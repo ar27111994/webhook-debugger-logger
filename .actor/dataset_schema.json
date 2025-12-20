@@ -1,0 +1,97 @@
+{
+  "actorSpecification": 1,
+  "fields": {
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Timestamp",
+      "description": "UTC time of the incoming request"
+    },
+    "webhookId": {
+      "type": "string",
+      "title": "Webhook ID",
+      "description": "Unique ID of the target webhook endpoint"
+    },
+    "method": {
+      "type": "string",
+      "title": "Method",
+      "description": "HTTP Method (GET, POST, etc.)"
+    },
+    "headers": {
+      "type": "object",
+      "title": "Headers",
+      "description": "Full HTTP request headers"
+    },
+    "query": {
+      "type": "object",
+      "title": "Query",
+      "description": "URL query parameters"
+    },
+    "body": {
+      "type": "string",
+      "title": "Body",
+      "description": "The raw or parsed request body"
+    },
+    "contentType": {
+      "type": "string",
+      "title": "Content-Type",
+      "description": "MIME type of the request body"
+    },
+    "size": {
+      "type": "integer",
+      "title": "Size (Bytes)",
+      "description": "Request body size in bytes"
+    },
+    "processingTime": {
+      "type": "integer",
+      "title": "Latency (ms)",
+      "description": "Time taken to process the request"
+    },
+    "remoteIp": {
+      "type": "string",
+      "title": "Source IP",
+      "description": "IP address of the sender"
+    },
+    "userAgent": {
+      "type": "string",
+      "title": "User-Agent",
+      "description": "Client user-agent string"
+    },
+    "statusCode": {
+      "type": "integer",
+      "title": "Status",
+      "description": "HTTP response status code returned to the sender"
+    }
+  },
+  "views": {
+    "overview": {
+      "title": "Overview",
+      "transformation": {
+        "fields": [
+          "timestamp",
+          "webhookId",
+          "method",
+          "statusCode",
+          "contentType",
+          "size",
+          "processingTime",
+          "remoteIp"
+        ],
+        "desc": true
+      },
+      "display": {
+        "component": "table",
+        "properties": {
+          "timestamp": { "label": "Time", "format": "date" },
+          "webhookId": { "label": "Webhook ID" },
+          "method": { "label": "Method" },
+          "statusCode": { "label": "Status" },
+          "contentType": { "label": "Content-Type" },
+          "size": { "label": "Size (Bytes)" },
+          "processingTime": { "label": "Latency (ms)" },
+          "remoteIp": { "label": "Source IP" }
+        }
+      }
+    }
+  }
+}

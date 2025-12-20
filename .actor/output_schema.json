@@ -1,0 +1,31 @@
+{
+  "actorOutputSchemaVersion": 1,
+  "title": "Webhook Debugger Output",
+  "properties": {
+    "dataset": {
+      "type": "string",
+      "title": "Captured Events (Live)",
+      "template": "{{links.apiDefaultDatasetUrl}}/items"
+    },
+    "dataset_csv": {
+      "type": "string",
+      "title": "Download logs (CSV)",
+      "template": "{{links.apiDefaultDatasetUrl}}/items?format=csv&clean=1"
+    },
+    "dataset_json": {
+      "type": "string",
+      "title": "Download logs (JSON)",
+      "template": "{{links.apiDefaultDatasetUrl}}/items?format=json&clean=1"
+    },
+    "info": {
+      "type": "string",
+      "title": "Active Webhooks Info",
+      "template": "{{links.containerRunUrl}}info"
+    },
+    "webhooks": {
+      "type": "string",
+      "title": "Storage State",
+      "template": "{{links.apiDefaultKeyValueStoreUrl}}/keys"
+    }
+  }
+}

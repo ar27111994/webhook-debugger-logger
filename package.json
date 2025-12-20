@@ -1,0 +1,23 @@
+{
+  "name": "webhook-debugger-logger",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Generate temporary webhook URLs and log all incoming requests with full details.",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "node src/main.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "apify": "^3.0.0",
+    "axios": "^1.13.2",
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5",
+    "eventsource": "^4.1.0",
+    "express": "^4.18.2",
+    "nanoid": "^5.0.0",
+    "qs": "^6.14.0"
+  },
+  "author": "",
+  "license": "ISC"
+}
