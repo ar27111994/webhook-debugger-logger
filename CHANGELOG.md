@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0] - 2025-12-21
+
+### Added
+
+- Narrated walkthrough video integrated into README for Quality Score boost.
+- 5+ comprehensive FAQs added to documentation.
+- CSV Output Format preview table in README.
+- Example values added to Dataset Schema for improved platform documentation.
+- Developer Support Guarantee (24h response time) added.
+
+### Improved
+
+- Input Schema sections and tooltips polished for better UX.
+- [CRITICAL] Safety checks added to logging middleware to prevent data loss.
+- GitHub repository synchronized with finalized production assets.
+
 ## [1.0.0] - 2025-12-20
 
 ### Added
