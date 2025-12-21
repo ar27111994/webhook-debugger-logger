@@ -84,7 +84,7 @@ No setup required. No localhost tunneling. Takes 30 seconds.
 
 ### JSON format (Dataset)
 
-````json
+```json
 {
   "timestamp": "2025-12-19T14:31:45Z",
   "webhookId": "wh_abc123",
@@ -99,14 +99,15 @@ No setup required. No localhost tunneling. Takes 30 seconds.
   "processingTime": 12,
   "remoteIp": "1.2.3.4"
 }
+```
 
 ### CSV Output Format (Preview)
 
-| Timestamp | Webhook ID | Method | Status | Content-Type | Size (B) | Latency (ms) |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| 2025-12-19 14:31 | wh_abc123 | POST | 200 | application/json | 1,240 | 12 |
-| 2025-12-19 14:35 | wh_xyz789 | GET | 401 | - | 0 | 5 |
-| 2025-12-19 14:40 | wh_abc123 | POST | 200 | application/x-www-form-urlencoded | 450 | 8 |
+| Timestamp        | Webhook ID | Method | Status | Content-Type                      | Size (B) | Latency (ms) |
+| :--------------- | :--------- | :----- | :----- | :-------------------------------- | :------- | :----------- |
+| 2025-12-19 14:31 | wh_abc123  | POST   | 200    | application/json                  | 1,240    | 12           |
+| 2025-12-19 14:35 | wh_xyz789  | GET    | 401    | -                                 | 0        | 5            |
+| 2025-12-19 14:40 | wh_abc123  | POST   | 200    | application/x-www-form-urlencoded | 450      | 8            |
 
 ## How to get started
 
@@ -126,7 +127,7 @@ No setup required. No localhost tunneling. Takes 30 seconds.
 
 ```bash
 curl -v https://<ACTOR-RUN-URL>/webhook/wh_abc123?test=true
-````
+```
 
 ### 2. Post JSON data
 
