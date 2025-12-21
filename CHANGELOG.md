@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.0] - 2025-12-21
+
+### Added
+
+- **v2.0 Enterprise Features**:
+  - **Security**: CIDR IP Whitelisting and API Key/Bearer Auth support.
+  - **Mocking**: Custom response bodies, status codes, and headers.
+  - **Simulation**: Configurable response delay (latency simulation up to 10s).
+  - **Workflows**: Real-time HTTP Request Forwarding (pipe webhooks to other APIs).
+  - **Replay API**: Endpoint to resend captured events to any destination.
+  - **Validation**: JSON Schema validation with professional error reporting.
+- New "Enterprise" sections in input schema for easier configuration.
+
+### Improved
+
+- Middleware refactored into a high-performance pipeline.
+- Upgraded dependencies: `ajv` for validation and `ip-range-check` for security.
+
 ## [1.1.0] - 2025-12-21
 
 ### Added

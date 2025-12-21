@@ -1,6 +1,7 @@
 import { Actor } from "apify";
 import express from "express";
 import bodyParser from "body-parser";
+import axios from "axios";
 import { WebhookManager } from "./webhook_manager.js";
 import { createLoggerMiddleware } from "./logger_middleware.js";
 
@@ -12,15 +13,20 @@ const {
   retentionHours = 24,
   maxPayloadSize = 10485760, // 10MB
   enableJSONParsing = true,
+  // v2.0 Features
+  authKey,
+  allowedIps = [],
+  defaultResponseCode = 200,
+  defaultResponseBody = "OK",
+  defaultResponseHeaders = {},
+  responseDelayMs = 0,
+  forwardUrl,
+  jsonSchema,
 } = input;
 
 const webhookManager = new WebhookManager();
 await webhookManager.init();
 
-// Open dataset once
-const dataset = await Actor.openDataset();
-
-// Generate initial webhooks if none exist
 const active = webhookManager.getAllActive();
 if (active.length === 0) {
   const ids = await webhookManager.generateWebhooks(urlCount, retentionHours);
@@ -31,15 +37,12 @@ if (active.length === 0) {
 
 const app = express();
 
-// Middleware
 app.use(bodyParser.urlencoded({ extended: true, limit: maxPayloadSize }));
 app.use(bodyParser.raw({ limit: maxPayloadSize, type: "*/*" }));
 
 if (enableJSONParsing) {
   app.use((req, res, next) => {
     if (!req.body || Buffer.isBuffer(req.body) === false) return next();
-
-    // Try to parse as JSON if it looks like JSON
     if (req.headers["content-type"]?.includes("application/json")) {
       try {
         req.body = JSON.parse(req.body.toString());
@@ -54,15 +57,12 @@ if (enableJSONParsing) {
 }
 
 const clients = new Set();
-
-// Helper to broadcast events to SSE clients
 const broadcast = (data) => {
   const message = `data: ${JSON.stringify(data)}\n\n`;
   clients.forEach((client) => client.write(message));
 };
 
-// Routes
-// Allow override status code via ?__status=XXX
+// 1. WEBHOOK ENDPOINT
 app.all(
   "/webhook/:id",
   (req, res, next) => {
@@ -72,32 +72,89 @@ app.all(
     }
     next();
   },
-  createLoggerMiddleware(webhookManager, maxPayloadSize, broadcast)
+  createLoggerMiddleware(
+    webhookManager,
+    {
+      maxPayloadSize,
+      authKey,
+      allowedIps,
+      defaultResponseCode,
+      defaultResponseBody,
+      defaultResponseHeaders,
+      responseDelayMs,
+      forwardUrl,
+      jsonSchema,
+    },
+    broadcast
+  )
 );
 
-// SSE endpoint for real-time streaming
+// 2. REPLAY ENDPOINT (v2.0)
+app.get("/replay/:webhookId/:itemId", async (req, res) => {
+  try {
+    const { webhookId, itemId } = req.params;
+    const targetUrl = req.query.url;
+
+    if (!targetUrl) {
+      return res
+        .status(400)
+        .json({
+          error: "Missing 'url' query parameter for replay destination.",
+        });
+    }
+
+    const dataset = await Actor.openDataset();
+    const { items } = await dataset.getData();
+
+    // Find the specific item (dataset doesn't easily filter by field in one call without extra logic)
+    const item = items.find(
+      (i) =>
+        i.webhookId === webhookId && (i.id === itemId || i.timestamp === itemId)
+    );
+
+    if (!item) {
+      return res.status(404).json({ error: "Logged event not found." });
+    }
+
+    console.log(`[REPLAY] Resending event ${itemId} to ${targetUrl}`);
+
+    const response = await axios({
+      method: item.method,
+      url: targetUrl,
+      data: item.body,
+      headers: {
+        ...item.headers,
+        "X-Apify-Replay": "true",
+        "X-Original-Webhook-Id": webhookId,
+        host: new URL(targetUrl).host,
+      },
+      validateStatus: () => true,
+    });
+
+    res.json({
+      status: "Replayed",
+      targetUrl,
+      targetResponseCode: response.status,
+      targetResponseBody: response.data,
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Replay failed", message: error.message });
+  }
+});
+
 app.get("/log-stream", (req, res) => {
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
   res.flushHeaders();
-
   clients.add(res);
-  console.log(`New SSE client connected. Total: ${clients.size}`);
-
-  // Heartbeat to keep connection alive
-  const heartbeat = setInterval(() => {
-    res.write(": heartbeat\n\n");
-  }, 15000);
-
+  const heartbeat = setInterval(() => res.write(": heartbeat\n\n"), 15000);
   req.on("close", () => {
     clearInterval(heartbeat);
     clients.delete(res);
-    console.log(`SSE client disconnected. Total: ${clients.size}`);
   });
 });
 
-// Logs endpoint with filtering
 app.get("/logs", async (req, res) => {
   try {
     const {
@@ -107,20 +164,15 @@ app.get("/logs", async (req, res) => {
       contentType,
       limit = 100,
     } = req.query;
-
-    // Open default dataset
     const localDataset = await Actor.openDataset();
-
     let items = [];
     try {
       const result = await localDataset.getData();
       items = result.items || [];
     } catch (e) {
       console.error("Failed to get data from dataset:", e.message);
-      // Fallback: items remains empty if dataset is not yet initialized in memory-storage
     }
 
-    // Apply filters and sort in-memory
     let filtered = items.filter((item) => {
       let match = true;
       if (webhookId && item.webhookId !== webhookId) match = false;
@@ -138,7 +190,6 @@ app.get("/logs", async (req, res) => {
     });
 
     filtered.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
     res.json({
       count: Math.min(filtered.length, parseInt(limit)),
       total: filtered.length,
@@ -146,47 +197,49 @@ app.get("/logs", async (req, res) => {
       items: filtered.slice(0, parseInt(limit)),
     });
   } catch (error) {
-    console.error("Error in /logs:", error);
-    res.status(500).json({
-      error: "Unexpected error in /logs",
-      message: error.message,
-    });
+    res
+      .status(500)
+      .json({ error: "Unexpected error in /logs", message: error.message });
   }
 });
 
-// Info endpoint to see active webhooks
 app.get("/info", (req, res) => {
   res.json({
     activeWebhooks: webhookManager.getAllActive(),
+    v2_features: [
+      "Auth Key Support",
+      "IP Whitelisting",
+      "Custom Responses",
+      "Mocking Delay",
+      "HTTP Forwarding",
+      "Request Replay",
+    ],
     endpoints: {
       logs: "/logs?webhookId=wh_XXX&method=POST&statusCode=200",
       stream: "/log-stream",
       webhook: "/webhook/:id",
+      replay: "/replay/:webhookId/:timestamp?url=http://your-goal.com",
     },
     docs: "https://apify.com/ar27111994/webhook-debugger-logger",
   });
 });
 
-// Root endpoint redirect
 app.get("/", (req, res) => {
   res.send(
-    "Webhook Debugger is running. Use /webhook/:id to log requests or /info to see active URLs."
+    "Webhook Debugger v2.0 (Enterprise) is running. Use /info to explore premium features."
   );
 });
 
-// Start Server
 const port = process.env.ACTOR_WEB_SERVER_PORT || 8080;
-const server = app.listen(port, () => {
-  console.log(`Server listening on port ${port}`);
-});
+const server = app.listen(port, () =>
+  console.log(`Server listening on port ${port}`)
+);
 
-// Periodic Cleanup (every 10 minutes)
 const cleanupInterval = setInterval(async () => {
   console.log("Running TTL cleanup...");
   await webhookManager.cleanup();
 }, 10 * 60 * 1000);
 
-// Graceful Shutdown
 const shutdown = async (signal) => {
   console.log(`Received ${signal}. Shutting down...`);
   clearInterval(cleanupInterval);

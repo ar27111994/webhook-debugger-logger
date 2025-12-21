@@ -58,6 +58,28 @@ No setup required. No localhost tunneling. Takes 30 seconds.
 | **Auto-Cleanup**    | URLs and data expire automatically (configurable 1-72h) |
 | **Export**          | Download logs as JSON or CSV from dataset               |
 
+## 🚀 v2.0 Enterprise Features
+
+The Enterprise Update transforms this Actor into a professional API mocking and workflow tool.
+
+### 🛡️ Security & Access Control
+
+- **API Key Auth**: Require a secret token for every incoming webhook.
+- **IP Whitelisting**: Lock down your endpoints to specific IPs or CIDR ranges.
+
+### 🎭 API Mocking & Latency
+
+- **Custom Responses**: Define the exact Body, Headers, and Status Code to return to the sender.
+- **Latency Simulation**: Simulate slow network conditions by delaying responses (up to 10s).
+- **JSON Schema Validation**: Reject invalid payloads automatically and log the errors.
+
+### 🔄 Advanced Workflows
+
+- **Real-time Forwarding**: Automatically pipe captured webhooks to another destination (e.g., your local dev server).
+- **Request Replay**: Resend any captured event to a new URL using the `/replay` API.
+
+---
+
 ## Input example
 
 ### Simple mode (basic)

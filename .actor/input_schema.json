@@ -49,6 +49,82 @@
       "title": "Enable JSON Parsing",
       "description": "If enabled, the Actor will attempt to parse 'application/json' bodies into searchable objects.",
       "default": true
+    },
+    "section_v2_security": {
+      "title": "v2.0 Security & Access Controls",
+      "type": "string",
+      "sectionCaption": "Enterprise Security",
+      "sectionDescription": "Protect your webhook logs from unauthorized traffic.",
+      "description": "Security settings.",
+      "editor": "hidden"
+    },
+    "authKey": {
+      "type": "string",
+      "title": "Authentication Key",
+      "description": "If provided, every request must include '?key=YOUR_KEY' or 'Authorization: Bearer YOUR_KEY'.",
+      "isSecret": true
+    },
+    "allowedIps": {
+      "type": "array",
+      "title": "Allowed IPs (Whitelist)",
+      "description": "Only accept requests from these IP addresses. Leave empty to allow all.",
+      "editor": "stringList"
+    },
+    "section_v2_response": {
+      "title": "v2.0 Advanced Responses",
+      "type": "string",
+      "sectionCaption": "API Mocking & Simulation",
+      "sectionDescription": "Define exactly how the server should respond to the sender.",
+      "description": "Response settings.",
+      "editor": "hidden"
+    },
+    "defaultResponseCode": {
+      "type": "integer",
+      "title": "Response Status Code",
+      "description": "The default HTTP code to return (200, 201, etc). Can be overridden via ?__status=XXX query.",
+      "minimum": 100,
+      "maximum": 599,
+      "default": 200
+    },
+    "defaultResponseBody": {
+      "type": "string",
+      "title": "Custom Response Body",
+      "description": "The payload to return to the sender. Supports JSON/XML string format.",
+      "editor": "textarea"
+    },
+    "defaultResponseHeaders": {
+      "type": "object",
+      "title": "Custom Response Headers",
+      "description": "A JSON object of headers to include in the response (e.g., {'X-Custom': 'Value'}).",
+      "editor": "json"
+    },
+    "responseDelayMs": {
+      "type": "integer",
+      "title": "Response Delay (ms)",
+      "description": "Simulate slow APIs by delaying the response (0-10000ms).",
+      "minimum": 0,
+      "maximum": 10000,
+      "default": 0
+    },
+    "section_v2_workflows": {
+      "title": "v2.0 Advanced Workflows",
+      "type": "string",
+      "sectionCaption": "Data Flow & Validation",
+      "sectionDescription": "Automate where your data goes after it's captured.",
+      "description": "Workflow settings.",
+      "editor": "hidden"
+    },
+    "forwardUrl": {
+      "type": "string",
+      "title": "HTTP Forwarding URL",
+      "description": "Automatically POST every captured request to this destination.",
+      "editor": "textfield"
+    },
+    "jsonSchema": {
+      "type": "string",
+      "title": "JSON Schema Validation",
+      "description": "Paste a JSON Schema to validate incoming payloads. Failed requests return 400.",
+      "editor": "textarea"
     }
   },
   "required": []
