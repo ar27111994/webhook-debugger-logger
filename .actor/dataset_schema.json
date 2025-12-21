@@ -10,12 +10,14 @@
     "webhookId": {
       "type": "string",
       "title": "Webhook ID",
-      "description": "Unique ID of the target webhook endpoint"
+      "description": "Unique ID of the target webhook endpoint",
+      "example": "wh_a7B2k9L1p4"
     },
     "method": {
       "type": "string",
       "title": "Method",
-      "description": "HTTP Method (GET, POST, etc.)"
+      "description": "HTTP Method (GET, POST, etc.)",
+      "example": "POST"
     },
     "headers": {
       "type": "object",
@@ -60,7 +62,8 @@
     "statusCode": {
       "type": "integer",
       "title": "Status",
-      "description": "HTTP response status code returned to the sender"
+      "description": "HTTP response status code returned to the sender",
+      "example": 200
     }
   },
   "views": {

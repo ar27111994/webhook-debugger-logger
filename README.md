@@ -14,7 +14,7 @@ node demo_cli.js
 
 Test and inspect webhooks instantly without running localhost or complex tunneling tools.
 
-**[Watch 2-min demo](https://youtube.com/...)**
+**[Watch the 2-min Narrated Walkthrough](https://youtu.be/uefialldYYw)**
 
 ## What does it do?
 
@@ -84,7 +84,7 @@ No setup required. No localhost tunneling. Takes 30 seconds.
 
 ### JSON format (Dataset)
 
-```json
+````json
 {
   "timestamp": "2025-12-19T14:31:45Z",
   "webhookId": "wh_abc123",
@@ -99,7 +99,14 @@ No setup required. No localhost tunneling. Takes 30 seconds.
   "processingTime": 12,
   "remoteIp": "1.2.3.4"
 }
-```
+
+### CSV Output Format (Preview)
+
+| Timestamp | Webhook ID | Method | Status | Content-Type | Size (B) | Latency (ms) |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| 2025-12-19 14:31 | wh_abc123 | POST | 200 | application/json | 1,240 | 12 |
+| 2025-12-19 14:35 | wh_xyz789 | GET | 401 | - | 0 | 5 |
+| 2025-12-19 14:40 | wh_abc123 | POST | 200 | application/x-www-form-urlencoded | 450 | 8 |
 
 ## How to get started
 
@@ -119,7 +126,7 @@ No setup required. No localhost tunneling. Takes 30 seconds.
 
 ```bash
 curl -v https://<ACTOR-RUN-URL>/webhook/wh_abc123?test=true
-```
+````
 
 ### 2. Post JSON data
 
@@ -238,6 +245,15 @@ A: No. Data is stored only in your Apify dataset (you own this). After the reten
 **Q: What's the payload size limit?**
 A: 10MB by default to ensure stability. Configurable in input up to 100MB.
 
+**Q: Can I use this with Zapier or Make?**
+A: Yes! It's an ideal "safe buffer." You can point your service to this Actor, then use an Apify Webhook to trigger your Zapier/Make flow whenever a new item is added to the dataset.
+
+**Q: Are the webhooks truly private?**
+A: Yes. All data is written directly to your own Apify account's default dataset. Only you (and whoever you share your Apify account with) can see the logs.
+
+**Q: Can I override the response headers?**
+A: Currently, we support status code overrides via `__status`. Full header customization is planned for a future update.
+
 ## Troubleshooting
 
 **Issue**: "Webhook not found or expired"  
@@ -248,4 +264,11 @@ A: 10MB by default to ensure stability. Configurable in input up to 100MB.
 
 ---
 
-**Questions?** Check the [Apify Discord Community](https://discord.gg/jyEM2PRvMU) or comment on the Actor page!
+**Questions?**
+
+- 💬 Join the [Apify Discord Community](https://discord.gg/jyEM2PRvMU)
+- 📚 Read the [Apify SDK Documentation](https://sdk.apify.com/)
+- 🛠️ Compare with [Webhook.site](https://webhook.site) (Desktop alternative)
+- 📝 Open an issue on our [GitHub Repository](https://github.com/ar27111994/webhook-debugger-logger)
+
+**Developer Support Guarantee**: I respond to all comments and bug reports on the Apify console within **24 hours**.

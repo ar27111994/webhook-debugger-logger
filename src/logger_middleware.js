@@ -86,10 +86,15 @@ export const createLoggerMiddleware = (
         userAgent,
       };
 
-      await Actor.pushData(event);
-      if (onEvent) onEvent(event);
+      if (event && event.webhookId) {
+        await Actor.pushData(event);
+        if (onEvent) onEvent(event);
+      }
     } catch (error) {
-      console.error(`Error logging webhook ${webhookId}:`, error);
+      console.error(
+        `[CRITICAL] Error logging webhook ${webhookId}:`,
+        error.message
+      );
     }
   };
 };

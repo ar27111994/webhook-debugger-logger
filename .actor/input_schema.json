@@ -5,11 +5,11 @@
   "schemaVersion": 1,
   "properties": {
     "section_urls": {
-      "title": "Webhook Configuration",
+      "title": "Endpoint Setup",
       "type": "string",
-      "sectionCaption": "Configure your temporary webhook endpoints",
-      "sectionDescription": "Decide how many URLs you need and how long they should stay active.",
-      "description": "Webhook configuration section.",
+      "sectionCaption": "Webhook Generation",
+      "sectionDescription": "Automatically create unique, temporary endpoints to capture incoming data.",
+      "description": "Configuration for generated URLs.",
       "editor": "hidden"
     },
     "urlCount": {
@@ -29,11 +29,11 @@
       "default": 24
     },
     "section_limits": {
-      "title": "Limits & Parsing",
+      "title": "Advanced Safety & Performance",
       "type": "string",
-      "sectionCaption": "Performance and Safety",
-      "sectionDescription": "Control payload limits and parsing behavior.",
-      "description": "Limits and parsing configuration section.",
+      "sectionCaption": "Traffic Controls",
+      "sectionDescription": "Define payload limits and automated parsing logic for your incoming webhooks.",
+      "description": "Safety and parsing controls.",
       "editor": "hidden"
     },
     "maxPayloadSize": {
