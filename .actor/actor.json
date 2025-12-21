@@ -3,7 +3,7 @@
   "name": "webhook-debugger-logger",
   "title": "Webhook Debugger & Logger",
   "description": "Test and inspect webhooks instantly. Capture headers, body, and query params with unique temporary URLs and real-time streaming.",
-  "version": "1.0",
+  "version": "1.1",
   "dockerfile": "./Dockerfile",
   "categories": ["DEVELOPER_TOOLS", "UTILITIES"],
   "homepageUrl": "https://apify.com/ar27111994/webhook-debugger-logger",
