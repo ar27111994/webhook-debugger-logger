@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.2.0] - 2025-12-22
+
+### Added
+
+- **v2.2 Comprehensive Robustness Update**:
+  - Global Express error handling to catch malformed bodies and unhandled exceptions.
+  - Hardened state persistence with try-catch and validation logic.
+  - Standardized timeouts (10s) for HTTP Forwarding and Replay APIs.
+  - Improved error reporting for Replay API (distinguishes between timeouts and target rejections).
+  - Resilient initialization to survive storage-layer transients.
+
 ## [2.1.1] - 2025-12-22
 
 ### Fixed

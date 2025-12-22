@@ -210,18 +210,25 @@ export const createLoggerMiddleware = (webhookManager, options, onEvent) => {
       }
 
       if (forwardUrl) {
+        // Ensure forwardUrl has a protocol
+        let validatedUrl = forwardUrl;
+        if (!forwardUrl.startsWith("http")) {
+          validatedUrl = `http://${forwardUrl}`;
+        }
+
         axios
-          .post(forwardUrl, req.body, {
+          .post(validatedUrl, req.body, {
             headers: {
               ...req.headers,
               "X-Forwarded-By": "Apify-Webhook-Debugger",
-              host: new URL(forwardUrl).host,
+              host: new URL(validatedUrl).host,
             },
+            timeout: 10000, // 10s timeout for forwarding
           })
           .catch((err) => {
             console.error(
-              `[FORWARD-ERROR] Failed to forward to ${forwardUrl}:`,
-              err.message
+              `[FORWARD-ERROR] Failed to forward to ${validatedUrl}:`,
+              err.code === "ECONNABORTED" ? "Timed out after 10s" : err.message
             );
           });
       }

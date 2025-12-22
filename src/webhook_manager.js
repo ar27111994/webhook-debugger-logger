@@ -9,16 +9,34 @@ export class WebhookManager {
   }
 
   async init() {
-    this.kvStore = await Actor.openKeyValueStore();
-    const savedState = await this.kvStore.getValue(this.STATE_KEY);
-    if (savedState) {
-      this.webhooks = new Map(Object.entries(savedState));
+    try {
+      this.kvStore = await Actor.openKeyValueStore();
+      const savedState = await this.kvStore.getValue(this.STATE_KEY);
+      if (savedState && typeof savedState === "object") {
+        this.webhooks = new Map(Object.entries(savedState));
+        console.log(
+          `[STORAGE] Restored ${this.webhooks.size} webhooks from state.`
+        );
+      }
+    } catch (error) {
+      console.error(
+        "[CRITICAL] Failed to initialize WebhookManager state:",
+        error.message
+      );
+      // Fallback to empty map is already handled by constructor
     }
   }
 
   async persist() {
-    const state = Object.fromEntries(this.webhooks);
-    await this.kvStore.setValue(this.STATE_KEY, state);
+    try {
+      const state = Object.fromEntries(this.webhooks);
+      await this.kvStore.setValue(this.STATE_KEY, state);
+    } catch (error) {
+      console.error(
+        "[STORAGE-ERROR] Failed to persist webhook state:",
+        error.message
+      );
+    }
   }
 
   async generateWebhooks(count, retentionHours) {

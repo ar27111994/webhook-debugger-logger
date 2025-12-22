@@ -129,6 +129,7 @@ app.get("/replay/:webhookId/:itemId", async (req, res) => {
         host: new URL(targetUrl).host,
       },
       validateStatus: () => true,
+      timeout: 10000,
     });
 
     res.json({
@@ -138,7 +139,14 @@ app.get("/replay/:webhookId/:itemId", async (req, res) => {
       targetResponseBody: response.data,
     });
   } catch (error) {
-    res.status(500).json({ error: "Replay failed", message: error.message });
+    const isTimeout = error.code === "ECONNABORTED";
+    res.status(isTimeout ? 504 : 500).json({
+      error: "Replay failed",
+      message: isTimeout
+        ? "Target destination timed out after 10s"
+        : error.message,
+      code: error.code,
+    });
   }
 });
 
@@ -228,6 +236,19 @@ app.get("/", (req, res) => {
   res.send(
     "Webhook Debugger v2.0 (Enterprise) is running. Use /info to explore premium features."
   );
+});
+
+// GLOBAL ERROR HANDLER
+app.use((err, req, res, next) => {
+  console.error("[EXPRESS-ERROR]", err.message);
+  if (res.headersSent) return next(err);
+
+  const status = err.statusCode || err.status || 500;
+  res.status(status).json({
+    error: "Internal Server Error",
+    message: err.message,
+    type: err.name,
+  });
 });
 
 const port = process.env.ACTOR_WEB_SERVER_PORT || 8080;
