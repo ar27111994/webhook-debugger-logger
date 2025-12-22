@@ -224,20 +224,24 @@ app.get("/logs", async (req, res) => {
 
 app.get("/info", (req, res) => {
   res.json({
+    version: "2.3.1",
+    status: "Enterprise & Optimization Active",
+    authActive: !!authKey,
     activeWebhooks: webhookManager.getAllActive(),
-    v2_features: [
-      "Auth Key Support",
-      "IP Whitelisting",
-      "Custom Responses",
-      "Mocking Delay",
-      "HTTP Forwarding",
-      "Request Replay",
+    features: [
+      "Advanced Responses (Mocking/Latency)",
+      "Enterprise Security (Auth/CIDR)",
+      "Smart Workflows (Forward/Validation)",
+      "Custom Scripting (v2.1)",
+      "Bandwidth Compression (v2.3)",
+      "High-Performance Logging",
     ],
     endpoints: {
-      logs: "/logs?webhookId=wh_XXX&method=POST&statusCode=200",
+      logs: "/logs?webhookId=wh_XXX&method=POST&statusCode=200&limit=100&offset=0",
       stream: "/log-stream",
       webhook: "/webhook/:id",
-      replay: "/replay/:webhookId/:timestamp?url=http://your-goal.com",
+      replay: "/replay/:webhookId/:itemId?url=http://your-goal.com",
+      info: "/info",
     },
     docs: "https://apify.com/ar27111994/webhook-debugger-logger",
   });
@@ -245,7 +249,7 @@ app.get("/info", (req, res) => {
 
 app.get("/", (req, res) => {
   res.send(
-    "Webhook Debugger v2.0 (Enterprise) is running. Use /info to explore premium features."
+    "Webhook Debugger & Logger v2.3.1 (Enterprise Suite) is running. Use /info to explore premium features."
   );
 });
 

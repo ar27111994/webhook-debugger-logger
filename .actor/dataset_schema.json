@@ -1,6 +1,11 @@
 {
   "actorSpecification": 1,
   "fields": {
+    "id": {
+      "type": "string",
+      "title": "Event ID",
+      "description": "Unique identifier for this captured request"
+    },
     "timestamp": {
       "type": "string",
       "format": "date-time",

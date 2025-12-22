@@ -1,11 +1,16 @@
 {
-  "urlCount": 1,
-  "retentionHours": 1,
-  "authKey": "secret-123",
+  "urlCount": 3,
+  "retentionHours": 24,
+  "authKey": "enterprise-secret-123",
+  "allowedIps": ["127.0.0.1", "::1"],
   "defaultResponseCode": 201,
-  "defaultResponseBody": "{\"status\":\"success\",\"v2\":true}",
+  "defaultResponseBody": "{\"status\":\"accepted\",\"message\":\"Enterprise Webhook Captured\"}",
   "defaultResponseHeaders": {
-    "X-Premium-Version": "2.0"
+    "X-Enterprise-Ready": "true",
+    "Content-Type": "application/json"
   },
-  "responseDelayMs": 1000
+  "responseDelayMs": 500,
+  "forwardUrl": "http://localhost:9999/callback",
+  "jsonSchema": "{\"type\":\"object\",\"required\":[\"event\"]}",
+  "customScript": "event.body = { ...event.body, scriptProcessed: true }; event.headers['x-script'] = 'active';"
 }

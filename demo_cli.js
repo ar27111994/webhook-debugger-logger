@@ -27,7 +27,14 @@ async function runDemo() {
 
     const targetId = active[0].id;
     console.log(`[URLS] Generated: ${active.map((a) => a.id).join(", ")}`);
-    console.log(`[URLS] Using for demo: ${targetId}\n`);
+    console.log(`[URLS] Using for demo: ${targetId}`);
+
+    if (infoRes.data.authActive) {
+      console.log(
+        "[WARN] Authentication is ENABLED. This demo might return 401s if not configured with the key."
+      );
+    }
+    console.log("");
 
     // 2. Connect to SSE Stream
     console.log("[STREAM] Connecting to Live Stream...");

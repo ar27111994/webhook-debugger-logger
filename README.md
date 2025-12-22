@@ -273,19 +273,25 @@ A: 10MB by default to ensure stability. Configurable in input up to 100MB.
 **Q: Can I use this with Zapier or Make?**
 A: Yes! It's an ideal "safe buffer." You can point your service to this Actor, then use an Apify Webhook to trigger your Zapier/Make flow whenever a new item is added to the dataset.
 
-**Q: Are the webhooks truly private?**
-A: Yes. All data is written directly to your own Apify account's default dataset. Only you (and whoever you share your Apify account with) can see the logs.
+**Q: Can I customize the response headers and body?**
+A: Yes! Enterprise features (v2.0+) allow you to define custom JSON/XML response bodies, arbitrary headers, and even simulate network latency (delay).
 
-**Q: Can I override the response headers?**
-A: Currently, we support status code overrides via `__status`. Full header customization is planned for a future update.
+**Q: Can I validate incoming data?**
+A: Yes. You can provide a JSON Schema in the input parameters, and the Actor will automatically reject invalid requests with a 400 Bad Request.
+
+**Q: Can I transform the data before it's saved?**
+A: Yes. Use the **Custom Scripting** (v2.1+) feature to provide a JavaScript snippet that modifies the event object in real-time.
 
 ## Troubleshooting
 
 **Issue**: "Webhook not found or expired"  
 **Solution**: Verify the webhook ID is correct. Check the `/info` endpoint of your running Actor to see active IDs. If it expired, restart the Actor to generate new ones.
 
-**Issue**: "Payload too large"  
-**Solution**: The default limit is 10MB. If you expect larger payloads, increase `maxPayloadSize` in the input settings.
+**Issue**: "Script Execution Error"  
+**Solution**: Check your `customScript` for syntax errors. The Actor runs scripts in a secure sandbox with a 1s timeout.
+
+**Issue**: "JSON Schema Validation Failed"  
+**Solution**: The incoming payload did not match your provided schema. Check the `/logs` or the webhook response for specific validation error details.
 
 ---
 
