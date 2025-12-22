@@ -266,10 +266,16 @@ app.use((err, req, res, next) => {
   });
 });
 
-const port = process.env.ACTOR_WEB_SERVER_PORT || 8080;
-const server = app.listen(port, () =>
-  console.log(`Server listening on port ${port}`)
-);
+// EXPORT FOR TESTING
+let server;
+if (process.env.NODE_ENV !== "test") {
+  const port = process.env.ACTOR_WEB_SERVER_PORT || 8080;
+  server = app.listen(port, () =>
+    console.log(`Server listening on port ${port}`)
+  );
+}
+
+export { app, webhookManager, server };
 
 const cleanupInterval = setInterval(async () => {
   console.log("Running TTL cleanup...");
@@ -279,14 +285,22 @@ const cleanupInterval = setInterval(async () => {
 const shutdown = async (signal) => {
   console.log(`Received ${signal}. Shutting down...`);
   clearInterval(cleanupInterval);
-  server.close(async () => {
+  if (server) {
+    server.close(async () => {
+      await webhookManager.persist();
+      await Actor.exit();
+      process.exit(0);
+    });
+  } else {
     await webhookManager.persist();
     await Actor.exit();
     process.exit(0);
-  });
+  }
 };
 
-Actor.on("migrating", () => shutdown("MIGRATING"));
-Actor.on("aborting", () => shutdown("ABORTING"));
-process.on("SIGTERM", () => shutdown("SIGTERM"));
-process.on("SIGINT", () => shutdown("SIGINT"));
+if (process.env.NODE_ENV !== "test") {
+  Actor.on("migrating", () => shutdown("MIGRATING"));
+  Actor.on("aborting", () => shutdown("ABORTING"));
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
+}

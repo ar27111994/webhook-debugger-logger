@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.4.0] - 2025-12-22
+
+### Added
+
+- **Comprehensive Test Suite**: 15+ Automated tests covering unit, integration, and E2E scenarios.
+- **Testing Framework**: Integrated Jest and Supertest with full ESM/VM support.
+- **Architectural Polish**: Refactored `main.js` to decouple the Express app from the server listener for professional testability.
+
 ## [2.3.1] - 2025-12-22
 
 ### Fixed
@@ -32,7 +40,16 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - **v2.1 Custom Scripting**: Allow users to provide JavaScript snippets for advanced data transformation before logging.
-- Prepared for $1M Challenge final submission with unified enterprise feature set.
+- Prepared- [x] Final $1M Challenge Readiness Audit
+
+## 14. v2.4 - Comprehensive Test Suite 🧪
+
+- [x] Setup Jest/Supertest with ESM support
+- [x] Implement WebhookManager Unit Tests
+- [x] Implement Middleware Integration Tests (Security/Mocking)
+- [x] Implement API E2E Tests (Logs/Replay)
+- [x] Achieve 100% test pass rate
+      bmission with unified enterprise feature set.
 
 ## [2.0.0] - 2025-12-21
 
