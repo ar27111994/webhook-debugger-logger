@@ -20,11 +20,13 @@ Test and inspect webhooks instantly without running localhost or complex tunneli
 
 Webhook Debugger generates temporary webhook URLs and logs every incoming request with full details (headers, body, query params). Perfect for testing webhook integrations from Stripe, GitHub, Shopify, or any service.
 
-**What it does NOT do**:
+## 💡 Popular Use Cases
 
-- ❌ Modify webhooks (read-only logging)
-- ❌ Replay webhooks (data capture only)
-- ❌ Permanent storage (auto-cleanup after 1-72 hours)
+- **Stripe & PayPal Debugging**: Mock successful or failed payment responses to test your order fulfillment logic.
+- **GitHub CD/CI Testing**: Verify complex payloads from CI/CD triggers without waiting for real builds.
+- **Shopify Webhook Relay**: Securely forward Shopify hooks to your local development environment.
+- **n8n & Zapier Buffer**: Acts as a high-performance validator for your automation workflows.
+- **API Mocking**: Simulate slow or faulty 3rd party APIs with custom responses and latency.
 
 ## Why use Webhook Debugger?
 

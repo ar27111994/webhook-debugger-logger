@@ -1,6 +1,7 @@
 import { Actor } from "apify";
 import express from "express";
 import bodyParser from "body-parser";
+import compression from "compression";
 import axios from "axios";
 import { WebhookManager } from "./webhook_manager.js";
 import { createLoggerMiddleware } from "./logger_middleware.js";
@@ -37,6 +38,7 @@ if (active.length === 0) {
 }
 
 const app = express();
+app.use(compression());
 
 app.use(bodyParser.urlencoded({ extended: true, limit: maxPayloadSize }));
 app.use(bodyParser.raw({ limit: maxPayloadSize, type: "*/*" }));
@@ -171,15 +173,17 @@ app.get("/logs", async (req, res) => {
       statusCode,
       contentType,
       limit = 100,
+      offset = 0,
     } = req.query;
     const localDataset = await Actor.openDataset();
-    let items = [];
-    try {
-      const result = await localDataset.getData();
-      items = result.items || [];
-    } catch (e) {
-      console.error("Failed to get data from dataset:", e.message);
-    }
+
+    // Memory-efficient retrieval: fetch only what's needed
+    const result = await localDataset.getData({
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      desc: true, // Fetch newest first naturally
+    });
+    let items = result.items || [];
 
     let filtered = items.filter((item) => {
       let match = true;
