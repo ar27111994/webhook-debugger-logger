@@ -4,14 +4,14 @@ Please use the following professional content to fill out your Actor's publicati
 
 ## 1. Display Information
 
-| Field               | Recommended Value                                                                                                                                                                                                                         |
-| :------------------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Icon**            | [icon.png](./assets/icon.png)                                                                                                                                                                                                             |
-| **Actor Name**      | `Webhook Debugger & Logger`                                                                                                                                                                                                               |
-| **Description**     | `Test and inspect webhooks instantly. Capture headers, body, and query params with unique temporary URLs. Features real-time log streaming (SSE), multi-format parsing (JSON/Form), and status code overrides for comprehensive testing.` |
-| **Categories**      | `Developer Tools`, `Utilities`                                                                                                                                                                                                            |
-| **SEO Title**       | `Webhook Debugger & Logger - Real-time Monitoring & Testing`                                                                                                                                                                              |
-| **SEO Description** | `A powerful, real-time webhook debugger for Apify. Generate temporary URLs, monitor events via SSE, and automate integrations with Zapier and Make.`                                                                                      |
+| Field               | Recommended Value                                                                                                                                                                                                                                           |
+| :------------------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Icon**            | [icon.png](./assets/icon.png)                                                                                                                                                                                                                               |
+| **Actor Name**      | `Webhook Debugger, Logger & API Mocking Suite`                                                                                                                                                                                                              |
+| **Description**     | `The ultimate webhook testing suite for developers. Capture, inspect, and replay requests in real-time without tunnels. Features API mocking (custom status/latency), secure forwarding, JSON Schema validation, and live SSE streaming. Perfect for debugging Stripe, GitHub, Shopify & Zapier workflows.` |
+| **Categories**      | `Developer Tools`, `Utilities`                                                                                                                                                                                                                              |
+| **SEO Title**       | `Webhook Debugger & Logger - Real-time Monitoring, Testing & API Mocking`                                                                                                                                                                                   |
+| **SEO Description** | `Debug webhooks instantly without ngrok. Capture requests, mock APIs with latency, replay events, and stream logs via SSE. The essential tool for Stripe & GitHub integrations.`                                                                            |
 
 ---
 
