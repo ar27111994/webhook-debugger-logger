@@ -218,21 +218,36 @@ export const createLoggerMiddleware = (webhookManager, options, onEvent) => {
           validatedUrl = `http://${forwardUrl}`;
         }
 
-        axios
-          .post(validatedUrl, req.body, {
-            headers: {
-              ...req.headers,
-              "X-Forwarded-By": "Apify-Webhook-Debugger",
-              host: new URL(validatedUrl).host,
-            },
-            timeout: 10000, // 10s timeout for forwarding
-          })
-          .catch((err) => {
-            console.error(
-              `[FORWARD-ERROR] Failed to forward to ${validatedUrl}:`,
-              err.code === "ECONNABORTED" ? "Timed out after 10s" : err.message
-            );
-          });
+        // Async retry logic (Fire & Forget)
+        (async () => {
+          const MAX_RETRIES = 3;
+          let attempt = 0;
+          let success = false;
+
+          while (attempt < MAX_RETRIES && !success) {
+            try {
+              attempt++;
+              await axios.post(validatedUrl, req.body, {
+                headers: {
+                  ...req.headers,
+                  "X-Forwarded-By": "Apify-Webhook-Debugger",
+                  host: new URL(validatedUrl).host,
+                },
+                timeout: 10000,
+              });
+              success = true;
+            } catch (err) {
+              const delay = 1000 * Math.pow(2, attempt - 1); // 1s, 2s, 4s
+              console.error(
+                `[FORWARD-ERROR] Attempt ${attempt}/${MAX_RETRIES} failed for ${validatedUrl}:`,
+                err.code === "ECONNABORTED" ? "Timed out" : err.message
+              );
+              if (attempt < MAX_RETRIES) {
+                await new Promise((resolve) => setTimeout(resolve, delay));
+              }
+            }
+          }
+        })();
       }
     } catch (error) {
       console.error(

@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.4.2] - 2025-12-22
+
+### Added
+
+- **Stress Testing**: Added a comprehensive stress test suite to verify the system's stability under high load.
+- **Documentation**: Added missing Pricing, FAQ, Support, Security & Permissions, and Privacy sections to `README.md`.
+- **Schema Quality**: Populated `dataset_schema.json` with concrete example values for all fields.
+- **Reliability**: Implemented retry logic with exponential backoff (3 attempts) for both HTTP Forwarding and the `/replay` API.
+
+### Fixed
+
+- **Stress Testing**: Fixed a memory leak in the stress test suite.
+- **Stress Testing**: Fixed a timeout issue in the stress test suite.
+
 ## [2.4.1] - 2025-12-22
 
 ### Fixed

@@ -81,7 +81,10 @@ async function runDemo() {
       console.log("\n✨ Demo complete. Press Ctrl+C to exit.");
     }, 4500);
   } catch (err) {
-    console.error("[ERROR] Setup failed. Is the Actor running on port 8080?");
+    console.error(`[ERROR] Setup failed: ${err.message}`);
+    console.log(
+      "👉 Make sure the Actor is running locally on port 8080 (npm start)."
+    );
   }
 }
 

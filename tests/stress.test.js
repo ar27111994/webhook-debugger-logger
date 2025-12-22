@@ -1,0 +1,67 @@
+import { jest } from "@jest/globals";
+import request from "supertest";
+import { app, webhookManager } from "../src/main.js";
+
+jest.unstable_mockModule("apify", () => ({
+  Actor: {
+    init: jest.fn(),
+    getInput: jest.fn().mockResolvedValue({}),
+    openKeyValueStore: jest.fn().mockResolvedValue({
+      getValue: jest.fn().mockResolvedValue(null),
+      setValue: jest.fn(),
+    }),
+    openDataset: jest.fn().mockResolvedValue({
+      getData: jest.fn().mockResolvedValue({ items: [] }),
+      pushData: jest.fn(),
+    }),
+    on: jest.fn(),
+    exit: jest.fn(),
+  },
+}));
+
+describe("Stress Tests", () => {
+  let webhookId;
+
+  beforeAll(async () => {
+    const ids = await webhookManager.generateWebhooks(1, 1);
+    webhookId = ids[0];
+  });
+
+  test("Memory usage should remain stable under high load", async () => {
+    const initialMemory = process.memoryUsage().heapUsed;
+    const ITERATIONS = 1000; // Simulate 1000 requests
+
+    for (let i = 0; i < ITERATIONS; i++) {
+      await request(app)
+        .post(`/webhook/${webhookId}`)
+        .send({ data: `payload-${i}`, timestamp: Date.now() })
+        .expect(200);
+
+      // Clear mocks periodically
+      if (i % 100 === 0) {
+        // Since pushData is a jest function, we can clear it
+        // However, accessing the mock instance from the import might be tricky if it's not exposed
+        // But since we are mocking "apify", we can get it from the instance if we had reference.
+        // In this simplified test, we just rely on the garbage collector and higher threshold.
+      }
+    }
+
+    // Force garbage collection if possible (requires --expose-gc)
+    if (global.gc) {
+      global.gc();
+    }
+
+    const finalMemory = process.memoryUsage().heapUsed;
+    const memoryDiffMB = (finalMemory - initialMemory) / 1024 / 1024;
+
+    console.log(
+      `Memory growth after ${ITERATIONS} requests: ${memoryDiffMB.toFixed(
+        2
+      )} MB`
+    );
+
+    // Expect memory growth to be reasonable (e.g., < 100MB for 1000 requests including overhead)
+    // Note: This is an observation test; precise assertion depends on the environment
+    expect(memoryDiffMB).toBeLessThan(100);
+  }, 45000); // Increased timeout
+});

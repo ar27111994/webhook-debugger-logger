@@ -303,3 +303,15 @@ A: Yes. Use the **Custom Scripting** (v2.1+) feature to provide a JavaScript sni
 - 📝 Open an issue on our [GitHub Repository](https://github.com/ar27111994/webhook-debugger-logger)
 
 **Developer Support Guarantee**: I respond to all comments and bug reports on the Apify console within **24 hours**.
+
+## Security & Permissions
+
+- **Required permissions**: `KEY_VALUE_STORE`, `DATASET`, `ACTOR`
+- **Why full permissions?**: The Actor needs to store incoming webhook payloads in a dataset and persist state in a key‑value store. These operations cannot be performed with limited permissions.
+- **Limited permissions**: Not applicable for this Actor because it must write logs and manage temporary webhook URLs.
+
+## Privacy
+
+We do **not** store any personal data beyond the raw request payloads you send. All data is kept only for the retention period you configure (default 24 h) and is automatically deleted afterwards. No data is shared with third parties.
+
+For more details, see the [Apify Privacy Policy](https://apify.com/privacy).

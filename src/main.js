@@ -120,19 +120,38 @@ app.get("/replay/:webhookId/:itemId", async (req, res) => {
 
     console.log(`[REPLAY] Resending event ${itemId} to ${targetUrl}`);
 
-    const response = await axios({
-      method: item.method,
-      url: targetUrl,
-      data: item.body,
-      headers: {
-        ...item.headers,
-        "X-Apify-Replay": "true",
-        "X-Original-Webhook-Id": webhookId,
-        host: new URL(targetUrl).host,
-      },
-      validateStatus: () => true,
-      timeout: 10000,
-    });
+    let response;
+    const MAX_RETRIES = 3;
+    let attempt = 0;
+    while (attempt < MAX_RETRIES) {
+      try {
+        attempt++;
+        response = await axios({
+          method: item.method,
+          url: targetUrl,
+          data: item.body,
+          headers: {
+            ...item.headers,
+            "X-Apify-Replay": "true",
+            "X-Original-Webhook-Id": webhookId,
+            host: new URL(targetUrl).host,
+          },
+          validateStatus: () => true,
+          timeout: 10000,
+        });
+        break; // Success
+      } catch (err) {
+        if (
+          attempt >= MAX_RETRIES ||
+          (err.code !== "ECONNABORTED" && err.code !== "ECONNRESET")
+        ) {
+          throw err;
+        }
+        await new Promise((resolve) =>
+          setTimeout(resolve, 1000 * Math.pow(2, attempt - 1))
+        );
+      }
+    }
 
     res.json({
       status: "Replayed",
@@ -224,7 +243,7 @@ app.get("/logs", async (req, res) => {
 
 app.get("/info", (req, res) => {
   res.json({
-    version: "2.3.1",
+    version: "2.4.2",
     status: "Enterprise & Optimization Active",
     authActive: !!authKey,
     activeWebhooks: webhookManager.getAllActive(),
@@ -249,7 +268,7 @@ app.get("/info", (req, res) => {
 
 app.get("/", (req, res) => {
   res.send(
-    "Webhook Debugger & Logger v2.3.1 (Enterprise Suite) is running. Use /info to explore premium features."
+    "Webhook Debugger & Logger v2.4.2 (Enterprise Suite) is running. Use /info to explore premium features."
   );
 });
 
