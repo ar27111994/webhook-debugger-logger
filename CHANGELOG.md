@@ -2,7 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
-## [2.2.0] - 2025-12-22
+## [2.3.1] - 2025-12-22
+
+### Fixed
+
+- **Edge Case Hardening**: Added input sanitization and hard-caps for `/logs` API.
+- **Safety**: Added object validation for custom response headers to prevent runtime crashes.
+- **Maintenance**: Minor documentation cleanup.
+
+## [2.3.0] - 2025-12-22
 
 ### Added
 

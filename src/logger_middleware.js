@@ -21,6 +21,11 @@ export const createLoggerMiddleware = (webhookManager, options, onEvent) => {
     customScript,
   } = options;
 
+  const safeResponseHeaders =
+    defaultResponseHeaders && typeof defaultResponseHeaders === "object"
+      ? defaultResponseHeaders
+      : {};
+
   // Pre-compile custom script if provided
   let compiledScript;
   if (customScript) {
@@ -173,12 +178,9 @@ export const createLoggerMiddleware = (webhookManager, options, onEvent) => {
     const sendResponse = () => {
       event.processingTime = Date.now() - startTime;
 
-      if (
-        defaultResponseHeaders &&
-        typeof defaultResponseHeaders === "object"
-      ) {
-        Object.keys(defaultResponseHeaders).forEach((key) => {
-          res.setHeader(key, defaultResponseHeaders[key]);
+      if (safeResponseHeaders) {
+        Object.keys(safeResponseHeaders).forEach((key) => {
+          res.setHeader(key, safeResponseHeaders[key]);
         });
       }
 

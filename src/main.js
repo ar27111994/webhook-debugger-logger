@@ -167,7 +167,7 @@ app.get("/log-stream", (req, res) => {
 
 app.get("/logs", async (req, res) => {
   try {
-    const {
+    let {
       webhookId,
       method,
       statusCode,
@@ -175,12 +175,19 @@ app.get("/logs", async (req, res) => {
       limit = 100,
       offset = 0,
     } = req.query;
+
+    // 1. Sanitize & Cap inputs
+    limit = Math.min(Math.max(parseInt(limit) || 100, 1), 1000);
+    offset = Math.max(parseInt(offset) || 0, 0);
+
     const localDataset = await Actor.openDataset();
 
-    // Memory-efficient retrieval: fetch only what's needed
+    // 2. Memory-efficient retrieval: fetch only what's needed
+    // If filtering is applied, we fetch a slightly larger window to increase match probability
     const result = await localDataset.getData({
-      limit: parseInt(limit),
-      offset: parseInt(offset),
+      limit:
+        webhookId || method || statusCode || contentType ? limit * 2 : limit,
+      offset,
       desc: true, // Fetch newest first naturally
     });
     let items = result.items || [];
