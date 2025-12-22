@@ -3,6 +3,7 @@ import axios from "axios";
 import Ajv from "ajv";
 import ipRangeCheck from "ip-range-check";
 import { nanoid } from "nanoid";
+import vm from "vm";
 
 const ajv = new Ajv();
 
@@ -17,7 +18,21 @@ export const createLoggerMiddleware = (webhookManager, options, onEvent) => {
     responseDelayMs = 0,
     forwardUrl,
     jsonSchema,
+    customScript,
   } = options;
+
+  // Pre-compile custom script if provided
+  let compiledScript;
+  if (customScript) {
+    try {
+      compiledScript = new vm.Script(customScript);
+    } catch (err) {
+      console.error(
+        "[SCRIPT-ERROR] Invalid Custom Script provided:",
+        err.message
+      );
+    }
+  }
 
   // Pre-compile schema if provided
   let validate;
@@ -141,6 +156,19 @@ export const createLoggerMiddleware = (webhookManager, options, onEvent) => {
       remoteIp,
       userAgent: req.headers["user-agent"],
     };
+
+    // 6. Custom Transformation Logic (Scripting)
+    if (compiledScript) {
+      try {
+        const sandbox = { event, req, console };
+        compiledScript.runInNewContext(sandbox, { timeout: 1000 });
+      } catch (err) {
+        console.error(
+          `[SCRIPT-EXEC-ERROR] Failed to run custom script for ${webhookId}:`,
+          err.message
+        );
+      }
+    }
 
     const sendResponse = () => {
       event.processingTime = Date.now() - startTime;

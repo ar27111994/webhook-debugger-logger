@@ -125,6 +125,12 @@
       "title": "JSON Schema Validation",
       "description": "Paste a JSON Schema to validate incoming payloads. Failed requests return 400.",
       "editor": "textarea"
+    },
+    "customScript": {
+      "type": "string",
+      "title": "Custom Transformation Script",
+      "description": "JavaScript code to transform the event object before saving. Provided arguments: { event, req }.",
+      "editor": "javascript"
     }
   },
   "required": []

@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.0] - 2025-12-22
+
+### Added
+
+- **v2.1 Custom Scripting**: Allow users to provide JavaScript snippets for advanced data transformation before logging.
+- Prepared for $1M Challenge final submission with unified enterprise feature set.
+
 ## [2.0.0] - 2025-12-21
 
 ### Added

@@ -22,6 +22,7 @@ const {
   responseDelayMs = 0,
   forwardUrl,
   jsonSchema,
+  customScript,
 } = input;
 
 const webhookManager = new WebhookManager();
@@ -84,6 +85,7 @@ app.all(
       responseDelayMs,
       forwardUrl,
       jsonSchema,
+      customScript,
     },
     broadcast
   )
