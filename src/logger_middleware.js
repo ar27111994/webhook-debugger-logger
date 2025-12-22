@@ -2,6 +2,7 @@ import { Actor } from "apify";
 import axios from "axios";
 import Ajv from "ajv";
 import ipRangeCheck from "ip-range-check";
+import { nanoid } from "nanoid";
 
 const ajv = new Ajv();
 
@@ -126,6 +127,7 @@ export const createLoggerMiddleware = (webhookManager, options, onEvent) => {
     }
 
     const event = {
+      id: nanoid(10),
       timestamp: new Date().toISOString(),
       webhookId,
       method: req.method,

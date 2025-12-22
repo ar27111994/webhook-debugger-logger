@@ -1,0 +1,11 @@
+{
+  "urlCount": 1,
+  "retentionHours": 1,
+  "authKey": "secret-123",
+  "defaultResponseCode": 201,
+  "defaultResponseBody": "{\"status\":\"success\",\"v2\":true}",
+  "defaultResponseHeaders": {
+    "X-Premium-Version": "2.0"
+  },
+  "responseDelayMs": 1000
+}

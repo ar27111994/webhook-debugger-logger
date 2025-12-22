@@ -96,11 +96,9 @@ app.get("/replay/:webhookId/:itemId", async (req, res) => {
     const targetUrl = req.query.url;
 
     if (!targetUrl) {
-      return res
-        .status(400)
-        .json({
-          error: "Missing 'url' query parameter for replay destination.",
-        });
+      return res.status(400).json({
+        error: "Missing 'url' query parameter for replay destination.",
+      });
     }
 
     const dataset = await Actor.openDataset();
