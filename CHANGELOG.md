@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.1] - 2025-12-22
+
+### Fixed
+
+- **Hotfix**: Added missing `editor` fields to `input_schema.json` to resolve Apify platform validation errors.
+
 ## [2.1.0] - 2025-12-22
 
 ### Added
