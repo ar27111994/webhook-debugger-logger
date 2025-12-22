@@ -306,9 +306,9 @@ A: Yes. Use the **Custom Scripting** (v2.1+) feature to provide a JavaScript sni
 
 ## Security & Permissions
 
-- **Required permissions**: `KEY_VALUE_STORE`, `DATASET`, `ACTOR`
-- **Why full permissions?**: The Actor needs to store incoming webhook payloads in a dataset and persist state in a key‑value store. These operations cannot be performed with limited permissions.
-- **Limited permissions**: Not applicable for this Actor because it must write logs and manage temporary webhook URLs.
+- **Permissions**: This Actor runs with **Limited Permissions** (the safest level).
+- **Scope**: It only accesses its own default dataset (to log webhooks) and key-value store (to manage state).
+- **Privacy**: It cannot access your other Actors, tasks, or datasets. Your data remains completely isolated.
 
 ## Privacy
 

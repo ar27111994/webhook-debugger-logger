@@ -10,7 +10,7 @@ Please use the following professional content to fill out your Actor's publicati
 | **Actor Name**      | `Webhook Debugger, Logger & API Mocking Suite`                                                                                                                                                                                                              |
 | **Description**     | `The ultimate webhook testing suite for developers. Capture, inspect, and replay requests in real-time without tunnels. Features API mocking (custom status/latency), secure forwarding, JSON Schema validation, and live SSE streaming. Perfect for debugging Stripe, GitHub, Shopify & Zapier workflows.` |
 | **Categories**      | `Developer Tools`, `Utilities`                                                                                                                                                                                                                              |
-| **SEO Title**       | `Webhook Debugger & Logger - Real-time Monitoring, Testing & API Mocking`                                                                                                                                                                                   |
+| **SEO Title**       | `Webhook Debugger & Logger - Real-time API Mocking & Testing`                                                                                                                                                                               |
 | **SEO Description** | `Debug webhooks instantly without ngrok. Capture requests, mock APIs with latency, replay events, and stream logs via SSE. The essential tool for Stripe & GitHub integrations.`                                                                            |
 
 ---
@@ -38,7 +38,16 @@ If you have a GitHub account, link this repository. It improves your **Actor Qua
 
 ---
 
-## 4. Next Steps
+## 4. Permissions (Critical for Quality Score)
+
+This Actor is designed to work with **Limited Permissions**. Do **NOT** use Full Permissions, as it will lower your Actor Quality Score.
+
+- **Permission Level**: `Limited Permissions`
+- **Why**: The Actor only needs to write to its own default dataset and key-value store. It does not require access to other user data.
+
+---
+
+## 5. Next Steps
 
 1. Copy-paste the values above into the forms shown in your screenshots.
 2. Click **Save** in each section.
