@@ -1,89 +1,92 @@
 {
-  "actorSpecification": 1,
+  "actorSpecification": 2,
   "fields": {
-    "id": {
-      "type": "string",
-      "title": "Event ID",
-      "description": "Unique identifier for this captured request"
-    },
-    "timestamp": {
-      "type": "string",
-      "format": "date-time",
-      "title": "Timestamp",
-      "description": "UTC time of the incoming request",
-      "example": "2025-12-22T11:07:54.852Z"
-    },
-    "webhookId": {
-      "type": "string",
-      "title": "Webhook ID",
-      "description": "Unique ID of the target webhook endpoint",
-      "example": "wh_a7B2k9L1p4"
-    },
-    "method": {
-      "type": "string",
-      "title": "Method",
-      "description": "HTTP Method (GET, POST, etc.)",
-      "example": "POST"
-    },
-    "headers": {
-      "type": "object",
-      "title": "Headers",
-      "description": "Full HTTP request headers",
-      "example": {
-        "content-type": "application/json",
-        "user-agent": "axios/1.13.2",
-        "accept": "application/json, text/plain, */*"
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "title": "Event ID",
+        "description": "Unique identifier for this captured request"
+      },
+      "timestamp": {
+        "type": "string",
+        "format": "date-time",
+        "title": "Timestamp",
+        "description": "UTC time of the incoming request",
+        "example": "2025-12-22T11:07:54.852Z"
+      },
+      "webhookId": {
+        "type": "string",
+        "title": "Webhook ID",
+        "description": "Unique ID of the target webhook endpoint",
+        "example": "wh_a7B2k9L1p4"
+      },
+      "method": {
+        "type": "string",
+        "title": "Method",
+        "description": "HTTP Method (GET, POST, etc.)",
+        "example": "POST"
+      },
+      "headers": {
+        "type": "object",
+        "title": "Headers",
+        "description": "Full HTTP request headers",
+        "example": {
+          "content-type": "application/json",
+          "user-agent": "axios/1.13.2",
+          "accept": "application/json, text/plain, */*"
+        }
+      },
+      "query": {
+        "type": "object",
+        "title": "Query",
+        "description": "URL query parameters",
+        "example": {
+          "__status": "401"
+        }
+      },
+      "body": {
+        "type": "string",
+        "title": "Body",
+        "description": "The raw or parsed request body",
+        "example": "{\"hello\": \"Apify World!\"}"
+      },
+      "contentType": {
+        "type": "string",
+        "title": "Content-Type",
+        "description": "MIME type of the request body",
+        "example": "application/json"
+      },
+      "size": {
+        "type": "integer",
+        "title": "Size (Bytes)",
+        "description": "Request body size in bytes",
+        "example": 24
+      },
+      "processingTime": {
+        "type": "integer",
+        "title": "Latency (ms)",
+        "description": "Time taken to process the request",
+        "example": 0
+      },
+      "remoteIp": {
+        "type": "string",
+        "title": "Source IP",
+        "description": "IP address of the sender",
+        "example": "::ffff:127.0.0.1"
+      },
+      "userAgent": {
+        "type": "string",
+        "title": "User-Agent",
+        "description": "Client user-agent string",
+        "example": "axios/1.13.2"
+      },
+      "statusCode": {
+        "type": "integer",
+        "title": "Status",
+        "description": "HTTP response status code returned to the sender",
+        "example": 200
       }
-    },
-    "query": {
-      "type": "object",
-      "title": "Query",
-      "description": "URL query parameters",
-      "example": {
-        "__status": "401"
-      }
-    },
-    "body": {
-      "type": "string",
-      "title": "Body",
-      "description": "The raw or parsed request body",
-      "example": "{\"hello\": \"Apify World!\"}"
-    },
-    "contentType": {
-      "type": "string",
-      "title": "Content-Type",
-      "description": "MIME type of the request body",
-      "example": "application/json"
-    },
-    "size": {
-      "type": "integer",
-      "title": "Size (Bytes)",
-      "description": "Request body size in bytes",
-      "example": 24
-    },
-    "processingTime": {
-      "type": "integer",
-      "title": "Latency (ms)",
-      "description": "Time taken to process the request",
-      "example": 0
-    },
-    "remoteIp": {
-      "type": "string",
-      "title": "Source IP",
-      "description": "IP address of the sender",
-      "example": "::ffff:127.0.0.1"
-    },
-    "userAgent": {
-      "type": "string",
-      "title": "User-Agent",
-      "description": "Client user-agent string",
-      "example": "axios/1.13.2"
-    },
-    "statusCode": {
-      "type": "integer",
-      "title": "Status",
-      "description": "HTTP response status code returned to the sender",
-      "example": 200
     }
   },
   "views": {
