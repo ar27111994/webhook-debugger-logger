@@ -1,5 +1,5 @@
 import axios from "axios";
-import EventSource from "eventsource";
+import { EventSource } from "eventsource";
 
 /**
  * 🚀 WEBHOOK DEBUGGER & LOGGER - LIVE DEMO

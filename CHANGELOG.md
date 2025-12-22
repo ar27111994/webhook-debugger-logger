@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.4.1] - 2025-12-22
+
+### Fixed
+
+- **ESM Compatibility**: Fixed `eventsource` import in `demo_cli.js` to support latest named exports.
+- **Version Sync**: Synchronized project version across all manifests.
+
 ## [2.4.0] - 2025-12-22
 
 ### Added
