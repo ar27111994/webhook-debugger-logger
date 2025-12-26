@@ -224,14 +224,25 @@ export const createLoggerMiddleware = (webhookManager, options, onEvent) => {
           let attempt = 0;
           let success = false;
 
+          let hostHeader = "";
+          try {
+            hostHeader = new URL(validatedUrl).host;
+          } catch (e) {
+            console.error(
+              `[FORWARD-ERROR] Invalid forward URL: ${validatedUrl}`
+            );
+            return; // Stop retrying if URL is fundamentally broken
+          }
+
           while (attempt < MAX_RETRIES && !success) {
             try {
               attempt++;
+
               await axios.post(validatedUrl, req.body, {
                 headers: {
                   ...req.headers,
                   "X-Forwarded-By": "Apify-Webhook-Debugger",
-                  host: new URL(validatedUrl).host,
+                  host: hostHeader,
                 },
                 timeout: 10000,
               });

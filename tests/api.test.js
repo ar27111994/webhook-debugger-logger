@@ -93,4 +93,17 @@ describe("API E2E Tests", () => {
     expect(res.statusCode).toBe(200);
     expect(res.body.status).toBe("Replayed");
   });
+
+  test("GET / should return version info", async () => {
+    const res = await request(app).get("/");
+    expect(res.statusCode).toBe(200);
+    expect(res.text).toContain("v2.5.0");
+  });
+
+  test("GET / with readiness probe header", async () => {
+    const res = await request(app)
+      .get("/")
+      .set("x-apify-container-server-readiness-probe", "true");
+    expect(res.statusCode).toBe(200);
+  });
 });

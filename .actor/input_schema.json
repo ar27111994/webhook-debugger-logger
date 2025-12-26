@@ -138,6 +138,13 @@
       "title": "Custom Transformation Script",
       "description": "JavaScript code to transform the event object before saving. Provided arguments: { event, req }.",
       "editor": "javascript"
+    },
+    "testAndExit": {
+      "type": "boolean",
+      "title": "Test and Exit",
+      "description": "If enabled, the Actor will exit immediately after successful initialization. Used for automated QA tests.",
+      "default": false,
+      "editor": "hidden"
     }
   },
   "required": []

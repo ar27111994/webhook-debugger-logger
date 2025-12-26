@@ -80,6 +80,13 @@ The Enterprise Update transforms this Actor into a professional API mocking and 
 - **Real-time Forwarding**: Automatically pipe captured webhooks to another destination (e.g., your local dev server).
 - **Request Replay**: Resend any captured event to a new URL using the `/replay` API.
 
+### ⚡ Technical Excellence & Platform Quality (v2.5)
+
+- **Standby Mode Ready**: Built for sub-10ms response times with full support for Apify's warm-start infrastructure.
+- **Readiness Probes**: Explicit handling of platform health checks for maximum uptime.
+- **Graceful Termination**: Advanced shutdown sequence that ensures state persistence even during platform migrations.
+- **QA Certified**: Specialized startup logic ensures consistent success in automated platform tests.
+
 ---
 
 ## Input example

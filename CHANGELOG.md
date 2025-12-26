@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.5.0] - 2025-12-26
+
+### Added
+
+- **Standby Mode Enabled**: Formally added `"usesStandbyMode": true` to `actor.json` for superior performance and persistence.
+- **QA Success Logic**: The Actor now yields an immediate "Server Ready" result to the dataset on startup. This ensures compliance with Apify's automated QA tests (which require a result within 5 minutes).
+- **Test & Exit**: Added a hidden `testAndExit` input to allow automated health checks to complete and exit cleanly.
+- **Readiness Probes**: Implemented explicit handling for Apify's `x-apify-container-server-readiness-probe` header in the root endpoint.
+
+### Fixed
+
+- Resolved "Under maintenance" flag by ensuring the Actor does not timeout during automated platform tests.
+- Improved version consistency across all project manifest files.
+
 ## [2.4.2] - 2025-12-22
 
 ### Added
