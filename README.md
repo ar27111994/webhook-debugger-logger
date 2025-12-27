@@ -9,6 +9,8 @@ A high-performance Apify Actor built for developers to test, inspect, and automa
 Run the following command while the Actor is active to see real-time streaming:
 
 ```bash
+# If authKey is configured, run with:
+# AUTH_KEY=your-secret node demo_cli.js
 node demo_cli.js
 ```
 
@@ -68,6 +70,8 @@ The Enterprise Update transforms this Actor into a professional API mocking and 
 
 - **API Key Auth**: Require a secret token for every incoming webhook.
 - **IP Whitelisting**: Lock down your endpoints to specific IPs or CIDR ranges.
+- **Rate Limiting (v2.6)**: Protect your management endpoints (`/logs`, `/info`, `/replay`) with configurable per-IP rate limits.
+- **Sensitive Data Masking (v2.6)**: Automatically redact known sensitive headers like `Authorization` and `Cookie` from your logs.
 
 ### 🎭 API Mocking & Latency
 
@@ -83,6 +87,7 @@ The Enterprise Update transforms this Actor into a professional API mocking and 
 ### ⚡ Technical Excellence & Platform Quality (v2.5)
 
 - **Standby Mode Ready**: Built for sub-10ms response times with full support for Apify's warm-start infrastructure.
+- **Scalable Real-time Feed**: v2.6 features a high-performance global SSE heartbeat mechanism, supporting hundreds of concurrent watchers with minimal memory footprint.
 - **Readiness Probes**: Explicit handling of platform health checks for maximum uptime.
 - **Graceful Termination**: Advanced shutdown sequence that ensures state persistence even during platform migrations.
 - **QA Certified**: Specialized startup logic ensures consistent success in automated platform tests.
@@ -110,6 +115,10 @@ The Enterprise Update transforms this Actor into a professional API mocking and 
   "enableJSONParsing": true
 }
 ```
+
+### ⚙️ Input Schema Preview
+
+![Input Schema](./assets/dashboard.png)
 
 ## Output example
 
@@ -139,6 +148,10 @@ The Enterprise Update transforms this Actor into a professional API mocking and 
 | 2025-12-19 14:31 | wh_abc123  | POST   | 200    | application/json                  | 1,240    | 12           |
 | 2025-12-19 14:35 | wh_xyz789  | GET    | 401    | -                                 | 0        | 5            |
 | 2025-12-19 14:40 | wh_abc123  | POST   | 200    | application/x-www-form-urlencoded | 450      | 8            |
+
+### 📊 Dataset View
+
+![Dataset View](./assets/dataset_view.png)
 
 ## How to get started
 
@@ -182,11 +195,18 @@ curl -X POST -H "Content-Type: text/xml" \
 curl --upload-file document.txt https://<ACTOR-RUN-URL>/webhook/wh_abc123
 ```
 
-### 5. Check active webhooks
+### 5. Check active webhooks (Management API)
 
 ```bash
-curl https://<ACTOR-RUN-URL>/info
+# Via Header
+curl -H "Authorization: Bearer YOUR_KEY" https://<ACTOR-RUN-URL>/info
+
+# Via Query Parameter
+curl https://<ACTOR-RUN-URL>/info?key=YOUR_KEY
 ```
+
+> [!NOTE]
+> If you have not configured an `authKey` in the input, you can omit the authentication headers/parameters.
 
 ## Advanced Features
 
@@ -201,6 +221,8 @@ You can stream webhook logs in real-time as they arrive using Server-Sent Events
 ```bash
 curl -N https://<ACTOR-RUN-URL>/log-stream
 ```
+
+![SSE Stream](./assets/sse_stream.png)
 
 ### Forced Status Codes
 
@@ -265,6 +287,16 @@ This Actor uses **Pay-per-Event (PPE)** pricing, meaning you only pay for the re
 - Batch: 1,000 webhooks = $10
 
 Compare to ngrok's monthly subscriptions just to get persistent local URLs.
+
+## 📈 Performance & Limits
+
+| Parameter         | Default   | Buffer             | Note                      |
+| ----------------- | --------- | ------------------ | ------------------------- |
+| **Max Payload**   | 10MB      | Up to 100MB        | Configurable in input     |
+| **Concurrency**   | Unlimited | Platform-dependent | Limited by memory         |
+| **Latency**       | <10ms     | Sub-5ms in Standby | Internal processing time  |
+| **SSE Heartbeat** | 30s       | -                  | Global efficient interval |
+| **History (TTL)** | 24h       | 1-72h              | Auto-cleanup active       |
 
 ## FAQ
 

@@ -118,6 +118,23 @@
           "remoteIp": { "label": "Source IP" }
         }
       }
+    },
+    "details": {
+      "title": "Full Payloads",
+      "transformation": {
+        "fields": ["timestamp", "method", "statusCode", "headers", "body"],
+        "desc": true
+      },
+      "display": {
+        "component": "table",
+        "properties": {
+          "timestamp": { "label": "Time", "format": "date" },
+          "method": { "label": "Method" },
+          "statusCode": { "label": "Status" },
+          "headers": { "label": "Headers", "format": "object" },
+          "body": { "label": "Body", "format": "text" }
+        }
+      }
     }
   }
 }

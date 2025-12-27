@@ -19,6 +19,7 @@
       "minimum": 1,
       "maximum": 10,
       "default": 3,
+      "prefill": 3,
       "editor": "number"
     },
     "retentionHours": {
@@ -28,6 +29,7 @@
       "minimum": 1,
       "maximum": 72,
       "default": 24,
+      "prefill": 24,
       "editor": "number"
     },
     "section_limits": {
@@ -45,6 +47,7 @@
       "minimum": 1024,
       "maximum": 104857600,
       "default": 10485760,
+      "prefill": 10485760,
       "editor": "number"
     },
     "enableJSONParsing": {
@@ -62,11 +65,29 @@
       "description": "Security settings.",
       "editor": "hidden"
     },
+    "maskSensitiveData": {
+      "type": "boolean",
+      "title": "Mask Sensitive Headers",
+      "description": "If enabled, headers like 'Authorization' and 'Cookie' will be masked in the logs to protect privacy.",
+      "default": true,
+      "editor": "checkbox"
+    },
+    "rateLimitPerMinute": {
+      "type": "integer",
+      "title": "Management Rate Limit",
+      "description": "Maximum requests per minute for management endpoints (/logs, /info, /replay) per IP.",
+      "minimum": 1,
+      "maximum": 1000,
+      "default": 60,
+      "prefill": 60,
+      "editor": "number"
+    },
     "authKey": {
       "type": "string",
       "title": "Authentication Key",
       "description": "If provided, every request must include '?key=YOUR_KEY' or 'Authorization: Bearer YOUR_KEY'.",
       "isSecret": true,
+      "example": "my-secret-key-123",
       "editor": "textfield"
     },
     "allowedIps": {
@@ -90,12 +111,14 @@
       "minimum": 100,
       "maximum": 599,
       "default": 200,
+      "prefill": 200,
       "editor": "number"
     },
     "defaultResponseBody": {
       "type": "string",
       "title": "Custom Response Body",
       "description": "The payload to return to the sender. Supports JSON/XML string format.",
+      "example": "{\"status\": \"received\"}",
       "editor": "textarea"
     },
     "defaultResponseHeaders": {
@@ -125,6 +148,7 @@
       "type": "string",
       "title": "HTTP Forwarding URL",
       "description": "Automatically POST every captured request to this destination.",
+      "example": "https://webhook.site/unique-id",
       "editor": "textfield"
     },
     "jsonSchema": {

@@ -2,9 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
-## [2.5.0] - 2025-12-26
+## [2.6.0] - 2025-12-27
 
 ### Added
+
+- **Management Rate Limiting**: Implemented a memory-efficient rate limiter for `/info`, `/logs`, and `/replay` endpoints to prevent brute-force attacks on API keys.
+- **Sensitive Data Masking**: Added opt-in masking for sensitive headers (Authorization, Cookie, etc.) in captured logs to enhance user privacy.
+- **Resource Offloading**: Dataset schemas and processing have been optimized for better platform performance.
+- **Detailed Log Views**: Added "Full Payloads" view to the Apify Dataset for easier inspection of headers and bodies in the console.
+
+### Improved
+
+- **SSE Scalability**: Refactored Server-Sent Events to use a high-performance global heartbeat mechanism, significantly reducing memory overhead per concurrent listener.
+- **Input Schema Quality**: Added detailed tooltips, grouping, and prefill examples for all v2.0+ features.
+- **Documentation**: Major README overhaul with new troubleshooting guides, professional usage examples, and performance metrics.
+
+## [2.5.0] - 2025-12-26
 
 - **Standby Mode Enabled**: Formally added `"usesStandbyMode": true` to `actor.json` for superior performance and persistence.
 - **QA Success Logic**: The Actor now yields an immediate "Server Ready" result to the dataset on startup. This ensures compliance with Apify's automated QA tests (which require a result within 5 minutes).

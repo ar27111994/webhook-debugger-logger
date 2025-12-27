@@ -94,6 +94,26 @@ describe("API E2E Tests", () => {
     expect(res.body.status).toBe("Replayed");
   });
 
+  test("POST /replay should also resend event", async () => {
+    const mockItem = {
+      id: "evt_789",
+      webhookId,
+      method: "POST",
+      body: '{"foo":"bar"}',
+      headers: {},
+    };
+    Actor.openDataset.mockReturnValue({
+      getData: jest.fn().mockResolvedValue({ items: [mockItem] }),
+    });
+
+    const res = await request(app)
+      .post(`/replay/${webhookId}/evt_789`)
+      .query({ url: "http://example.com/target" });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.status).toBe("Replayed");
+  });
+
   test("GET / should return version info", async () => {
     const res = await request(app).get("/");
     expect(res.statusCode).toBe(200);

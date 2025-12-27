@@ -10,14 +10,21 @@ import { EventSource } from "eventsource";
  */
 
 const BASE_URL = process.env.APIFY_ACTOR_URL || "http://localhost:8080";
+const AUTH_KEY = process.env.AUTH_KEY || "";
 
 async function runDemo() {
   console.log("\n🚀 WEBHOOK DEBUGGER & LOGGER - LIVE DEMO");
   console.log("------------------------------------------");
 
   try {
+    const headers = {};
+    if (AUTH_KEY) {
+      headers["Authorization"] = `Bearer ${AUTH_KEY}`;
+      console.log(`[AUTH] Using provided AUTH_KEY...`);
+    }
+
     // 1. Get active webhooks
-    const infoRes = await axios.get(`${BASE_URL}/info`);
+    const infoRes = await axios.get(`${BASE_URL}/info`, { headers });
     const active = infoRes.data.activeWebhooks;
 
     if (active.length === 0) {
@@ -38,7 +45,10 @@ async function runDemo() {
 
     // 2. Connect to SSE Stream
     console.log("[STREAM] Connecting to Live Stream...");
-    const es = new EventSource(`${BASE_URL}/log-stream`);
+    const streamOptions = AUTH_KEY
+      ? { headers: { Authorization: `Bearer ${AUTH_KEY}` } }
+      : {};
+    const es = new EventSource(`${BASE_URL}/log-stream`, streamOptions);
 
     es.onmessage = (event) => {
       const data = JSON.parse(event.data);
@@ -59,9 +69,13 @@ async function runDemo() {
     // 3. Send test requests
     setTimeout(async () => {
       console.log("[ACTION] Sending JSON payload...");
-      await axios.post(`${BASE_URL}/webhook/${targetId}`, {
-        hello: "Apify World!",
-      });
+      await axios.post(
+        `${BASE_URL}/webhook/${targetId}`,
+        {
+          hello: "Apify World!",
+        },
+        { headers }
+      );
     }, 1500);
 
     setTimeout(async () => {
@@ -69,13 +83,15 @@ async function runDemo() {
       const params = new URLSearchParams();
       params.append("user", "tester");
       params.append("action", "login");
-      await axios.post(`${BASE_URL}/webhook/${targetId}`, params);
+      await axios.post(`${BASE_URL}/webhook/${targetId}`, params, { headers });
     }, 3000);
 
     setTimeout(async () => {
-      console.log("[ACTION] Forcing 401 Unauthorized...");
+      console.log(
+        "[ACTION] Forcing 401 Unauthorized (via __status parameter)..."
+      );
       await axios
-        .get(`${BASE_URL}/webhook/${targetId}?__status=401`)
+        .get(`${BASE_URL}/webhook/${targetId}?__status=401`, { headers })
         .catch(() => {});
 
       console.log("\n✨ Demo complete. Press Ctrl+C to exit.");

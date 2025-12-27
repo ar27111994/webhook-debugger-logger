@@ -7,6 +7,7 @@ import { WebhookManager } from "./webhook_manager.js";
 import { createLoggerMiddleware } from "./logger_middleware.js";
 
 let server;
+let sseHeartbeat;
 let cleanupInterval;
 
 const webhookManager = new WebhookManager();
@@ -14,6 +15,7 @@ const webhookManager = new WebhookManager();
 const shutdown = async (signal) => {
   console.log(`Received ${signal}. Shutting down...`);
   if (cleanupInterval) clearInterval(cleanupInterval);
+  if (sseHeartbeat) clearInterval(sseHeartbeat);
 
   // Force exit after 30 seconds if graceful shutdown hangs
   const forceExitTimer = setTimeout(() => {
@@ -54,6 +56,8 @@ const {
   forwardUrl,
   jsonSchema,
   customScript,
+  maskSensitiveData = true,
+  rateLimitPerMinute = 60,
   testAndExit = false, // Hidden property for QA tests
 } = input;
 
@@ -96,6 +100,7 @@ if (active.length === 0) {
 }
 
 const app = express();
+app.set("trust proxy", true);
 app.use(compression());
 
 app.use(bodyParser.urlencoded({ extended: true, limit: maxPayloadSize }));
@@ -117,7 +122,48 @@ if (enableJSONParsing) {
   });
 }
 
+// RATE LIMITER FOR MANAGEMENT ENDPOINTS
+class RateLimiter {
+  constructor(limit, windowMs) {
+    this.limit = limit;
+    this.windowMs = windowMs;
+    this.hits = new Map();
+  }
+
+  middleware() {
+    return (req, res, next) => {
+      const ip =
+        req.ip || req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+      const now = Date.now();
+      const userHits = this.hits.get(ip) || [];
+
+      // Filter hits within the window
+      const recentHits = userHits.filter((h) => now - h < this.windowMs);
+      if (recentHits.length >= this.limit) {
+        return res.status(429).json({
+          error: "Too Many Requests",
+          message: `Rate limit exceeded. Max ${this.limit} requests per ${
+            this.windowMs / 1000
+          }s.`,
+        });
+      }
+
+      recentHits.push(now);
+      this.hits.set(ip, recentHits);
+      next();
+    };
+  }
+}
+
+const mgmtRateLimiter = new RateLimiter(rateLimitPerMinute, 60000).middleware();
+
 const clients = new Set();
+sseHeartbeat = setInterval(() => {
+  for (const client of clients) {
+    client.write(": heartbeat\n\n");
+  }
+}, 30000);
+
 const broadcast = (data) => {
   const message = `data: ${JSON.stringify(data)}\n\n`;
   clients.forEach((client) => client.write(message));
@@ -146,88 +192,132 @@ app.all(
       forwardUrl,
       jsonSchema,
       customScript,
+      maskSensitiveData,
     },
     broadcast
   )
 );
 
-// 2. REPLAY ENDPOINT (v2.0)
-app.get("/replay/:webhookId/:itemId", async (req, res) => {
-  try {
-    const { webhookId, itemId } = req.params;
-    const targetUrl = req.query.url;
-
-    if (!targetUrl) {
-      return res.status(400).json({
-        error: "Missing 'url' query parameter for replay destination.",
+// AUTH MIDDLEWARE FOR MANAGEMENT ENDPOINTS
+const authMiddleware = (req, res, next) => {
+  if (authKey) {
+    const providedKey =
+      req.query.key ||
+      (req.headers["authorization"] || "").replace("Bearer ", "");
+    if (providedKey !== authKey) {
+      return res.status(401).json({
+        error: "Unauthorized: Invalid or missing API key",
       });
     }
+  }
+  next();
+};
 
-    const dataset = await Actor.openDataset();
-    const { items } = await dataset.getData();
+// 2. REPLAY ENDPOINT (v2.0)
+app.all(
+  "/replay/:webhookId/:itemId",
+  mgmtRateLimiter,
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const { webhookId, itemId } = req.params;
+      const targetUrl = req.query.url;
 
-    // Find the specific item (dataset doesn't easily filter by field in one call without extra logic)
-    const item = items.find(
-      (i) =>
-        i.webhookId === webhookId && (i.id === itemId || i.timestamp === itemId)
-    );
-
-    if (!item) {
-      return res.status(404).json({ error: "Logged event not found." });
-    }
-
-    console.log(`[REPLAY] Resending event ${itemId} to ${targetUrl}`);
-
-    let response;
-    const MAX_RETRIES = 3;
-    let attempt = 0;
-    while (attempt < MAX_RETRIES) {
-      try {
-        attempt++;
-        response = await axios({
-          method: item.method,
-          url: targetUrl,
-          data: item.body,
-          headers: {
-            ...item.headers,
-            "X-Apify-Replay": "true",
-            "X-Original-Webhook-Id": webhookId,
-            host: new URL(targetUrl).host,
-          },
-          validateStatus: () => true,
-          timeout: 10000,
+      if (!targetUrl) {
+        return res.status(400).json({
+          error: "Missing 'url' query parameter for replay destination.",
         });
-        break; // Success
-      } catch (err) {
-        if (
-          attempt >= MAX_RETRIES ||
-          (err.code !== "ECONNABORTED" && err.code !== "ECONNRESET")
-        ) {
-          throw err;
+      }
+
+      const dataset = await Actor.openDataset();
+      const { items } = await dataset.getData();
+
+      // Find the specific item (dataset doesn't easily filter by field in one call without extra logic)
+      const item = items.find(
+        (i) =>
+          i.webhookId === webhookId &&
+          (i.id === itemId || i.timestamp === itemId)
+      );
+
+      if (!item) {
+        return res.status(404).json({ error: "Logged event not found." });
+      }
+
+      console.log(`[REPLAY] Resending event ${itemId} to ${targetUrl}`);
+
+      const strippedHeaders = [];
+      const filteredHeaders = Object.entries(item.headers || {}).reduce(
+        (acc, [key, value]) => {
+          if (typeof value === "string" && value.toUpperCase() === "[MASKED]") {
+            strippedHeaders.push(key);
+          } else {
+            acc[key] = value;
+          }
+          return acc;
+        },
+        {}
+      );
+
+      let response;
+      const MAX_RETRIES = 3;
+      let attempt = 0;
+      while (attempt < MAX_RETRIES) {
+        try {
+          attempt++;
+          response = await axios({
+            method: item.method,
+            url: targetUrl,
+            data: item.body,
+            headers: {
+              ...filteredHeaders,
+              "X-Apify-Replay": "true",
+              "X-Original-Webhook-Id": webhookId,
+              host: new URL(targetUrl).host,
+            },
+            validateStatus: () => true,
+            timeout: 10000,
+          });
+          break; // Success
+        } catch (err) {
+          if (
+            attempt >= MAX_RETRIES ||
+            (err.code !== "ECONNABORTED" && err.code !== "ECONNRESET")
+          ) {
+            throw err;
+          }
+          await new Promise((resolve) =>
+            setTimeout(resolve, 1000 * Math.pow(2, attempt - 1))
+          );
         }
-        await new Promise((resolve) =>
-          setTimeout(resolve, 1000 * Math.pow(2, attempt - 1))
+      }
+
+      if (strippedHeaders.length > 0) {
+        res.setHeader(
+          "X-Apify-Replay-Warning",
+          `Masked headers stripped: ${strippedHeaders.join(", ")}`
         );
       }
-    }
 
-    res.json({
-      status: "Replayed",
-      targetUrl,
-      targetResponseCode: response.status,
-      targetResponseBody: response.data,
-    });
-  } catch (error) {
-    const isTimeout = error.code === "ECONNABORTED";
-    res.status(isTimeout ? 504 : 500).json({
-      error: "Replay failed",
-      message: isTimeout
-        ? "Target destination timed out after 10s"
-        : error.message,
-      code: error.code,
-    });
+      res.json({
+        status: "Replayed",
+        targetUrl,
+        targetResponseCode: response.status,
+        targetResponseBody: response.data,
+        strippedHeaders:
+          strippedHeaders.length > 0 ? strippedHeaders : undefined,
+      });
+    } catch (error) {
+      const isTimeout = error.code === "ECONNABORTED";
+      res.status(isTimeout ? 504 : 500).json({
+        error: "Replay failed",
+        message: isTimeout
+          ? "Target destination timed out after 10s"
+          : error.message,
+        code: error.code,
+      });
+    }
   }
-});
+);
 
 app.get("/log-stream", (req, res) => {
   res.setHeader("Content-Type", "text/event-stream");
@@ -235,14 +325,13 @@ app.get("/log-stream", (req, res) => {
   res.setHeader("Connection", "keep-alive");
   res.flushHeaders();
   clients.add(res);
-  const heartbeat = setInterval(() => res.write(": heartbeat\n\n"), 15000);
+
   req.on("close", () => {
-    clearInterval(heartbeat);
     clients.delete(res);
   });
 });
 
-app.get("/logs", async (req, res) => {
+app.get("/logs", mgmtRateLimiter, authMiddleware, async (req, res) => {
   try {
     let {
       webhookId,
@@ -299,9 +388,9 @@ app.get("/logs", async (req, res) => {
   }
 });
 
-app.get("/info", (req, res) => {
+app.get("/info", mgmtRateLimiter, authMiddleware, (req, res) => {
   res.json({
-    version: "2.5.0",
+    version: "2.6.0",
     status: "Enterprise, Optimization & Standby Active",
     authActive: !!authKey,
     activeWebhooks: webhookManager.getAllActive(),
@@ -329,7 +418,7 @@ app.get("/", (req, res) => {
     return res.status(200).send("OK");
   }
   res.send(
-    "Webhook Debugger & Logger v2.5.0 (Enterprise Suite) is running. Use /info to explore premium features."
+    "Webhook Debugger & Logger v2.6.0 (Enterprise Suite) is running. Use /info to explore premium features."
   );
 });
 
@@ -354,7 +443,7 @@ if (process.env.NODE_ENV !== "test") {
   );
 }
 
-export { app, webhookManager, server };
+export { app, webhookManager, server, sseHeartbeat };
 
 if (process.env.NODE_ENV !== "test") {
   cleanupInterval = setInterval(async () => {

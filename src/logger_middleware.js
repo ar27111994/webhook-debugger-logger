@@ -19,6 +19,7 @@ export const createLoggerMiddleware = (webhookManager, options, onEvent) => {
     forwardUrl,
     jsonSchema,
     customScript,
+    maskSensitiveData = true,
   } = options;
 
   const safeResponseHeaders =
@@ -146,12 +147,28 @@ export const createLoggerMiddleware = (webhookManager, options, onEvent) => {
       loggedBody = "";
     }
 
+    const headersToMask = [
+      "authorization",
+      "cookie",
+      "set-cookie",
+      "x-api-key",
+      "api-key",
+    ];
+    const loggedHeaders = maskSensitiveData
+      ? Object.fromEntries(
+          Object.entries(req.headers).map(([key, value]) => [
+            key,
+            headersToMask.includes(key.toLowerCase()) ? "[MASKED]" : value,
+          ])
+        )
+      : req.headers;
+
     const event = {
       id: nanoid(10),
       timestamp: new Date().toISOString(),
       webhookId,
       method: req.method,
-      headers: req.headers,
+      headers: loggedHeaders,
       query: req.query,
       body: loggedBody,
       contentType,
@@ -253,7 +270,27 @@ export const createLoggerMiddleware = (webhookManager, options, onEvent) => {
                 `[FORWARD-ERROR] Attempt ${attempt}/${MAX_RETRIES} failed for ${validatedUrl}:`,
                 err.code === "ECONNABORTED" ? "Timed out" : err.message
               );
-              if (attempt < MAX_RETRIES) {
+
+              if (attempt >= MAX_RETRIES) {
+                // Log the final failure to the dataset as a system error
+                try {
+                  await Actor.pushData({
+                    id: nanoid(10),
+                    timestamp: new Date().toISOString(),
+                    webhookId: event.webhookId,
+                    method: "SYSTEM",
+                    type: "forward_error",
+                    body: `Forwarding to ${validatedUrl} failed after ${MAX_RETRIES} attempts. Last error: ${err.message}`,
+                    statusCode: 500,
+                    originalEventId: event.id,
+                  });
+                } catch (pushErr) {
+                  console.error(
+                    "[CRITICAL] Failed to log forward error to dataset:",
+                    pushErr.message
+                  );
+                }
+              } else {
                 await new Promise((resolve) => setTimeout(resolve, delay));
               }
             }
