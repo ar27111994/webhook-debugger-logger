@@ -24,11 +24,11 @@ jest.unstable_mockModule("apify", () => ({
   },
 }));
 
-jest.unstable_mockModule("axios", () => ({
-  default: {
-    post: jest.fn().mockResolvedValue({ status: 200, data: "OK" }),
-  },
-}));
+jest.unstable_mockModule("axios", () => {
+  const mockAxios = jest.fn().mockResolvedValue({ status: 200, data: "OK" });
+  mockAxios.post = jest.fn().mockResolvedValue({ status: 200, data: "OK" });
+  return { default: mockAxios };
+});
 
 const request = (await import("supertest")).default;
 const { app, webhookManager, sseHeartbeat } = await import("../src/main.js");
@@ -117,6 +117,63 @@ describe("Production Readiness Tests (v2.6.0)", () => {
         .set("X-Forwarded-For", "8.8.8.8")
         .send({});
       expect(res.statusCode).toBe(403);
+    });
+  });
+
+  describe("Hardening: Replay Logic", () => {
+    test("Should strip content-length and transmission headers during replay", async () => {
+      const targetUrl = "http://example.com/replay-target";
+      const eventId = "evt_123";
+
+      // Mock an event with a small content-length but a large body
+      const mockEvent = {
+        id: eventId,
+        method: "POST",
+        webhookId,
+        headers: {
+          "content-type": "application/json",
+          "content-length": "10", // Obviously too small for the body below
+          authorization: "[MASKED]",
+          host: "original.com",
+          connection: "keep-alive",
+        },
+        body: '{\n  "hello": "world"\n}', // 22 characters
+      };
+
+      const mockDataset = {
+        getData: jest.fn().mockResolvedValue({ items: [mockEvent] }),
+        pushData: jest.fn(),
+      };
+      Actor.openDataset.mockResolvedValue(mockDataset);
+
+      const res = await request(app)
+        .post(`/replay/${webhookId}/${eventId}?url=${targetUrl}`)
+        .set("Authorization", "Bearer top-secret")
+        .expect(200);
+
+      const { default: axiosMock } = await import("axios");
+      const axiosCall = axiosMock.mock.calls.find(
+        (c) => c[0].url === targetUrl
+      );
+      expect(axiosCall).toBeDefined();
+
+      const sentHeaders = axiosCall[0].headers;
+
+      // Transmission headers should be stripped
+      expect(sentHeaders["content-length"]).toBeUndefined();
+      expect(sentHeaders["content-encoding"]).toBeUndefined();
+      expect(sentHeaders["connection"]).toBeUndefined();
+
+      // Host should be overridden
+      expect(sentHeaders["host"]).toBe("example.com");
+
+      // Masked headers should be stripped
+      expect(sentHeaders["authorization"]).toBeUndefined();
+
+      // Response warning should be present
+      expect(res.headers["x-apify-replay-warning"]).toMatch(/Headers stripped/);
+      expect(res.body.strippedHeaders).toContain("content-length");
+      expect(res.body.strippedHeaders).toContain("authorization");
     });
   });
 });

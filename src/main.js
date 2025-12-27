@@ -246,9 +246,27 @@ app.all(
       console.log(`[REPLAY] Resending event ${itemId} to ${targetUrl}`);
 
       const strippedHeaders = [];
+      const headersToIgnore = [
+        "content-length",
+        "content-encoding",
+        "transfer-encoding",
+        "host",
+        "connection",
+        "keep-alive",
+        "proxy-authorization",
+        "te",
+        "trailer",
+        "upgrade",
+      ];
+
       const filteredHeaders = Object.entries(item.headers || {}).reduce(
         (acc, [key, value]) => {
-          if (typeof value === "string" && value.toUpperCase() === "[MASKED]") {
+          const lowerKey = key.toLowerCase();
+          const isMasked =
+            typeof value === "string" && value.toUpperCase() === "[MASKED]";
+          const isIgnored = headersToIgnore.includes(lowerKey);
+
+          if (isMasked || isIgnored) {
             strippedHeaders.push(key);
           } else {
             acc[key] = value;
@@ -294,7 +312,9 @@ app.all(
       if (strippedHeaders.length > 0) {
         res.setHeader(
           "X-Apify-Replay-Warning",
-          `Masked headers stripped: ${strippedHeaders.join(", ")}`
+          `Headers stripped (masked or transmission-related): ${strippedHeaders.join(
+            ", "
+          )}`
         );
       }
 
