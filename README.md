@@ -402,7 +402,3 @@ A: You can generate up to 10 unique endpoints per Actor run. If you need more, y
 We do **not** store any personal data beyond the raw request payloads you send. All data is kept only for the retention period you configure (default 24 h) and is automatically deleted afterwards. No data is shared with third parties.
 
 For more details, see the [Apify Privacy Policy](https://apify.com/privacy).
-
-```
-
-```
