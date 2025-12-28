@@ -21,11 +21,37 @@
       "type": "string",
       "title": "Active Webhooks Info",
       "template": "{{links.containerRunUrl}}info"
+    }
+  },
+  "views": {
+    "overview": {
+      "title": "Overview",
+      "transformation": {
+        "fields": [
+          "timestamp",
+          "webhookId",
+          "method",
+          "statusCode",
+          "contentType",
+          "size",
+          "processingTime",
+          "remoteIp"
+        ],
+        "desc": true
+      },
+      "display": {
+        "component": "table"
+      }
     },
-    "webhooks": {
-      "type": "string",
-      "title": "Storage State",
-      "template": "{{links.apiDefaultKeyValueStoreUrl}}/keys"
+    "details": {
+      "title": "Full Payloads",
+      "transformation": {
+        "fields": ["timestamp", "method", "statusCode", "headers", "body"],
+        "desc": true
+      },
+      "display": {
+        "component": "table"
+      }
     }
   }
 }
