@@ -25,6 +25,7 @@ describe("Logger Middleware", () => {
   beforeEach(() => {
     webhookManager = {
       isValid: jest.fn().mockReturnValue(true),
+      getWebhookData: jest.fn().mockReturnValue({}),
     };
     onEvent = jest.fn();
     options = {

@@ -1,6 +1,9 @@
 # Specify the parent image from which we build
 FROM apify/actor-node:20
 
+# Set working directory
+WORKDIR /app
+
 # Copy source code
 COPY . ./
 

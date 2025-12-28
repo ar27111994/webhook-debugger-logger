@@ -2,22 +2,10 @@ import { jest } from "@jest/globals";
 import request from "supertest";
 import { app, webhookManager } from "../src/main.js";
 
-jest.unstable_mockModule("apify", () => ({
-  Actor: {
-    init: jest.fn(),
-    getInput: jest.fn().mockResolvedValue({}),
-    openKeyValueStore: jest.fn().mockResolvedValue({
-      getValue: jest.fn().mockResolvedValue(null),
-      setValue: jest.fn(),
-    }),
-    openDataset: jest.fn().mockResolvedValue({
-      getData: jest.fn().mockResolvedValue({ items: [] }),
-      pushData: jest.fn(),
-    }),
-    on: jest.fn(),
-    exit: jest.fn(),
-  },
-}));
+jest.unstable_mockModule("apify", async () => {
+  const { createApifyMock } = await import("./helpers/apify-mock.js");
+  return { Actor: createApifyMock() };
+});
 
 describe("Stress Tests", () => {
   let webhookId;

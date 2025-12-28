@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.7.0] - 2025-12-28
+
+### Added
+
+- **Deterministic Rate-Limit Eviction**: The `RateLimiter` now enforces a strict `maxEntries` cap by automatically evicting the oldest entries when new clients connect, ensuring bounded memory usage.
+- **Advanced Edge Case Verification**: Expanded the test suite with high-precision timing assertions for delay caps and simulated IP identification failures.
+
+### Improved
+
+- **Security Hardening**:
+  - **Option Override Whitelisting**: Restricted per-webhook overrides to non-security settings (`responseDelayMs`, `defaultResponseCode`, etc.) to prevent bypassing global security controls.
+  - **Hardened IP Identification**: Implemented strict validation for management endpoints; requests without a resolvable client IP are now rejected with a `400 Bad Request`.
+- **Architectural Reliability**:
+  - **Background Rate-Limit Pruning**: Moved hit cleanup to a non-blocking background interval (60s) to maintain management endpoint performance.
+  - **Middleware Orchestration**: Refactored the request lifecycle to guarantee immediate response delivery before racing background tasks against a 10s timeout.
+  - **Consistent Error Branding**: Standardized automated error titles to Title Case (e.g., `Payload Too Large`, `Bad Request`).
+
 ## [2.6.0] - 2025-12-27
 
 ### Added

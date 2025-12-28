@@ -1,28 +1,17 @@
 import { jest } from "@jest/globals";
 
 // Mock Apify with configuration
-jest.unstable_mockModule("apify", () => ({
-  Actor: {
-    init: jest.fn(),
-    getInput: jest.fn().mockResolvedValue({
+jest.unstable_mockModule("apify", async () => {
+  const { createApifyMock } = await import("./helpers/apify-mock.js");
+  return {
+    Actor: createApifyMock({
       authKey: "top-secret",
-      rateLimitPerMinute: 2, // Low limit for easy testing
+      rateLimitPerMinute: 2,
       maskSensitiveData: true,
       allowedIps: ["127.0.0.1", "192.168.1.0/24"],
     }),
-    openKeyValueStore: jest.fn().mockResolvedValue({
-      getValue: jest.fn().mockResolvedValue(null),
-      setValue: jest.fn(),
-    }),
-    openDataset: jest.fn().mockResolvedValue({
-      getData: jest.fn().mockResolvedValue({ items: [] }),
-      pushData: jest.fn().mockResolvedValue({}),
-    }),
-    pushData: jest.fn().mockResolvedValue({}),
-    on: jest.fn(),
-    exit: jest.fn(),
-  },
-}));
+  };
+});
 
 jest.unstable_mockModule("axios", () => {
   const mockAxios = jest.fn().mockResolvedValue({ status: 200, data: "OK" });

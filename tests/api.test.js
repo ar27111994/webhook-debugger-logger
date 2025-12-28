@@ -1,22 +1,9 @@
 import { jest } from "@jest/globals";
 
-jest.unstable_mockModule("apify", () => ({
-  Actor: {
-    init: jest.fn(),
-    getInput: jest.fn().mockResolvedValue({}),
-    openKeyValueStore: jest.fn().mockResolvedValue({
-      getValue: jest.fn().mockResolvedValue(null),
-      setValue: jest.fn(),
-    }),
-    openDataset: jest.fn().mockResolvedValue({
-      getData: jest.fn().mockResolvedValue({ items: [] }),
-      pushData: jest.fn().mockResolvedValue({}),
-    }),
-    pushData: jest.fn().mockResolvedValue({}),
-    on: jest.fn(),
-    exit: jest.fn(),
-  },
-}));
+jest.unstable_mockModule("apify", async () => {
+  const { createApifyMock } = await import("./helpers/apify-mock.js");
+  return { Actor: createApifyMock() };
+});
 
 jest.unstable_mockModule("axios", () => ({
   default: jest.fn().mockResolvedValue({ status: 200, data: "OK" }),
@@ -117,7 +104,7 @@ describe("API E2E Tests", () => {
   test("GET / should return version info", async () => {
     const res = await request(app).get("/");
     expect(res.statusCode).toBe(200);
-    expect(res.text).toContain("v2.5.0");
+    expect(res.text).toContain("v2.7.0");
   });
 
   test("GET / with readiness probe header", async () => {

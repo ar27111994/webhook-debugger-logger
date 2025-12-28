@@ -4,304 +4,412 @@ import Ajv from "ajv";
 import ipRangeCheck from "ip-range-check";
 import { nanoid } from "nanoid";
 import vm from "vm";
+import { validateAuth } from "./utils/auth.js";
+import { parseWebhookOptions } from "./utils/config.js";
 
 const ajv = new Ajv();
 
-export const createLoggerMiddleware = (webhookManager, options, onEvent) => {
-  const {
-    maxPayloadSize,
-    authKey,
-    allowedIps = [],
-    defaultResponseCode = 200,
-    defaultResponseBody = "OK",
-    defaultResponseHeaders = {},
-    responseDelayMs = 0,
-    forwardUrl,
-    jsonSchema,
-    customScript,
-    maskSensitiveData = true,
-  } = options;
+/**
+ * Validates the basic webhook request parameters and permissions.
+ */
+function validateWebhookRequest(req, webhookId, options, webhookManager) {
+  const { authKey, allowedIps } = options;
 
-  const safeResponseHeaders =
-    defaultResponseHeaders && typeof defaultResponseHeaders === "object"
-      ? defaultResponseHeaders
-      : {};
+  // 1. Basic ID Validation
+  if (!webhookManager.isValid(webhookId)) {
+    return {
+      isValid: false,
+      statusCode: 404,
+      error: "Webhook ID not found or expired",
+    };
+  }
 
-  // Pre-compile custom script if provided
-  let compiledScript;
-  if (customScript) {
+  // 2. IP Whitelisting
+  const remoteIp = req.ip || req.socket.remoteAddress;
+  if (allowedIps.length > 0) {
+    const isAllowed = ipRangeCheck(remoteIp, allowedIps);
+    if (!isAllowed) {
+      return {
+        isValid: false,
+        statusCode: 403,
+        error: "Forbidden: IP not in whitelist",
+        remoteIp,
+      };
+    }
+  }
+
+  // 3. Authentication Check
+  const { isValid: isAuthValid, error: authError } = validateAuth(req, authKey);
+  if (!isAuthValid) {
+    return {
+      isValid: false,
+      statusCode: 401,
+      error: authError,
+    };
+  }
+
+  // 4. Payload size check
+  const contentLength = parseInt(req.headers["content-length"] || "0");
+  if (contentLength > options.maxPayloadSize) {
+    return {
+      isValid: false,
+      statusCode: 413,
+      error: "Payload Too Large",
+      received: contentLength,
+    };
+  }
+
+  return { isValid: true, remoteIp, contentLength };
+}
+
+/**
+ * Prepares the request body, validates JSON schema, and masks headers.
+ */
+function prepareRequestData(req, options, validate) {
+  const { maskSensitiveData } = options;
+  const rawContentType =
+    req.headers["content-type"] || "application/octet-stream";
+  const contentType = rawContentType.split(";")[0].trim().toLowerCase();
+
+  let loggedBody = req.body;
+  if (Buffer.isBuffer(loggedBody)) {
+    loggedBody = loggedBody.toString();
+  }
+
+  // JSON Schema Validation
+  if (validate && contentType === "application/json") {
+    let bodyToValidate = req.body;
+    if (typeof bodyToValidate === "string") {
+      try {
+        bodyToValidate = JSON.parse(bodyToValidate);
+      } catch (e) {
+        throw { statusCode: 400, error: "Invalid JSON for schema validation" };
+      }
+    }
+    const isValid = validate(bodyToValidate);
+    if (!isValid) {
+      throw {
+        statusCode: 400,
+        error: "JSON Schema Validation Failed",
+        details: validate.errors,
+      };
+    }
+  }
+
+  // Normalize loggedBody for storage
+  if (
+    loggedBody &&
+    typeof loggedBody === "object" &&
+    Object.keys(loggedBody).length > 0
+  ) {
+    loggedBody = JSON.stringify(loggedBody, null, 2);
+  } else if (
+    !loggedBody ||
+    (typeof loggedBody === "object" && Object.keys(loggedBody).length === 0)
+  ) {
+    loggedBody = "";
+  }
+
+  const headersToMask = [
+    "authorization",
+    "cookie",
+    "set-cookie",
+    "x-api-key",
+    "api-key",
+  ];
+  const loggedHeaders = maskSensitiveData
+    ? Object.fromEntries(
+        Object.entries(req.headers).map(([key, value]) => [
+          key,
+          headersToMask.includes(key.toLowerCase()) ? "[MASKED]" : value,
+        ])
+      )
+    : req.headers;
+
+  return { loggedBody, loggedHeaders, contentType };
+}
+
+/**
+ * Executes a custom script to transform the event.
+ */
+function transformRequestData(event, req, compiledScript) {
+  if (compiledScript) {
     try {
-      compiledScript = new vm.Script(customScript);
+      const sandbox = { event, req, console };
+      compiledScript.runInNewContext(sandbox, { timeout: 1000 });
     } catch (err) {
       console.error(
-        "[SCRIPT-ERROR] Invalid Custom Script provided:",
+        `[SCRIPT-EXEC-ERROR] Failed to run custom script for ${event.webhookId}:`,
         err.message
       );
     }
   }
+}
 
-  // Pre-compile schema if provided
+/**
+ * Sends the HTTP response back to the client.
+ */
+function sendResponse(res, event, options) {
+  const { defaultResponseBody, defaultResponseHeaders } = options;
+
+  if (defaultResponseHeaders && typeof defaultResponseHeaders === "object") {
+    Object.entries(defaultResponseHeaders).forEach(([key, value]) => {
+      res.setHeader(key, value);
+    });
+  }
+
+  res.status(event.statusCode);
+
+  if (
+    event.statusCode >= 400 &&
+    (!defaultResponseBody || defaultResponseBody === "OK")
+  ) {
+    res.json({
+      message: `Webhook received with status ${event.statusCode}`,
+      webhookId: event.webhookId,
+    });
+  } else if (typeof defaultResponseBody === "object") {
+    res.json(defaultResponseBody);
+  } else {
+    res.send(defaultResponseBody);
+  }
+}
+
+/**
+ * Handles background tasks like storage and forwarding.
+ */
+async function executeBackgroundTasks(event, req, options, onEvent) {
+  const { forwardUrl } = options;
+
+  try {
+    if (event && event.webhookId) {
+      await Actor.pushData(event);
+      if (onEvent) onEvent(event);
+    }
+
+    if (forwardUrl) {
+      let validatedUrl = forwardUrl.startsWith("http")
+        ? forwardUrl
+        : `http://${forwardUrl}`;
+
+      const forwardingPromise = (async () => {
+        const MAX_RETRIES = 3;
+        let attempt = 0;
+        let success = false;
+
+        let hostHeader = "";
+        try {
+          hostHeader = new URL(validatedUrl).host;
+        } catch (e) {
+          console.error(`[FORWARD-ERROR] Invalid forward URL: ${validatedUrl}`);
+          return;
+        }
+
+        while (attempt < MAX_RETRIES && !success) {
+          try {
+            attempt++;
+            await axios.post(validatedUrl, req.body, {
+              headers: {
+                ...req.headers,
+                "X-Forwarded-By": "Apify-Webhook-Debugger",
+                host: hostHeader,
+              },
+              timeout: 10000,
+            });
+            success = true;
+          } catch (err) {
+            const delay = 1000 * Math.pow(2, attempt - 1);
+            console.error(
+              `[FORWARD-ERROR] Attempt ${attempt}/${MAX_RETRIES} failed for ${validatedUrl}:`,
+              err.code === "ECONNABORTED" ? "Timed out" : err.message
+            );
+
+            if (attempt >= MAX_RETRIES) {
+              try {
+                await Actor.pushData({
+                  id: nanoid(10),
+                  timestamp: new Date().toISOString(),
+                  webhookId: event.webhookId,
+                  method: "SYSTEM",
+                  type: "forward_error",
+                  body: `Forwarding to ${validatedUrl} failed after ${MAX_RETRIES} attempts. Last error: ${err.message}`,
+                  statusCode: 500,
+                  originalEventId: event.id,
+                });
+              } catch (pushErr) {
+                console.error(
+                  "[CRITICAL] Failed to log forward error:",
+                  pushErr.message
+                );
+              }
+            } else {
+              await new Promise((resolve) => setTimeout(resolve, delay));
+            }
+          }
+        }
+      })();
+
+      await forwardingPromise;
+    }
+  } catch (error) {
+    const isPlatformError =
+      error.message &&
+      (error.message.includes("Dataset") ||
+        error.message.includes("quota") ||
+        error.message.includes("limit"));
+
+    console.error(
+      `[CRITICAL] ${
+        isPlatformError ? "PLATFORM-LIMIT" : "BACKGROUND-ERROR"
+      } for ${event.webhookId}:`,
+      error.message
+    );
+
+    if (isPlatformError) {
+      console.warn(
+        "[ADVICE] Check your Apify platform limits or storage availability."
+      );
+    }
+  }
+}
+
+export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
+  const options = parseWebhookOptions(rawOptions);
+
+  // Pre-compilation steps
+  let compiledScript;
+  if (options.customScript) {
+    try {
+      compiledScript = new vm.Script(options.customScript);
+    } catch (err) {
+      console.error("[SCRIPT-ERROR] Invalid Custom Script:", err.message);
+    }
+  }
+
   let validate;
-  if (jsonSchema) {
+  if (options.jsonSchema) {
     try {
       const schema =
-        typeof jsonSchema === "string" ? JSON.parse(jsonSchema) : jsonSchema;
+        typeof options.jsonSchema === "string"
+          ? JSON.parse(options.jsonSchema)
+          : options.jsonSchema;
       validate = ajv.compile(schema);
     } catch (err) {
-      console.error(
-        "[SCHEMA-ERROR] Invalid JSON Schema provided:",
-        err.message
-      );
+      console.error("[SCHEMA-ERROR] Invalid JSON Schema:", err.message);
     }
   }
 
-  return async (req, res, next) => {
+  return async (req, res) => {
     const startTime = Date.now();
     const webhookId = req.params.id;
 
-    // 1. Basic ID Validation
-    if (!webhookManager.isValid(webhookId)) {
-      return res.status(404).json({
-        error: "Webhook not found or expired",
+    // 1. Validate & Load Per-Webhook Options
+    const webhookData = webhookManager.getWebhookData(webhookId) || {};
+
+    // Only allow non-security settings to be overridden per-webhook
+    const allowedOverrides = [
+      "defaultResponseCode",
+      "defaultResponseBody",
+      "defaultResponseHeaders",
+      "responseDelayMs",
+    ];
+    const webhookOverrides = Object.fromEntries(
+      Object.entries(webhookData).filter(([key]) =>
+        allowedOverrides.includes(key)
+      )
+    );
+
+    const mergedOptions = {
+      ...options,
+      ...webhookOverrides,
+    };
+
+    const validation = validateWebhookRequest(
+      req,
+      webhookId,
+      mergedOptions,
+      webhookManager
+    );
+    if (!validation.isValid) {
+      return res.status(validation.statusCode).json({
+        error: validation.error,
+        ip: validation.remoteIp,
+        received: validation.received,
         id: webhookId,
         docs: "https://apify.com/ar27111994/webhook-debugger-logger",
       });
     }
 
-    // 2. IP Whitelisting (CIDR Support)
-    const remoteIp =
-      req.ip || req.headers["x-forwarded-for"] || req.socket.remoteAddress;
-    if (allowedIps.length > 0) {
-      const isAllowed = ipRangeCheck(remoteIp, allowedIps);
-      if (!isAllowed) {
-        return res.status(403).json({
-          error: "Forbidden: IP not in whitelist",
-          ip: remoteIp,
-        });
-      }
-    }
+    try {
+      // 2. Prepare
+      const { loggedBody, loggedHeaders, contentType } = prepareRequestData(
+        req,
+        mergedOptions,
+        validate
+      );
 
-    // 3. Authentication Check
-    if (authKey) {
-      const providedKey =
-        req.query.key ||
-        (req.headers["authorization"] || "").replace("Bearer ", "");
-      if (providedKey !== authKey) {
-        return res.status(401).json({
-          error: "Unauthorized: Invalid or missing API key",
-        });
-      }
-    }
+      // 3. Transform
+      const event = {
+        id: nanoid(10),
+        timestamp: new Date().toISOString(),
+        webhookId,
+        method: req.method,
+        headers: loggedHeaders,
+        query: req.query,
+        body: loggedBody,
+        contentType,
+        size: validation.contentLength,
+        statusCode: req.forcedStatus || mergedOptions.defaultResponseCode,
+        processingTime: 0,
+        remoteIp: validation.remoteIp,
+        userAgent: req.headers["user-agent"],
+      };
 
-    // 4. Payload size check
-    const contentLength = parseInt(req.headers["content-length"] || "0");
-    if (contentLength > maxPayloadSize) {
-      return res.status(413).json({
-        error: "Payload too large",
-        limit: maxPayloadSize,
-        received: contentLength,
-      });
-    }
+      transformRequestData(event, req, compiledScript);
 
-    // 5. Preparation for logging & Validation
-    const rawContentType =
-      req.headers["content-type"] || "application/octet-stream";
-    const contentType = rawContentType.split(";")[0].trim().toLowerCase();
-    let loggedBody = req.body;
-
-    if (Buffer.isBuffer(loggedBody)) {
-      loggedBody = loggedBody.toString();
-    }
-
-    // JSON Schema Validation
-    if (validate && contentType === "application/json") {
-      let bodyToValidate = req.body;
-      if (typeof bodyToValidate === "string") {
-        try {
-          bodyToValidate = JSON.parse(bodyToValidate);
-        } catch (e) {
-          return res
-            .status(400)
-            .json({ error: "Invalid JSON for schema validation" });
-        }
-      }
-      const isValid = validate(bodyToValidate);
-      if (!isValid) {
-        return res.status(400).json({
-          error: "JSON Schema Validation Failed",
-          details: validate.errors,
-        });
-      }
-    }
-
-    if (
-      loggedBody &&
-      typeof loggedBody === "object" &&
-      Object.keys(loggedBody).length > 0
-    ) {
-      loggedBody = JSON.stringify(loggedBody, null, 2);
-    } else if (
-      !loggedBody ||
-      (typeof loggedBody === "object" && Object.keys(loggedBody).length === 0)
-    ) {
-      loggedBody = "";
-    }
-
-    const headersToMask = [
-      "authorization",
-      "cookie",
-      "set-cookie",
-      "x-api-key",
-      "api-key",
-    ];
-    const loggedHeaders = maskSensitiveData
-      ? Object.fromEntries(
-          Object.entries(req.headers).map(([key, value]) => [
-            key,
-            headersToMask.includes(key.toLowerCase()) ? "[MASKED]" : value,
-          ])
-        )
-      : req.headers;
-
-    const event = {
-      id: nanoid(10),
-      timestamp: new Date().toISOString(),
-      webhookId,
-      method: req.method,
-      headers: loggedHeaders,
-      query: req.query,
-      body: loggedBody,
-      contentType,
-      size: contentLength,
-      statusCode: req.forcedStatus || defaultResponseCode,
-      processingTime: 0,
-      remoteIp,
-      userAgent: req.headers["user-agent"],
-    };
-
-    // 6. Custom Transformation Logic (Scripting)
-    if (compiledScript) {
-      try {
-        const sandbox = { event, req, console };
-        compiledScript.runInNewContext(sandbox, { timeout: 1000 });
-      } catch (err) {
-        console.error(
-          `[SCRIPT-EXEC-ERROR] Failed to run custom script for ${webhookId}:`,
-          err.message
+      // 4. Orchestration: Respond synchronous-ish, then race background tasks
+      if (mergedOptions.responseDelayMs > 0) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, Math.min(mergedOptions.responseDelayMs, 10000))
         );
       }
-    }
 
-    const sendResponse = () => {
       event.processingTime = Date.now() - startTime;
+      sendResponse(res, event, mergedOptions);
 
-      if (safeResponseHeaders) {
-        Object.keys(safeResponseHeaders).forEach((key) => {
-          res.setHeader(key, safeResponseHeaders[key]);
-        });
-      }
-
-      res.status(event.statusCode);
-
-      if (
-        event.statusCode >= 400 &&
-        (!defaultResponseBody || defaultResponseBody === "OK")
-      ) {
-        res.json({
-          message: `Webhook received with status ${event.statusCode}`,
-          webhookId,
-        });
-      } else {
-        res.send(defaultResponseBody);
-      }
-    };
-
-    if (responseDelayMs > 0) {
-      setTimeout(sendResponse, Math.min(responseDelayMs, 10000));
-    } else {
-      sendResponse();
-    }
-
-    try {
-      if (event && event.webhookId) {
-        await Actor.pushData(event);
-        if (onEvent) onEvent(event);
-      }
-
-      if (forwardUrl) {
-        // Ensure forwardUrl has a protocol
-        let validatedUrl = forwardUrl;
-        if (!forwardUrl.startsWith("http")) {
-          validatedUrl = `http://${forwardUrl}`;
+      // Execute background tasks (storage, forwarding) after response
+      const backgroundPromise = async () => {
+        try {
+          await executeBackgroundTasks(event, req, mergedOptions, onEvent);
+        } catch (err) {
+          console.error(
+            `[CRITICAL] Background tasks for ${event.id} failed:`,
+            err.message
+          );
         }
+      };
 
-        // Async retry logic (Fire & Forget)
-        (async () => {
-          const MAX_RETRIES = 3;
-          let attempt = 0;
-          let success = false;
-
-          let hostHeader = "";
-          try {
-            hostHeader = new URL(validatedUrl).host;
-          } catch (e) {
-            console.error(
-              `[FORWARD-ERROR] Invalid forward URL: ${validatedUrl}`
+      // Wrap background work in Promise.race to ensure we don't hang the Actor if storage is slow
+      await Promise.race([
+        backgroundPromise(),
+        new Promise((resolve) =>
+          setTimeout(() => {
+            console.warn(
+              `[TIMEOUT] Background tasks for ${event.id} exceeded 10s. Continuing...`
             );
-            return; // Stop retrying if URL is fundamentally broken
-          }
-
-          while (attempt < MAX_RETRIES && !success) {
-            try {
-              attempt++;
-
-              await axios.post(validatedUrl, req.body, {
-                headers: {
-                  ...req.headers,
-                  "X-Forwarded-By": "Apify-Webhook-Debugger",
-                  host: hostHeader,
-                },
-                timeout: 10000,
-              });
-              success = true;
-            } catch (err) {
-              const delay = 1000 * Math.pow(2, attempt - 1); // 1s, 2s, 4s
-              console.error(
-                `[FORWARD-ERROR] Attempt ${attempt}/${MAX_RETRIES} failed for ${validatedUrl}:`,
-                err.code === "ECONNABORTED" ? "Timed out" : err.message
-              );
-
-              if (attempt >= MAX_RETRIES) {
-                // Log the final failure to the dataset as a system error
-                try {
-                  await Actor.pushData({
-                    id: nanoid(10),
-                    timestamp: new Date().toISOString(),
-                    webhookId: event.webhookId,
-                    method: "SYSTEM",
-                    type: "forward_error",
-                    body: `Forwarding to ${validatedUrl} failed after ${MAX_RETRIES} attempts. Last error: ${err.message}`,
-                    statusCode: 500,
-                    originalEventId: event.id,
-                  });
-                } catch (pushErr) {
-                  console.error(
-                    "[CRITICAL] Failed to log forward error to dataset:",
-                    pushErr.message
-                  );
-                }
-              } else {
-                await new Promise((resolve) => setTimeout(resolve, delay));
-              }
-            }
-          }
-        })();
+            resolve();
+          }, 10000)
+        ),
+      ]);
+    } catch (err) {
+      if (err.statusCode) {
+        return res.status(err.statusCode).json({
+          error: err.error,
+          details: err.details,
+        });
       }
-    } catch (error) {
-      console.error(
-        `[CRITICAL] Error in background tasks for ${webhookId}:`,
-        error.message
-      );
+      console.error("[CRITICAL] Internal Middleware Error:", err.message);
+      res.status(500).json({ error: "Internal Server Error" });
     }
   };
 };

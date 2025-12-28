@@ -5,17 +5,17 @@
   "schemaVersion": 1,
   "properties": {
     "section_urls": {
-      "title": "Endpoint Setup",
+      "title": "🌐 Dynamic Endpoint Setup",
       "type": "string",
       "sectionCaption": "Webhook Generation",
-      "sectionDescription": "Automatically create unique, temporary endpoints to capture incoming data.",
+      "sectionDescription": "Quickly create unique, temporary endpoints to capture incoming data from any source.",
       "description": "Configuration for generated URLs.",
       "editor": "hidden"
     },
     "urlCount": {
       "type": "integer",
-      "title": "Number of URLs",
-      "description": "How many unique webhook URLs to generate for this run (1-10).",
+      "title": "Number of Endpoints",
+      "description": "How many unique webhook URLs to generate for this run (1-10). Default is 3.",
       "minimum": 1,
       "maximum": 10,
       "default": 3,
@@ -24,8 +24,8 @@
     },
     "retentionHours": {
       "type": "integer",
-      "title": "Retention Period (hours)",
-      "description": "How long to keep webhook URLs active before auto-deletion (1-72 hours).",
+      "title": "Retention Window (Hours)",
+      "description": "How long to keep your webhook URLs active and data accessible before auto-deletion (1-72 hrs).",
       "minimum": 1,
       "maximum": 72,
       "default": 24,
@@ -33,17 +33,17 @@
       "editor": "number"
     },
     "section_limits": {
-      "title": "Advanced Safety & Performance",
       "type": "string",
-      "sectionCaption": "Traffic Controls",
-      "sectionDescription": "Define payload limits and automated parsing logic for your incoming webhooks.",
+      "title": "🛡️ Traffic & Payload Controls",
+      "sectionCaption": "Stability & Scaling",
+      "sectionDescription": "Protect your Actor from traffic spikes by defining payload and parsing limits.",
       "description": "Safety and parsing controls.",
       "editor": "hidden"
     },
     "maxPayloadSize": {
       "type": "integer",
-      "title": "Max Payload Size (Bytes)",
-      "description": "Maximum allowed size for the request body. Requests exceeding this will be rejected with 413.",
+      "title": "Max Body Size (Bytes)",
+      "description": "Maximum allowed size for the incoming request body. Defaults to 10MB. Requests exceeding this will be rejected with 413.",
       "minimum": 1024,
       "maximum": 104857600,
       "default": 10485760,
@@ -52,30 +52,30 @@
     },
     "enableJSONParsing": {
       "type": "boolean",
-      "title": "Enable JSON Parsing",
-      "description": "If enabled, the Actor will attempt to parse 'application/json' bodies into searchable objects.",
+      "title": "Auto-Parse JSON Payloads",
+      "description": "If enabled, the Actor will automatically convert 'application/json' bodies into searchable dataset objects.",
       "default": true,
       "editor": "checkbox"
     },
     "section_v2_security": {
-      "title": "v2.0 Security & Access Controls",
+      "title": "🔑 Enterprise-Grade Security",
       "type": "string",
-      "sectionCaption": "Enterprise Security",
-      "sectionDescription": "Protect your webhook logs from unauthorized traffic.",
+      "sectionCaption": "Access Control",
+      "sectionDescription": "Secure your endpoints with API keys, IP whitelisting, and automated data masking.",
       "description": "Security settings.",
       "editor": "hidden"
     },
     "maskSensitiveData": {
       "type": "boolean",
-      "title": "Mask Sensitive Headers",
-      "description": "If enabled, headers like 'Authorization' and 'Cookie' will be masked in the logs to protect privacy.",
+      "title": "Mask Authentication Headers",
+      "description": "Automatically redact 'Authorization' and 'Cookie' headers from logs to ensure compliance and privacy.",
       "default": true,
       "editor": "checkbox"
     },
     "rateLimitPerMinute": {
       "type": "integer",
       "title": "Management Rate Limit",
-      "description": "Maximum requests per minute for management endpoints (/logs, /info, /replay) per IP.",
+      "description": "Maximum requests per minute for management endpoints (/logs, /info, /replay). Applied per client IP.",
       "minimum": 1,
       "maximum": 1000,
       "default": 60,
@@ -84,30 +84,30 @@
     },
     "authKey": {
       "type": "string",
-      "title": "Authentication Key",
-      "description": "If provided, every request must include '?key=YOUR_KEY' or 'Authorization: Bearer YOUR_KEY'.",
+      "title": "Global API Key",
+      "description": "Secure all incoming requests. Senders must provide this key via 'Authorization: Bearer' or '?key='.",
       "isSecret": true,
       "example": "my-secret-key-123",
       "editor": "textfield"
     },
     "allowedIps": {
       "type": "array",
-      "title": "Allowed IPs (Whitelist)",
-      "description": "Only accept requests from these IP addresses. Leave empty to allow all.",
+      "title": "IP Whitelist (CIDR)",
+      "description": "Only accept traffic from these specific IPs or CIDR blocks. Leave blank for public access.",
       "editor": "stringList"
     },
     "section_v2_response": {
-      "title": "v2.0 Advanced Responses",
+      "title": "🎭 API Mocking & Latency",
       "type": "string",
-      "sectionCaption": "API Mocking & Simulation",
-      "sectionDescription": "Define exactly how the server should respond to the sender.",
+      "sectionCaption": "Response Simulation",
+      "sectionDescription": "Simulate real-world API behaviors by customizing the responses sent back to the source.",
       "description": "Response settings.",
       "editor": "hidden"
     },
     "defaultResponseCode": {
       "type": "integer",
-      "title": "Response Status Code",
-      "description": "The default HTTP code to return (200, 201, etc). Can be overridden via ?__status=XXX query.",
+      "title": "HTTP Status Code",
+      "description": "Default code to return (200, 201, etc). Use the '__status' query on webhooks to override dynamically.",
       "minimum": 100,
       "maximum": 599,
       "default": 200,
@@ -116,57 +116,57 @@
     },
     "defaultResponseBody": {
       "type": "string",
-      "title": "Custom Response Body",
-      "description": "The payload to return to the sender. Supports JSON/XML string format.",
-      "example": "{\"status\": \"received\"}",
+      "title": "Custom Body Payload",
+      "description": "The exact data to return to the sender. Supports JSON, XML, or plain text strings.",
+      "example": "{\"status\": \"received\", \"success\": true}",
       "editor": "textarea"
     },
     "defaultResponseHeaders": {
       "type": "object",
-      "title": "Custom Response Headers",
-      "description": "A JSON object of headers to include in the response (e.g., {'X-Custom': 'Value'}).",
+      "title": "Custom HTTP Headers",
+      "description": "Define extra headers (e.g., {'X-Custom': 'Value'}) to include in EVERY webhook response.",
       "editor": "json"
     },
     "responseDelayMs": {
       "type": "integer",
-      "title": "Response Delay (ms)",
-      "description": "Simulate slow APIs by delaying the response (0-10000ms).",
+      "title": "Network Latency (ms)",
+      "description": "Simulate slow internet or busy servers by delaying the response (0-10,000ms).",
       "minimum": 0,
       "maximum": 10000,
       "default": 0,
       "editor": "number"
     },
     "section_v2_workflows": {
-      "title": "v2.0 Advanced Workflows",
+      "title": "🔄 Smart Data Workflows",
       "type": "string",
-      "sectionCaption": "Data Flow & Validation",
-      "sectionDescription": "Automate where your data goes after it's captured.",
+      "sectionCaption": "Automation",
+      "sectionDescription": "Trigger events and validate data immediately as it lands on your endpoints.",
       "description": "Workflow settings.",
       "editor": "hidden"
     },
     "forwardUrl": {
       "type": "string",
-      "title": "HTTP Forwarding URL",
-      "description": "Automatically POST every captured request to this destination.",
-      "example": "https://webhook.site/unique-id",
+      "title": "Automated Pipe URL",
+      "description": "Immediately POST a copy of every captured request to this destination URL.",
+      "example": "https://your-server.com/ingest",
       "editor": "textfield"
     },
     "jsonSchema": {
       "type": "string",
-      "title": "JSON Schema Validation",
-      "description": "Paste a JSON Schema to validate incoming payloads. Failed requests return 400.",
+      "title": "JSON Schema Guard",
+      "description": "Enforce strict payload structure. Invalid requests will be rejected with a 400 Bad Request.",
       "editor": "textarea"
     },
     "customScript": {
       "type": "string",
-      "title": "Custom Transformation Script",
-      "description": "JavaScript code to transform the event object before saving. Provided arguments: { event, req }.",
+      "title": "Transformation Logic (JS)",
+      "description": "JavaScript snippet to clean or transform the event before storage. Args: { event, req }.",
       "editor": "javascript"
     },
     "testAndExit": {
       "type": "boolean",
-      "title": "Test and Exit",
-      "description": "If enabled, the Actor will exit immediately after successful initialization. Used for automated QA tests.",
+      "title": "Automated QA Mode",
+      "description": "Internal test flag: enables immediate exit after healthy startup.",
       "default": false,
       "editor": "hidden"
     }

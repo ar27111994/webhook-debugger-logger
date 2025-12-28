@@ -1,0 +1,60 @@
+import { timingSafeEqual } from "crypto";
+
+/**
+ * Validates the authentication key from query or headers.
+ *
+ * @param {Object} req - Express request object
+ * @param {string} authKey - The configured authentication key
+ * @returns {Object} Validation result { isValid: boolean, error?: string }
+ */
+export function validateAuth(req, authKey) {
+  if (!authKey) {
+    return { isValid: true };
+  }
+
+  // 1. Extract token from Authorization header (Preferred)
+  const authHeader = req.headers["authorization"] || "";
+  let providedKey = "";
+
+  if (authHeader.toLowerCase().startsWith("bearer ")) {
+    providedKey = authHeader.substring(7).trim();
+  } else if (req.query.key) {
+    // 2. Fallback to query param (Deprecated/Riskier)
+    providedKey = req.query.key;
+    console.warn(
+      "[SECURITY] API key provided in query string. Use Authorization header instead."
+    );
+  }
+
+  if (!providedKey) {
+    return {
+      isValid: false,
+      error: "Unauthorized: Missing API key",
+    };
+  }
+
+  // 3. Timing-safe comparison
+  const expectedBuffer = Buffer.from(authKey);
+  const providedBuffer = Buffer.from(providedKey);
+
+  // timingSafeEqual requires buffers of the same length
+  if (expectedBuffer.length !== providedBuffer.length) {
+    // Perform a dummy comparison to avoid a simple timing shortcut
+    timingSafeEqual(expectedBuffer, expectedBuffer);
+    return {
+      isValid: false,
+      error: "Unauthorized: Invalid API key",
+    };
+  }
+
+  const isValid = timingSafeEqual(expectedBuffer, providedBuffer);
+
+  if (!isValid) {
+    return {
+      isValid: false,
+      error: "Unauthorized: Invalid API key",
+    };
+  }
+
+  return { isValid: true };
+}

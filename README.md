@@ -332,12 +332,22 @@ A: Yes. Use the **Custom Scripting** (v2.1+) feature to provide a JavaScript sni
 **Issue**: "JSON Schema Validation Failed"  
 **Solution**: The incoming payload did not match your provided schema. Check the `/logs` or the webhook response for specific validation error details.
 
+**Q: Can I transform data before it's saved?**
+A: Yes. Use the **Custom Scripting** feature to write JavaScript that modifies the `event` object dynamically.
+
+**Q: How do I handle heavy traffic?**
+A: The Actor is built on a high-performance Express server. For heavy traffic, ensure you have enough memory (1024MB+ recommended) and consider using **HTTP Forwarding** to offload processing to your own infrastructure.
+
+**Q: Is there a limit on the number of webhooks?**
+A: You can generate up to 10 unique endpoints per Actor run. If you need more, you can start multiple runs or use different IDs with the same endpoint by routing logic in your `customScript`.
+
 ---
 
 **Questions?**
 
 - 💬 Join the [Apify Discord Community](https://discord.gg/jyEM2PRvMU)
 - 📚 Read the [Apify SDK Documentation](https://sdk.apify.com/)
+- 🔗 Manage your webhooks in [Apify Console](https://console.apify.com)
 - 🛠️ Compare with [Webhook.site](https://webhook.site) (Desktop alternative)
 - 📝 Open an issue on our [GitHub Repository](https://github.com/ar27111994/webhook-debugger-logger)
 

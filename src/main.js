@@ -5,6 +5,8 @@ import compression from "compression";
 import axios from "axios";
 import { WebhookManager } from "./webhook_manager.js";
 import { createLoggerMiddleware } from "./logger_middleware.js";
+import { parseWebhookOptions } from "./utils/config.js";
+import { validateAuth } from "./utils/auth.js";
 
 let server;
 let sseHeartbeat;
@@ -16,6 +18,7 @@ const shutdown = async (signal) => {
   console.log(`Received ${signal}. Shutting down...`);
   if (cleanupInterval) clearInterval(cleanupInterval);
   if (sseHeartbeat) clearInterval(sseHeartbeat);
+  if (webhookRateLimiter) webhookRateLimiter.destroy();
 
   // Force exit after 30 seconds if graceful shutdown hangs
   const forceExitTimer = setTimeout(() => {
@@ -41,25 +44,29 @@ const shutdown = async (signal) => {
 await Actor.init();
 
 const input = (await Actor.getInput()) || {};
+const config = parseWebhookOptions(input);
 const {
   urlCount = 3,
   retentionHours = 24,
   maxPayloadSize = 10485760, // 10MB
   enableJSONParsing = true,
-  // v2.0 Features
+} = input;
+const {
   authKey,
-  allowedIps = [],
-  defaultResponseCode = 200,
-  defaultResponseBody = "OK",
-  defaultResponseHeaders = {},
-  responseDelayMs = 0,
+  allowedIps,
+  defaultResponseCode,
+  defaultResponseBody,
+  defaultResponseHeaders,
+  responseDelayMs,
   forwardUrl,
   jsonSchema,
   customScript,
-  maskSensitiveData = true,
-  rateLimitPerMinute = 60,
-  testAndExit = false, // Hidden property for QA tests
-} = input;
+  maskSensitiveData,
+  rateLimitPerMinute: rawRateLimit,
+} = config;
+
+const rateLimitPerMinute = Math.max(1, Math.floor(rawRateLimit || 60));
+const testAndExit = input.testAndExit || false;
 
 await webhookManager.init();
 
@@ -124,18 +131,77 @@ if (enableJSONParsing) {
 
 // RATE LIMITER FOR MANAGEMENT ENDPOINTS
 class RateLimiter {
-  constructor(limit, windowMs) {
+  constructor(limit, windowMs, maxEntries = 10000) {
     this.limit = limit;
     this.windowMs = windowMs;
+    this.maxEntries = maxEntries;
     this.hits = new Map();
+
+    // Background pruning to avoid blocking the request path
+    this.cleanupInterval = setInterval(() => {
+      const now = Date.now();
+      const threshold = now - this.windowMs;
+      let prunedCount = 0;
+
+      for (const [key, timestamps] of this.hits.entries()) {
+        const fresh = timestamps.filter((t) => t > threshold);
+        if (fresh.length === 0) {
+          this.hits.delete(key);
+          prunedCount++;
+        } else {
+          this.hits.set(key, fresh);
+        }
+      }
+
+      if (prunedCount > 0 && process.env.NODE_ENV !== "test") {
+        console.log(
+          `[SYSTEM] RateLimiter pruned ${prunedCount} expired entries.`
+        );
+      }
+    }, 60000); // Prune every 60s
+  }
+
+  destroy() {
+    if (this.cleanupInterval) clearInterval(this.cleanupInterval);
   }
 
   middleware() {
     return (req, res, next) => {
-      const ip =
-        req.ip || req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+      let ip = req.ip || req.socket.remoteAddress;
+
+      // Test hook to simulate missing IP metadata
+      if (process.env.NODE_ENV === "test" && req.headers["x-simulate-no-ip"]) {
+        ip = null;
+      }
+
+      if (!ip) {
+        console.warn("[SECURITY] Rejecting request with unidentifiable IP:", {
+          userAgent: req.headers["user-agent"],
+          headers: req.headers,
+        });
+        return res.status(400).json({
+          error: "Bad Request",
+          message:
+            "Client IP could not be identified. Ensure your request includes standard IP headers if behind a proxy.",
+        });
+      }
+
       const now = Date.now();
-      const userHits = this.hits.get(ip) || [];
+      let userHits = this.hits.get(ip);
+
+      if (!userHits) {
+        // Enforce maxEntries cap for new clients
+        if (this.hits.size >= this.maxEntries) {
+          const oldestKey = this.hits.keys().next().value;
+          this.hits.delete(oldestKey);
+          if (process.env.NODE_ENV !== "test") {
+            console.log(
+              `[SYSTEM] RateLimiter evicted entry for ${oldestKey} (Cap: ${this.maxEntries})`
+            );
+          }
+        }
+        userHits = [];
+      }
 
       // Filter hits within the window
       const recentHits = userHits.filter((h) => now - h < this.windowMs);
@@ -155,7 +221,8 @@ class RateLimiter {
   }
 }
 
-const mgmtRateLimiter = new RateLimiter(rateLimitPerMinute, 60000).middleware();
+const webhookRateLimiter = new RateLimiter(rateLimitPerMinute, 60000);
+const mgmtRateLimiter = webhookRateLimiter.middleware();
 
 const clients = new Set();
 sseHeartbeat = setInterval(() => {
@@ -200,15 +267,9 @@ app.all(
 
 // AUTH MIDDLEWARE FOR MANAGEMENT ENDPOINTS
 const authMiddleware = (req, res, next) => {
-  if (authKey) {
-    const providedKey =
-      req.query.key ||
-      (req.headers["authorization"] || "").replace("Bearer ", "");
-    if (providedKey !== authKey) {
-      return res.status(401).json({
-        error: "Unauthorized: Invalid or missing API key",
-      });
-    }
+  const { isValid, error } = validateAuth(req, authKey);
+  if (!isValid) {
+    return res.status(401).json({ error });
   }
   next();
 };
@@ -410,7 +471,7 @@ app.get("/logs", mgmtRateLimiter, authMiddleware, async (req, res) => {
 
 app.get("/info", mgmtRateLimiter, authMiddleware, (req, res) => {
   res.json({
-    version: "2.6.0",
+    version: "2.7.0",
     status: "Enterprise, Optimization & Standby Active",
     authActive: !!authKey,
     activeWebhooks: webhookManager.getAllActive(),
@@ -438,7 +499,7 @@ app.get("/", (req, res) => {
     return res.status(200).send("OK");
   }
   res.send(
-    "Webhook Debugger & Logger v2.6.0 (Enterprise Suite) is running. Use /info to explore premium features."
+    "Webhook Debugger & Logger v2.7.0 (Enterprise Suite) is running. Use /info to explore premium features."
   );
 });
 
@@ -448,10 +509,17 @@ app.use((err, req, res, next) => {
   if (res.headersSent) return next(err);
 
   const status = err.statusCode || err.status || 500;
+  const errorTitle =
+    status === 413
+      ? "Payload Too Large"
+      : status === 400
+      ? "Bad Request"
+      : "Internal Server Error";
+
   res.status(status).json({
-    error: "Internal Server Error",
+    error: errorTitle,
     message: err.message,
-    type: err.name,
+    statusCode: status,
   });
 });
 
