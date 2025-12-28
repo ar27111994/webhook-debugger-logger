@@ -88,6 +88,7 @@
       "description": "Secure all incoming requests. Senders must provide this key via 'Authorization: Bearer' or '?key='.",
       "isSecret": true,
       "example": "my-secret-key-123",
+      "prefill": "my-secret-token",
       "editor": "textfield"
     },
     "allowedIps": {
@@ -119,6 +120,7 @@
       "title": "Custom Body Payload",
       "description": "The exact data to return to the sender. Supports JSON, XML, or plain text strings.",
       "example": "{\"status\": \"received\", \"success\": true}",
+      "prefill": "{\"status\": \"success\", \"message\": \"Webhook captured!\"}",
       "editor": "textarea"
     },
     "defaultResponseHeaders": {
@@ -151,16 +153,27 @@
       "example": "https://your-server.com/ingest",
       "editor": "textfield"
     },
+    "forwardHeaders": {
+      "type": "boolean",
+      "title": "Pass Original Headers",
+      "description": "If enabled, all incoming headers will be forwarded to the destination. Disable this to send a 'clean' request (Type/Length only).",
+      "default": true,
+      "editor": "checkbox"
+    },
     "jsonSchema": {
       "type": "string",
       "title": "JSON Schema Guard",
       "description": "Enforce strict payload structure. Invalid requests will be rejected with a 400 Bad Request.",
+      "example": "{\n  \"type\": \"object\",\n  \"required\": [\"userId\"],\n  \"properties\": {\n    \"userId\": { \"type\": \"string\" }\n  }\n}",
+      "prefill": "{\n  \"type\": \"object\",\n  \"required\": [\"event\"],\n  \"properties\": {\n    \"event\": { \"type\": \"string\" }\n  }\n}",
       "editor": "textarea"
     },
     "customScript": {
       "type": "string",
       "title": "Transformation Logic (JS)",
       "description": "JavaScript snippet to clean or transform the event before storage. Args: { event, req }.",
+      "example": "event.body = JSON.parse(event.body);\nevent.headers['x-custom'] = 'modified';",
+      "prefill": "// Example: Parse body and add a custom flag\nif (event.contentType === 'application/json') {\n    const body = JSON.parse(event.body);\n    event.body = { ...body, _debug: true };\n}",
       "editor": "javascript"
     },
     "testAndExit": {

@@ -4,3 +4,4 @@ storage/
 .DS_Store
 *.log
 .env
+*.mp4

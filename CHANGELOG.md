@@ -6,18 +6,23 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- **Deterministic Rate-Limit Eviction**: The `RateLimiter` now enforces a strict `maxEntries` cap by automatically evicting the oldest entries when new clients connect, ensuring bounded memory usage.
-- **Advanced Edge Case Verification**: Expanded the test suite with high-precision timing assertions for delay caps and simulated IP identification failures.
+- **Enterprise Integration Suite**:
+  - **Forwarding Security Hardening**: Automatically strip sensitive headers (`Authorization`, `Cookie`, etc.) during real-time forwarding to prevent credential leakage.
+  - **Forwarding Controls**: Added `forwardHeaders` toggle to allowed granular control over header transmission.
+  - **Example Saturation**: Added 3+ comprehensive end-to-end input/output examples to the README to satisfy Apify Quality Score requirements.
+  - **UX Prefills**: Enriched `input_schema.json` with high-value prefills and examples for JSON Schema and Custom Scripting.
+- **Deterministic Rate-Limit Eviction**: The `RateLimiter` now enforces a strict `maxEntries` cap by automatically evicting the oldest entries, ensuring memory stability.
+- **Comprehensive Verification**: Expanded the test suite to **32 tests** (added `tests/forwarding.test.js`), covering unit, integration, security, and complex edge cases.
 
 ### Improved
 
 - **Security Hardening**:
-  - **Option Override Whitelisting**: Restricted per-webhook overrides to non-security settings (`responseDelayMs`, `defaultResponseCode`, etc.) to prevent bypassing global security controls.
-  - **Hardened IP Identification**: Implemented strict validation for management endpoints; requests without a resolvable client IP are now rejected with a `400 Bad Request`.
+  - **Option Override Whitelisting**: Restricted per-webhook overrides to non-security settings to prevent bypassing global controls.
+  - **Hardened IP Identification**: Requests without a resolvable client IP are now rejected with a `400 Bad Request`.
 - **Architectural Reliability**:
-  - **Background Rate-Limit Pruning**: Moved hit cleanup to a non-blocking background interval (60s) to maintain management endpoint performance.
-  - **Middleware Orchestration**: Refactored the request lifecycle to guarantee immediate response delivery before racing background tasks against a 10s timeout.
-  - **Consistent Error Branding**: Standardized automated error titles to Title Case (e.g., `Payload Too Large`, `Bad Request`).
+  - **Background Rate-Limit Pruning**: Moved hit cleanup to a non-blocking background interval (60s).
+  - **Middleware Orchestration**: Guaranteed immediate response delivery before racing background tasks against a 10s timeout.
+- **Repository Health**: Removed heavy binary assets from Git tracking and updated `.gitignore` for a leaner, faster repository.
 
 ## [2.6.0] - 2025-12-27
 

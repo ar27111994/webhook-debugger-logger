@@ -94,8 +94,6 @@ The Enterprise Update transforms this Actor into a professional API mocking and 
 
 ---
 
-## Input example
-
 ### Simple mode (basic)
 
 ```json
@@ -113,6 +111,19 @@ The Enterprise Update transforms this Actor into a professional API mocking and 
   "retentionHours": 72,
   "maxPayloadSize": 10485760,
   "enableJSONParsing": true
+}
+```
+
+### Enterprise/CI integration
+
+```json
+{
+  "urlCount": 1,
+  "authKey": "my-secure-ci-token",
+  "allowedIps": ["34.250.0.0/16"],
+  "jsonSchema": "{\"type\":\"object\",\"required\":[\"commit_id\"]}",
+  "forwardUrl": "https://ci-collector.internal.com/hooks",
+  "maskSensitiveData": true
 }
 ```
 
@@ -138,6 +149,22 @@ The Enterprise Update transforms this Actor into a professional API mocking and 
   "contentType": "application/json",
   "processingTime": 12,
   "remoteIp": "1.2.3.4"
+}
+```
+
+### Advanced Event Metadata (v2.7+)
+
+```json
+{
+  "id": "evt_8m2L5p9xR",
+  "timestamp": "2025-12-28T12:00:00Z",
+  "webhookId": "wh_ci_prod_1",
+  "method": "POST",
+  "statusCode": 201,
+  "processingTime": 450,
+  "remoteIp": "34.250.12.34",
+  "forwardStatus": "SUCCESS",
+  "originalEventId": null
 }
 ```
 
@@ -268,15 +295,26 @@ Webhook Debugger is the perfect "safe buffer" for your automations.
 - **Logs everything**: Even if your Zap fails, you have the raw request in Apify.
 - **Payload transformation**: Apify datasets make it easy to clean/inspect data before it hits your automation.
 
-### Setup Guide (Zapier/Make)
+### Setup Guide (Zapier/Make/n8n)
 
-1. **Source**: Point your service (Stripe, Shopify, etc.) to the Actor's webhook URL.
-2. **Apify Webhook**:
-   - Go to your Actor's **Integrations** tab.
-   - Set up a webhook to trigger on **Dataset item created**.
-   - Point this Apify webhook to your **Zapier/Make "Catch Webhook"** URL.
-3. **Data Flow**: `Stripe` -> `Webhook Debugger` -> `Apify Dataset` -> `Zapier`.
-4. **Benefit**: You get real-time logging AND immediate automation trigger.
+You can integrate your debugger with external tools in two distinct ways:
+
+#### Option A: Real-time Forwarding (Recommended 🚀)
+
+Use this if you want your automation to trigger **immediately** (sub-100ms) when a webhook is received.
+
+1. **In Zapier**: Create a Zap and use the **"Webhooks by Zapier"** app with the **"Catch Webhook"** trigger. Copy the generated URL.
+2. **In Apify**: Paste that URL into the **"Automated Pipe URL"** field in your Actor's input.
+3. **Control**: Use the **"Pass Original Headers"** toggle to decide if your automation needs the original source headers or just the raw payload.
+
+#### Option B: Platform Integrations (Monitoring 📊)
+
+Use this to trigger actions based on lifecycle events or safely after data is stored.
+
+1. **In Apify**: Go to the **Integrations** tab of your Actor.
+2. **Setup**: Add a "Webhooks" integration triggered on **"Dataset item created"**.
+3. **Flow**: `Source` -> `Debugger` -> `Apify Storage` -> `Zapier`.
+4. **Benefit**: Guaranteed delivery even if your external tool is temporarily down (via Apify's retry logic).
 
 ## Pricing
 
@@ -323,13 +361,13 @@ A: Yes. Use the **Custom Scripting** (v2.1+) feature to provide a JavaScript sni
 
 ## Troubleshooting
 
-**Issue**: "Webhook not found or expired"  
+**Issue**: "Webhook not found or expired"
 **Solution**: Verify the webhook ID is correct. Check the `/info` endpoint of your running Actor to see active IDs. If it expired, restart the Actor to generate new ones.
 
-**Issue**: "Script Execution Error"  
+**Issue**: "Script Execution Error"
 **Solution**: Check your `customScript` for syntax errors. The Actor runs scripts in a secure sandbox with a 1s timeout.
 
-**Issue**: "JSON Schema Validation Failed"  
+**Issue**: "JSON Schema Validation Failed"
 **Solution**: The incoming payload did not match your provided schema. Check the `/logs` or the webhook response for specific validation error details.
 
 **Q: Can I transform data before it's saved?**
@@ -364,3 +402,7 @@ A: You can generate up to 10 unique endpoints per Actor run. If you need more, y
 We do **not** store any personal data beyond the raw request payloads you send. All data is kept only for the retention period you configure (default 24 h) and is automatically deleted afterwards. No data is shared with third parties.
 
 For more details, see the [Apify Privacy Policy](https://apify.com/privacy).
+
+```
+
+```

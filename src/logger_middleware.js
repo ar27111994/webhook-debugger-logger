@@ -208,9 +208,30 @@ async function executeBackgroundTasks(event, req, options, onEvent) {
         while (attempt < MAX_RETRIES && !success) {
           try {
             attempt++;
+
+            const sensitiveHeaders = [
+              "authorization",
+              "cookie",
+              "set-cookie",
+              "x-api-key",
+              "api-key",
+            ];
+
+            const forwardingHeaders =
+              options.forwardHeaders !== false
+                ? Object.fromEntries(
+                    Object.entries(req.headers).filter(
+                      ([key]) => !sensitiveHeaders.includes(key.toLowerCase())
+                    )
+                  )
+                : {
+                    "content-type": req.headers["content-type"],
+                    "content-length": req.headers["content-length"],
+                  };
+
             await axios.post(validatedUrl, req.body, {
               headers: {
-                ...req.headers,
+                ...forwardingHeaders,
                 "X-Forwarded-By": "Apify-Webhook-Debugger",
                 host: hostHeader,
               },

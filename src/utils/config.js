@@ -13,6 +13,7 @@ export function parseWebhookOptions(options = {}) {
     defaultResponseHeaders: options.defaultResponseHeaders ?? {},
     responseDelayMs: options.responseDelayMs ?? 0,
     forwardUrl: options.forwardUrl,
+    forwardHeaders: options.forwardHeaders ?? true,
     jsonSchema: options.jsonSchema,
     customScript: options.customScript,
     maskSensitiveData: options.maskSensitiveData ?? true, // Default to true
