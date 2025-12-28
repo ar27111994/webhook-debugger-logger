@@ -1,16 +1,14 @@
 import { jest } from "@jest/globals";
 
-jest.unstable_mockModule("axios", () => ({
-  default: {
-    post: jest.fn().mockResolvedValue({ status: 200 }),
-  },
-}));
+jest.unstable_mockModule("axios", async () => {
+  const { axiosMock } = await import("./helpers/shared-mocks.js");
+  return { default: axiosMock };
+});
 
-jest.unstable_mockModule("apify", () => ({
-  Actor: {
-    pushData: jest.fn().mockResolvedValue({}),
-  },
-}));
+jest.unstable_mockModule("apify", async () => {
+  const { apifyMock } = await import("./helpers/shared-mocks.js");
+  return { Actor: apifyMock };
+});
 
 const { createLoggerMiddleware } = await import("../src/logger_middleware.js");
 const httpMocks = (await import("node-mocks-http")).default;
