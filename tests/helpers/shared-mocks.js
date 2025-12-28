@@ -12,6 +12,8 @@ export const axiosMock = {
  * Minimal Apify Actor mock for basic tests.
  */
 export const apifyMock = {
+  init: jest.fn().mockResolvedValue({}),
+  exit: jest.fn().mockResolvedValue({}),
   pushData: jest.fn().mockResolvedValue({}),
   on: jest.fn(),
   getInput: jest.fn().mockResolvedValue({}),

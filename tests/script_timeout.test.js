@@ -3,17 +3,14 @@ import httpMocks from "node-mocks-http";
 
 // Mock axios
 jest.unstable_mockModule("axios", async () => {
-  return { default: jest.fn().mockResolvedValue({ status: 200, data: "OK" }) };
+  const { axiosMock } = await import("./helpers/shared-mocks.js");
+  return { default: axiosMock };
 });
 
 // Mock Apify
 jest.unstable_mockModule("apify", async () => {
-  const { createApifyMock } = await import("./helpers/apify-mock.js");
-  return {
-    Actor: createApifyMock({
-      authKey: "secret",
-    }),
-  };
+  const { apifyMock } = await import("./helpers/shared-mocks.js");
+  return { Actor: apifyMock };
 });
 
 const { createLoggerMiddleware } = await import("../src/logger_middleware.js");
