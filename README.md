@@ -1,10 +1,10 @@
-# 🚀 Webhook Debugger & Logger
+# 🚀 Webhook Debugger & Logger v2.7.0 (Enterprise Suite)
 
 ![Dashboard Mockup](./assets/dashboard.png)
 
-A high-performance Apify Actor built for developers to test, inspect, and automate incoming webhooks in real-time.
+A high-performance Apify Actor built for developers to test, inspect, and automate incoming webhooks in real-time. This Actor is optimized for **Apify Standby Mode**, providing sub-10ms logic execution and zero cold-start latency.
 
-## ⚡ Live Demo (Local)
+## ⚡ Quick Start: Live Demo (Local)
 
 Run the following command while the Actor is active to see real-time streaming:
 
@@ -316,15 +316,16 @@ Use this to trigger actions based on lifecycle events or safely after data is st
 3. **Flow**: `Source` -> `Debugger` -> `Apify Storage` -> `Zapier`.
 4. **Benefit**: Guaranteed delivery even if your external tool is temporarily down (via Apify's retry logic).
 
-## Pricing
+## 💰 Pricing & Economics
 
-This Actor uses **Pay-per-Event (PPE)** pricing, meaning you only pay for the requests you actually log:
+This Actor uses a transparent **Pay-per-Event (PPE)** pricing model. This means you only pay for the resources you actually consume during active debugging, with no monthly subscription overhead.
 
-- **$0.01 per webhook request logged**
-- Batch: 100 webhooks = $1
-- Batch: 1,000 webhooks = $10
+- **Rate**: $0.01 per 1 captured webhook.
+- **Batching**: 100 webhooks = $1.00.
+- **Batching**: 1,000 webhooks = $10.00.
 
-Compare to ngrok's monthly subscriptions just to get persistent local URLs.
+**Why PPE?**
+Standard tools like ngrok or dedicated SaaS webhooks charge fixed monthly fees. With Webhook Debugger, you can keep an endpoint active for a month and only pay if you actually trigger a test.
 
 ## 📈 Performance & Limits
 
@@ -381,17 +382,20 @@ A: You can generate up to 10 unique endpoints per Actor run. If you need more, y
 
 ---
 
-**Questions?**
+## 🆘 Support & Community
 
-- 💬 Join the [Apify Discord Community](https://discord.gg/jyEM2PRvMU)
-- 📚 Read the [Apify SDK Documentation](https://sdk.apify.com/)
-- 🔗 Manage your webhooks in [Apify Console](https://console.apify.com)
-- 🛠️ Compare with [Webhook.site](https://webhook.site) (Desktop alternative)
-- 📝 Open an issue on our [GitHub Repository](https://github.com/ar27111994/webhook-debugger-logger)
+We are committed to providing first-class support for our "Enterprise Suite" users.
 
-**Developer Support Guarantee**: I respond to all comments and bug reports on the Apify console within **24 hours**.
+- 💬 **Apify Discord**: Join the [Apify Discord Community](https://discord.gg/jyEM2PRvMU) to chat with other developers.
+- 📚 **Learning**: Explore the [Apify Academy](https://docs.apify.com/academy) for best practices on building resilient Actors.
+- 📖 **Documentation**: Read the [Apify SDK Documentation](https://sdk.apify.com/) for technical deep dives.
+- 🔗 **Console**: Manage your active runs in the [Apify Console](https://console.apify.com).
+- 🛠️ **Alternative**: Compare with [Webhook.site](https://webhook.site) if you need a desktop-only alternative.
+- 📝 **Issues**: Found a bug? Open an issue on our [GitHub Repository](https://github.com/ar27111994/webhook-debugger-logger).
 
-## Security & Permissions
+**Developer Support Guarantee**: I am an active maintainer and respond to all comments, bug reports, and feature requests on the [Apify Store Console](https://apify.com/ar27111994/webhook-debugger-logger/comments) within **24 hours**.
+
+## 🛡️ Security & Permissions
 
 - **Permissions**: This Actor runs with **Limited Permissions** (the safest level).
 - **Scope**: It only accesses its own default dataset (to log webhooks) and key-value store (to manage state).

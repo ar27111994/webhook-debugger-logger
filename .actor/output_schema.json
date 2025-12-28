@@ -21,6 +21,11 @@
       "type": "string",
       "title": "Active Webhooks Info",
       "template": "{{links.containerRunUrl}}info"
+    },
+    "webhooks": {
+      "type": "string",
+      "title": "Storage State",
+      "template": "{{links.apiDefaultKeyValueStoreUrl}}/keys"
     }
   },
   "views": {

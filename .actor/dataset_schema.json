@@ -1,72 +1,140 @@
 {
-  "title": "Captured Webhook Events",
-  "type": "object",
-  "properties": {
-    "id": {
-      "type": "string",
-      "title": "Event ID",
-      "description": "Unique identifier for this captured request"
+  "actorSpecification": 1,
+  "fields": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "title": "Event ID",
+        "description": "Unique identifier for this captured request",
+        "example": "evt_z8X2n0P5q1"
+      },
+      "timestamp": {
+        "type": "string",
+        "format": "date-time",
+        "title": "Timestamp",
+        "description": "UTC time of the incoming request",
+        "example": "2025-12-28T21:40:24.852Z"
+      },
+      "webhookId": {
+        "type": "string",
+        "title": "Webhook ID",
+        "description": "Unique ID of the target webhook endpoint",
+        "example": "wh_a7B2k9L1p4"
+      },
+      "method": {
+        "type": "string",
+        "title": "Method",
+        "description": "HTTP Method (GET, POST, etc.)",
+        "example": "POST"
+      },
+      "headers": {
+        "type": "object",
+        "title": "Headers",
+        "description": "Full HTTP request headers",
+        "example": {
+          "content-type": "application/json",
+          "user-agent": "axios/1.13.2"
+        }
+      },
+      "query": {
+        "type": "object",
+        "title": "Query",
+        "description": "URL query parameters",
+        "example": {
+          "__status": "200"
+        }
+      },
+      "body": {
+        "type": "string",
+        "title": "Body",
+        "description": "The raw or parsed request body",
+        "example": "{\"status\": \"success\"}"
+      },
+      "contentType": {
+        "type": "string",
+        "title": "Content-Type",
+        "description": "MIME type of the request body",
+        "example": "application/json"
+      },
+      "size": {
+        "type": "integer",
+        "title": "Size (Bytes)",
+        "description": "Request body size in bytes",
+        "example": 24
+      },
+      "processingTime": {
+        "type": "integer",
+        "title": "Latency (ms)",
+        "description": "Time taken to process the request",
+        "example": 5
+      },
+      "remoteIp": {
+        "type": "string",
+        "title": "Source IP",
+        "description": "IP address of the sender",
+        "example": "1.2.3.4"
+      },
+      "userAgent": {
+        "type": "string",
+        "title": "User-Agent",
+        "description": "Client user-agent string",
+        "example": "Stripe/1.0"
+      },
+      "statusCode": {
+        "type": "integer",
+        "title": "Status",
+        "description": "HTTP response status code returned to the sender",
+        "example": 200
+      }
+    }
+  },
+  "views": {
+    "overview": {
+      "title": "Overview",
+      "transformation": {
+        "fields": [
+          "timestamp",
+          "webhookId",
+          "method",
+          "statusCode",
+          "contentType",
+          "size",
+          "processingTime",
+          "remoteIp"
+        ],
+        "desc": true
+      },
+      "display": {
+        "component": "table",
+        "properties": {
+          "timestamp": { "label": "Time", "format": "date" },
+          "webhookId": { "label": "Webhook ID" },
+          "method": { "label": "Method" },
+          "statusCode": { "label": "Status" },
+          "contentType": { "label": "Content-Type" },
+          "size": { "label": "Size (Bytes)" },
+          "processingTime": { "label": "Latency (ms)" },
+          "remoteIp": { "label": "Source IP" }
+        }
+      }
     },
-    "timestamp": {
-      "type": "string",
-      "format": "date-time",
-      "title": "Timestamp",
-      "description": "UTC time of the incoming request"
-    },
-    "webhookId": {
-      "type": "string",
-      "title": "Webhook ID",
-      "description": "Unique ID of the target webhook endpoint"
-    },
-    "method": {
-      "type": "string",
-      "title": "Method",
-      "description": "HTTP Method (GET, POST, etc.)"
-    },
-    "headers": {
-      "type": "object",
-      "title": "Headers",
-      "description": "Full HTTP request headers"
-    },
-    "query": {
-      "type": "object",
-      "title": "Query",
-      "description": "URL query parameters"
-    },
-    "body": {
-      "type": "string",
-      "title": "Body",
-      "description": "The raw or parsed request body"
-    },
-    "contentType": {
-      "type": "string",
-      "title": "Content-Type",
-      "description": "MIME type of the request body"
-    },
-    "size": {
-      "type": "integer",
-      "title": "Size (Bytes)",
-      "description": "Request body size in bytes"
-    },
-    "processingTime": {
-      "type": "integer",
-      "title": "Latency (ms)",
-      "description": "Time taken to process the request"
-    },
-    "remoteIp": {
-      "type": "string",
-      "title": "Source IP",
-      "description": "IP address of the sender"
-    },
-    "userAgent": {
-      "type": "string",
-      "title": "User-Agent",
-      "description": "Client user-agent string"
-    },
-    "statusCode": {
-      "type": "integer",
-      "title": "Status",
-      "description": "HTTP response status code returned to the sender"
+    "details": {
+      "title": "Full Payloads",
+      "transformation": {
+        "fields": ["timestamp", "method", "statusCode", "headers", "body"],
+        "desc": true
+      },
+      "display": {
+        "component": "table",
+        "properties": {
+          "timestamp": { "label": "Time", "format": "date" },
+          "method": { "label": "Method" },
+          "statusCode": { "label": "Status" },
+          "headers": { "label": "Headers", "format": "object" },
+          "body": { "label": "Body", "format": "text" }
+        }
+      }
     }
   }
 }
