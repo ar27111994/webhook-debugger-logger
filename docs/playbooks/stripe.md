@@ -15,13 +15,15 @@ Copy the JSON below and paste it into the **Input** tab in Apify Console:
 ```json
 {
   "authKey": "stripe-live-verification",
-  "allowedIps": ["3.18.12.63"],
+  "allowedIps": ["3.18.12.63"], // Example IP; Always verify against official docs
   "defaultResponseCode": 200,
   "defaultResponseBody": "{\"received\": true}",
   "maskSensitiveData": true,
   "jsonSchema": "{\"type\":\"object\",\"required\":[\"type\",\"data\"]}"
 }
 ```
+
+> [!IMPORTANT] > **Verify Stripe IPs**: The `allowedIps` above are examples. Stripe frequently updates their webhook IP ranges. Always consult the [Official Stripe Webhook IP Documentation](https://stripe.com/docs/webhooks#ip-addresses) to ensure your whitelist is up to date.
 
 ## 🛠️ Programmatic Run (API)
 
