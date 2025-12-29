@@ -30,6 +30,16 @@ Webhook Debugger generates temporary webhook URLs and logs every incoming reques
 - **n8n & Zapier Buffer**: Acts as a high-performance validator for your automation workflows.
 - **API Mocking**: Simulate slow or faulty 3rd party APIs with custom responses and latency.
 
+## 📖 Workflow Playbooks & "Launch Packs"
+
+Stop building generic tools and start solving real problems. Use these pre-configured setup guides for your specific tech stack:
+
+- **[💳 Stripe Hardening Pack](file:///home/ar27111994/Projects/Apify/Webhook%20Debugger%20&%20Logger/docs/playbooks/stripe.md)**: Verify signatures, inspect payloads, and replay payment events safely.
+- **[🛍️ Shopify Launch Pack](file:///home/ar27111994/Projects/Apify/Webhook%20Debugger%20&%20Logger/docs/playbooks/shopify.md)**: Bridge Shopify webhooks to your local machine with 72h retention for high-traffic windows.
+- **[💬 Slack & Messaging](file:///home/ar27111994/Projects/Apify/Webhook%20Debugger%20&%20Logger/docs/playbooks/slack.md)**: Test complex message blocks and interactive components.
+
+---
+
 ## Why use Webhook Debugger?
 
 ### The Problem
@@ -78,6 +88,17 @@ The Enterprise Update transforms this Actor into a professional API mocking and 
 - **Custom Responses**: Define the exact Body, Headers, and Status Code to return to the sender.
 - **Latency Simulation**: Simulate slow network conditions by delaying responses (up to 10s).
 - **JSON Schema Validation**: Reject invalid payloads automatically and log the errors.
+
+- [x] Pre-Launch Quality Score Optimization (Target: 75+)
+  - [x] Restore lost schema metadata (examples, descriptions, views)
+  - [x] Audit: Input & Output Schema
+  - [x] Audit: README Completeness
+  - [x] Audit: Documentation Quality
+  - [x] Audit: Error Handling & Reliability
+- [x] Implement Community Feedback (Reddit)
+  - [x] Create Workflow Playbooks (Stripe, Shopify)
+  - [x] Implement "One-Click" config links
+  - [x] Draft Growth & Monitoring Guide
 
 ### 🔄 Advanced Workflows
 
