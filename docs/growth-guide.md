@@ -6,32 +6,38 @@ Implement these high-leverage, low-effort strategies to find users exactly when 
 
 Don't sit online 24/7. Use automation to alert you when folks are stuck.
 
-- **Google Alerts / Talkwalker**: Set up alerts for:
-  - `"Stripe signature verification failed"`
-  - `"Shopify webhook 429 error"`
-  - `"webhook debugging tool apify"`
-- **Pulse (Reddit/SO Monitoring)**: Use [Pulse](https://getpulse.ai/) or similar free tiers to monitor `r/devops`, `r/stripe`, and `r/shopify` for keywords like "how to test webhooks."
+- **High-Intent Keywords (Google Alerts / Pulse)**:
+  - `"webhook debugger online"`
+  - `"ngrok alternatives for webhooks"`
+  - `"inspect stripe webhook body"`
+  - `"shopify webhook 429 error"`
+  - `"slack interactive component payload logger"`
+  - `"hookdeck vs [competitor]"`
+- **Stack Overflow Monitoring**: Use Pulse to track tags: `webhook`, `stripe-webhooks`, `shopify-api`.
 
-## 2. Lightweight Tracking
+## 2. Low-Effort Distribution Funnel
 
-Since you can't easily inject JS into the Apify Store page:
+Implement a "Value First" funnel that costs $0/mo.
 
-- **GitHub Analytics**: Ensure your repo is linked; GitHub provides free referral tracking.
-- **UTM Links**: Always use UTM parameters (`?utm_source=reddit&utm_campaign=playbook`) when sharing links to your Actor.
-- **PostHog (Free Tier)**: If you ever create a small landing page or a `docs` site, PostHog's free tier (1M events) is the gold standard for devtool funnels.
+- **The Reddit "Bridge"**:
+  - **Identify**: Someone complaining about local tunnel timeouts or missing data.
+  - **Respond**: "I had this issue with Stripe. I used this free debugger to bridge it: [URL]. It keeps logs for 72h so you don't lose events."
+- **The SEO Long-tail**:
+  - Publish the playbooks in this repo as GitHub Gists or Dev.to posts.
+  - Title: "How to survive Shopify Launch Week: Webhook Hardening 101."
 
-## 3. The "Playbook" Distribution Strategy
+## 3. Lightweight Monitoring (PostHog Free Tier)
 
-When answering questions on Reddit or Stack Overflow:
+Track user intent without complex analytics.
 
-1. **Don't just pitch**: Provide a specific answer.
-2. **Link a Playbook**: Instead of linking the generic Actor page, link the specific playbook (e.g., `docs/playbooks/stripe.md`).
-3. **The Hook**: "I built this open-source debugger specifically for launch weeks. Here's a one-click config for Stripe signatures."
+- **Event Tracking**: Track clicks on "Launch Webhook Debugger" links using UTM parameters.
+  - `?utm_source=playbook&utm_medium=stripe`
+- **Funnel Analysis**: See which playbooks drive the most "Try it" clicks to decide where to build more features.
 
-## 4. Community Engagement Funnel
+## 4. Reddit Response Templates
 
-| Platform           | Strategy                                                 | Frequency |
-| :----------------- | :------------------------------------------------------- | :-------- |
-| **Reddit**         | Search "webhook failing" + "Stripe/Shopify"              | Weekly    |
-| **Stack Overflow** | Answer questions about "viewing raw webhook headers"     | Weekly    |
-| **Discord**        | Join Apify & Stripe Discord; offer help in #webhook-help | Passive   |
+| Scenario           | Response Hook                                                                                                 |
+| :----------------- | :------------------------------------------------------------------------------------------------------------ |
+| **Tunnel Timeout** | "If ngrok is timing out, try bridging via Apify. It responds in <10ms and buffers the payloads for you."      |
+| **Missing Data**   | "Webhook data missing? Use a logger that captures the raw raw body before your app parses it."                |
+| **Mocking Needs**  | "You can mock the 400/500 responses from the webhook provider to test your retry logic without code changes." |

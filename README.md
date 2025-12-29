@@ -139,7 +139,7 @@ The Enterprise Update transforms this Actor into a professional API mocking and 
 
 ### ⚙️ Input Schema Preview
 
-![Input Schema](./assets/dashboard.png)
+![Input Schema Preview](./assets/input_schema_preview.png)
 
 ## Output example
 
