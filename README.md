@@ -34,9 +34,9 @@ Webhook Debugger generates temporary webhook URLs and logs every incoming reques
 
 Stop building generic tools and start solving real problems. Use these pre-configured setup guides for your specific tech stack:
 
-- **[💳 Stripe Hardening Pack](file:///home/ar27111994/Projects/Apify/Webhook%20Debugger%20&%20Logger/docs/playbooks/stripe.md)**: Verify signatures, inspect payloads, and replay payment events safely.
-- **[🛍️ Shopify Launch Pack](file:///home/ar27111994/Projects/Apify/Webhook%20Debugger%20&%20Logger/docs/playbooks/shopify.md)**: Bridge Shopify webhooks to your local machine with 72h retention for high-traffic windows.
-- **[💬 Slack & Messaging](file:///home/ar27111994/Projects/Apify/Webhook%20Debugger%20&%20Logger/docs/playbooks/slack.md)**: Test complex message blocks and interactive components.
+- **[💳 Stripe Hardening Pack](docs/playbooks/stripe.md)**: Verify signatures, inspect payloads, and replay payment events safely.
+- **[🛍️ Shopify Launch Pack](docs/playbooks/shopify.md)**: Bridge Shopify webhooks to your local machine with 72h retention for high-traffic windows.
+- **[💬 Slack & Messaging](docs/playbooks/slack.md)**: Test complex message blocks and interactive components.
 
 ---
 

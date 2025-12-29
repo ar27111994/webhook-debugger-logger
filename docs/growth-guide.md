@@ -4,7 +4,7 @@ Implement these high-leverage, low-effort strategies to find users exactly when 
 
 ## 1. Automated "Webhook Pain" Monitoring
 
-Dont sit online 24/7. Use automation to alert you when folks are stuck.
+Don't sit online 24/7. Use automation to alert you when folks are stuck.
 
 - **Google Alerts / Talkwalker**: Set up alerts for:
   - `"Stripe signature verification failed"`

@@ -11,13 +11,15 @@ Use this playbook to verify signatures, inspect event payloads, and re-run payme
 ```json
 {
   "authKey": "stripe-verification-key",
-  "allowedIps": ["3.18.12.63", "3.130.192.160"],
+  "allowedIps": ["3.18.12.63"], // Example IP; Always verify against official docs
   "defaultResponseCode": 200,
   "defaultResponseBody": "{\"received\": true}",
   "maskSensitiveData": true,
   "jsonSchema": "{\"type\":\"object\",\"required\":[\"type\",\"data\"]}"
 }
 ```
+
+> [!IMPORTANT] > **Verify Stripe IPs**: The `allowedIps` above are examples. Stripe frequently updates their webhook IP ranges. Always consult the [Official Stripe Webhook IP Documentation](https://stripe.com/docs/webhooks#ip-addresses) to ensure your whitelist is up to date.
 
 ## 🔍 Common Stripe Error Patterns
 
