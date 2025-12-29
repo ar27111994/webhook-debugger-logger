@@ -16,44 +16,49 @@ Don't sit online 24/7. Use automation to alert you when folks are stuck.
   - `"inspect stripe webhook body"`
 - **Pulse Monitoring**: Use [Pulse](https://getpulse.ai/) alongside your Reddit/SO flow to catch threads where developers are stuck on debugging without manual searching.
 
-## 2. "Pricing as Messaging" & Retention
+## 2. "Pricing as Messaging" & Positioning
 
-Pricing isn't just a business model; it's a marketing tool. Lean into "debugging bursts" instead of dead subscriptions.
+Align your pricing and messaging with painful "launch week" debugging windows instead of generic webhook tooling.
 
-- **Pay-Per-Event for Bursts**: Market the flexible pricing as the "Safe Bridge" for high-traffic events. No need for a $50/mo subscription when you only need a 48h debugging window.
-- **Workflow-Based "Launch Packs"**: Structure your messaging around real workflows:
-  - **"Shopify Launch Week Pack"**: Focus on X events, 72h retention, and Standby Mode for high-burst reliability.
-  - **"Stripe Hardening Pack"**: Focus on signature logs, replay, and CIDR whitelist presets.
+- **Pricing as Retention**: Market the pay-per-event model for "debugging bursts." It's the big unlock: users don't need a dead subscription; they need a high-burst bridge that just works when they are in the weeds.
+- **Workflow-Based "Launch Packs"**: Structure your marketing around real survival scenarios:
+  - **"Shopify Launch Week Pack"**: Message: "High-throughput (Xk events), 72h-7day retention, Standby Mode ON for sub-10ms reliability."
+  - **"Stripe Webhook Hardening Pack"**: Message: "Signature verification logging, automated replays, and CIDR IP whitelist presets."
 
-## 3. Lightweight Tracking & Funnel
+## 3. Lightweight Tracking & Funnels
 
-Track user intent without complex, privacy-invasive analytics.
+Treat it like a devtool funnel. Use free tiers to track intent without sitting online 24/7.
 
-- **PostHog (Free Tier)**: The gold standard for devtool event funnels. Track which playbooks lead to the most "Try it" clicks.
-- **Lightweight Page Tracking**: Use **Splitbee** or **Simple Analytics** for clean, fast page tracking that doesn't slow down your docs.
-- **GitHub & UTM Analytics**: Ensure your repo is linked and use UTM parameters (`?utm_source=reddit&utm_campaign=shopify_pack`) for every link shared.
+- **Intent Monitoring**: Use **Pulse** alongside Reddit/SO flows to catch threads where developers are stuck.
+- **Event Funnels**: **PostHog (Free Tier)** is the gold standard for tracking which playbooks drive the most "Try it" clicks.
+- **Lightweight Page Tracking**: Use **Splitbee** or **Simple Analytics** for privacy-first, fast referer tracking from the playbooks.
+- **UTM Strategy**: Use specific campaign tags (`?utm_campaign=stripe_hardening`) for every external link.
 
-## 4. The "Playbook" Distribution Strategy
+## 4. The "Mini-Playbook" Distribution Strategy
 
-Bundle answers to specific Stack Overflow questions into mini-playbooks.
+Bundle answers to specific Stack Overflow and Reddit questions into mini-playbooks that feel like a "solution in a box."
 
-1. **Identify the Pain**: Find a SO question about "Shopify webhook signature mismatch" or "Slack component timeouts."
-2. **The "Value First" Answer**: Provide the direct answer in the thread.
-3. **Link the Playbook**: "I built a copy-pastable config and error pattern guide for this exact scenario: [Link to docs/playbooks/shopify.md]."
+1. **The Assets**: Every playbook (Stripe, Shopify, Slack) must contain:
+   - **Copy-pastable JSON configs** for instant Actor setup.
+   - **Exact error patterns** the Actor catches (e.g., `429 Too Many Requests`, `Signature Mismatch`).
+2. **The Reach**: When someone asks "How to test Stripe signatures locally?":
+   - Provide the direct technical answer.
+   - Link the specific playbook: "I bundled a copy-pastable config and a guide to catching common 400-level error patterns here: [Link]."
+3. **Internal Links**: Ensure your GitHub README links to these docs using repository-relative paths for SEO and discoverability.
 
-## 5. Community Engagement & "Public Build"
+## 5. Community Engagement Funnel
 
-| Channel            | Core Strategy                                                             | Frequency    |
-| :----------------- | :------------------------------------------------------------------------ | :----------- |
-| **Reddit**         | Help with tunnel timeouts / missing logs                                  | Weekly       |
-| **Stack Overflow** | Answer questions about "viewing raw webhook headers"                      | Weekly       |
-| **LinkedIn/X**     | Share "Aha!" moments: "Found a Stripe bug in 10ms using an Apify bridge." | Daily/Weekly |
+| Platform           | Strategy                                     | Frequency |
+| :----------------- | :------------------------------------------- | :-------- |
+| **Reddit**         | Search "webhook failing" + "Stripe/Shopify"  | Weekly    |
+| **Stack Overflow** | Answer questions using "Mini-Playbook" links | Weekly    |
+| **Discord/Slack**  | Offer help in #webhook-dev; link configs     | Passive   |
 
-## 6. Response Templates (Launch Focused)
+## 6. Response Templates (Survival Focused)
 
-| Scenario               | Response Hook                                                                                                          |
-| :--------------------- | :--------------------------------------------------------------------------------------------------------------------- |
-| **Launch Week Stress** | "If your tunnel is timing out during a launch, bridge it via Apify. It absorbs the burst and logs everything for 72h." |
-| **Missing Data**       | "Webhook data missing? Use a real-time logger that captures raw headers + body before your app even parses it."        |
-| **Retry Logic Test**   | "Mock 400/500 responses from the webhook provider to test your backend's retry logic without code changes."            |
-| **Low-Code Setup**     | "Trying to parse complex JSON in Zapier/Make? Bridge it via Apify first to verify the schema instantly."               |
+| Scenario               | Response Hook                                                                                                                          |
+| :--------------------- | :------------------------------------------------------------------------------------------------------------------------------------- |
+| **Launch Week Stress** | "If your tunnel is timing out during a launch, bridge it via Apify. It absorbs the burst (Xk events/sec) and logs raw bodies for 72h." |
+| **Signature Mismatch** | "Hardening your Stripe hooks? Use this config to log raw headers and verify signatures before they hit your app."                      |
+| **Retry Logic Test**   | "Mock 400/500 responses directly from the bridge to verify your backend's retry logic without touching prod."                          |
+| **Low-Code Setup**     | "Trying to parse complex JSON in Zapier/Make? Bridge it via Apify first to verify the schema and error patterns."                      |
