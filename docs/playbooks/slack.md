@@ -45,11 +45,12 @@ Slack's interactive components (buttons, menus) send massive payloads that can b
 
 ## 🔍 Common Slack Error Patterns
 
-| Error Signal       | Description                                 | Solution                                                                                                         |
-| :----------------- | :------------------------------------------ | :--------------------------------------------------------------------------------------------------------------- |
-| `dispatch_failed`  | Slack didn't get a 200 OK within 3 seconds. | Ensure the Actor is in **Standby Mode** for sub-10ms responses.                                                  |
-| `Missing block_id` | Your Block Kit JSON is malformed.           | Inspect the raw body in the Actor dataset; the Actor's **JSON Parsing** handles nested structures automatically. |
-| `ssl_required`     | Slack requires HTTPS for all endpoints.     | The Actor's generated URLs are **HTTPS by default**, satisfying Slack's security policy.                         |
+| Error Signal       | Description                                                | Solution                                                                                                         |
+| :----------------- | :--------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------- |
+| `dispatch_failed`  | Slack didn't get a 200 OK within 3 seconds.                | Ensure the Actor is in **Standby Mode** for sub-10ms responses.                                                  |
+| `Missing block_id` | Your Block Kit JSON is malformed.                          | Inspect the raw body in the Actor dataset; the Actor's **JSON Parsing** handles nested structures automatically. |
+| `ssl_required`     | Slack requires HTTPS for all endpoints.                    | The Actor's generated URLs are **HTTPS by default**, satisfying Slack's security policy.                         |
+| `Invalid Response` | Slack expects specific responses for interactive triggers. | Use `customScript` to return the exact JSON Slack expects.                                                       |
 
 ## 🛠️ Typical Workflow
 
