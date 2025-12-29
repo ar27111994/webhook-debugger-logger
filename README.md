@@ -89,17 +89,6 @@ The Enterprise Update transforms this Actor into a professional API mocking and 
 - **Latency Simulation**: Simulate slow network conditions by delaying responses (up to 10s).
 - **JSON Schema Validation**: Reject invalid payloads automatically and log the errors.
 
-- [x] Pre-Launch Quality Score Optimization (Target: 75+)
-  - [x] Restore lost schema metadata (examples, descriptions, views)
-  - [x] Audit: Input & Output Schema
-  - [x] Audit: README Completeness
-  - [x] Audit: Documentation Quality
-  - [x] Audit: Error Handling & Reliability
-- [x] Implement Community Feedback (Reddit)
-  - [x] Create Workflow Playbooks (Stripe, Shopify)
-  - [x] Implement "One-Click" config links
-  - [x] Draft Growth & Monitoring Guide
-
 ### 🔄 Advanced Workflows
 
 - **Real-time Forwarding**: Automatically pipe captured webhooks to another destination (e.g., your local dev server).
