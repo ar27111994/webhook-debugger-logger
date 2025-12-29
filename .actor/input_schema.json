@@ -88,7 +88,6 @@
       "description": "Secure all incoming requests. Senders must provide this key via 'Authorization: Bearer' or '?key='.",
       "isSecret": true,
       "example": "my-secret-key-123",
-      "prefill": "my-secret-token",
       "editor": "textfield"
     },
     "allowedIps": {
