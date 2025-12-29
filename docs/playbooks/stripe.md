@@ -2,10 +2,11 @@
 
 Use this playbook to verify signatures, inspect event payloads, and re-run payment fulfillment logic without exhausting your Stripe test event limits.
 
-## 🚀 Quick Setup (One-Click)
+## 🚀 Quick Setup (Manual)
 
-1. **[Open Webhook Debugger Input Tab](https://console.apify.com/actors/ar27111994~webhook-debugger-logger#/input)**
-2. **Copy & Paste** the JSON from the section below.
+1. **[Open Webhook Debugger on Apify Store](https://apify.com/ar27111994/webhook-debugger-logger)**
+2. Navigate to the **Input** tab.
+3. **Copy & Paste** the JSON from the section below into the JSON editor.
 
 ## 📋 Recommended Quick-Start (JSON)
 
