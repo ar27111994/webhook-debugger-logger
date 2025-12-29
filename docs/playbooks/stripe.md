@@ -4,7 +4,7 @@ Use this playbook to verify signatures, inspect event payloads, and re-run payme
 
 ## 🚀 One-Click Configuration
 
-**[Launch Webhook Debugger with Stripe Presets](https://console.apify.com/actors/ar27111994/webhook-debugger-logger?input=%7B%22defaultResponseCode%22%3A200%2C%22maskSensitiveData%22%3Atrue%2C%22jsonSchema%22%3A%22%7B%5C%22type%5C%22%3A%5C%22object%5C%22%2C%5C%22required%5C%22%3A%5B%5C%22type%5C%22%2C%5C%22data%5C%22%5D%7D%22%7D)**
+**[Launch Webhook Debugger with Stripe Presets](https://apify.com/ar27111994/webhook-debugger-logger?input=%7B%22defaultResponseCode%22%3A200%2C%22maskSensitiveData%22%3Atrue%2C%22jsonSchema%22%3A%22%7B%5C%22type%5C%22%3A%5C%22object%5C%22%2C%5C%22required%5C%22%3A%5B%5C%22type%5C%22%2C%5C%22data%5C%22%5D%7D%22%7D)**
 
 ## 📋 Recommended Input (JSON)
 

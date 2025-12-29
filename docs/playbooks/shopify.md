@@ -4,7 +4,7 @@ Ensure your store's inventory and order fulfillment hooks are rock-solid during 
 
 ## 🚀 One-Click Configuration
 
-**[Launch Webhook Debugger with Shopify Presets](https://console.apify.com/actors/ar27111994/webhook-debugger-logger?input=%7B%22defaultResponseCode%22%3A200%2C%22forwardHeaders%22%3Atrue%2C%22maskSensitiveData%22%3Atrue%7D)**
+**[Launch Webhook Debugger with Shopify Presets](https://apify.com/ar27111994/webhook-debugger-logger?input=%7B%22defaultResponseCode%22%3A200%2C%22forwardHeaders%22%3Atrue%2C%22maskSensitiveData%22%3Atrue%7D)**
 
 ## 📋 Recommended Input (JSON)
 
