@@ -14,45 +14,46 @@ Don't sit online 24/7. Use automation to alert you when folks are stuck.
   - `"webhook debugger online"`
   - `"ngrok alternatives for webhooks"`
   - `"inspect stripe webhook body"`
-- **Pulse (Reddit/SO Monitoring)**: Use [Pulse](https://getpulse.ai/) or similar free tiers to monitor `r/devops`, `r/stripe`, and `r/shopify` for keywords like "how to test webhooks."
+- **Pulse Monitoring**: Use [Pulse](https://getpulse.ai/) alongside your Reddit/SO flow to catch threads where developers are stuck on debugging without manual searching.
 
-## 2. Niche Community Distribution
+## 2. "Pricing as Messaging" & Retention
 
-Go where the developers hang out. Helpfulness is the best marketing.
+Pricing isn't just a business model; it's a marketing tool. Lean into "debugging bursts" instead of dead subscriptions.
 
-| Channel               | Core Strategy                                  | Niche Subreddit/Forum                 |
-| :-------------------- | :--------------------------------------------- | :------------------------------------ |
-| **Reddit**            | Help with tunnel timeouts / missing logs       | `r/SaaS`, `r/SideProject`, `r/webdev` |
-| **Make.com / Zapier** | Position as a "Pre-processor" for complex JSON | `Make Community`, `Zapier Experts`    |
-| **Developer Slacks**  | Answer "Signature Verification" questions      | `Stripe Devs`, `Shopify Partners`     |
+- **Pay-Per-Event for Bursts**: Market the flexible pricing as the "Safe Bridge" for high-traffic events. No need for a $50/mo subscription when you only need a 48h debugging window.
+- **Workflow-Based "Launch Packs"**: Structure your messaging around real workflows:
+  - **"Shopify Launch Week Pack"**: Focus on X events, 72h retention, and Standby Mode for high-burst reliability.
+  - **"Stripe Hardening Pack"**: Focus on signature logs, replay, and CIDR whitelist presets.
 
-## 3. "Engineering as Marketing" (Lead Magnets)
+## 3. Lightweight Tracking & Funnel
 
-Create small, high-value assets that link back to the Actor.
+Track user intent without complex, privacy-invasive analytics.
 
-- **The "Webhook Signature Cheat Sheet"**: A simple PDF or Gist listing the HMAC header names for Stripe, Shopify, Slack, and GitHub.
-- **The "Local Tunnel Comparison"**: A blog post or Reddit thread: "Why I stopped using ngrok for Stripe Webhooks (and used an Apify bridge instead)."
+- **PostHog (Free Tier)**: The gold standard for devtool event funnels. Track which playbooks lead to the most "Try it" clicks.
+- **Lightweight Page Tracking**: Use **Splitbee** or **Simple Analytics** for clean, fast page tracking that doesn't slow down your docs.
+- **GitHub & UTM Analytics**: Ensure your repo is linked and use UTM parameters (`?utm_source=reddit&utm_campaign=shopify_pack`) for every link shared.
 
-## 4. Lightweight Tracking & Funnel
+## 4. The "Playbook" Distribution Strategy
 
-Since you can't easily inject JS into the Apify Store page:
+Bundle answers to specific Stack Overflow questions into mini-playbooks.
 
-- **GitHub Analytics**: Ensure your repo is linked; GitHub provides free referral tracking for incoming traffic.
-- **UTM Links**: Always use UTM parameters (`?utm_source=reddit&utm_campaign=playbook`) when sharing links to your Actor.
-- **PostHog (Free Tier)**: If you ever create a small landing page or a `docs` site, PostHog's free tier (1M events) is the gold standard for devtool funnels.
+1. **Identify the Pain**: Find a SO question about "Shopify webhook signature mismatch" or "Slack component timeouts."
+2. **The "Value First" Answer**: Provide the direct answer in the thread.
+3. **Link the Playbook**: "I built a copy-pastable config and error pattern guide for this exact scenario: [Link to docs/playbooks/shopify.md]."
 
-## 5. The "Public Build" Strategy (X/LinkedIn)
+## 5. Community Engagement & "Public Build"
 
-Building in public builds trust and authority.
+| Channel            | Core Strategy                                                             | Frequency    |
+| :----------------- | :------------------------------------------------------------------------ | :----------- |
+| **Reddit**         | Help with tunnel timeouts / missing logs                                  | Weekly       |
+| **Stack Overflow** | Answer questions about "viewing raw webhook headers"                      | Weekly       |
+| **LinkedIn/X**     | Share "Aha!" moments: "Found a Stripe bug in 10ms using an Apify bridge." | Daily/Weekly |
 
-- **Tweet the "Aha!" Moment**: "Found a bug in my Stripe integration because I could see the raw body in sub-10ms. Bridging via @apify saved my launch week."
-- **LinkedIn Tip**: "Developer Tip: Never trust your local logs for webhooks. Use a dead-simple bridge that persists logs for 72h."
+## 6. Response Templates (Launch Focused)
 
-## 6. Reddit Response Templates
-
-| Scenario           | Response Hook                                                                                                 |
-| :----------------- | :------------------------------------------------------------------------------------------------------------ |
-| **Tunnel Timeout** | "If ngrok is timing out, try bridging via Apify. It responds in <10ms and buffers the payloads for you."      |
-| **Missing Data**   | "Webhook data missing? Use a logger that captures the raw body before your app parses it."                    |
-| **Mocking Needs**  | "You can mock the 400/500 responses from the webhook provider to test your retry logic without code changes." |
-| **Low-Code Setup** | "Trying to parse complex JSON in Zapier? Bridge it via Apify first to inspect the schema properly."           |
+| Scenario               | Response Hook                                                                                                          |
+| :--------------------- | :--------------------------------------------------------------------------------------------------------------------- |
+| **Launch Week Stress** | "If your tunnel is timing out during a launch, bridge it via Apify. It absorbs the burst and logs everything for 72h." |
+| **Missing Data**       | "Webhook data missing? Use a real-time logger that captures raw headers + body before your app even parses it."        |
+| **Retry Logic Test**   | "Mock 400/500 responses from the webhook provider to test your backend's retry logic without code changes."            |
+| **Low-Code Setup**     | "Trying to parse complex JSON in Zapier/Make? Bridge it via Apify first to verify the schema instantly."               |
