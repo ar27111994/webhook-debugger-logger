@@ -13,11 +13,16 @@ jest.unstable_mockModule("apify", async () => {
 });
 
 const request = (await import("supertest")).default;
-const { app, webhookManager, sseHeartbeat } = await import("../src/main.js");
+const { app, webhookManager, sseHeartbeat, initialize, shutdown } =
+  await import("../src/main.js");
 
 describe("Large Payload Stability", () => {
-  afterAll(() => {
-    if (sseHeartbeat) clearInterval(sseHeartbeat);
+  beforeAll(async () => {
+    await initialize();
+  });
+
+  afterAll(async () => {
+    await shutdown("TEST_COMPLETE");
   });
 
   test("Should handle 10MB payload", async () => {

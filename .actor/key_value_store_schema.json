@@ -1,0 +1,11 @@
+{
+  "actorKeyValueStoreSchemaVersion": 1,
+  "title": "Webhook Debugger & Logger KVS",
+  "collections": {
+    "persistence": {
+      "title": "Persistence State",
+      "description": "Internal state mapping active webhook IDs to their expiration timestamps. Used for state recovery across migrations or restarts.",
+      "key": "WEBHOOK_STATE"
+    }
+  }
+}

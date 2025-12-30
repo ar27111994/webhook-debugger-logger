@@ -8,11 +8,13 @@ The input schema defines the input parameters for an Actor. It's a JSON object c
 
 ```json
 {
-    "title": "<INPUT-SCHEMA-TITLE>",
-    "type": "object",
-    "schemaVersion": 1,
-    "properties": { /* define input fields here */ },
-    "required": []
+  "title": "<INPUT-SCHEMA-TITLE>",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    /* define input fields here */
+  },
+  "required": []
 }
 ```
 
@@ -29,8 +31,8 @@ The input schema defines the input parameters for an Actor. It's a JSON object c
       "type": "array",
       "description": "URLs to start scraping from (category pages or product pages)",
       "editor": "requestListSources",
-      "default": [{"url": "https://example.com/category"}],
-      "prefill": [{"url": "https://example.com/category"}]
+      "default": [{ "url": "https://example.com/category" }],
+      "prefill": [{ "url": "https://example.com/category" }]
     },
     "followVariants": {
       "title": "Follow Product Variants",
@@ -50,7 +52,7 @@ The input schema defines the input parameters for an Actor. It's a JSON object c
       "type": "object",
       "description": "Proxy settings for anti-bot protection",
       "editor": "proxy",
-      "default": {"useApifyProxy": false}
+      "default": { "useApifyProxy": false }
     },
     "locale": {
       "title": "Locale",
@@ -73,9 +75,11 @@ The Actor output schema builds upon the schemas for the dataset and key-value st
 
 ```json
 {
-    "actorOutputSchemaVersion": 1,
-    "title": "<OUTPUT-SCHEMA-TITLE>",
-    "properties": { /* define your outputs here */ }
+  "actorOutputSchemaVersion": 1,
+  "title": "<OUTPUT-SCHEMA-TITLE>",
+  "properties": {
+    /* define your outputs here */
+  }
 }
 ```
 
@@ -83,20 +87,20 @@ The Actor output schema builds upon the schemas for the dataset and key-value st
 
 ```json
 {
-    "actorOutputSchemaVersion": 1,
-    "title": "Output schema of the files scraper",
-    "properties": {
-        "files": {
-            "type": "string",
-            "title": "Files",
-            "template": "{{links.apiDefaultKeyValueStoreUrl}}/keys"
-        },
-        "dataset": {
-            "type": "string",
-            "title": "Dataset",
-            "template": "{{links.apiDefaultDatasetUrl}}/items"
-        }
+  "actorOutputSchemaVersion": 1,
+  "title": "Output schema of the files scraper",
+  "properties": {
+    "files": {
+      "type": "string",
+      "title": "Files",
+      "template": "{{links.apiDefaultKeyValueStoreUrl}}/keys"
+    },
+    "dataset": {
+      "type": "string",
+      "title": "Dataset",
+      "template": "{{links.apiDefaultDatasetUrl}}/items"
     }
+  }
 }
 ```
 

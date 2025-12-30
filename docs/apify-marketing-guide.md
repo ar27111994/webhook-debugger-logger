@@ -683,13 +683,11 @@ Your product details:
 Content structure:
 
 1. Direct, problem-focused introduction (100-150 words):
-
    - Start with the problem developers face
    - Why you researched these tools
    - What you'll cover
 
 2. "What I looked for" - clear evaluation criteria developers care about (100 words):
-
    - Performance
    - Ease of integration
    - Documentation quality
@@ -697,7 +695,6 @@ Content structure:
    - Community/support
 
 3. Detailed tool reviews (200-250 words each):
-
    - Brief overview and what makes it stand out
    - Key features (bullet points)
    - Developer experience highlights
@@ -779,7 +776,6 @@ Your product details:
 Content Structure:
 
 1. Clear, technical introduction (150-200 words):
-
    - The specific problem/challenge
    - Why it matters to developers
    - What criteria you used for evaluation
@@ -788,7 +784,6 @@ Content Structure:
 2. "Understanding [CATEGORY]" - brief technical context if needed (100-150 words)
 
 3. "Evaluation criteria" - what developers should consider (150 words):
-
    - Technical capabilities
    - Performance & scalability
    - Developer experience
@@ -796,7 +791,6 @@ Content Structure:
    - Pricing & value
 
 4. Detailed tool analysis (250-300 words each):
-
    - Overview and core functionality
    - Technical approach/architecture (briefly)
    - Key features with technical details
@@ -890,20 +884,17 @@ Your product details:
 Content structure:
 
 1. Professional hook and introduction (150-200 words):
-
    - Start with a business challenge or opportunity
    - Establish credibility (your experience/background)
    - Why this matters for businesses now
    - What decision-makers will learn
 
 2. "Why [CATEGORY] matters for your business" (150-200 words):
-
    - Business impact and ROI potential
    - Current market trends
    - Risk of not having the right solution
 
 3. "What we evaluated" - business-focused criteria (100-150 words):
-
    - Business value and ROI
    - Ease of implementation
    - Scalability
@@ -911,7 +902,6 @@ Content structure:
    - Total cost of ownership
 
 4. Detailed solution analysis (200-250 words each):
-
    - Executive summary of what it does
    - Key capabilities from a business perspective
    - Business benefits (3-4 items focusing on outcomes)
@@ -924,7 +914,6 @@ Content structure:
 5. Comparison table - focus on business metrics (pricing, implementation time, support, scalability)
 
 6. "Choosing the right solution for your team" (200-250 words):
-
    - Decision framework based on company size, needs, budget
    - Questions to ask before choosing
 
@@ -1004,20 +993,17 @@ Your Actor details:
 Content structure:
 
 1. Introduction (100-150 words):
-
    - Hook: Start with what readers will accomplish
    - Why this Actor is useful/who it's for
    - What they'll learn by the end
    - Time estimate (e.g., "⏱️ This takes about 10 minutes")
 
 2. Prerequisites (50-100 words):
-
    - Free Apify account (mention you can sign up with email or GitHub)
    - Any other requirements
    - No coding required (if applicable)
 
 3. "What you'll achieve" overview (100-150 words):
-
    - Brief description of the end result
    - What data or outcome they'll get
    - Example use case
@@ -1025,7 +1011,6 @@ Content structure:
 4. Step-by-step tutorial using the Actor:
 
    Step 1: Access [YOUR ACTOR NAME]
-
    - Instructions: "Go to the [Actor Name] page on Apify Store to try it for free."
    - Mention account creation (email or GitHub)
    - Explain they'll be redirected to Apify Console
@@ -1033,7 +1018,6 @@ Content structure:
    - Screenshot suggestion: Actor page or Console view
 
    Step 2: Configure [Primary Input/Settings]
-
    - Explain the main input field(s) based on your README
    - Provide specific examples (like "bagel" and "New York")
    - Explain what the Actor will do with this input
@@ -1042,7 +1026,6 @@ Content structure:
    - Screenshot suggestion: Input configuration
 
    Step 3: [Additional Configuration - if applicable]
-
    - Explain optional settings or advanced features
    - When and why to use each option
    - Examples of different configurations
@@ -1050,7 +1033,6 @@ Content structure:
    - Screenshot suggestion: Advanced settings panel
 
    Step 4: Run the Actor
-
    - Click "Start" or "Run" button
    - What happens: Status changes to "Running"
    - How long it typically takes
@@ -1058,7 +1040,6 @@ Content structure:
    - "⚠️ Tip: You can leave the page and come back - the run will continue"
 
    Step 5: View and download results
-
    - Navigate to Storage tab or Results
    - Preview the data
    - Explain the data structure/fields
@@ -1069,14 +1050,12 @@ Content structure:
    [Add more steps if your Actor has additional features]
 
 5. "Understanding your results" (150-200 words):
-
    - Explain what each key field means
    - How to interpret the data
    - Example of actual output
    - Common questions about results
 
 6. "Pro tips and advanced usage" (150-200 words):
-
    - 3-5 tips for getting better results
    - How to optimize for speed or cost
    - Advanced configuration options
@@ -1084,7 +1063,6 @@ Content structure:
    - Common use cases from users
 
 7. "Troubleshooting common issues" (100-150 words):
-
    - 2-3 common problems and solutions
    - Where to check for errors
    - How to get support
@@ -1168,7 +1146,6 @@ Your Actor details:
 Content structure:
 
 1. Introduction (150-200 words):
-
    - What this tutorial covers
    - The use case and why it matters
    - What readers will accomplish
@@ -1176,14 +1153,12 @@ Content structure:
    - Estimated time to complete
 
 2. TL;DR section (100 words):
-
    - Quick summary: "In this tutorial, you'll learn to..."
    - Key steps overview
    - Link to Actor
    - Expected outcome
 
 3. Prerequisites and setup (100-150 words):
-
    - Apify account (free tier works)
    - How to sign up (email or GitHub)
    - What is Apify Console (brief explanation)
@@ -1191,7 +1166,6 @@ Content structure:
    - Link to Apify documentation
 
 4. Understanding [YOUR ACTOR] (150-200 words):
-
    - What the Actor does (technical overview)
    - How it works behind the scenes
    - Key capabilities and features
@@ -1202,7 +1176,6 @@ Content structure:
 5. Step-by-step guide to using [YOUR ACTOR]:
 
    Step 1: Accessing the Actor
-
    - Navigate to the [Actor Name] page on Apify Store
    - Create account or sign in
    - Understanding the Actor page (features, pricing, reviews)
@@ -1211,7 +1184,6 @@ Content structure:
    - Screenshot: Actor Store page and Console
 
    Step 2: Configuring input parameters
-
    - Overview of the input form/configuration
    - Explanation of each input field based on README:
      Primary input field (purpose, format, examples)
@@ -1222,7 +1194,6 @@ Content structure:
    - Best practices for input configuration
 
    Step 3: Advanced configuration (if applicable)
-
    - Advanced settings and options from README
    - When and why to use advanced features
    - Performance vs. thoroughness trade-offs
@@ -1231,7 +1202,6 @@ Content structure:
    - Screenshot: Advanced settings panel
 
    Step 4: Optional enrichment features
-
    - Explanation of any enrichment add-ons (from README)
    - What additional data they provide
    - Pricing tier considerations
@@ -1240,7 +1210,6 @@ Content structure:
    - Example use cases for enriched data
 
    Step 5: Running the Actor
-
    - Click "Start" or "Run" button
    - Understanding the run lifecycle (Running → Succeeded/Failed)
    - What to expect: timing, resource usage
@@ -1249,7 +1218,6 @@ Content structure:
    - Screenshot: Run status page
 
    Step 6: Examining the results
-
    - Navigate to Storage or Results tab
    - Understanding the data structure
    - Explanation of output fields (from README)
@@ -1259,7 +1227,6 @@ Content structure:
    - Screenshot: Results preview with annotations
 
    Step 7: Downloading and exporting data
-
    - Export options (JSON, CSV, Excel, XML, RSS)
    - How to select specific fields or data subsets
    - Download vs. API access
@@ -1269,7 +1236,6 @@ Content structure:
    [Add more steps if your Actor has additional features or workflows]
 
 6. Working with the API (200-300 words):
-
    - How to run the Actor via API
    - Code example: Starting a run (JavaScript/Python)
    - Code example: Retrieving results
@@ -1280,7 +1246,6 @@ Content structure:
    - Rate limits and best practices
 
 7. Advanced usage patterns (200-250 words):
-
    - Batch processing multiple queries
    - Integrating with other tools (Zapier, Make, etc.)
    - Setting up scheduled runs
@@ -1289,7 +1254,6 @@ Content structure:
    - Scaling considerations
 
 8. Understanding your data (150-200 words):
-
    - Detailed explanation of output fields
    - How to interpret the results
    - Data quality indicators
@@ -1297,7 +1261,6 @@ Content structure:
    - Example analysis or use case
 
 9. Troubleshooting guide (150-200 words):
-
    - Common errors and solutions
    - How to read logs
    - Performance issues
@@ -1305,7 +1268,6 @@ Content structure:
    - Where to get help (Apify Discord, support)
 
 10. Best practices (100-150 words):
-
     - Configuration tips
     - Cost efficiency
     - Data freshness considerations
@@ -1413,7 +1375,6 @@ Your Actor details:
 Content structure:
 
 1. Compelling introduction with a hook (200-300 words):
-
    - Start with a relatable problem or personal story
    - Your experience facing this challenge
    - Traditional approaches and why they fail
@@ -1422,7 +1383,6 @@ Content structure:
    - Make it personal and engaging
 
 2. "Why I needed this solution" (150-200 words):
-
    - Paint the picture of your challenge
    - Time wasted with manual approaches
    - Impact on your work or business
@@ -1430,7 +1390,6 @@ Content structure:
    - Why this Actor was the answer
 
 3. "What you'll need" (100-150 words):
-
    - Free Apify account (very simple to create)
    - Time required (be specific: "about 10 minutes")
    - No technical skills required (reassure them)
@@ -1438,7 +1397,6 @@ Content structure:
    - Total cost: Free tier or pricing info
 
 4. "What you'll accomplish" (100-150 words):
-
    - Clear picture of the end result
    - What data or outcome they'll get
    - Real-world value of this outcome
@@ -1448,7 +1406,6 @@ Content structure:
    Format as a clear journey with personal insights:
 
    Step 1: Get started with [YOUR ACTOR NAME]
-
    - "First, head over to the [Actor Name] page..."
    - Creating your free account (use email or GitHub - super easy)
    - What Apify Console is (explain simply: "your workspace")
@@ -1457,7 +1414,6 @@ Content structure:
    - Screenshot description: Actor page, sign-up flow
 
    Step 2: Tell the tool what you want
-
    - Explain the main input in simple, non-technical terms
    - Provide a real example you used (from README)
    - "For example, I entered '[YOUR EXAMPLE]' and here's why..."
@@ -1468,7 +1424,6 @@ Content structure:
    - Personal tip: What worked best for you
 
    Step 3: Fine-tune your settings (optional)
-
    - "Here's where you can get more specific..."
    - Explain optional settings in plain language
    - When and why you might use them
@@ -1477,7 +1432,6 @@ Content structure:
    - Screenshot description: Advanced settings (if applicable)
 
    Step 4: Add extra features (if you want)
-
    - Explain any enrichment features from README in simple terms
    - What additional information they provide
    - Real-world example of how this helps
@@ -1485,7 +1439,6 @@ Content structure:
    - When it's worth the extra cost (if applicable)
 
    Step 5: Hit the Start button
-
    - "This is the exciting part..."
    - What happens when you click Start
    - How long to expect (be specific)
@@ -1495,7 +1448,6 @@ Content structure:
    - Screenshot description: Run status page
 
    Step 6: Check out your results
-
    - "Once it's done, here's how to see your data..."
    - Navigate to Results or Storage tab
    - What the data looks like
@@ -1505,7 +1457,6 @@ Content structure:
    - Screenshot description: Results page with data preview
 
    Step 7: Download and use your data
-
    - Different formats available (CSV, Excel, JSON)
    - Which format to choose and why
    - "I downloaded mine as Excel because..."
@@ -1514,7 +1465,6 @@ Content structure:
    - Screenshot description: Export options
 
    Each step should:
-
    - Feel conversational and supportive
    - Include your personal experience or tip
    - Anticipate questions or concerns
@@ -1522,7 +1472,6 @@ Content structure:
    - Use analogies to explain technical concepts
 
 6. "The results that surprised me" (200-250 words):
-
    - What you actually got (specific examples)
    - Time saved compared to manual work
    - Quality or completeness of data
@@ -1532,7 +1481,6 @@ Content structure:
    - Specific metrics: "It would have taken me 8 hours manually"
 
 7. "Tips I learned along the way" (150-200 words):
-
    - 3-5 practical tips from your experience
    - Mistakes you made so readers can avoid them
    - How to get even better results
@@ -1540,7 +1488,6 @@ Content structure:
    - Time-saving shortcuts
 
 8. "What I built with this data" (100-150 words):
-
    - How you actually used the results
    - The outcome or project you created
    - Why it mattered for your goal
@@ -1663,7 +1610,6 @@ Your Actor details:
 Content structure:
 
 1. Professional introduction (150-200 words):
-
    - Start with a common business challenge your audience faces
    - Establish your credibility (your role, why you're qualified to guide them)
    - The cost of doing this task manually (time, money, opportunity cost)
@@ -1672,7 +1618,6 @@ Content structure:
    - The business outcome they'll achieve
 
 2. The business case (150-200 words):
-
    - Why this task matters for professionals
    - Typical time wasted on manual approaches (e.g., "Most teams spend 5-10 hours per week on this")
    - Cost implications (calculate hourly rate × hours saved)
@@ -1681,7 +1626,6 @@ Content structure:
    - Expected ROI or efficiency gain
 
 3. What You'll Need (100-150 words):
-
    - Free Apify account (explain what Apify is: "professional-grade automation platform")
    - Simple sign-up process (business email works, takes 1 minute)
    - Time required: "[X] minutes to set up, then automated"
@@ -1690,7 +1634,6 @@ Content structure:
    - What you'll have at the end
 
 4. Understanding the solution (100-150 words):
-
    - What [Your Actor] does in business terms (not technical jargon)
    - Why it's effective for this specific use case
    - How it fits into existing business workflows
@@ -1789,7 +1732,6 @@ Step 7: Export for Business Use
 - Screenshot suggestion: Export dialog with format options
 
 1. Measuring Success (150-200 words):
-
    - Key metrics to track for this task
    - Time saved per use (be specific: "What took 4 hours now takes 10 minutes")
    - Cost savings calculation (your hourly rate × time saved)
@@ -1799,7 +1741,6 @@ Step 7: Export for Business Use
    - Long-term value: "Multiply this by weekly or monthly usage"
 
 2. Professional Best Practices (200-250 words):
-
    - Insights from your experience using this Actor
    - How to integrate into team workflows
    - Setting up recurring runs or schedules (mention Apify's scheduling features)
@@ -1811,7 +1752,6 @@ Step 7: Export for Business Use
    - When to use free tier vs. paid plans
 
 3. Real-World Business Applications (150-200 words):
-
    - 3-4 specific professional use cases:
      Sales teams: [how they can use this]
      Marketing: [specific application]
@@ -1822,7 +1762,6 @@ Step 7: Export for Business Use
    - "I use this weekly for [specific task] and it saves me approximately [X hours]"
 
 4. Common Professional Questions (150-200 words):
-
    - Address 4-5 business concerns:
      "Is my data secure?" (explain Apify's security)
      "What does regular use cost?" (transparent pricing info)
@@ -1833,7 +1772,6 @@ Step 7: Export for Business Use
    - Format as Q&A for scannability
 
 5. Next Steps for Your Organization (100-150 words):
-
    - How to scale usage across your team
    - Setting up automation and scheduling for recurring needs
    - Integration with business intelligence or CRM tools

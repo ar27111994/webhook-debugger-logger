@@ -1,18 +1,24 @@
 import { jest } from "@jest/globals";
-import request from "supertest";
-import { app, webhookManager } from "../src/main.js";
-
 jest.unstable_mockModule("apify", async () => {
-  const { createApifyMock } = await import("./helpers/apify-mock.js");
-  return { Actor: createApifyMock() };
+  const { apifyMock } = await import("./helpers/shared-mocks.js");
+  return { Actor: apifyMock };
 });
+
+const request = (await import("supertest")).default;
+const { app, webhookManager, initialize, shutdown } =
+  await import("../src/main.js");
 
 describe("Stress Tests", () => {
   let webhookId;
 
   beforeAll(async () => {
+    await initialize();
     const ids = await webhookManager.generateWebhooks(1, 1);
     webhookId = ids[0];
+  });
+
+  afterAll(async () => {
+    await shutdown("TEST_COMPLETE");
   });
 
   test("Memory usage should remain stable under high load", async () => {
@@ -44,8 +50,8 @@ describe("Stress Tests", () => {
 
     console.log(
       `Memory growth after ${ITERATIONS} requests: ${memoryDiffMB.toFixed(
-        2
-      )} MB`
+        2,
+      )} MB`,
     );
 
     // Expect memory growth to be reasonable (e.g., < 100MB for 1000 requests including overhead)

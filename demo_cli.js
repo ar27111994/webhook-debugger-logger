@@ -38,7 +38,7 @@ async function runDemo() {
 
     if (infoRes.data.authActive) {
       console.log(
-        "[WARN] Authentication is ENABLED. This demo might return 401s if not configured with the key."
+        "[WARN] Authentication is ENABLED. This demo might return 401s if not configured with the key.",
       );
     }
     console.log("");
@@ -57,7 +57,7 @@ async function runDemo() {
       console.log(`- Status: ${data.statusCode}`);
       console.log(`- Path:   /webhook/${data.webhookId}`);
       console.log(
-        `- Body:   ${JSON.stringify(data.body, null, 2).substring(0, 100)}...`
+        `- Body:   ${JSON.stringify(data.body, null, 2).substring(0, 100)}...`,
       );
       console.log("------------------------------------------");
     };
@@ -74,7 +74,7 @@ async function runDemo() {
         {
           hello: "Apify World!",
         },
-        { headers }
+        { headers },
       );
     }, 1500);
 
@@ -88,7 +88,7 @@ async function runDemo() {
 
     setTimeout(async () => {
       console.log(
-        "[ACTION] Forcing 401 Unauthorized (via __status parameter)..."
+        "[ACTION] Forcing 401 Unauthorized (via __status parameter)...",
       );
       await axios
         .get(`${BASE_URL}/webhook/${targetId}?__status=401`, { headers })
@@ -99,7 +99,7 @@ async function runDemo() {
   } catch (err) {
     console.error(`[ERROR] Setup failed: ${err.message}`);
     console.log(
-      "👉 Make sure the Actor is running locally on port 8080 (npm start)."
+      "👉 Make sure the Actor is running locally on port 8080 (npm start).",
     );
   }
 }

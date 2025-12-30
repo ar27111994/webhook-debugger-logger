@@ -111,4 +111,3 @@ Otherwise, reference: `@https://mcp.apify.com/`
 - [docs.apify.com/llms-full.txt](https://docs.apify.com/llms-full.txt) - Complete docs
 - [crawlee.dev](https://crawlee.dev) - Crawlee documentation
 - [whitepaper.actor](https://raw.githubusercontent.com/apify/actor-whitepaper/refs/heads/master/README.md) - Complete Actor specification
-

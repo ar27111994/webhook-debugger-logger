@@ -1,4 +1,5 @@
 # Apify $1M Challenge: Implementation Templates & Code Examples
+
 ## Ready-to-Use Templates for Rapid Development
 
 ---
@@ -6,7 +7,7 @@
 ## TABLE OF CONTENTS
 
 1. [Input Schema Templates](#input-schemas)
-2. [Output Schema Templates](#output-schemas)  
+2. [Output Schema Templates](#output-schemas)
 3. [README Templates](#readme-templates)
 4. [Error Handling Patterns](#error-patterns)
 5. [Marketing Post Templates](#marketing-templates)
@@ -224,10 +225,10 @@
     "summary": {
       "type": "object",
       "properties": {
-        "total": {"type": "integer"},
-        "valid": {"type": "integer"},
-        "invalid": {"type": "integer"},
-        "enriched": {"type": "integer"}
+        "total": { "type": "integer" },
+        "valid": { "type": "integer" },
+        "invalid": { "type": "integer" },
+        "enriched": { "type": "integer" }
       }
     }
   }
@@ -247,10 +248,10 @@
       "items": {
         "type": "object",
         "properties": {
-          "id": {"type": "string"},
-          "url": {"type": "string"},
-          "createdAt": {"type": "string"},
-          "expiresAt": {"type": "string"}
+          "id": { "type": "string" },
+          "url": { "type": "string" },
+          "createdAt": { "type": "string" },
+          "expiresAt": { "type": "string" }
         }
       }
     },
@@ -260,13 +261,13 @@
       "items": {
         "type": "object",
         "properties": {
-          "timestamp": {"type": "string"},
-          "webhookId": {"type": "string"},
-          "method": {"type": "string"},
-          "headers": {"type": "object"},
-          "body": {"type": "string"},
-          "size": {"type": "integer"},
-          "contentType": {"type": "string"}
+          "timestamp": { "type": "string" },
+          "webhookId": { "type": "string" },
+          "method": { "type": "string" },
+          "headers": { "type": "object" },
+          "body": { "type": "string" },
+          "size": { "type": "integer" },
+          "contentType": { "type": "string" }
         }
       }
     }
@@ -289,11 +290,12 @@ Test and inspect webhooks instantly without running localhost.
 
 ## What does it do?
 
-Webhook Debugger generates temporary webhook URLs and logs every incoming 
-request with full details (headers, body, query params). Perfect for testing 
+Webhook Debugger generates temporary webhook URLs and logs every incoming
+request with full details (headers, body, query params). Perfect for testing
 webhook integrations from Stripe, GitHub, Shopify, or any service.
 
 **What it does NOT do**:
+
 - ❌ Modify webhooks (read-only logging)
 - ❌ Replay webhooks (data capture only)
 - ❌ Permanent storage (auto-cleanup after 24-72 hours)
@@ -301,7 +303,9 @@ webhook integrations from Stripe, GitHub, Shopify, or any service.
 ## Why use Webhook Debugger?
 
 ### The Problem
+
 Debugging webhooks is painful:
+
 - ❌ Can't see what data services send
 - ❌ No way to inspect payloads
 - ❌ Localhost tunneling is complicated (ngrok, etc.)
@@ -309,12 +313,14 @@ Debugging webhooks is painful:
 
 ### The Solution
 ```
+
 1. Run Webhook Debugger
 2. Get 3 unique webhook URLs
 3. Configure service to send to those URLs
 4. See all requests in real-time
 5. Export logs as JSON/CSV
-```
+
+````
 
 No setup required. No localhost tunneling. Takes 30 seconds.
 
@@ -337,13 +343,14 @@ No setup required. No localhost tunneling. Takes 30 seconds.
   "urlCount": 3,
   "retentionHours": 24
 }
-```
+````
 
 Copy the 3 webhook URLs from the output dataset.
 
 Configure your service (Stripe, GitHub, etc.) to send to these URLs.
 
 ### Advanced mode
+
 ```json
 {
   "urlCount": 5,
@@ -356,6 +363,7 @@ Configure your service (Stripe, GitHub, etc.) to send to these URLs.
 ## Output example
 
 ### JSON format
+
 ```json
 {
   "webhooks": [
@@ -384,9 +392,10 @@ Configure your service (Stripe, GitHub, etc.) to send to these URLs.
 ```
 
 ### CSV export
-| Timestamp | Webhook ID | Method | Body | Size | Content-Type |
-|-----------|-----------|--------|------|------|--------------|
-| 2025-12-19T14:31:45Z | wh_abc123 | POST | {"type": "payment.success"} | 78 | application/json |
+
+| Timestamp            | Webhook ID | Method | Body                        | Size | Content-Type     |
+| -------------------- | ---------- | ------ | --------------------------- | ---- | ---------------- |
+| 2025-12-19T14:31:45Z | wh_abc123  | POST   | {"type": "payment.success"} | 78   | application/json |
 
 ## How to get started
 
@@ -413,6 +422,7 @@ Pay only for requests you actually capture:
 - Batch: 1,000 webhooks = $10
 
 **Examples**:
+
 - Testing 50 webhook calls: $0.50
 - Debugging daily: ~$1/month
 - Heavy integration testing: $5-10/month
@@ -420,7 +430,9 @@ Pay only for requests you actually capture:
 ## Advanced features
 
 ### Use your own API keys
+
 Set up authentication in the input to capture OAuth tokens:
+
 ```json
 {
   "apiKeys": {
@@ -431,7 +443,9 @@ Set up authentication in the input to capture OAuth tokens:
 ```
 
 ### Export directly to Google Sheets
+
 Auto-populate your logs into Google Sheets:
+
 ```json
 {
   "exportToSheets": "https://docs.google.com/spreadsheets/d/..."
@@ -439,6 +453,7 @@ Auto-populate your logs into Google Sheets:
 ```
 
 ### Integrate with Zapier/Make
+
 Use this Actor's webhook URLs with automation platforms for complex workflows.
 
 ## FAQ
@@ -447,11 +462,11 @@ Use this Actor's webhook URLs with automation platforms for complex workflows.
 A: By default, 24 hours. You can set 1-72 hours in input.
 
 **Q: Will you store my data?**
-A: No. Data is stored only in your Apify dataset (you own this). After TTL 
+A: No. Data is stored only in your Apify dataset (you own this). After TTL
 expires, URLs and old requests are deleted automatically.
 
 **Q: Can I test production webhooks?**
-A: Yes, but be careful! These are public URLs. Use them only for testing, 
+A: Yes, but be careful! These are public URLs. Use them only for testing,
 not in production.
 
 **Q: What's the payload size limit?**
@@ -463,11 +478,11 @@ A: Not currently, but you can export the body and resend manually.
 ## Troubleshooting
 
 **Issue**: "Webhook not captured"
-**Solution**: Verify webhook URL is copied correctly. Check service is actually 
+**Solution**: Verify webhook URL is copied correctly. Check service is actually
 sending webhooks (check service logs). Ensure URL hasn't expired.
 
 **Issue**: "URL expired"
-**Solution**: Webhook URLs expire after the retention period you set. 
+**Solution**: Webhook URLs expire after the retention period you set.
 Re-run Actor to generate new URLs.
 
 **Issue**: "Payload too large"
@@ -483,7 +498,8 @@ Re-run Actor to generate new URLs.
 ---
 
 **Questions?** Comment below or join the Apify community Discord!
-```
+
+````
 
 ---
 
@@ -496,11 +512,11 @@ Re-run Actor to generate new URLs.
 app.use((err, req, res, next) => {
   // Log the error
   Apify.utils.log.error('Request error:', err);
-  
+
   // Determine status code
   const statusCode = err.statusCode || 500;
   const message = err.message || 'Internal Server Error';
-  
+
   // Send error response
   res.status(statusCode).json({
     error: message,
@@ -522,7 +538,7 @@ app.post('/webhook/:id', asyncHandler(async (req, res) => {
       example: '/webhook/wh_abc123'
     });
   }
-  
+
   if (req.headers['content-length'] > MAX_PAYLOAD) {
     return res.status(413).json({
       error: 'Payload too large',
@@ -530,10 +546,10 @@ app.post('/webhook/:id', asyncHandler(async (req, res) => {
       received: req.headers['content-length']
     });
   }
-  
+
   // Process request...
 }));
-```
+````
 
 ## Pattern 2: API Call with Retry Logic
 
@@ -544,24 +560,20 @@ const retry = async (fn, maxRetries = 3, delay = 1000) => {
       return await fn();
     } catch (err) {
       if (attempt === maxRetries) throw err;
-      
+
       // Exponential backoff
       const waitTime = delay * Math.pow(2, attempt - 1);
       Apify.utils.log.warning(
         `Attempt ${attempt} failed, retrying in ${waitTime}ms...`,
-        err.message
+        err.message,
       );
-      await new Promise(r => setTimeout(r, waitTime));
+      await new Promise((r) => setTimeout(r, waitTime));
     }
   }
 };
 
 // Usage
-const data = await retry(
-  () => axios.get(url, {timeout: 5000}),
-  3,
-  1000
-);
+const data = await retry(() => axios.get(url, { timeout: 5000 }), 3, 1000);
 ```
 
 ## Pattern 3: Data Validation
@@ -569,23 +581,23 @@ const data = await retry(
 ```javascript
 const validateEmail = (email) => {
   const errors = [];
-  
+
   if (!email) {
-    errors.push('Email is required');
+    errors.push("Email is required");
   }
-  
-  if (!email.includes('@')) {
-    errors.push('Email must contain @');
+
+  if (!email.includes("@")) {
+    errors.push("Email must contain @");
   }
-  
+
   if (email.length > 254) {
-    errors.push('Email too long (max 254 characters)');
+    errors.push("Email too long (max 254 characters)");
   }
-  
+
   return {
     isValid: errors.length === 0,
     errors,
-    message: errors.join('; ')
+    message: errors.join("; "),
   };
 };
 
@@ -609,13 +621,14 @@ Title: I spent 3 hours debugging a webhook, so I built this tool.
 
 ---
 
-Hey devs, I'm a backend engineer who spent way too much time trying to 
-test webhooks from Stripe. Couldn't see what was being sent, localhost 
+Hey devs, I'm a backend engineer who spent way too much time trying to
+test webhooks from Stripe. Couldn't see what was being sent, localhost
 tunneling sucked, and configuring ngrok was a hassle.
 
 So I built [Webhook Debugger](https://apify.com/...) to solve this.
 
 **How it works**:
+
 1. Run the Actor (takes 30 seconds)
 2. Get 3 unique webhook URLs
 3. Configure your service to send to these URLs
@@ -623,6 +636,7 @@ So I built [Webhook Debugger](https://apify.com/...) to solve this.
 5. Export logs as JSON/CSV
 
 **What's different**:
+
 - ✅ No localhost setup required
 - ✅ No ngrok tunneling needed
 - ✅ URLs auto-expire (24-72 hours configurable)
@@ -631,7 +645,7 @@ So I built [Webhook Debugger](https://apify.com/...) to solve this.
 
 Built on Apify. Free to try. No credit card needed.
 
-Feedback welcome! I'm also building email validation and social media 
+Feedback welcome! I'm also building email validation and social media
 scheduling tools if anyone's interested.
 
 [Try Webhook Debugger →](https://apify.com/...)
@@ -646,21 +660,23 @@ Question: "How can I test webhooks locally for my Node.js application?"
 
 ---
 
-I had this exact problem. Testing webhooks locally is a pain because you 
+I had this exact problem. Testing webhooks locally is a pain because you
 need to expose your local server to the internet (ngrok, localtunnel, etc.).
 
 Here's what I did:
 
-**Instead of running localhost**: I built an Actor that generates temporary 
+**Instead of running localhost**: I built an Actor that generates temporary
 webhook URLs you can test against.
 
 **How it works**:
 ```
+
 1. Run Actor → Get 3 unique webhook URLs
 2. Configure your service (Stripe, GitHub, etc.) to send to these URLs
 3. All requests get logged with full details
 4. Export logs to JSON/CSV for analysis
-```
+
+````
 
 **Code example**:
 ```javascript
@@ -672,9 +688,10 @@ const response = await fetch(webhookUrl, {
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ event: 'test', timestamp: Date.now() })
 });
-```
+````
 
 **Benefits over localhost tunneling**:
+
 - ✅ No setup required
 - ✅ Works across all machines
 - ✅ Easy to share URLs with team
@@ -684,7 +701,8 @@ const response = await fetch(webhookUrl, {
 Try it: [Webhook Debugger on Apify](https://apify.com/...)
 
 Hope this helps!
-```
+
+````
 
 ## Template 3: Dev.to Article
 
@@ -714,9 +732,10 @@ Forwarding: https://abc123.ngrok.io -> localhost:3000
 
 # Now configure webhook to: https://abc123.ngrok.io/webhook
 # But ngrok expires, URLs change, setup is manual...
-```
+````
 
 ### After: Temporary webhook URLs
+
 ```
 1. Click "Start Actor"
 2. Get 3 unique URLs
@@ -726,10 +745,11 @@ Forwarding: https://abc123.ngrok.io -> localhost:3000
 
 ## What I Built
 
-I got frustrated enough to build [Webhook Debugger](https://apify.com/...), 
+I got frustrated enough to build [Webhook Debugger](https://apify.com/...),
 a tool that generates temporary webhook URLs with automatic logging.
 
 **Features**:
+
 - 🚀 Generate URLs in 30 seconds
 - 📝 Log every incoming request
 - 👀 See full details (headers, body, IP, timing)
@@ -739,6 +759,7 @@ a tool that generates temporary webhook URLs with automatic logging.
 ## How to Use
 
 **Step 1: Run the Actor**
+
 ```json
 {
   "urlCount": 3,
@@ -747,6 +768,7 @@ a tool that generates temporary webhook URLs with automatic logging.
 ```
 
 **Step 2: Get Your URLs**
+
 ```
 Webhook 1: https://api.apify.com/webhook/wh_abc123
 Webhook 2: https://api.apify.com/webhook/wh_def456
@@ -777,6 +799,7 @@ All incoming webhooks appear in your dataset with full details.
 ## Pricing
 
 Pay only for what you use:
+
 - **$0.01 per webhook request logged**
 - Testing 100 webhooks = $1
 - Testing 1,000 webhooks = $10
@@ -791,9 +814,10 @@ Takes 2 minutes to set up. No credit card required.
 
 ---
 
-Have you struggled with webhook testing? What's your workflow? Let me know 
+Have you struggled with webhook testing? What's your workflow? Let me know
 in the comments!
-```
+
+````
 
 ---
 
@@ -815,28 +839,29 @@ Use the input schema to enter your emails. The output will show if they're valid
 
 ```json
 {"emails": ["test@example.com"]}
-```
+````
 
 ## Output
 
 ```json
-{"valid": true}
+{ "valid": true }
 ```
-```
+
+````
 
 ### ✅ AFTER (Quality Score: 78)
 ```markdown
 # Email Validator & B2B Enricher
 
-Validate email addresses and automatically enrich them with company data 
+Validate email addresses and automatically enrich them with company data
 (industry, size, employee count) in seconds.
 
 **[Watch 2-min demo](https://youtube.com/...)**
 
 ## What does it do?
 
-Validates email addresses and enriches them with company information using 
-public APIs (Hunter.io, Clearbit). Perfect for sales teams building targeted 
+Validates email addresses and enriches them with company information using
+public APIs (Hunter.io, Clearbit). Perfect for sales teams building targeted
 prospect lists.
 
 ## Why use Email Validator & Enricher?
@@ -848,12 +873,14 @@ prospect lists.
 - ❌ Need to manually research companies
 
 ### The Solution
-```
+````
+
 1. Upload your email list
 2. Actor validates + enriches automatically
 3. Get company info, industry, employee count
 4. Export clean list for outreach
-```
+
+````
 
 **Results**:
 - 30x faster than manual validation
@@ -881,9 +908,10 @@ prospect lists.
   "enrichment": "full",
   "removeInvalid": true
 }
-```
+````
 
 **Advanced mode** (for power users)
+
 ```json
 {
   "emails": ["john@techcompany.com"],
@@ -897,6 +925,7 @@ prospect lists.
 ## Output example
 
 ### JSON format
+
 ```json
 {
   "email": "john@techcompany.com",
@@ -912,18 +941,21 @@ prospect lists.
 ```
 
 ### CSV export
-| Email | Valid | Company | Industry | Employees | Confidence |
-|-------|-------|---------|----------|-----------|------------|
-| john@techcompany.com | ✓ | Tech Company Inc | Software | 500-1000 | 98 |
-| invalid@test.local | ✗ | - | - | - | - |
+
+| Email                | Valid | Company          | Industry | Employees | Confidence |
+| -------------------- | ----- | ---------------- | -------- | --------- | ---------- |
+| john@techcompany.com | ✓     | Tech Company Inc | Software | 500-1000  | 98         |
+| invalid@test.local   | ✗     | -                | -        | -         | -          |
 
 ## How to get started
 
 **Step 1**: Prepare your email list (CSV or JSON)
+
 - CSV format: Just one column with emails
 - JSON format: `["email1@example.com", "email2@example.com"]`
 
 **Step 2**: Input your emails in the Actor
+
 ```json
 {
   "emails": ["email1@example.com", "email2@example.com"],
@@ -940,16 +972,19 @@ prospect lists.
 ## Pricing
 
 **Pay-per-event**: Only pay for emails you validate
+
 - **$0.03 per email validated + enriched**
 - Batch: 100 emails = $3
 - Batch: 1,000 emails = $30
 
 **Examples**:
+
 - Weekly list validation: 500 emails × $0.03 = $15/week
 - Monthly campaign: 10,000 emails × $0.03 = $300/month
 - No setup fees, no minimum
 
 **vs. Competitors**:
+
 - ZeroBounce: $0.10/email + $99/month minimum
 - Clearbit: $30/month + $0.50/record
 - This Actor: **$0.03/email (70% cheaper!)**
@@ -957,10 +992,13 @@ prospect lists.
 ## Advanced features & tips
 
 ### Batch processing (5,000+ emails)
+
 Set `batchSize` to 100 for parallel processing. Reduces runtime 50-70%.
 
 ### Use your own API keys
+
 Provide Hunter.io + Clearbit API keys for unlimited enrichment:
+
 ```json
 {
   "apiKeys": {
@@ -971,11 +1009,14 @@ Provide Hunter.io + Clearbit API keys for unlimited enrichment:
 ```
 
 ### Caching strategy
-Results are cached by domain. Validating multiple emails from same company 
+
+Results are cached by domain. Validating multiple emails from same company
 uses cache (faster + cheaper).
 
 ### Export to Google Sheets
+
 Set `exportToSheets` with Sheet URL to auto-populate results:
+
 ```json
 {
   "exportToSheets": "https://docs.google.com/spreadsheets/d/..."
@@ -983,41 +1024,42 @@ Set `exportToSheets` with Sheet URL to auto-populate results:
 ```
 
 ### CI/CD Integration
+
 Integrate with n8n or Zapier to auto-validate leads from your CRM.
 
 ## FAQ
 
 **Q: How accurate is the validation?**
-A: Email format validation (99.9% accurate). DNS verification (95%+ 
+A: Email format validation (99.9% accurate). DNS verification (95%+
 accurate). Most accurate results with SMTP verification.
 
 **Q: Can I use this for email marketing?**
-A: Yes! Validated emails improve deliverability. Results perfect for cold 
+A: Yes! Validated emails improve deliverability. Results perfect for cold
 outreach and marketing campaigns.
 
 **Q: Do you store my data?**
-A: No. Emails are processed and discarded. Only metadata stored in your 
+A: No. Emails are processed and discarded. Only metadata stored in your
 dataset. You own all your data.
 
 **Q: How often should I re-validate?**
 A: Every 6 months. Email addresses expire ~2% per month.
 
 **Q: What's included in company enrichment?**
-A: Company name, industry, employee count, website, location, LinkedIn URL, 
+A: Company name, industry, employee count, website, location, LinkedIn URL,
 founded year, tech stack (if available).
 
 ## Troubleshooting
 
 **Issue**: "Invalid API key"  
-**Solution**: Double-check your Hunter.io API key in input. Regenerate if 
+**Solution**: Double-check your Hunter.io API key in input. Regenerate if
 needed. Get free trial at https://hunter.io/
 
 **Issue**: "Rate limit exceeded"  
-**Solution**: Your API key hit hourly limits. Wait 1 hour or upgrade your 
+**Solution**: Your API key hit hourly limits. Wait 1 hour or upgrade your
 Hunter.io plan.
 
 **Issue**: "Enrichment data not returned"  
-**Solution**: Some companies may not have public data available. Partial 
+**Solution**: Some companies may not have public data available. Partial
 enrichment is still valuable (you get email validity + basic domain info).
 
 ## See also
@@ -1031,6 +1073,7 @@ enrichment is still valuable (you get email validity + basic domain info).
 ---
 
 Questions? Drop a comment below or join our Discord community!
+
 ```
 
 **Quality Score Jump**: 55 → 78 (+23 points!) = 41% improvement
@@ -1070,3 +1113,4 @@ Questions? Drop a comment below or join our Discord community!
 ---
 
 **Last Updated**: December 19, 2025 | **Status**: Ready to Use
+```

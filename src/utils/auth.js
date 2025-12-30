@@ -22,7 +22,7 @@ export function validateAuth(req, authKey) {
     // 2. Fallback to query param (Deprecated/Riskier)
     providedKey = req.query.key;
     console.warn(
-      "[SECURITY] API key provided in query string. Use Authorization header instead."
+      "[SECURITY] API key provided in query string. Use Authorization header instead.",
     );
   }
 

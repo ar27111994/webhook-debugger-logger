@@ -2,25 +2,30 @@ import { jest } from "@jest/globals";
 
 // Mock Apify
 jest.unstable_mockModule("apify", async () => {
-  const { createApifyMock } = await import("./helpers/apify-mock.js");
-  return {
-    Actor: createApifyMock({
-      maxPayloadSize: 1024, // 1KB for testing
-      enableJSONParsing: true,
-    }),
-  };
+  const { apifyMock } = await import("./helpers/shared-mocks.js");
+  return { Actor: apifyMock };
 });
 
 const request = (await import("supertest")).default;
-const { app, webhookManager } = await import("../src/main.js");
+const { app, webhookManager, initialize, shutdown } =
+  await import("../src/main.js");
 const { Actor } = await import("apify");
 
 describe("Edge Case Tests", () => {
   let webhookId;
 
   beforeAll(async () => {
+    Actor.getInput.mockResolvedValue({
+      maxPayloadSize: 1024,
+      enableJSONParsing: true,
+    });
+    await initialize();
     const ids = await webhookManager.generateWebhooks(1, 1);
     webhookId = ids[0];
+  });
+
+  afterAll(async () => {
+    await shutdown("TEST_COMPLETE");
   });
 
   test("Should handle empty request body gracefully", async () => {

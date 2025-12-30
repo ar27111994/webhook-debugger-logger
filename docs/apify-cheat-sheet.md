@@ -1,4 +1,5 @@
 # Apify $1M Challenge: Quick Reference Cheat Sheet
+
 ## One-Page Reference for Solo Developers (43 Days Remaining)
 
 ---
@@ -6,6 +7,7 @@
 ## CHALLENGE ESSENTIALS (NON-NEGOTIABLE)
 
 ### ✅ MUST DO
+
 - **Pay-per-Event (PPE)** pricing ONLY (Rental/PPR = ineligible)
 - **Actor Quality Score** ≥ 65 (aim for 75+)
 - Input schema + Output schema required
@@ -14,6 +16,7 @@
 - Only 5 Actors count toward prize pool
 
 ### ❌ AUTOMATIC DISQUALIFICATION
+
 - Raw scrapers of: YouTube, LinkedIn, Instagram, Facebook, TikTok, X, Apollo, Amazon, Google Maps/Search/Trends
 - Metrics gaming or fraud
 - Spamming communities
@@ -21,6 +24,7 @@
 - Third-party license violations
 
 ### 💰 REWARD STRUCTURE
+
 - **Per Actor**: $2 × MAU (max $2,000 at 1,000 MAU)
 - **Weekly Spotlight**: $2,000 (9 weeks remaining)
 - **Grand Prizes**: $30K, $20K, $10K
@@ -30,13 +34,13 @@
 
 ## THE 5 ACTORS TO BUILD (PRIORITY ORDER)
 
-| # | Actor | Days | Target MAU | Revenue | Status |
-|---|---|---|---|---|---|
-| 1 | Webhook Debugger | 3-4 | 250+ | $500+ | 🔴 LAUNCH FIRST |
-| 2 | Email Validator | 4-5 | 300+ | $600+ | 🔴 LAUNCH SECOND |
-| 3 | Social Scheduler | 5-6 | 400+ | $800+ | 🟠 Week 2 |
-| 4 | Price Monitor | 5-6 | 500+ | $1000+ | 🟠 Week 2-3 |
-| 5 | API Rate Limiter | 4-5 | 150+ | $300+ | 🟠 Week 3+ |
+| #   | Actor            | Days | Target MAU | Revenue | Status           |
+| --- | ---------------- | ---- | ---------- | ------- | ---------------- |
+| 1   | Webhook Debugger | 3-4  | 250+       | $500+   | 🔴 LAUNCH FIRST  |
+| 2   | Email Validator  | 4-5  | 300+       | $600+   | 🔴 LAUNCH SECOND |
+| 3   | Social Scheduler | 5-6  | 400+       | $800+   | 🟠 Week 2        |
+| 4   | Price Monitor    | 5-6  | 500+       | $1000+  | 🟠 Week 2-3      |
+| 5   | API Rate Limiter | 4-5  | 150+       | $300+   | 🟠 Week 3+       |
 
 **Total Expected**: 1,600+ MAU = $1,200-$1,600 challenge bonus
 
@@ -45,34 +49,42 @@
 ## WEEKLY TIMELINE (STARTING TODAY)
 
 ### Week 1: LAUNCH PHASE
+
 ```
 Mon-Wed: Build Webhook Debugger MVP
 Thu: Publish Actor #1
 Fri-Sun: Build Email Validator + Start Marketing
 ```
+
 **Goal**: 50-75 MAU, 70+ quality, organic buzz
 
-### Week 2: MOMENTUM PHASE  
+### Week 2: MOMENTUM PHASE
+
 ```
 Mon: Publish Actor #2 (Email Validator)
 Tue-Wed: Build Actor #3 (Social Scheduler)
 Thu: Publish Actor #3
 Fri-Sun: Optimize + Start Marketing Push
 ```
+
 **Goal**: 150-200 MAU, 75+ quality, revenue flowing
 
 ### Week 3: SCALE PHASE
+
 ```
 Mon-Wed: Build Actor #4 (Price Monitor)
 Thu: Publish Actor #4
 Fri-Sun: Heavy marketing + bug fixes
 ```
+
 **Goal**: 400-600 MAU, $300-500+ revenue
 
 ### Week 4+: MAXIMIZE PHASE
+
 ```
 Build/Launch Actor #5, optimize for revenue, maintain MAU
 ```
+
 **Goal**: 1,000+ MAU by Jan 31
 
 ---
@@ -80,6 +92,7 @@ Build/Launch Actor #5, optimize for revenue, maintain MAU
 ## QUALITY SCORE FORMULA (75+ TARGET)
 
 **5 Scoring Dimensions**:
+
 - 📊 **Reliability** (25%): Error rate <2%, success >98%
 - 📝 **Documentation** (25%): README with 5+ examples + video
 - 👥 **Ease of Use** (20%): Good input schema, clear errors
@@ -87,6 +100,7 @@ Build/Launch Actor #5, optimize for revenue, maintain MAU
 - 🔧 **Maintenance** (10%): Regular updates, Limited permissions
 
 **Quick Wins**:
+
 1. Add demo video (huge boost)
 2. Write comprehensive README
 3. Fix all bugs immediately
@@ -136,17 +150,20 @@ Build/Launch Actor #5, optimize for revenue, maintain MAU
 ## PRICING PSYCHOLOGY FRAMEWORK
 
 ### Charm Pricing (5-15% conversion boost)
+
 - ❌ $0.10 per event
 - ✅ $0.099 per event
 
 ### By Actor Type
-| Type | Low Volume | Medium | High Volume |
-|---|---|---|---|
-| Data Processing | $0.01-0.02 | $0.03-0.05 | $0.05-0.10 |
-| API Wrappers | $0.005-0.01 | $0.01-0.02 | $0.02-0.05 |
-| AI Tools | $0.50-1.00 | $1.00-2.00 | $2.00-5.00 |
+
+| Type            | Low Volume  | Medium     | High Volume |
+| --------------- | ----------- | ---------- | ----------- |
+| Data Processing | $0.01-0.02  | $0.03-0.05 | $0.05-0.10  |
+| API Wrappers    | $0.005-0.01 | $0.01-0.02 | $0.02-0.05  |
+| AI Tools        | $0.50-1.00  | $1.00-2.00 | $2.00-5.00  |
 
 ### Revenue Examples
+
 - **Email Validator**: 300 MAU × 100 emails × $0.03 = $900/month
 - **Social Scheduler**: 400 MAU × 2 posts × 30 × $0.07 = $1,680/month
 - **Webhook Debugger**: 250 MAU × 50 events × $0.01 = $125/month
@@ -157,21 +174,25 @@ Build/Launch Actor #5, optimize for revenue, maintain MAU
 ## MARKETING CHANNELS (ANONYMOUS, NO INTERACTION)
 
 ### Reddit (Highest ROI)
+
 - r/webdev, r/programming, r/SideHustle
 - Format: "Spent 3 hours on [problem], built this tool"
 - Expected: 50-200 upvotes = 20-50 new users per post
 
 ### Stack Overflow (Authority + SEO)
+
 - Find [problem] questions in your niche
 - Answer + include link naturally
 - Expected: 5-50 views/upvotes = 2-10 conversions
 
 ### Dev.to / Hashnode (Content)
+
 - Write "How to [solve] without expensive tools"
 - Gets organic traffic for months
 - Expected: 500-2000 views = 20-50 users
 
 ### Twitter/X (Community)
+
 - Daily: Share demo, answer questions, engage
 - Weekly: Thread about your problem/solution
 - Expected: 5-50 clicks/week per consistent posting
@@ -221,12 +242,14 @@ Make it production-ready, not skeleton code.
 ## QUALITY OPTIMIZATION CHECKLIST (PRE-LAUNCH)
 
 ### Schema ✅
+
 - [ ] Input schema: All fields documented
 - [ ] Input schema: Good defaults provided
 - [ ] Output schema: All fields clear
 - [ ] Output schema: Sample values shown
 
 ### README ✅
+
 - [ ] "What does it do?" (1-2 sentences)
 - [ ] "Why use it?" (problem + benefits)
 - [ ] Features table
@@ -239,6 +262,7 @@ Make it production-ready, not skeleton code.
 - [ ] 5+ links (internal + external)
 
 ### Code Quality ✅
+
 - [ ] Try-catch blocks (all errors handled)
 - [ ] Helpful error messages (not cryptic)
 - [ ] Performance: <5 min for typical use
@@ -246,6 +270,7 @@ Make it production-ready, not skeleton code.
 - [ ] Edge cases tested (empty input, max size)
 
 ### Support ✅
+
 - [ ] Plan to respond within 24 hours
 - [ ] Monitor dashboard daily
 - [ ] Fix bugs immediately
@@ -281,18 +306,19 @@ TOP PRIORITY NEXT:
 
 ## MILESTONES & DEADLINES
 
-| Milestone | Target Date | Goal |
-|---|---|---|
-| 2 Actors Published | Dec 22 | 50-75 MAU, 70+ quality |
-| 4 Actors Published | Dec 31 | 300+ MAU, 75+ quality |
-| 5 Actors Published | Jan 15 | 800+ MAU |
-| Final Push | Jan 31 | 1,000+ MAU = $1,000+ bonus |
+| Milestone          | Target Date | Goal                       |
+| ------------------ | ----------- | -------------------------- |
+| 2 Actors Published | Dec 22      | 50-75 MAU, 70+ quality     |
+| 4 Actors Published | Dec 31      | 300+ MAU, 75+ quality      |
+| 5 Actors Published | Jan 15      | 800+ MAU                   |
+| Final Push         | Jan 31      | 1,000+ MAU = $1,000+ bonus |
 
 ---
 
 ## DO'S & DON'T'S (CRITICAL)
 
 ### ✅ DO
+
 - Start immediately (43 days = short window)
 - Focus on QUALITY not QUANTITY
 - Market organically (genuine, not spammy)
@@ -302,6 +328,7 @@ TOP PRIORITY NEXT:
 - Iterate based on feedback
 
 ### ❌ DON'T
+
 - Overengineer MVP (ship fast)
 - Build 10 Actors (5 great > 10 mediocre)
 - Spam communities (auto-disqualification)
@@ -314,14 +341,14 @@ TOP PRIORITY NEXT:
 
 ## SUCCESS METRICS (TRACK WEEKLY)
 
-| Metric | Target | Red Flag |
-|---|---|---|
-| MAU (per Actor) | 50+ by Week 4 | <30 by Week 4 |
-| Quality Score | 75+ | <65 = ineligible |
-| User Rating | 4.5+ stars | <3.5 = major problem |
-| Error Rate | <2% | >5% = optimize |
-| Response Time | <30 sec | >2 min = slow |
-| Churn Rate | <10%/month | >20% = retention issue |
+| Metric          | Target        | Red Flag               |
+| --------------- | ------------- | ---------------------- |
+| MAU (per Actor) | 50+ by Week 4 | <30 by Week 4          |
+| Quality Score   | 75+           | <65 = ineligible       |
+| User Rating     | 4.5+ stars    | <3.5 = major problem   |
+| Error Rate      | <2%           | >5% = optimize         |
+| Response Time   | <30 sec       | >2 min = slow          |
+| Churn Rate      | <10%/month    | >20% = retention issue |
 
 ---
 

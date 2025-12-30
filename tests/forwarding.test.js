@@ -89,6 +89,35 @@ describe("Forwarding Security", () => {
     expect(sentHeaders["X-Forwarded-By"]).toBe("Apify-Webhook-Debugger");
   });
 
+  test("should mask sensitive headers in captured event if maskSensitiveData is true", async () => {
+    options.maskSensitiveData = true;
+    const { Actor } = await import("apify");
+    const middleware = createLoggerMiddleware(webhookManager, options, onEvent);
+    const req = httpMocks.createRequest({
+      params: { id: "wh_123" },
+      headers: {
+        authorization: "Bearer secret",
+        cookie: "session=123",
+        "x-api-key": "my-key",
+        "user-agent": "test-agent",
+      },
+      body: {},
+    });
+    const res = httpMocks.createResponse();
+
+    await middleware(req, res);
+
+    expect(res.statusCode).toBe(200);
+    // Explicitly assert that pushData was invoked before accessing mock.calls
+    expect(Actor.pushData).toHaveBeenCalled();
+
+    const pushedData = Actor.pushData.mock.calls[0][0];
+    expect(pushedData.headers["authorization"]).toBe("[MASKED]");
+    expect(pushedData.headers["cookie"]).toBe("[MASKED]");
+    expect(pushedData.headers["x-api-key"]).toBe("[MASKED]");
+    expect(pushedData.headers["user-agent"]).toBe("test-agent");
+  });
+
   test("should handle missing forwardUrl gracefully (no forwarding)", async () => {
     delete options.forwardUrl;
     const middleware = createLoggerMiddleware(webhookManager, options, onEvent);

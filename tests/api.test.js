@@ -1,32 +1,40 @@
 import { jest } from "@jest/globals";
 
 jest.unstable_mockModule("apify", async () => {
-  const { createApifyMock } = await import("./helpers/apify-mock.js");
-  return { Actor: createApifyMock() };
+  const { apifyMock } = await import("./helpers/shared-mocks.js");
+  return { Actor: apifyMock };
 });
 
-jest.unstable_mockModule("axios", () => ({
-  default: jest.fn().mockResolvedValue({ status: 200, data: "OK" }),
-}));
+jest.unstable_mockModule("axios", async () => {
+  const { axiosMock } = await import("./helpers/shared-mocks.js");
+  return { default: axiosMock };
+});
 
 const request = (await import("supertest")).default;
-const { app, webhookManager } = await import("../src/main.js");
+const { app, webhookManager, initialize, shutdown } =
+  await import("../src/main.js");
 const { Actor } = await import("apify");
 
 describe("API E2E Tests", () => {
   let webhookId;
 
   beforeAll(async () => {
+    await initialize();
     // Generate a test webhook
     const ids = await webhookManager.generateWebhooks(1, 1);
     webhookId = ids[0];
+  });
+
+  afterAll(async () => {
+    await shutdown("TEST_COMPLETE");
   });
 
   test("GET /info should return status and webhooks", async () => {
     const res = await request(app).get("/info");
     expect(res.statusCode).toBe(200);
     expect(res.body.version).toBeDefined();
-    expect(res.body.activeWebhooks.length).toBeGreaterThanOrEqual(1);
+    expect(res.body.system.activeWebhooks.length).toBeGreaterThanOrEqual(1);
+    expect(res.body.endpoints).toBeDefined();
   });
 
   test("POST /webhook/:id should capture data", async () => {
@@ -38,7 +46,7 @@ describe("API E2E Tests", () => {
     expect(res.text).toBe("OK");
   });
 
-  test("GET /logs should return captured items", async () => {
+  test("GET /logs should return captured items and filters", async () => {
     // Mock dataset to return one item for this test
     const mockItem = {
       webhookId,
@@ -52,6 +60,7 @@ describe("API E2E Tests", () => {
 
     const res = await request(app).get("/logs").query({ webhookId });
     expect(res.statusCode).toBe(200);
+    expect(res.body.filters).toBeDefined();
     expect(res.body.items).toHaveLength(1);
     expect(res.body.items[0].webhookId).toBe(webhookId);
   });

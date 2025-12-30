@@ -15,13 +15,13 @@ export class WebhookManager {
       if (savedState && typeof savedState === "object") {
         this.webhooks = new Map(Object.entries(savedState));
         console.log(
-          `[STORAGE] Restored ${this.webhooks.size} webhooks from state.`
+          `[STORAGE] Restored ${this.webhooks.size} webhooks from state.`,
         );
       }
     } catch (error) {
       console.error(
         "[CRITICAL] Failed to initialize WebhookManager state:",
-        error.message
+        error.message,
       );
       // Fallback to empty map is already handled by constructor
     }
@@ -34,14 +34,14 @@ export class WebhookManager {
     } catch (error) {
       console.error(
         "[STORAGE-ERROR] Failed to persist webhook state:",
-        error.message
+        error.message,
       );
     }
   }
 
   async generateWebhooks(count, retentionHours) {
     const expiresAt = new Date(
-      Date.now() + retentionHours * 60 * 60 * 1000
+      Date.now() + retentionHours * 60 * 60 * 1000,
     ).toISOString();
     const newIds = [];
 

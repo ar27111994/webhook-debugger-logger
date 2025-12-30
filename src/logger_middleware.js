@@ -122,7 +122,7 @@ function prepareRequestData(req, options, validate) {
         Object.entries(req.headers).map(([key, value]) => [
           key,
           headersToMask.includes(key.toLowerCase()) ? "[MASKED]" : value,
-        ])
+        ]),
       )
     : req.headers;
 
@@ -140,7 +140,7 @@ function transformRequestData(event, req, compiledScript) {
     } catch (err) {
       console.error(
         `[SCRIPT-EXEC-ERROR] Failed to run custom script for ${event.webhookId}:`,
-        err.message
+        err.message,
       );
     }
   }
@@ -221,8 +221,8 @@ async function executeBackgroundTasks(event, req, options, onEvent) {
               options.forwardHeaders !== false
                 ? Object.fromEntries(
                     Object.entries(req.headers).filter(
-                      ([key]) => !sensitiveHeaders.includes(key.toLowerCase())
-                    )
+                      ([key]) => !sensitiveHeaders.includes(key.toLowerCase()),
+                    ),
                   )
                 : {
                     "content-type": req.headers["content-type"],
@@ -239,13 +239,23 @@ async function executeBackgroundTasks(event, req, options, onEvent) {
             });
             success = true;
           } catch (err) {
+            const transientErrors = [
+              "ECONNABORTED",
+              "ECONNRESET",
+              "ETIMEDOUT",
+              "ENETUNREACH",
+              "EHOSTUNREACH",
+              "EAI_AGAIN",
+            ];
+            const isTransient = transientErrors.includes(err.code);
             const delay = 1000 * Math.pow(2, attempt - 1);
+
             console.error(
               `[FORWARD-ERROR] Attempt ${attempt}/${MAX_RETRIES} failed for ${validatedUrl}:`,
-              err.code === "ECONNABORTED" ? "Timed out" : err.message
+              err.code === "ECONNABORTED" ? "Timed out" : err.message,
             );
 
-            if (attempt >= MAX_RETRIES) {
+            if (attempt >= MAX_RETRIES || !isTransient) {
               try {
                 await Actor.pushData({
                   id: nanoid(10),
@@ -253,16 +263,19 @@ async function executeBackgroundTasks(event, req, options, onEvent) {
                   webhookId: event.webhookId,
                   method: "SYSTEM",
                   type: "forward_error",
-                  body: `Forwarding to ${validatedUrl} failed after ${MAX_RETRIES} attempts. Last error: ${err.message}`,
+                  body: `Forwarding to ${validatedUrl} failed${
+                    !isTransient ? " (Non-transient error)" : ""
+                  } after ${attempt} attempts. Last error: ${err.message}`,
                   statusCode: 500,
                   originalEventId: event.id,
                 });
               } catch (pushErr) {
                 console.error(
                   "[CRITICAL] Failed to log forward error:",
-                  pushErr.message
+                  pushErr.message,
                 );
               }
+              break; // Stop retrying
             } else {
               await new Promise((resolve) => setTimeout(resolve, delay));
             }
@@ -283,12 +296,12 @@ async function executeBackgroundTasks(event, req, options, onEvent) {
       `[CRITICAL] ${
         isPlatformError ? "PLATFORM-LIMIT" : "BACKGROUND-ERROR"
       } for ${event.webhookId}:`,
-      error.message
+      error.message,
     );
 
     if (isPlatformError) {
       console.warn(
-        "[ADVICE] Check your Apify platform limits or storage availability."
+        "[ADVICE] Check your Apify platform limits or storage availability.",
       );
     }
   }
@@ -336,8 +349,8 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
     ];
     const webhookOverrides = Object.fromEntries(
       Object.entries(webhookData).filter(([key]) =>
-        allowedOverrides.includes(key)
-      )
+        allowedOverrides.includes(key),
+      ),
     );
 
     const mergedOptions = {
@@ -349,7 +362,7 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
       req,
       webhookId,
       mergedOptions,
-      webhookManager
+      webhookManager,
     );
     if (!validation.isValid) {
       return res.status(validation.statusCode).json({
@@ -366,7 +379,7 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
       const { loggedBody, loggedHeaders, contentType } = prepareRequestData(
         req,
         mergedOptions,
-        validate
+        validate,
       );
 
       // 3. Transform
@@ -391,7 +404,7 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
       // 4. Orchestration: Respond synchronous-ish, then race background tasks
       if (mergedOptions.responseDelayMs > 0) {
         await new Promise((resolve) =>
-          setTimeout(resolve, Math.min(mergedOptions.responseDelayMs, 10000))
+          setTimeout(resolve, Math.min(mergedOptions.responseDelayMs, 10000)),
         );
       }
 
@@ -405,22 +418,28 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
         } catch (err) {
           console.error(
             `[CRITICAL] Background tasks for ${event.id} failed:`,
-            err.message
+            err.message,
           );
         }
       };
 
       // Wrap background work in Promise.race to ensure we don't hang the Actor if storage is slow
+      const timeoutMs = process.env.NODE_ENV === "test" ? 100 : 10000;
       await Promise.race([
         backgroundPromise(),
-        new Promise((resolve) =>
-          setTimeout(() => {
-            console.warn(
-              `[TIMEOUT] Background tasks for ${event.id} exceeded 10s. Continuing...`
-            );
+        new Promise((resolve) => {
+          const t = setTimeout(() => {
+            if (process.env.NODE_ENV !== "test") {
+              const readableTimeout =
+                timeoutMs < 1000 ? `${timeoutMs}ms` : `${timeoutMs / 1000}s`;
+              console.warn(
+                `[TIMEOUT] Background tasks for ${event.id} exceeded ${readableTimeout}. Continuing...`,
+              );
+            }
             resolve();
-          }, 10000)
-        ),
+          }, timeoutMs);
+          if (t.unref) t.unref();
+        }),
       ]);
     } catch (err) {
       if (err.statusCode) {

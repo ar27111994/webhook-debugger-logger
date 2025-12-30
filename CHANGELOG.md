@@ -2,27 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
-## [2.7.0] - 2025-12-28
+## [2.7.0] - 2025-12-30
 
 ### Added
 
+- **Enterprise-Grade Rate Limiting**:
+  - Implemented **LRU (Least Recently Used)** eviction strategy for superior client protection under load.
+  - Added **strict IP validation** for proxy headers (`X-Forwarded-For`/`X-Real-IP`) to prevent spoofing and malformed data propagation.
+  - Added robust validation for `limit`, `windowMs`, and `maxEntries` parameters.
+- **Security & Privacy Hardening**:
+  - **Enhanced Privacy (PII Masking)**: Integrated an IP masking helper to obfuscate sensitive client data in logs (e.g., `192.168.1.****`).
+  - **XSS Protection**: Implemented `escapeHtml` sanitization for all user-controlled output in the "Locked" auth screen and error pages.
+  - **Universal Auth UI**: Created a unified landing page with hardened auth detection and zero-leak link generation.
 - **Enterprise Integration Suite**:
-  - **Forwarding Security Hardening**: Automatically strip sensitive headers (`Authorization`, `Cookie`, etc.) during real-time forwarding to prevent credential leakage.
-  - **Forwarding Controls**: Added `forwardHeaders` toggle to allowed granular control over header transmission.
-  - **Example Saturation**: Added 3+ comprehensive end-to-end input/output examples to the README to satisfy Apify Quality Score requirements.
-  - **UX Prefills**: Enriched `input_schema.json` with high-value prefills and examples for JSON Schema and Custom Scripting.
-- **Deterministic Rate-Limit Eviction**: The `RateLimiter` now enforces a strict `maxEntries` cap by automatically evicting the oldest entries, ensuring memory stability.
-- **Comprehensive Verification**: Expanded the test suite to **32 tests** (added `tests/forwarding.test.js`), covering unit, integration, security, and complex edge cases.
+  - **Forwarding Security**: Automatically strip sensitive headers (`Authorization`, `Cookie`, etc.) during real-time forwarding and replay.
+  - **Forwarding Controls**: Added `forwardHeaders` toggle for granular control over header transmission.
+  - **Documentation Playbooks**: Added new guides for `Revenue Recovery`, `Low-Code Bridge`, and `Legacy Migration`.
+  - **Example Saturation**: Added 3+ comprehensive end-to-end input/output examples to satisfying Apify Quality Score requirements.
 
 ### Improved
 
-- **Security Hardening**:
-  - **Option Override Whitelisting**: Restricted per-webhook overrides to non-security settings to prevent bypassing global controls.
-  - **Hardened IP Identification**: Requests without a resolvable client IP are now rejected with a `400 Bad Request`.
+- **Auth Security**: Eliminated all `authKey` leakage by removing automatic query parameter propagation in management links and API responses.
+- **Replay Accuracy**: Prioritized nanoid `id` over timestamps in event lookup to eliminate collisions during high-concurrency replays.
 - **Architectural Reliability**:
-  - **Background Rate-Limit Pruning**: Moved hit cleanup to a non-blocking background interval (60s).
+  - **Background Pruning**: Moved hit cleanup to a non-blocking background interval (60s).
   - **Middleware Orchestration**: Guaranteed immediate response delivery before racing background tasks against a 10s timeout.
-- **Repository Health**: Removed heavy binary assets from Git tracking and updated `.gitignore` for a leaner, faster repository.
+- **Comprehensive Verification**: Expanded test suite to **79 tests** (15 files), achieving full coverage of security, reliability, and edge case scenarios with zero memory/timer leaks.
+- **Repository Health**: Removed heavy binary assets and updated `.gitignore` for a leaner, faster repository.
 
 ## [2.6.0] - 2025-12-27
 

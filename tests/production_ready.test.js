@@ -1,38 +1,42 @@
 import { jest } from "@jest/globals";
 
-// Mock Apify with configuration
 jest.unstable_mockModule("apify", async () => {
-  const { createApifyMock } = await import("./helpers/apify-mock.js");
-  return {
-    Actor: createApifyMock({
-      authKey: "top-secret",
-      rateLimitPerMinute: 2,
-      maskSensitiveData: true,
-      allowedIps: ["127.0.0.1", "192.168.1.0/24"],
-    }),
-  };
+  const { apifyMock } = await import("./helpers/shared-mocks.js");
+  return { Actor: apifyMock };
 });
 
-jest.unstable_mockModule("axios", () => {
-  const mockAxios = jest.fn().mockResolvedValue({ status: 200, data: "OK" });
-  mockAxios.post = jest.fn().mockResolvedValue({ status: 200, data: "OK" });
-  return { default: mockAxios };
+jest.unstable_mockModule("axios", async () => {
+  const { axiosMock } = await import("./helpers/shared-mocks.js");
+  return { default: axiosMock };
 });
 
 const request = (await import("supertest")).default;
-const { app, webhookManager, sseHeartbeat } = await import("../src/main.js");
+const { app, webhookManager, sseHeartbeat, initialize, shutdown } =
+  await import("../src/main.js");
 const { Actor } = await import("apify");
 
 describe("Production Readiness Tests (v2.6.0)", () => {
   let webhookId;
 
   beforeAll(async () => {
+    Actor.getInput.mockResolvedValue({
+      authKey: "top-secret",
+      rateLimitPerMinute: 2,
+      maskSensitiveData: true,
+      allowedIps: ["127.0.0.1", "192.168.1.0/24"],
+    });
+    await initialize();
     const ids = await webhookManager.generateWebhooks(1, 1);
     webhookId = ids[0];
   });
 
-  afterAll(() => {
+  afterAll(async () => {
     if (sseHeartbeat) clearInterval(sseHeartbeat);
+    try {
+      await shutdown("TEST_COMPLETE");
+    } catch (e) {
+      console.warn("Cleanup shutdown failed:", e.message);
+    }
   });
 
   describe("Security: Rate Limiting", () => {

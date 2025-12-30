@@ -4,12 +4,15 @@
   "title": "Webhook Debugger, Logger & API Mocking Suite",
   "description": "Enterprise-grade tool to test, debug, and mock webhooks. Features real-time SSE streaming, request replay, HTTP forwarding, and JSON schema validation. Perfect for Stripe, GitHub, and Shopify integrations.",
   "version": "2.7.0",
+  "output": "./output_schema.json",
+  "input": "./input_schema.json",
   "usesStandbyMode": true,
   "dockerfile": "../Dockerfile",
   "categories": ["DEVELOPER_TOOLS", "UTILITIES", "INTEGRATION_TOOLS"],
   "homepageUrl": "https://apify.com/ar27111994/webhook-debugger-logger",
   "storages": {
-    "dataset": "./dataset_schema.json"
+    "dataset": "./dataset_schema.json",
+    "keyValueStore": "./key_value_store_schema.json"
   },
   "environmentVariables": {
     "ACTOR_WEB_SERVER_PORT": "8080"

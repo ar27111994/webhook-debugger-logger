@@ -9,7 +9,7 @@ The dataset schema defines how your Actor's output data is structured, transform
 Consider an example Actor that calls `Actor.pushData()` to store data into dataset:
 
 ```typescript
-import { Actor } from 'apify';
+import { Actor } from "apify";
 // Initialize the JavaScript SDK
 await Actor.init();
 
@@ -17,14 +17,15 @@ await Actor.init();
  * Actor code
  */
 await Actor.pushData({
-    numericField: 10,
-    pictureUrl: 'https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_92x30dp.png',
-    linkUrl: 'https://google.com',
-    textField: 'Google',
-    booleanField: true,
-    dateField: new Date(),
-    arrayField: ['#hello', '#world'],
-    objectField: {},
+  numericField: 10,
+  pictureUrl:
+    "https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_92x30dp.png",
+  linkUrl: "https://google.com",
+  textField: "Google",
+  booleanField: true,
+  dateField: new Date(),
+  arrayField: ["#hello", "#world"],
+  objectField: {},
 });
 
 // Exit successfully
@@ -35,13 +36,13 @@ To set up the Actor's output tab UI, reference a dataset schema file in `.actor/
 
 ```json
 {
-    "actorSpecification": 1,
-    "name": "book-library-scraper",
-    "title": "Book Library Scraper",
-    "version": "1.0.0",
-    "storages": {
-        "dataset": "./dataset_schema.json"
-    }
+  "actorSpecification": 1,
+  "name": "book-library-scraper",
+  "title": "Book Library Scraper",
+  "version": "1.0.0",
+  "storages": {
+    "dataset": "./dataset_schema.json"
+  }
 }
 ```
 
@@ -49,62 +50,62 @@ Then create the dataset schema in `.actor/dataset_schema.json`:
 
 ```json
 {
-    "actorSpecification": 1,
-    "fields": {},
-    "views": {
-        "overview": {
-            "title": "Overview",
-            "transformation": {
-                "fields": [
-                    "pictureUrl",
-                    "linkUrl",
-                    "textField",
-                    "booleanField",
-                    "arrayField",
-                    "objectField",
-                    "dateField",
-                    "numericField"
-                ]
-            },
-            "display": {
-                "component": "table",
-                "properties": {
-                    "pictureUrl": {
-                        "label": "Image",
-                        "format": "image"
-                    },
-                    "linkUrl": {
-                        "label": "Link",
-                        "format": "link"
-                    },
-                    "textField": {
-                        "label": "Text",
-                        "format": "text"
-                    },
-                    "booleanField": {
-                        "label": "Boolean",
-                        "format": "boolean"
-                    },
-                    "arrayField": {
-                        "label": "Array",
-                        "format": "array"
-                    },
-                    "objectField": {
-                        "label": "Object",
-                        "format": "object"
-                    },
-                    "dateField": {
-                        "label": "Date",
-                        "format": "date"
-                    },
-                    "numericField": {
-                        "label": "Number",
-                        "format": "number"
-                    }
-                }
-            }
+  "actorSpecification": 1,
+  "fields": {},
+  "views": {
+    "overview": {
+      "title": "Overview",
+      "transformation": {
+        "fields": [
+          "pictureUrl",
+          "linkUrl",
+          "textField",
+          "booleanField",
+          "arrayField",
+          "objectField",
+          "dateField",
+          "numericField"
+        ]
+      },
+      "display": {
+        "component": "table",
+        "properties": {
+          "pictureUrl": {
+            "label": "Image",
+            "format": "image"
+          },
+          "linkUrl": {
+            "label": "Link",
+            "format": "link"
+          },
+          "textField": {
+            "label": "Text",
+            "format": "text"
+          },
+          "booleanField": {
+            "label": "Boolean",
+            "format": "boolean"
+          },
+          "arrayField": {
+            "label": "Array",
+            "format": "array"
+          },
+          "objectField": {
+            "label": "Object",
+            "format": "object"
+          },
+          "dateField": {
+            "label": "Date",
+            "format": "date"
+          },
+          "numericField": {
+            "label": "Number",
+            "format": "number"
+          }
         }
+      }
     }
+  }
 }
 ```
 
@@ -112,31 +113,31 @@ Then create the dataset schema in `.actor/dataset_schema.json`:
 
 ```json
 {
-    "actorSpecification": 1,
-    "fields": {},
-    "views": {
-        "<VIEW_NAME>": {
-            "title": "string (required)",
-            "description": "string (optional)",
-            "transformation": {
-                "fields": ["string (required)"],
-                "unwind": ["string (optional)"],
-                "flatten": ["string (optional)"],
-                "omit": ["string (optional)"],
-                "limit": "integer (optional)",
-                "desc": "boolean (optional)"
-            },
-            "display": {
-                "component": "table (required)",
-                "properties": {
-                    "<FIELD_NAME>": {
-                        "label": "string (optional)",
-                        "format": "text|number|date|link|boolean|image|array|object (optional)"
-                    }
-                }
-            }
+  "actorSpecification": 1,
+  "fields": {},
+  "views": {
+    "<VIEW_NAME>": {
+      "title": "string (required)",
+      "description": "string (optional)",
+      "transformation": {
+        "fields": ["string (required)"],
+        "unwind": ["string (optional)"],
+        "flatten": ["string (optional)"],
+        "omit": ["string (optional)"],
+        "limit": "integer (optional)",
+        "desc": "boolean (optional)"
+      },
+      "display": {
+        "component": "table (required)",
+        "properties": {
+          "<FIELD_NAME>": {
+            "label": "string (optional)",
+            "format": "text|number|date|link|boolean|image|array|object (optional)"
+          }
         }
+      }
     }
+  }
 }
 ```
 
@@ -181,16 +182,20 @@ The key-value store schema organizes keys into logical groups called collections
 Consider an example Actor that calls `Actor.setValue()` to save records into the key-value store:
 
 ```typescript
-import { Actor } from 'apify';
+import { Actor } from "apify";
 // Initialize the JavaScript SDK
 await Actor.init();
 
 /**
  * Actor code
  */
-await Actor.setValue('document-1', 'my text data', { contentType: 'text/plain' });
+await Actor.setValue("document-1", "my text data", {
+  contentType: "text/plain",
+});
 
-await Actor.setValue(`image-${imageID}`, imageBuffer, { contentType: 'image/jpeg' });
+await Actor.setValue(`image-${imageID}`, imageBuffer, {
+  contentType: "image/jpeg",
+});
 
 // Exit successfully
 await Actor.exit();
@@ -200,13 +205,13 @@ To configure the key-value store schema, reference a schema file in `.actor/acto
 
 ```json
 {
-    "actorSpecification": 1,
-    "name": "data-collector",
-    "title": "Data Collector",
-    "version": "1.0.0",
-    "storages": {
-        "keyValueStore": "./key_value_store_schema.json"
-    }
+  "actorSpecification": 1,
+  "name": "data-collector",
+  "title": "Data Collector",
+  "version": "1.0.0",
+  "storages": {
+    "keyValueStore": "./key_value_store_schema.json"
+  }
 }
 ```
 
@@ -214,21 +219,21 @@ Then create the key-value store schema in `.actor/key_value_store_schema.json`:
 
 ```json
 {
-    "actorKeyValueStoreSchemaVersion": 1,
-    "title": "Key-Value Store Schema",
-    "collections": {
-        "documents": {
-            "title": "Documents",
-            "description": "Text documents stored by the Actor",
-            "keyPrefix": "document-"
-        },
-        "images": {
-            "title": "Images",
-            "description": "Images stored by the Actor",
-            "keyPrefix": "image-",
-            "contentTypes": ["image/jpeg"]
-        }
+  "actorKeyValueStoreSchemaVersion": 1,
+  "title": "Key-Value Store Schema",
+  "collections": {
+    "documents": {
+      "title": "Documents",
+      "description": "Text documents stored by the Actor",
+      "keyPrefix": "document-"
+    },
+    "images": {
+      "title": "Images",
+      "description": "Images stored by the Actor",
+      "keyPrefix": "image-",
+      "contentTypes": ["image/jpeg"]
     }
+  }
 }
 ```
 
@@ -236,19 +241,19 @@ Then create the key-value store schema in `.actor/key_value_store_schema.json`:
 
 ```json
 {
-    "actorKeyValueStoreSchemaVersion": 1,
-    "title": "string (required)",
-    "description": "string (optional)",
-    "collections": {
-        "<COLLECTION_NAME>": {
-            "title": "string (required)",
-            "description": "string (optional)",
-            "key": "string (conditional - use key OR keyPrefix)",
-            "keyPrefix": "string (conditional - use key OR keyPrefix)",
-            "contentTypes": ["string (optional)"],
-            "jsonSchema": "object (optional)"
-        }
+  "actorKeyValueStoreSchemaVersion": 1,
+  "title": "string (required)",
+  "description": "string (optional)",
+  "collections": {
+    "<COLLECTION_NAME>": {
+      "title": "string (required)",
+      "description": "string (optional)",
+      "key": "string (conditional - use key OR keyPrefix)",
+      "keyPrefix": "string (conditional - use key OR keyPrefix)",
+      "contentTypes": ["string (optional)"],
+      "jsonSchema": "object (optional)"
     }
+  }
 }
 ```
 

@@ -61,6 +61,7 @@ apify help                             # List all commands
 ## Safety and Permissions
 
 Allowed without prompt:
+
 - read files with `Actor.get_value()`
 - push data with `Actor.push_data()`
 - set values with `Actor.set_value()`
@@ -68,6 +69,7 @@ Allowed without prompt:
 - run locally with `apify run`
 
 Ask first:
+
 - npm/pip package installations
 - apify push (deployment to cloud)
 - proxy configuration changes (requires paid plan)
@@ -97,6 +99,7 @@ Due to the length of the schema specifications, they have been moved to separate
 - [Storage Schema](file:///home/ar27111994/Projects/Apify/Domain%20Availability%20Checker/.agent/rules/python.STORAGE_SCHEMAS.md) (Dataset and Key-Value Store specifications)
 
 If MCP server is configured, use these tools for documentation:
+
 - `search-apify-docs` - Search documentation
 - `fetch-apify-docs` - Get full doc pages
 
@@ -108,4 +111,3 @@ Otherwise, reference: `@https://mcp.apify.com/`
 - [docs.apify.com/llms-full.txt](https://docs.apify.com/llms-full.txt) - Complete docs
 - [crawlee.dev](https://crawlee.dev) - Crawlee documentation
 - [whitepaper.actor](https://raw.githubusercontent.com/apify/actor-whitepaper/refs/heads/master/README.md) - Complete Actor specification
-

@@ -37,6 +37,9 @@ Stop building generic tools and start solving real problems. Use these pre-confi
 - **[💳 Stripe Hardening Pack](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/playbooks/stripe.md)**: Verify signatures, inspect payloads, and replay payment events safely.
 - **[🛍️ Shopify Launch Pack](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/playbooks/shopify.md)**: Bridge Shopify webhooks to your local machine with 72h retention for high-traffic windows.
 - **[💬 Slack & Messaging](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/playbooks/slack.md)**: Test complex message blocks and interactive components.
+- **[💰 Revenue Recovery](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/playbooks/revenue-recovery.md)**: Recover missed payments and reconcile Stripe/Shopify orders during high-burst launches.
+- **[🌉 Low-Code Bridge](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/playbooks/low-code-bridge.md)**: Optimize Zapier and Make (Integromat) costs by using the Actor as a smart pre-filter.
+- **[📑 Legacy Migration](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/playbooks/legacy-migration.md)**: Safely compare raw payloads side-by-side when upgrading API versions or switching providers.
 
 ---
 
