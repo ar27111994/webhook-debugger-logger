@@ -149,8 +149,62 @@ async function initialize() {
     });
   }
 
+  let currentAuthKey = authKey;
+  let currentRetentionHours = retentionHours;
+  let currentUrlCount = urlCount;
+
   webhookRateLimiter = new RateLimiter(rateLimitPerMinute, 60000);
   const mgmtRateLimiter = webhookRateLimiter.middleware();
+  const loggerMiddleware = createLoggerMiddleware(
+    webhookManager,
+    { ...config, maxPayloadSize },
+    broadcast
+  );
+
+  // --- Hot Reloading Logic ---
+  Actor.on("input", async (newInput) => {
+    if (!newInput) return;
+    console.log("[SYSTEM] Detected input update! Applying new settings...");
+
+    try {
+      const newConfig = parseWebhookOptions(newInput);
+      const newRateLimit = Math.max(
+        1,
+        Math.floor(newConfig.rateLimitPerMinute || 60)
+      );
+
+      // 1. Update Middleware
+      loggerMiddleware.updateOptions({ ...newConfig, maxPayloadSize });
+
+      // 2. Update Rate Limiter
+      webhookRateLimiter.limit = newRateLimit;
+
+      // 3. Update Auth Key
+      currentAuthKey = newConfig.authKey;
+
+      // 4. Re-reconcile URL count
+      currentUrlCount = newInput.urlCount || currentUrlCount;
+      const active = webhookManager.getAllActive();
+      if (active.length < currentUrlCount) {
+        const diff = currentUrlCount - active.length;
+        console.log(
+          `[SYSTEM] Dynamic Scale-up: Generating ${diff} additional webhook(s).`
+        );
+        await webhookManager.generateWebhooks(diff, currentRetentionHours);
+      }
+
+      // 5. Update Retention
+      currentRetentionHours = newInput.retentionHours || currentRetentionHours;
+      await webhookManager.updateRetention(currentRetentionHours);
+
+      console.log("[SYSTEM] Hot-reload complete. New settings are active.");
+    } catch (err) {
+      console.error(
+        "[SYSTEM-ERROR] Failed to apply new settings:",
+        err.message
+      );
+    }
+  });
 
   sseHeartbeat = setInterval(() => {
     clients.forEach((c) => c.write(": heartbeat\n\n"));
@@ -158,7 +212,7 @@ async function initialize() {
   if (sseHeartbeat.unref) sseHeartbeat.unref();
 
   const authMiddleware = (req, res, next) => {
-    const { isValid, error } = validateAuth(req, authKey);
+    const { isValid, error } = validateAuth(req, currentAuthKey);
     if (!isValid) {
       return res.status(401).json({
         status: 401,
@@ -180,11 +234,7 @@ async function initialize() {
       }
       next();
     },
-    createLoggerMiddleware(
-      webhookManager,
-      { ...config, maxPayloadSize },
-      broadcast
-    )
+    loggerMiddleware
   );
 
   app.all(

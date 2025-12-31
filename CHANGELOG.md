@@ -6,11 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- **Dynamic Infrastructure Scaling**:
-
-  - Implemented **urlCount Reconciliation**: The Actor now automatically generates missing webhooks on restart if the count is increased, preserving existing IDs.
+- **Dynamic Infrastructure Scaling & Hot-Reloading**:
+  - Implemented **Actor Hot-Reloading**: Configuration changes (Auth Keys, Allowed IPs, Scripts, Schemas) now apply in real-time via `Actor.on('input')` without Actor restarts.
+  - Implemented **urlCount Reconciliation**: The Actor now automatically generates missing webhooks on restart (or hot-reload) if the count is increased, preserving existing IDs.
   - Implemented **Retention Synchronization**: Existing webhooks are now automatically extended if the `retentionHours` setting is increased.
-
 - **Enterprise-Grade Rate Limiting**:
   - Implemented **LRU (Least Recently Used)** eviction strategy for superior client protection under load.
   - Added **strict IP validation** for proxy headers (`X-Forwarded-For`/`X-Real-IP`) to prevent spoofing and malformed data propagation.
@@ -32,7 +31,7 @@ All notable changes to this project will be documented in this file.
 - **Architectural Reliability**:
   - **Background Pruning**: Moved hit cleanup to a non-blocking background interval (60s).
   - **Middleware Orchestration**: Guaranteed immediate response delivery before racing background tasks against a 10s timeout.
-- **Comprehensive Verification**: Expanded test suite to **82 tests** (16 files), achieving full coverage of security, reliability, dynamic scaling, and edge case scenarios with zero memory/timer leaks.
+- **Comprehensive Verification**: Expanded test suite to **85 tests** (17 files), achieving full coverage of security, reliability, dynamic scaling, hot-reloading, and edge case scenarios with zero memory/timer leaks.
 - **Repository Health**: Removed heavy binary assets and updated `.gitignore` for a leaner, faster repository.
 
 ## [2.6.0] - 2025-12-27

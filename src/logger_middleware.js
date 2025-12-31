@@ -122,7 +122,7 @@ function prepareRequestData(req, options, validate) {
         Object.entries(req.headers).map(([key, value]) => [
           key,
           headersToMask.includes(key.toLowerCase()) ? "[MASKED]" : value,
-        ]),
+        ])
       )
     : req.headers;
 
@@ -140,7 +140,7 @@ function transformRequestData(event, req, compiledScript) {
     } catch (err) {
       console.error(
         `[SCRIPT-EXEC-ERROR] Failed to run custom script for ${event.webhookId}:`,
-        err.message,
+        err.message
       );
     }
   }
@@ -152,26 +152,31 @@ function transformRequestData(event, req, compiledScript) {
 function sendResponse(res, event, options) {
   const { defaultResponseBody, defaultResponseHeaders } = options;
 
-  if (defaultResponseHeaders && typeof defaultResponseHeaders === "object") {
-    Object.entries(defaultResponseHeaders).forEach(([key, value]) => {
-      res.setHeader(key, value);
-    });
-  }
+  // 1. Headers (Global defaults -> Event overrides)
+  const headers = {
+    ...defaultResponseHeaders,
+    ...(event.responseHeaders || {}),
+  };
+  Object.entries(headers).forEach(([key, value]) => {
+    res.setHeader(key, value);
+  });
 
+  // 2. Status
   res.status(event.statusCode);
 
-  if (
-    event.statusCode >= 400 &&
-    (!defaultResponseBody || defaultResponseBody === "OK")
-  ) {
+  // 3. Body (Event override -> Global default)
+  const responseBody =
+    event.responseBody !== undefined ? event.responseBody : defaultResponseBody;
+
+  if (event.statusCode >= 400 && (!responseBody || responseBody === "OK")) {
     res.json({
       message: `Webhook received with status ${event.statusCode}`,
       webhookId: event.webhookId,
     });
-  } else if (typeof defaultResponseBody === "object") {
-    res.json(defaultResponseBody);
+  } else if (typeof responseBody === "object") {
+    res.json(responseBody);
   } else {
-    res.send(defaultResponseBody);
+    res.send(responseBody);
   }
 }
 
@@ -221,8 +226,8 @@ async function executeBackgroundTasks(event, req, options, onEvent) {
               options.forwardHeaders !== false
                 ? Object.fromEntries(
                     Object.entries(req.headers).filter(
-                      ([key]) => !sensitiveHeaders.includes(key.toLowerCase()),
-                    ),
+                      ([key]) => !sensitiveHeaders.includes(key.toLowerCase())
+                    )
                   )
                 : {
                     "content-type": req.headers["content-type"],
@@ -252,7 +257,7 @@ async function executeBackgroundTasks(event, req, options, onEvent) {
 
             console.error(
               `[FORWARD-ERROR] Attempt ${attempt}/${MAX_RETRIES} failed for ${validatedUrl}:`,
-              err.code === "ECONNABORTED" ? "Timed out" : err.message,
+              err.code === "ECONNABORTED" ? "Timed out" : err.message
             );
 
             if (attempt >= MAX_RETRIES || !isTransient) {
@@ -272,7 +277,7 @@ async function executeBackgroundTasks(event, req, options, onEvent) {
               } catch (pushErr) {
                 console.error(
                   "[CRITICAL] Failed to log forward error:",
-                  pushErr.message,
+                  pushErr.message
                 );
               }
               break; // Stop retrying
@@ -296,44 +301,71 @@ async function executeBackgroundTasks(event, req, options, onEvent) {
       `[CRITICAL] ${
         isPlatformError ? "PLATFORM-LIMIT" : "BACKGROUND-ERROR"
       } for ${event.webhookId}:`,
-      error.message,
+      error.message
     );
 
     if (isPlatformError) {
       console.warn(
-        "[ADVICE] Check your Apify platform limits or storage availability.",
+        "[ADVICE] Check your Apify platform limits or storage availability."
       );
     }
   }
 }
 
 export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
-  const options = parseWebhookOptions(rawOptions);
-
-  // Pre-compilation steps
+  let options; // Initialized as undefined to trigger initial compilation
   let compiledScript;
-  if (options.customScript) {
-    try {
-      compiledScript = new vm.Script(options.customScript);
-    } catch (err) {
-      console.error("[SCRIPT-ERROR] Invalid Custom Script:", err.message);
-    }
-  }
-
   let validate;
-  if (options.jsonSchema) {
-    try {
-      const schema =
-        typeof options.jsonSchema === "string"
-          ? JSON.parse(options.jsonSchema)
-          : options.jsonSchema;
-      validate = ajv.compile(schema);
-    } catch (err) {
-      console.error("[SCHEMA-ERROR] Invalid JSON Schema:", err.message);
-    }
-  }
 
-  return async (req, res) => {
+  const refreshCompilations = (newOptions) => {
+    // 1. Smart script re-compilation
+    if (!options || newOptions.customScript !== options.customScript) {
+      if (newOptions.customScript) {
+        try {
+          compiledScript = new vm.Script(newOptions.customScript);
+          console.log("[SYSTEM] Custom script re-compiled successfully.");
+        } catch (err) {
+          console.error("[SCRIPT-ERROR] Invalid Custom Script:", err.message);
+        }
+      } else {
+        compiledScript = null;
+      }
+    }
+
+    // 2. Smart schema re-compilation
+    const oldSchemaStr =
+      options && typeof options.jsonSchema === "object"
+        ? JSON.stringify(options.jsonSchema)
+        : options?.jsonSchema;
+    const newSchemaStr =
+      typeof newOptions.jsonSchema === "object"
+        ? JSON.stringify(newOptions.jsonSchema)
+        : newOptions.jsonSchema;
+
+    if (!options || newSchemaStr !== oldSchemaStr) {
+      if (newOptions.jsonSchema) {
+        try {
+          const schema =
+            typeof newOptions.jsonSchema === "string"
+              ? JSON.parse(newOptions.jsonSchema)
+              : newOptions.jsonSchema;
+          validate = ajv.compile(schema);
+          console.log("[SYSTEM] JSON Schema re-compiled successfully.");
+        } catch (err) {
+          console.error("[SCHEMA-ERROR] Invalid JSON Schema:", err.message);
+        }
+      } else {
+        validate = null;
+      }
+    }
+  };
+
+  // Initial compilation
+  const initialOptions = parseWebhookOptions(rawOptions);
+  refreshCompilations(initialOptions);
+  options = initialOptions;
+
+  const middleware = async (req, res) => {
     const startTime = Date.now();
     const webhookId = req.params.id;
 
@@ -349,8 +381,8 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
     ];
     const webhookOverrides = Object.fromEntries(
       Object.entries(webhookData).filter(([key]) =>
-        allowedOverrides.includes(key),
-      ),
+        allowedOverrides.includes(key)
+      )
     );
 
     const mergedOptions = {
@@ -362,7 +394,7 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
       req,
       webhookId,
       mergedOptions,
-      webhookManager,
+      webhookManager
     );
     if (!validation.isValid) {
       return res.status(validation.statusCode).json({
@@ -379,7 +411,7 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
       const { loggedBody, loggedHeaders, contentType } = prepareRequestData(
         req,
         mergedOptions,
-        validate,
+        validate
       );
 
       // 3. Transform
@@ -394,6 +426,8 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
         contentType,
         size: validation.contentLength,
         statusCode: req.forcedStatus || mergedOptions.defaultResponseCode,
+        responseBody: undefined, // Custom scripts can set this
+        responseHeaders: {}, // Custom scripts can add headers
         processingTime: 0,
         remoteIp: validation.remoteIp,
         userAgent: req.headers["user-agent"],
@@ -404,7 +438,7 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
       // 4. Orchestration: Respond synchronous-ish, then race background tasks
       if (mergedOptions.responseDelayMs > 0) {
         await new Promise((resolve) =>
-          setTimeout(resolve, Math.min(mergedOptions.responseDelayMs, 10000)),
+          setTimeout(resolve, Math.min(mergedOptions.responseDelayMs, 10000))
         );
       }
 
@@ -418,7 +452,7 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
         } catch (err) {
           console.error(
             `[CRITICAL] Background tasks for ${event.id} failed:`,
-            err.message,
+            err.message
           );
         }
       };
@@ -433,7 +467,7 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
               const readableTimeout =
                 timeoutMs < 1000 ? `${timeoutMs}ms` : `${timeoutMs / 1000}s`;
               console.warn(
-                `[TIMEOUT] Background tasks for ${event.id} exceeded ${readableTimeout}. Continuing...`,
+                `[TIMEOUT] Background tasks for ${event.id} exceeded ${readableTimeout}. Continuing...`
               );
             }
             resolve();
@@ -452,4 +486,13 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
       res.status(500).json({ error: "Internal Server Error" });
     }
   };
+
+  // Add hot-reload capability
+  middleware.updateOptions = (newRawOptions) => {
+    const newOptions = parseWebhookOptions(newRawOptions);
+    refreshCompilations(newOptions);
+    options = newOptions; // Switch to new options
+  };
+
+  return middleware;
 };

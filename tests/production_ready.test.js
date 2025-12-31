@@ -80,7 +80,7 @@ describe("Production Readiness Tests (v2.6.0)", () => {
         (call) =>
           call[0] &&
           call[0].method === "POST" &&
-          call[0].webhookId === webhookId
+          call[0].webhookId === webhookId,
       );
 
       expect(matchedCall).toBeDefined();
@@ -146,7 +146,7 @@ describe("Production Readiness Tests (v2.6.0)", () => {
 
       const { default: axiosMock } = await import("axios");
       const axiosCall = axiosMock.mock.calls.find(
-        (c) => c[0].url === targetUrl
+        (c) => c[0].url === targetUrl,
       );
       expect(axiosCall).toBeDefined();
 

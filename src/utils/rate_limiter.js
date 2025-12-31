@@ -57,7 +57,7 @@ export class RateLimiter {
 
       if (prunedCount > 0 && process.env.NODE_ENV !== "test") {
         console.log(
-          `[SYSTEM] RateLimiter pruned ${prunedCount} expired entries.`
+          `[SYSTEM] RateLimiter pruned ${prunedCount} expired entries.`,
         );
       }
     }, 60000);
@@ -86,7 +86,7 @@ export class RateLimiter {
     // IPv4 check
     if (
       /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/.test(
-        ip
+        ip,
       )
     ) {
       return true;
@@ -134,8 +134,8 @@ export class RateLimiter {
         const safeHeaders = ["user-agent", "accept-language", "referer"];
         const loggedHeaders = Object.fromEntries(
           Object.entries(req.headers).filter(([key]) =>
-            safeHeaders.includes(key.toLowerCase())
-          )
+            safeHeaders.includes(key.toLowerCase()),
+          ),
         );
 
         console.warn("[SECURITY] Rejecting request with unidentifiable IP:", {
@@ -161,8 +161,8 @@ export class RateLimiter {
           if (process.env.NODE_ENV !== "test") {
             console.log(
               `[SYSTEM] RateLimiter evicted entry for ${this.maskIp(
-                oldestKey
-              )} (Cap: ${this.maxEntries})`
+                oldestKey,
+              )} (Cap: ${this.maxEntries})`,
             );
           }
         }
