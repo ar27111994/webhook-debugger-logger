@@ -1,20 +1,12 @@
 import { jest } from "@jest/globals";
 
 // 1. Define mocks before any imports
-jest.unstable_mockModule("apify", () => ({
-  Actor: {
-    init: jest.fn().mockResolvedValue(),
-    getInput: jest.fn(),
-    openKeyValueStore: jest.fn(),
-    openDataset: jest.fn(),
-    pushData: jest.fn().mockResolvedValue(),
-    exit: jest.fn().mockResolvedValue(),
-    on: jest.fn(),
-  },
-}));
+jest.unstable_mockModule("apify", async () => {
+  const { apifyMock } = await import("./helpers/shared-mocks.js");
+  return { Actor: apifyMock };
+});
 
 // 2. Dynamically import modules to ensure mocks are active
-const request = (await import("supertest")).default;
 const { Actor } = await import("apify");
 const { initialize, shutdown, webhookManager } = await import("../src/main.js");
 
@@ -45,7 +37,7 @@ describe("Webhook Lifecycle & Scaling Tests", () => {
     // 2. Mock input asking for 3 webhooks
     Actor.getInput.mockResolvedValue({ urlCount: 3, retentionHours: 1 });
 
-    const app = await initialize();
+    await initialize();
 
     // 3. Verify we now have 3 webhooks
     const active = webhookManager.getAllActive();
