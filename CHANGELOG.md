@@ -2,9 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
-## [2.7.0] - 2025-12-30
+## [2.7.0] - 2025-12-31
 
 ### Added
+
+- **Dynamic Infrastructure Scaling**:
+
+  - Implemented **urlCount Reconciliation**: The Actor now automatically generates missing webhooks on restart if the count is increased, preserving existing IDs.
+  - Implemented **Retention Synchronization**: Existing webhooks are now automatically extended if the `retentionHours` setting is increased.
 
 - **Enterprise-Grade Rate Limiting**:
   - Implemented **LRU (Least Recently Used)** eviction strategy for superior client protection under load.
@@ -27,7 +32,7 @@ All notable changes to this project will be documented in this file.
 - **Architectural Reliability**:
   - **Background Pruning**: Moved hit cleanup to a non-blocking background interval (60s).
   - **Middleware Orchestration**: Guaranteed immediate response delivery before racing background tasks against a 10s timeout.
-- **Comprehensive Verification**: Expanded test suite to **79 tests** (15 files), achieving full coverage of security, reliability, and edge case scenarios with zero memory/timer leaks.
+- **Comprehensive Verification**: Expanded test suite to **82 tests** (16 files), achieving full coverage of security, reliability, dynamic scaling, and edge case scenarios with zero memory/timer leaks.
 - **Repository Health**: Removed heavy binary assets and updated `.gitignore` for a leaner, faster repository.
 
 ## [2.6.0] - 2025-12-27

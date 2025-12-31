@@ -108,11 +108,24 @@ async function initialize() {
   }
 
   const active = webhookManager.getAllActive();
-  if (active.length === 0) {
-    await webhookManager.generateWebhooks(urlCount, retentionHours);
+
+  // 1. Reconcile URL Count (Dynamic Scaling)
+  if (active.length < urlCount) {
+    const diff = urlCount - active.length;
+    console.log(
+      `[SYSTEM] Scaling up: Generating ${diff} additional webhook(s).`
+    );
+    await webhookManager.generateWebhooks(diff, retentionHours);
+  } else if (active.length > urlCount) {
+    console.log(
+      `[SYSTEM] Notice: Active webhooks (${active.length}) exceed requested count (${urlCount}). No new IDs generated.`
+    );
   } else {
-    console.log(`Resuming with ${active.length} active webhooks.`);
+    console.log(`[SYSTEM] Resuming with ${active.length} active webhooks.`);
   }
+
+  // 2. Sync Retention (Global Extension)
+  await webhookManager.updateRetention(retentionHours);
 
   // --- Express Middleware ---
   app.set("trust proxy", true);
