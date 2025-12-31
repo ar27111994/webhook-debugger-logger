@@ -66,14 +66,15 @@ No setup required. No localhost tunneling. Takes 30 seconds.
 
 ## What can this Actor do?
 
-| Feature             | Description                                             |
-| ------------------- | ------------------------------------------------------- |
-| **URL Generation**  | Generate 1-10 temporary webhook URLs                    |
-| **Request Logging** | Capture ALL incoming requests (GET, POST, etc.)         |
-| **Full Details**    | Headers, body, query params, IP, timing                 |
-| **Multi-Format**    | Handles JSON, Text, XML, and Form Data                  |
-| **Auto-Cleanup**    | URLs and data expire automatically (configurable 1-72h) |
-| **Export**          | Download logs as JSON or CSV from dataset               |
+| Feature             | Description                                                   |
+| ------------------- | ------------------------------------------------------------- |
+| **URL Generation**  | Generate 1-10 temporary webhook URLs                          |
+| **Request Logging** | Capture ALL incoming requests (GET, POST, etc.)               |
+| **Full Details**    | Headers, body, query params, IP, timing                       |
+| **Multi-Format**    | Handles JSON, Text, XML, and Form Data                        |
+| **Auto-Cleanup**    | URLs and data expire automatically (configurable 1-72h)       |
+| **Hot-Reloading**   | Configuration changes apply instantly without restarts (v2.7) |
+| **Export**          | Download logs as JSON or CSV from dataset                     |
 
 ## 🚀 v2.0 Enterprise Features
 
@@ -85,6 +86,8 @@ The Enterprise Update transforms this Actor into a professional API mocking and 
 - **IP Whitelisting**: Lock down your endpoints to specific IPs or CIDR ranges.
 - **Rate Limiting (v2.6)**: Protect your management endpoints (`/logs`, `/info`, `/replay`) with configurable per-IP rate limits.
 - **Sensitive Data Masking (v2.6)**: Automatically redact known sensitive headers like `Authorization` and `Cookie` from your logs.
+- **Zero-Downtime Hot-Reloading (v2.7)**: Update your `authKey`, `allowedIps`, or `rateLimits` while the Actor is running. Changes apply **instantly** via `Actor.on('input')` without dropping a single webhook.
+- **Dynamic Infrastructure Scaling (v2.7)**: Increase your `urlCount` without restarting. The Actor intelligently reconciles state, generating new IDs while preserving your existing ones.
 
 ### 🎭 API Mocking & Latency
 
@@ -370,22 +373,19 @@ A: Yes! Enterprise features (v2.0+) allow you to define custom JSON/XML response
 **Q: Can I validate incoming data?**
 A: Yes. You can provide a JSON Schema in the input parameters, and the Actor will automatically reject invalid requests with a 400 Bad Request.
 
-**Q: Can I transform the data before it's saved?**
-A: Yes. Use the **Custom Scripting** (v2.1+) feature to provide a JavaScript snippet that modifies the event object in real-time.
+**Q: Can I transform data or override responses?**
+A: Yes! Use the **Custom Scripting (v2.7)** feature to write JavaScript that modifies the `event` object dynamically. Beyond logging, your script can now override the response sent back to the provider (e.g., `event.statusCode = 201; event.responseBody = { success: true };`).
 
 ## Troubleshooting
 
 **Issue**: "Webhook not found or expired"
-**Solution**: Verify the webhook ID is correct. Check the `/info` endpoint of your running Actor to see active IDs. If it expired, restart the Actor to generate new ones.
+**Solution**: Verify the webhook ID is correct. Check the `/info` endpoint of your running Actor to see active IDs. If you need more, simply increase the `urlCount` in input—the Actor will hot-reload and add them instantly.
 
 **Issue**: "Script Execution Error"
 **Solution**: Check your `customScript` for syntax errors. The Actor runs scripts in a secure sandbox with a 1s timeout.
 
 **Issue**: "JSON Schema Validation Failed"
 **Solution**: The incoming payload did not match your provided schema. Check the `/logs` or the webhook response for specific validation error details.
-
-**Q: Can I transform data before it's saved?**
-A: Yes. Use the **Custom Scripting** feature to write JavaScript that modifies the `event` object dynamically.
 
 **Q: How do I handle heavy traffic?**
 A: The Actor is built on a high-performance Express server. For heavy traffic, ensure you have enough memory (1024MB+ recommended) and consider using **HTTP Forwarding** to offload processing to your own infrastructure.
