@@ -1,28 +1,9 @@
 import { jest } from "@jest/globals";
 
 // 1. Setup mocks
-jest.unstable_mockModule("apify", () => {
-  let inputHandler;
-  return {
-    Actor: {
-      init: jest.fn().mockResolvedValue(),
-      getInput: jest.fn(),
-      on: jest.fn((event, handler) => {
-        if (event === "input") inputHandler = handler;
-      }),
-      // Helper to trigger the mock event
-      emitInput: async (data) => {
-        if (inputHandler) await inputHandler(data);
-      },
-      openKeyValueStore: jest.fn().mockResolvedValue({
-        getValue: jest.fn().mockResolvedValue({}),
-        setValue: jest.fn().mockResolvedValue(),
-      }),
-      openDataset: jest.fn(),
-      pushData: jest.fn().mockResolvedValue(),
-      exit: jest.fn().mockResolvedValue(),
-    },
-  };
+jest.unstable_mockModule("apify", async () => {
+  const { apifyMock } = await import("./helpers/shared-mocks.js");
+  return { Actor: apifyMock };
 });
 
 // 2. Import modules

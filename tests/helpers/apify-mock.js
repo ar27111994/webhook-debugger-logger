@@ -25,13 +25,20 @@ export function createApifyMock(inputOverrides = {}) {
     pushData: jest.fn().mockResolvedValue({}),
   };
 
+  let inputHandler;
+
   actorInstance = {
     init: jest.fn().mockResolvedValue({}),
     getInput: jest.fn().mockResolvedValue(inputOverrides),
     openKeyValueStore: jest.fn().mockResolvedValue(store),
     openDataset: jest.fn().mockResolvedValue(dataset),
     pushData: jest.fn().mockResolvedValue({}),
-    on: jest.fn(),
+    on: jest.fn((event, handler) => {
+      if (event === "input") inputHandler = handler;
+    }),
+    emitInput: async (data) => {
+      if (inputHandler) await inputHandler(data);
+    },
     exit: jest.fn().mockResolvedValue({}),
   };
 
