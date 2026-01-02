@@ -4,7 +4,7 @@ Use this playbook to verify signatures, inspect event payloads, and re-run payme
 
 ## 🚀 Quick Setup (Manual)
 
-1. **[Open Webhook Debugger on Apify Store](https://apify.com/ar27111994/webhook-debugger-logger)**
+1. **[Open Webhook Debugger on Apify Store](https://apify.com/ar27111994/webhook-debugger-logger?utm_campaign=stripe_hardening)**
 2. Navigate to the **Input** tab.
 3. **Copy & Paste** the JSON from the section below into the JSON editor.
 
@@ -23,7 +23,7 @@ Copy the JSON below and paste it into the **Input** tab in Apify Console:
 }
 ```
 
-> [!IMPORTANT] > **Verify Stripe IPs**: The `allowedIps` above are examples. Stripe frequently updates their webhook IP ranges. Always consult the **Official Stripe Webhook IP Documentation**: [https://docs.stripe.com/ips#ip-addresses](https://docs.stripe.com/ips#ip-addresses) and [https://docs.stripe.com/ips#webhook-notifications](https://docs.stripe.com/ips#webhook-notifications) to ensure your whitelist is up to date.
+> [!IMPORTANT] > **Verify Stripe IPs**: The `allowedIps` above are examples. Stripe frequently updates their webhook IP ranges. Always consult the **Official Stripe Webhook IP Documentation**: [https://docs.stripe.com/ips#ip-addresses](https://docs.stripe.com/ips#ip-addresses?utm_campaign=stripe_hardening) and [https://docs.stripe.com/ips#webhook-notifications](https://docs.stripe.com/ips#webhook-notifications?utm_campaign=stripe_hardening) to ensure your whitelist is up to date.
 
 ## 🛠️ Programmatic Run (API)
 

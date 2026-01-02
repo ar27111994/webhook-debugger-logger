@@ -4,7 +4,7 @@ Ensure your store's inventory and order fulfillment hooks are rock-solid during 
 
 ## 🚀 Quick Setup (Manual)
 
-1. **[Open Webhook Debugger on Apify Store](https://apify.com/ar27111994/webhook-debugger-logger)**
+1. **[Open Webhook Debugger on Apify Store](https://apify.com/ar27111994/webhook-debugger-logger?utm_campaign=shopify_launch)**
 2. Navigate to the **Input** tab.
 3. **Copy & Paste** the JSON from the section below into the JSON editor.
 

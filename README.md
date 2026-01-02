@@ -1,6 +1,8 @@
 # 🚀 Webhook Debugger & Logger v2.7.0 (Enterprise Suite)
 
-![Dashboard Mockup](./assets/dashboard.png)
+![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/ar27111994/webhook-debugger-logger?utm_source=oss&utm_medium=github&utm_campaign=ar27111994%2Fwebhook-debugger-logger&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
+
+![Dashboard Mockup](https://raw.githubusercontent.com/ar27111994/webhook-debugger-logger/main/assets/dashboard.png)
 
 A high-performance Apify Actor built for developers to test, inspect, and automate incoming webhooks in real-time. This Actor is optimized for **Apify Standby Mode**, providing sub-10ms logic execution and zero cold-start latency.
 
@@ -34,12 +36,12 @@ Webhook Debugger generates temporary webhook URLs and logs every incoming reques
 
 Stop building generic tools and start solving real problems. Use these pre-configured setup guides for your specific tech stack:
 
-- **[💳 Stripe Hardening Pack](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/playbooks/stripe.md)**: Verify signatures, inspect payloads, and replay payment events safely.
-- **[🛍️ Shopify Launch Pack](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/playbooks/shopify.md)**: Bridge Shopify webhooks to your local machine with 72h retention for high-traffic windows.
-- **[💬 Slack & Messaging](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/playbooks/slack.md)**: Test complex message blocks and interactive components.
-- **[💰 Revenue Recovery](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/playbooks/revenue-recovery.md)**: Recover missed payments and reconcile Stripe/Shopify orders during high-burst launches.
-- **[🌉 Low-Code Bridge](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/playbooks/low-code-bridge.md)**: Optimize Zapier and Make (Integromat) costs by using the Actor as a smart pre-filter.
-- **[📑 Legacy Migration](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/playbooks/legacy-migration.md)**: Safely compare raw payloads side-by-side when upgrading API versions or switching providers.
+- **[💳 Stripe Hardening Pack](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/playbooks/stripe.md?utm_campaign=stripe_hardening)**: Verify signatures, inspect payloads, and replay payment events safely.
+- **[🛍️ Shopify Launch Pack](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/playbooks/shopify.md?utm_campaign=shopify_launch)**: Bridge Shopify webhooks to your local machine with 72h retention for high-traffic windows.
+- **[💬 Slack & Messaging](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/playbooks/slack.md?utm_campaign=slack_bot)**: Test complex message blocks and interactive components.
+- **[💰 Revenue Recovery](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/playbooks/revenue-recovery.md?utm_campaign=revenue_recovery)**: Recover missed payments and reconcile Stripe/Shopify orders during high-burst launches.
+- **[🌉 Low-Code Bridge](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/playbooks/low-code-bridge.md?utm_campaign=low_code_bridge)**: Optimize Zapier and Make (Integromat) costs by using the Actor as a smart pre-filter.
+- **[📑 Legacy Migration](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/playbooks/legacy-migration.md?utm_campaign=legacy_migration)**: Safely compare raw payloads side-by-side when upgrading API versions or switching providers.
 
 ---
 
@@ -145,7 +147,7 @@ The Enterprise Update transforms this Actor into a professional API mocking and 
 
 ### ⚙️ Input Schema Preview
 
-![Input Schema Preview](./assets/input_schema_preview.png)
+![Input Schema Preview](https://raw.githubusercontent.com/ar27111994/webhook-debugger-logger/main/assets/input_schema_preview.png)
 
 ## Output example
 
@@ -194,7 +196,7 @@ The Enterprise Update transforms this Actor into a professional API mocking and 
 
 ### 📊 Dataset View
 
-![Dataset View](./assets/dataset_view.png)
+![Dataset View](https://raw.githubusercontent.com/ar27111994/webhook-debugger-logger/main/assets/dataset_view.png)
 
 ## How to get started
 
@@ -265,7 +267,7 @@ You can stream webhook logs in real-time as they arrive using Server-Sent Events
 curl -N https://<ACTOR-RUN-URL>/log-stream
 ```
 
-![SSE Stream](./assets/sse_stream.png)
+![SSE Stream](https://raw.githubusercontent.com/ar27111994/webhook-debugger-logger/main/assets/sse_stream.png)
 
 ### Forced Status Codes
 
@@ -399,14 +401,14 @@ A: You can generate up to 10 unique endpoints per Actor run. If you need more, y
 
 We are committed to providing first-class support for our "Enterprise Suite" users.
 
-- 💬 **Apify Discord**: Join the [Apify Discord Community](https://discord.gg/jyEM2PRvMU) to chat with other developers.
-- 📚 **Learning**: Explore the [Apify Academy](https://docs.apify.com/academy) for best practices on building resilient Actors.
-- 📖 **Documentation**: Read the [Apify SDK Documentation](https://sdk.apify.com/) for technical deep dives.
-- 🔗 **Console**: Manage your active runs in the [Apify Console](https://console.apify.com).
+- 💬 **Apify Discord**: Join the [Apify Discord Community](https://discord.gg/jyEM2PRvMU?utm_campaign=readme_support) to chat with other developers.
+- 📚 **Learning**: Explore the [Apify Academy](https://docs.apify.com/academy?utm_campaign=readme_support) for best practices on building resilient Actors.
+- 📖 **Documentation**: Read the [Apify SDK Documentation](https://sdk.apify.com/?utm_campaign=readme_support) for technical deep dives.
+- 🔗 **Console**: Manage your active runs in the [Apify Console](https://console.apify.com?utm_campaign=readme_support).
 - 🛠️ **Alternative**: Compare with [Webhook.site](https://webhook.site) if you need a desktop-only alternative.
-- 📝 **Issues**: Found a bug? Open an issue on our [GitHub Repository](https://github.com/ar27111994/webhook-debugger-logger).
+- 📝 **Issues**: Found a bug? Open an issue on our [GitHub Repository](https://github.com/ar27111994/webhook-debugger-logger?utm_campaign=readme_support).
 
-**Developer Support Guarantee**: I am an active maintainer and respond to all comments, bug reports, and feature requests on the [Apify Store Console](https://apify.com/ar27111994/webhook-debugger-logger/comments) within **24 hours**.
+**Developer Support Guarantee**: I am an active maintainer and respond to all comments, bug reports, and feature requests on the [Apify Store Console](https://apify.com/ar27111994/webhook-debugger-logger/comments?utm_campaign=readme_support) within **24 hours**.
 
 ## 🛡️ Security & Permissions
 
