@@ -4,7 +4,15 @@
 
 ![Dashboard Mockup](https://raw.githubusercontent.com/ar27111994/webhook-debugger-logger/main/assets/dashboard.png)
 
+<a href="https://www.producthunt.com/products/webhook-debugger-logger-api-mocker?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-webhook-debugger-logger-api-mocker" target="_blank" rel="noopener noreferrer"><img alt="Webhook Debugger, Logger & API Mocker - Debug webhooks 90% faster without localhost tunneling | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1057655&theme=light&t=1767529788592"></a>
+
 A high-performance Apify Actor built for developers to test, inspect, and automate incoming webhooks in real-time. This Actor is optimized for **Apify Standby Mode**, providing sub-10ms logic execution and zero cold-start latency.
+
+**Interactive Demos:**
+
+- **Webhook Debugging & Response Simulation:** [Try it →](https://app.arcade.software/share/j4bq45Us5BTZz6Bn9rML)
+- **Access Control:** [Try it →](https://app.usehexus.com/flow/3b046e8d-c0ba-4b78-951c-10349bb0fe3f)
+- **Request Replay:** [Try it →](https://app.usehexus.com/flow/398af11b-7ad0-4cd6-9300-784326e3ed8e)
 
 ## ⚡ Quick Start: Live Demo (Local)
 
