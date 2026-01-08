@@ -122,7 +122,7 @@ describe("Hot-Reloading Configuration Tests", () => {
     // Verify error was logged
     expect(consoleSpy).toHaveBeenCalledWith(
       expect.stringContaining("[SCHEMA-ERROR]"),
-      expect.any(String)
+      expect.any(String),
     );
     consoleSpy.mockRestore();
 

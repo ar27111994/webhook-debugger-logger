@@ -12,9 +12,8 @@ jest.unstable_mockModule("apify", async () => {
   return { Actor: apifyMock };
 });
 
-const { app, webhookManager, initialize, shutdown } = await import(
-  "../src/main.js"
-);
+const { app, webhookManager, initialize, shutdown } =
+  await import("../src/main.js");
 const { Actor } = await import("apify");
 const request = (await import("supertest")).default;
 

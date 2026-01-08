@@ -20,9 +20,8 @@ jest.unstable_mockModule("axios", async () => {
 
 // @ts-ignore
 const request = (await import("supertest")).default;
-const { app, initialize, shutdown, webhookManager } = await import(
-  "../src/main.js"
-);
+const { app, initialize, shutdown, webhookManager } =
+  await import("../src/main.js");
 const { Actor } = await import("apify");
 
 describe("API Contract & Regression Tests", () => {
@@ -65,7 +64,7 @@ describe("API Contract & Regression Tests", () => {
           "Advanced Mocking & Latency Control",
           "Enterprise Security (Auth/CIDR)",
           "Smart Forwarding Workflows",
-        ])
+        ]),
       );
 
       // Endpoints block
@@ -76,7 +75,7 @@ describe("API Contract & Regression Tests", () => {
 
       // Docs
       expect(body.docs).toBe(
-        "https://apify.com/ar27111994/webhook-debugger-logger"
+        "https://apify.com/ar27111994/webhook-debugger-logger",
       );
     });
   });
@@ -134,7 +133,7 @@ describe("API Contract & Regression Tests", () => {
         .set("Authorization", "Bearer test-secret");
 
       expect(getDataMock).toHaveBeenCalledWith(
-        expect.objectContaining({ limit: 50 })
+        expect.objectContaining({ limit: 50 }),
       );
     });
 
@@ -153,7 +152,7 @@ describe("API Contract & Regression Tests", () => {
         .set("Authorization", "Bearer test-secret");
 
       expect(getDataMock).toHaveBeenCalledWith(
-        expect.objectContaining({ limit: 10 })
+        expect.objectContaining({ limit: 10 }),
       );
     });
   });
@@ -253,7 +252,7 @@ describe("API Contract & Regression Tests", () => {
       // @ts-ignore
       const lastCall2 = axiosMock.mock.calls[axiosMock.mock.calls.length - 1];
       expect(lastCall2[0].data).toContain(
-        "i am an interloper with same timestamp"
+        "i am an interloper with same timestamp",
       );
     });
   });

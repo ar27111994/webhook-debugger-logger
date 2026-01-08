@@ -20,9 +20,8 @@ jest.unstable_mockModule("axios", async () => {
 });
 
 const request = (await import("supertest")).default;
-const { app, initialize, shutdown, webhookManager } = await import(
-  "../src/main.js"
-);
+const { app, initialize, shutdown, webhookManager } =
+  await import("../src/main.js");
 const axios = (await import("axios")).default;
 const { Actor } = await import("apify");
 
@@ -147,7 +146,7 @@ describe("Resilience & Retry Tests", () => {
           new Promise((resolve) => {
             const t = setTimeout(resolve, 1000);
             if (t.unref) t.unref();
-          })
+          }),
       );
 
       const startTime = Date.now();

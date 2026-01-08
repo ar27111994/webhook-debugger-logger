@@ -50,7 +50,7 @@ describe("Script Execution Extended", () => {
 
     expect(consoleErrorSpy).toHaveBeenCalledWith(
       expect.stringContaining("[SCRIPT-EXEC-ERROR]"),
-      expect.stringContaining("Script execution timed out")
+      expect.stringContaining("Script execution timed out"),
     );
     consoleErrorSpy.mockRestore();
   });
@@ -78,7 +78,7 @@ describe("Script Execution Extended", () => {
 
     expect(consoleErrorSpy).toHaveBeenCalledWith(
       expect.stringContaining("[SCRIPT-EXEC-ERROR]"),
-      "Boom"
+      "Boom",
     );
     consoleErrorSpy.mockRestore();
   });

@@ -156,7 +156,7 @@ describe("Forwarding Security", () => {
       const middleware = createLoggerMiddleware(
         webhookManager,
         options,
-        onEvent
+        onEvent,
       );
       const req = httpMocks.createRequest({
         params: { id: "wh_retry" },
@@ -179,7 +179,7 @@ describe("Forwarding Security", () => {
       const calls = jest.mocked(Actor.pushData).mock.calls;
       const errorLog = calls.find(
         // @ts-ignore
-        (c) => c[0].type === "forward_error" && c[0].statusCode === 500
+        (c) => c[0].type === "forward_error" && c[0].statusCode === 500,
       );
       expect(errorLog).toBeDefined();
     });
@@ -193,7 +193,7 @@ describe("Forwarding Security", () => {
       const middleware = createLoggerMiddleware(
         webhookManager,
         options,
-        onEvent
+        onEvent,
       );
       const req = httpMocks.createRequest({
         params: { id: "wh_fail_fast" },
@@ -218,7 +218,7 @@ describe("Forwarding Security", () => {
       const middleware = createLoggerMiddleware(
         webhookManager,
         options,
-        onEvent
+        onEvent,
       );
       const req = httpMocks.createRequest({
         params: { id: "wh_limit" },

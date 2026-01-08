@@ -14,9 +14,8 @@ jest.unstable_mockModule("apify", async () => {
 });
 
 const request = (await import("supertest")).default;
-const { app, webhookManager, initialize, shutdown } = await import(
-  "../src/main.js"
-);
+const { app, webhookManager, initialize, shutdown } =
+  await import("../src/main.js");
 const { Actor } = await import("apify");
 
 describe("Concurrency Tests", () => {
@@ -45,7 +44,7 @@ describe("Concurrency Tests", () => {
       promises.push(
         request(app)
           .post(`/webhook/${webhookId}`)
-          .send({ index: i, timestamp: Date.now() })
+          .send({ index: i, timestamp: Date.now() }),
       );
     }
 
@@ -61,7 +60,7 @@ describe("Concurrency Tests", () => {
     // Actor.pushData is called for each request
     // We expect the call count to increase by exactly CONCURRENCY
     expect(
-      jest.mocked(Actor.pushData).mock.calls.length - initialCallCount
+      jest.mocked(Actor.pushData).mock.calls.length - initialCallCount,
     ).toBe(CONCURRENCY);
   });
 });

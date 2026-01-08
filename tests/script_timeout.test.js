@@ -37,7 +37,7 @@ describe("Custom Script Timeout", () => {
         customScript: dangerousScript,
         authKey: "secret",
       },
-      onEvent
+      onEvent,
     );
 
     const req = httpMocks.createRequest({
