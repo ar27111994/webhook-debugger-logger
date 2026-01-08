@@ -1,4 +1,4 @@
-import { jest } from "@jest/globals";
+import { jest, describe, test, expect, beforeEach } from "@jest/globals";
 
 jest.unstable_mockModule("apify", () => ({
   Actor: {
@@ -18,7 +18,8 @@ describe("WebhookManager", () => {
       getValue: jest.fn(),
       setValue: jest.fn(),
     };
-    Actor.openKeyValueStore.mockResolvedValue(mockKvStore);
+    // @ts-ignore
+    jest.mocked(Actor.openKeyValueStore).mockResolvedValue(mockKvStore);
     webhookManager = new WebhookManager();
   });
 

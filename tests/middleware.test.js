@@ -1,4 +1,4 @@
-import { jest } from "@jest/globals";
+import { jest, describe, test, expect, beforeEach } from "@jest/globals";
 
 jest.unstable_mockModule("axios", async () => {
   const { axiosMock } = await import("./helpers/shared-mocks.js");
@@ -12,8 +12,6 @@ jest.unstable_mockModule("apify", async () => {
 
 const { createLoggerMiddleware } = await import("../src/logger_middleware.js");
 const httpMocks = (await import("node-mocks-http")).default;
-const axios = (await import("axios")).default;
-const { Actor } = await import("apify");
 
 describe("Logger Middleware", () => {
   let webhookManager;
@@ -108,6 +106,7 @@ describe("Logger Middleware", () => {
     const req = httpMocks.createRequest({
       params: { id: "wh_123" },
       query: { key: "secret" }, // Bypass Auth
+      // @ts-ignore
       body: "original",
     });
     const res = httpMocks.createResponse();

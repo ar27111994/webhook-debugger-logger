@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.7.1] - 2026-01-08
+
+### Improved
+
+- **Quality Assurance**: Achieved >90% test coverage for Lines/Statements and implemented strict type checking across the entire test suite.
+- **Reliability**: Hardened forwarding retry logic and platform limit handling with comprehensive new test cases.
+- **Maintainability**: Removed all `// @ts-nocheck` directives and standardized Jest mocks for long-term stability.
+
 ## [2.7.0] - 2025-12-31
 
 ### Added

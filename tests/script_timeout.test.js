@@ -1,4 +1,4 @@
-import { jest } from "@jest/globals";
+import { jest, describe, test, expect, beforeEach } from "@jest/globals";
 import httpMocks from "node-mocks-http";
 
 // Mock axios
@@ -37,7 +37,7 @@ describe("Custom Script Timeout", () => {
         customScript: dangerousScript,
         authKey: "secret",
       },
-      onEvent,
+      onEvent
     );
 
     const req = httpMocks.createRequest({

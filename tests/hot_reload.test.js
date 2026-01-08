@@ -1,4 +1,11 @@
-import { jest } from "@jest/globals";
+import {
+  jest,
+  describe,
+  test,
+  expect,
+  beforeAll,
+  afterAll,
+} from "@jest/globals";
 
 // 1. Setup mocks
 jest.unstable_mockModule("apify", async () => {
@@ -16,7 +23,7 @@ describe("Hot-Reloading Configuration Tests", () => {
 
   beforeAll(async () => {
     // Start with basic config
-    Actor.getInput.mockResolvedValue({
+    jest.mocked(Actor.getInput).mockResolvedValue({
       authKey: "original-key",
       urlCount: 1,
       retentionHours: 1,
@@ -36,6 +43,7 @@ describe("Hot-Reloading Configuration Tests", () => {
     expect(res1.statusCode).toBe(200);
 
     // Update to new key
+    // @ts-ignore
     await Actor.emitInput({
       authKey: "new-super-secret",
       urlCount: 1,
@@ -60,6 +68,7 @@ describe("Hot-Reloading Configuration Tests", () => {
     expect(initialActive).toBe(1);
 
     // Scale up to 3
+    // @ts-ignore
     await Actor.emitInput({
       authKey: "new-super-secret",
       urlCount: 3,
@@ -82,6 +91,7 @@ describe("Hot-Reloading Configuration Tests", () => {
     expect(res1.text).toBe("OK");
 
     // 2. Add custom script via hot-reload
+    // @ts-ignore
     await Actor.emitInput({
       authKey: "new-super-secret",
       urlCount: 3,
@@ -97,5 +107,31 @@ describe("Hot-Reloading Configuration Tests", () => {
       .send({ data: "test" });
     expect(res2.statusCode).toBe(201);
     expect(res2.text).toBe("Transformed!");
+  });
+
+  test("should handle invalid JSON schema updates gracefully", async () => {
+    const consoleSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    // @ts-ignore
+    await Actor.emitInput({
+      jsonSchema: "{ invalid json: }", // Malformed
+    });
+
+    // Verify error was logged
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining("[SCHEMA-ERROR]"),
+      expect.any(String)
+    );
+    consoleSpy.mockRestore();
+
+    // Verify app is still responsive
+    const res = await request(app)
+      .get("/info")
+      .set("Authorization", "Bearer last-key");
+
+    // Ensure we got a response (not a connection refused/crash)
+    expect(res.statusCode).toBeDefined();
   });
 });

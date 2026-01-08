@@ -1,4 +1,12 @@
-import { jest } from "@jest/globals";
+import {
+  jest,
+  describe,
+  test,
+  expect,
+  beforeAll,
+  afterAll,
+  beforeEach,
+} from "@jest/globals";
 
 // Mock Apify and axios using shared components
 jest.unstable_mockModule("apify", async () => {
@@ -12,8 +20,9 @@ jest.unstable_mockModule("axios", async () => {
 });
 
 const request = (await import("supertest")).default;
-const { app, initialize, shutdown, webhookManager } =
-  await import("../src/main.js");
+const { app, initialize, shutdown, webhookManager } = await import(
+  "../src/main.js"
+);
 const axios = (await import("axios")).default;
 const { Actor } = await import("apify");
 
@@ -50,12 +59,14 @@ describe("Resilience & Retry Tests", () => {
         headers: {},
       };
 
-      Actor.openDataset.mockResolvedValue({
+      jest.mocked(Actor.openDataset).mockResolvedValue({
+        // @ts-ignore
         getData: jest.fn().mockResolvedValue({ items: [mockItem] }),
       });
 
       // Mock axios to fail twice then succeed
       axios
+        // @ts-ignore
         .mockRejectedValueOnce({ code: "ECONNABORTED" })
         .mockRejectedValueOnce({ code: "ECONNABORTED" })
         .mockResolvedValueOnce({ status: 200, data: "OK" });
@@ -81,11 +92,13 @@ describe("Resilience & Retry Tests", () => {
         headers: {},
       };
 
-      Actor.openDataset.mockResolvedValue({
+      jest.mocked(Actor.openDataset).mockResolvedValue({
+        // @ts-ignore
         getData: jest.fn().mockResolvedValue({ items: [mockItem] }),
       });
 
       // Always fail
+      // @ts-ignore
       axios.mockRejectedValue({ code: "ECONNABORTED" });
 
       const res = await request(app)
@@ -106,13 +119,15 @@ describe("Resilience & Retry Tests", () => {
         headers: {},
       };
 
-      Actor.openDataset.mockResolvedValue({
+      jest.mocked(Actor.openDataset).mockResolvedValue({
+        // @ts-ignore
         getData: jest.fn().mockResolvedValue({ items: [mockItem] }),
       });
 
       // Axios returns a response with 404 status (no exception thrown if validateStatus allows it)
       // But in our Replay logic we use validateStatus: () => true, so it wont throw.
       // Wait, let's test a real error that SHOULDNT be retried, like a generic Error without code
+      // @ts-ignore
       axios.mockRejectedValueOnce(new Error("Generic Failure"));
 
       const res = await request(app)
@@ -127,12 +142,12 @@ describe("Resilience & Retry Tests", () => {
   describe("Background Tasks Resilience", () => {
     test("should NOT block response if background tasks are slow (Timeout Verification)", async () => {
       // Mock Actor.pushData to be very slow
-      Actor.pushData.mockImplementation(
+      jest.mocked(Actor.pushData).mockImplementation(
         () =>
           new Promise((resolve) => {
             const t = setTimeout(resolve, 1000);
             if (t.unref) t.unref();
-          }),
+          })
       );
 
       const startTime = Date.now();

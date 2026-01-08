@@ -1,4 +1,11 @@
-import { jest } from "@jest/globals";
+import {
+  jest,
+  describe,
+  test,
+  expect,
+  beforeAll,
+  afterAll,
+} from "@jest/globals";
 
 // Mock Apify and axios using shared components
 jest.unstable_mockModule("apify", async () => {
@@ -11,16 +18,18 @@ jest.unstable_mockModule("axios", async () => {
   return { default: axiosMock };
 });
 
+// @ts-ignore
 const request = (await import("supertest")).default;
-const { app, initialize, shutdown, webhookManager } =
-  await import("../src/main.js");
+const { app, initialize, shutdown, webhookManager } = await import(
+  "../src/main.js"
+);
 const { Actor } = await import("apify");
 
 describe("API Contract & Regression Tests", () => {
   let webhookId;
 
   beforeAll(async () => {
-    Actor.getInput.mockResolvedValue({ authKey: "test-secret" });
+    jest.mocked(Actor.getInput).mockResolvedValue({ authKey: "test-secret" });
     await initialize();
     const ids = await webhookManager.generateWebhooks(1, 1);
     webhookId = ids[0];
@@ -56,7 +65,7 @@ describe("API Contract & Regression Tests", () => {
           "Advanced Mocking & Latency Control",
           "Enterprise Security (Auth/CIDR)",
           "Smart Forwarding Workflows",
-        ]),
+        ])
       );
 
       // Endpoints block
@@ -67,7 +76,7 @@ describe("API Contract & Regression Tests", () => {
 
       // Docs
       expect(body.docs).toBe(
-        "https://apify.com/ar27111994/webhook-debugger-logger",
+        "https://apify.com/ar27111994/webhook-debugger-logger"
       );
     });
   });
@@ -89,7 +98,8 @@ describe("API Contract & Regression Tests", () => {
         },
       ];
 
-      Actor.openDataset.mockResolvedValue({
+      jest.mocked(Actor.openDataset).mockResolvedValue({
+        // @ts-ignore
         getData: jest.fn().mockResolvedValue({ items: mockItems }),
       });
 
@@ -110,8 +120,13 @@ describe("API Contract & Regression Tests", () => {
     });
 
     test("should fetch with limit * 5 when filters are present", async () => {
+      // @ts-ignore
       const getDataMock = jest.fn().mockResolvedValue({ items: [] });
-      Actor.openDataset.mockResolvedValue({ getData: getDataMock });
+      // @ts-ignore
+      jest
+        .mocked(Actor.openDataset)
+        // @ts-ignore
+        .mockResolvedValue({ getData: getDataMock });
 
       await request(app)
         .get("/logs")
@@ -119,13 +134,18 @@ describe("API Contract & Regression Tests", () => {
         .set("Authorization", "Bearer test-secret");
 
       expect(getDataMock).toHaveBeenCalledWith(
-        expect.objectContaining({ limit: 50 }),
+        expect.objectContaining({ limit: 50 })
       );
     });
 
     test("should fetch with limit * 1 when NO filters are present", async () => {
+      // @ts-ignore
       const getDataMock = jest.fn().mockResolvedValue({ items: [] });
-      Actor.openDataset.mockResolvedValue({ getData: getDataMock });
+      // @ts-ignore
+      jest
+        .mocked(Actor.openDataset)
+        // @ts-ignore
+        .mockResolvedValue({ getData: getDataMock });
 
       await request(app)
         .get("/logs")
@@ -133,7 +153,7 @@ describe("API Contract & Regression Tests", () => {
         .set("Authorization", "Bearer test-secret");
 
       expect(getDataMock).toHaveBeenCalledWith(
-        expect.objectContaining({ limit: 10 }),
+        expect.objectContaining({ limit: 10 })
       );
     });
   });
@@ -167,7 +187,8 @@ describe("API Contract & Regression Tests", () => {
         },
       };
 
-      Actor.openDataset.mockResolvedValue({
+      jest.mocked(Actor.openDataset).mockResolvedValue({
+        // @ts-ignore
         getData: jest.fn().mockResolvedValue({ items: [mockItem] }),
       });
 
@@ -205,7 +226,8 @@ describe("API Contract & Regression Tests", () => {
         },
       ];
 
-      Actor.openDataset.mockResolvedValue({
+      jest.mocked(Actor.openDataset).mockResolvedValue({
+        // @ts-ignore
         getData: jest.fn().mockResolvedValue({ items: mockItems }),
       });
 
@@ -217,6 +239,7 @@ describe("API Contract & Regression Tests", () => {
 
       expect(res.statusCode).toBe(200);
       const { default: axiosMock } = await import("axios");
+      // @ts-ignore
       const lastCall = axiosMock.mock.calls[axiosMock.mock.calls.length - 1];
       expect(lastCall[0].data).toContain("i am the correct one");
 
@@ -227,9 +250,10 @@ describe("API Contract & Regression Tests", () => {
         .set("Authorization", "Bearer test-secret");
 
       expect(res2.statusCode).toBe(200);
+      // @ts-ignore
       const lastCall2 = axiosMock.mock.calls[axiosMock.mock.calls.length - 1];
       expect(lastCall2[0].data).toContain(
-        "i am an interloper with same timestamp",
+        "i am an interloper with same timestamp"
       );
     });
   });

@@ -7,10 +7,42 @@ import vm from "vm";
 import { validateAuth } from "./utils/auth.js";
 import { parseWebhookOptions } from "./utils/config.js";
 
+// @ts-ignore
 const ajv = new Ajv();
+
+const FORWARD_TIMEOUT_MS = 10000;
+const BACKGROUND_TASK_TIMEOUT_PROD = 10000;
+const BACKGROUND_TASK_TIMEOUT_TEST = 100;
+const MAX_FORWARD_RETRIES = 3;
+const SCRIPT_EXECUTION_TIMEOUT_MS = 1000;
+
+/**
+ * @typedef {Object} WebhookEvent
+ * @property {string} id
+ * @property {string} timestamp
+ * @property {string} webhookId
+ * @property {string} method
+ * @property {Object.<string, string>} headers
+ * @property {Object.<string, any>} query
+ * @property {string|Object} body
+ * @property {string} contentType
+ * @property {number} size
+ * @property {number} statusCode
+ * @property {string|Object} [responseBody]
+ * @property {Object.<string, string>} [responseHeaders]
+ * @property {number} processingTime
+ * @property {string} remoteIp
+ * @property {string} [userAgent]
+ */
 
 /**
  * Validates the basic webhook request parameters and permissions.
+ *
+ * @param {import("express").Request} req
+ * @param {string} webhookId
+ * @param {Object} options
+ * @param {import("./webhook_manager.js").WebhookManager} webhookManager
+ * @returns {{ isValid: boolean, statusCode?: number, error?: string, remoteIp?: string, contentLength?: number, received?: number }}
  */
 function validateWebhookRequest(req, webhookId, options, webhookManager) {
   const { authKey, allowedIps } = options;
@@ -64,6 +96,11 @@ function validateWebhookRequest(req, webhookId, options, webhookManager) {
 
 /**
  * Prepares the request body, validates JSON schema, and masks headers.
+ *
+ * @param {import("express").Request} req
+ * @param {Object} options
+ * @param {import("ajv").ValidateFunction} validate
+ * @returns {{ loggedBody: string, loggedHeaders: Object, contentType: string }}
  */
 function prepareRequestData(req, options, validate) {
   const { maskSensitiveData } = options;
@@ -82,7 +119,7 @@ function prepareRequestData(req, options, validate) {
     if (typeof bodyToValidate === "string") {
       try {
         bodyToValidate = JSON.parse(bodyToValidate);
-      } catch (e) {
+      } catch (_) {
         throw { statusCode: 400, error: "Invalid JSON for schema validation" };
       }
     }
@@ -122,7 +159,7 @@ function prepareRequestData(req, options, validate) {
         Object.entries(req.headers).map(([key, value]) => [
           key,
           headersToMask.includes(key.toLowerCase()) ? "[MASKED]" : value,
-        ]),
+        ])
       )
     : req.headers;
 
@@ -131,16 +168,22 @@ function prepareRequestData(req, options, validate) {
 
 /**
  * Executes a custom script to transform the event.
+ *
+ * @param {WebhookEvent} event
+ * @param {import("express").Request} req
+ * @param {vm.Script} compiledScript
  */
 function transformRequestData(event, req, compiledScript) {
   if (compiledScript) {
     try {
       const sandbox = { event, req, console };
-      compiledScript.runInNewContext(sandbox, { timeout: 1000 });
+      compiledScript.runInNewContext(sandbox, {
+        timeout: SCRIPT_EXECUTION_TIMEOUT_MS,
+      });
     } catch (err) {
       console.error(
         `[SCRIPT-EXEC-ERROR] Failed to run custom script for ${event.webhookId}:`,
-        err.message,
+        err.message
       );
     }
   }
@@ -148,6 +191,10 @@ function transformRequestData(event, req, compiledScript) {
 
 /**
  * Sends the HTTP response back to the client.
+ *
+ * @param {import("express").Response} res
+ * @param {WebhookEvent} event
+ * @param {Object} options
  */
 function sendResponse(res, event, options) {
   const { defaultResponseBody, defaultResponseHeaders } = options;
@@ -182,6 +229,11 @@ function sendResponse(res, event, options) {
 
 /**
  * Handles background tasks like storage and forwarding.
+ *
+ * @param {WebhookEvent} event
+ * @param {import("express").Request} req
+ * @param {Object} options
+ * @param {Function} onEvent
  */
 async function executeBackgroundTasks(event, req, options, onEvent) {
   const { forwardUrl } = options;
@@ -198,19 +250,18 @@ async function executeBackgroundTasks(event, req, options, onEvent) {
         : `http://${forwardUrl}`;
 
       const forwardingPromise = (async () => {
-        const MAX_RETRIES = 3;
         let attempt = 0;
         let success = false;
 
         let hostHeader = "";
         try {
           hostHeader = new URL(validatedUrl).host;
-        } catch (e) {
+        } catch (_) {
           console.error(`[FORWARD-ERROR] Invalid forward URL: ${validatedUrl}`);
           return;
         }
 
-        while (attempt < MAX_RETRIES && !success) {
+        while (attempt < MAX_FORWARD_RETRIES && !success) {
           try {
             attempt++;
 
@@ -226,8 +277,8 @@ async function executeBackgroundTasks(event, req, options, onEvent) {
               options.forwardHeaders !== false
                 ? Object.fromEntries(
                     Object.entries(req.headers).filter(
-                      ([key]) => !sensitiveHeaders.includes(key.toLowerCase()),
-                    ),
+                      ([key]) => !sensitiveHeaders.includes(key.toLowerCase())
+                    )
                   )
                 : {
                     "content-type": req.headers["content-type"],
@@ -240,7 +291,7 @@ async function executeBackgroundTasks(event, req, options, onEvent) {
                 "X-Forwarded-By": "Apify-Webhook-Debugger",
                 host: hostHeader,
               },
-              timeout: 10000,
+              timeout: FORWARD_TIMEOUT_MS,
             });
             success = true;
           } catch (err) {
@@ -256,11 +307,11 @@ async function executeBackgroundTasks(event, req, options, onEvent) {
             const delay = 1000 * Math.pow(2, attempt - 1);
 
             console.error(
-              `[FORWARD-ERROR] Attempt ${attempt}/${MAX_RETRIES} failed for ${validatedUrl}:`,
-              err.code === "ECONNABORTED" ? "Timed out" : err.message,
+              `[FORWARD-ERROR] Attempt ${attempt}/${MAX_FORWARD_RETRIES} failed for ${validatedUrl}:`,
+              err.code === "ECONNABORTED" ? "Timed out" : err.message
             );
 
-            if (attempt >= MAX_RETRIES || !isTransient) {
+            if (attempt >= MAX_FORWARD_RETRIES || !isTransient) {
               try {
                 await Actor.pushData({
                   id: nanoid(10),
@@ -277,7 +328,7 @@ async function executeBackgroundTasks(event, req, options, onEvent) {
               } catch (pushErr) {
                 console.error(
                   "[CRITICAL] Failed to log forward error:",
-                  pushErr.message,
+                  pushErr.message
                 );
               }
               break; // Stop retrying
@@ -301,17 +352,32 @@ async function executeBackgroundTasks(event, req, options, onEvent) {
       `[CRITICAL] ${
         isPlatformError ? "PLATFORM-LIMIT" : "BACKGROUND-ERROR"
       } for ${event.webhookId}:`,
-      error.message,
+      error.message
     );
 
     if (isPlatformError) {
       console.warn(
-        "[ADVICE] Check your Apify platform limits or storage availability.",
+        "[ADVICE] Check your Apify platform limits or storage availability."
       );
     }
   }
 }
 
+/**
+ * @typedef {Function} LoggerMiddleware
+ * @param {import("express").Request} req
+ * @param {import("express").Response} res
+ * @returns {Promise<void>}
+ */
+
+/**
+ * Creates the logger middleware instance with hot-reload support.
+ *
+ * @param {import("./webhook_manager.js").WebhookManager} webhookManager
+ * @param {Object} rawOptions
+ * @param {Function} onEvent
+ * @returns {LoggerMiddleware & { updateOptions: Function }}
+ */
 export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
   let options; // Initialized as undefined to trigger initial compilation
   let compiledScript;
@@ -381,8 +447,8 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
     ];
     const webhookOverrides = Object.fromEntries(
       Object.entries(webhookData).filter(([key]) =>
-        allowedOverrides.includes(key),
-      ),
+        allowedOverrides.includes(key)
+      )
     );
 
     const mergedOptions = {
@@ -394,7 +460,7 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
       req,
       webhookId,
       mergedOptions,
-      webhookManager,
+      webhookManager
     );
     if (!validation.isValid) {
       return res.status(validation.statusCode).json({
@@ -411,7 +477,7 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
       const { loggedBody, loggedHeaders, contentType } = prepareRequestData(
         req,
         mergedOptions,
-        validate,
+        validate
       );
 
       // 3. Transform
@@ -438,7 +504,7 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
       // 4. Orchestration: Respond synchronous-ish, then race background tasks
       if (mergedOptions.responseDelayMs > 0) {
         await new Promise((resolve) =>
-          setTimeout(resolve, Math.min(mergedOptions.responseDelayMs, 10000)),
+          setTimeout(resolve, Math.min(mergedOptions.responseDelayMs, 10000))
         );
       }
 
@@ -452,13 +518,16 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
         } catch (err) {
           console.error(
             `[CRITICAL] Background tasks for ${event.id} failed:`,
-            err.message,
+            err.message
           );
         }
       };
 
       // Wrap background work in Promise.race to ensure we don't hang the Actor if storage is slow
-      const timeoutMs = process.env.NODE_ENV === "test" ? 100 : 10000;
+      const timeoutMs =
+        process.env.NODE_ENV === "test"
+          ? BACKGROUND_TASK_TIMEOUT_TEST
+          : BACKGROUND_TASK_TIMEOUT_PROD;
       await Promise.race([
         backgroundPromise(),
         new Promise((resolve) => {
@@ -467,7 +536,7 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
               const readableTimeout =
                 timeoutMs < 1000 ? `${timeoutMs}ms` : `${timeoutMs / 1000}s`;
               console.warn(
-                `[TIMEOUT] Background tasks for ${event.id} exceeded ${readableTimeout}. Continuing...`,
+                `[TIMEOUT] Background tasks for ${event.id} exceeded ${readableTimeout}. Continuing...`
               );
             }
             resolve();

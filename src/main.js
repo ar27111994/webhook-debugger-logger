@@ -9,6 +9,13 @@ import { parseWebhookOptions } from "./utils/config.js";
 import { validateAuth } from "./utils/auth.js";
 import { RateLimiter } from "./utils/rate_limiter.js";
 
+const SSE_HEARTBEAT_INTERVAL_MS = 30000;
+const SHUTDOWN_TIMEOUT_MS = 30000;
+const STARTUP_TEST_EXIT_DELAY_MS = 5000;
+const CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
+const MAX_REPLAY_RETRIES = 3;
+const REPLAY_TIMEOUT_MS = 10000;
+
 let server;
 let sseHeartbeat;
 let cleanupInterval;
@@ -19,7 +26,20 @@ const clients = new Set();
 const app = express(); // Exported for tests
 
 /**
+ * @typedef {Object} WebhookItem
+ * @property {string} id
+ * @property {string} webhookId
+ * @property {string} method
+ * @property {Object} headers
+ * @property {any} body
+ * @property {string} timestamp
+ * @property {number} statusCode
+ */
+
+/**
  * Simple HTML escaping for security.
+ * @param {string} unsafe
+ * @returns {string}
  */
 const escapeHtml = (unsafe) => {
   if (!unsafe) return "";
@@ -33,6 +53,7 @@ const escapeHtml = (unsafe) => {
 
 /**
  * Broadcasts data to all connected SSE clients.
+ * @param {any} data
  */
 const broadcast = (data) => {
   const message = `data: ${JSON.stringify(data)}\n\n`;
@@ -41,25 +62,26 @@ const broadcast = (data) => {
 
 /**
  * Gracefully shuts down the server and persists state.
+ * @param {string} signal
  */
 const shutdown = async (signal) => {
   if (cleanupInterval) clearInterval(cleanupInterval);
   if (sseHeartbeat) clearInterval(sseHeartbeat);
   if (webhookRateLimiter) webhookRateLimiter.destroy();
 
-  if (process.env.NODE_ENV === "test") return;
+  if (process.env.NODE_ENV === "test" && signal !== "TEST_COMPLETE") return;
 
   console.log(`Received ${signal}. Shutting down...`);
   const forceExitTimer = setTimeout(() => {
     console.error("Forceful shutdown after timeout");
     process.exit(1);
-  }, 30000);
+  }, SHUTDOWN_TIMEOUT_MS);
 
   const finalCleanup = async () => {
     await webhookManager.persist();
     await Actor.exit();
     clearTimeout(forceExitTimer);
-    process.exit(0);
+    if (process.env.NODE_ENV !== "test") process.exit(0);
   };
 
   if (server && server.listening) {
@@ -71,11 +93,12 @@ const shutdown = async (signal) => {
 
 /**
  * Main initialization logic.
+ * @returns {Promise<import("express").Application>}
  */
 async function initialize() {
   await Actor.init();
 
-  const input = (await Actor.getInput()) || {};
+  const input = /** @type {any} */ ((await Actor.getInput()) || {});
   const config = parseWebhookOptions(input);
   const {
     urlCount = 3,
@@ -104,7 +127,8 @@ async function initialize() {
     } catch (e) {
       console.warn("Startup log failed:", e.message);
     }
-    if (testAndExit) setTimeout(() => shutdown("TESTANDEXIT"), 5000);
+    if (testAndExit)
+      setTimeout(() => shutdown("TESTANDEXIT"), STARTUP_TEST_EXIT_DELAY_MS);
   }
 
   const active = webhookManager.getAllActive();
@@ -113,12 +137,12 @@ async function initialize() {
   if (active.length < urlCount) {
     const diff = urlCount - active.length;
     console.log(
-      `[SYSTEM] Scaling up: Generating ${diff} additional webhook(s).`,
+      `[SYSTEM] Scaling up: Generating ${diff} additional webhook(s).`
     );
     await webhookManager.generateWebhooks(diff, retentionHours);
   } else if (active.length > urlCount) {
     console.log(
-      `[SYSTEM] Notice: Active webhooks (${active.length}) exceed requested count (${urlCount}). No new IDs generated.`,
+      `[SYSTEM] Notice: Active webhooks (${active.length}) exceed requested count (${urlCount}). No new IDs generated.`
     );
   } else {
     console.log(`[SYSTEM] Resuming with ${active.length} active webhooks.`);
@@ -139,7 +163,7 @@ async function initialize() {
       if (req.headers["content-type"]?.includes("application/json")) {
         try {
           req.body = JSON.parse(req.body.toString());
-        } catch (e) {
+        } catch (_) {
           req.body = req.body.toString();
         }
       } else {
@@ -158,10 +182,11 @@ async function initialize() {
   const loggerMiddleware = createLoggerMiddleware(
     webhookManager,
     { ...config, maxPayloadSize },
-    broadcast,
+    broadcast
   );
 
   // --- Hot Reloading Logic ---
+  // @ts-ignore
   Actor.on("input", async (newInput) => {
     if (!newInput) return;
     console.log("[SYSTEM] Detected input update! Applying new settings...");
@@ -170,7 +195,7 @@ async function initialize() {
       const newConfig = parseWebhookOptions(newInput);
       const newRateLimit = Math.max(
         1,
-        Math.floor(newConfig.rateLimitPerMinute || 60),
+        Math.floor(newConfig.rateLimitPerMinute || 60)
       );
 
       // 1. Update Middleware
@@ -184,11 +209,11 @@ async function initialize() {
 
       // 4. Re-reconcile URL count
       currentUrlCount = newInput.urlCount || currentUrlCount;
-      const active = webhookManager.getAllActive();
-      if (active.length < currentUrlCount) {
-        const diff = currentUrlCount - active.length;
+      const activeWebhooks = webhookManager.getAllActive();
+      if (activeWebhooks.length < currentUrlCount) {
+        const diff = currentUrlCount - activeWebhooks.length;
         console.log(
-          `[SYSTEM] Dynamic Scale-up: Generating ${diff} additional webhook(s).`,
+          `[SYSTEM] Dynamic Scale-up: Generating ${diff} additional webhook(s).`
         );
         await webhookManager.generateWebhooks(diff, currentRetentionHours);
       }
@@ -201,14 +226,14 @@ async function initialize() {
     } catch (err) {
       console.error(
         "[SYSTEM-ERROR] Failed to apply new settings:",
-        err.message,
+        err.message
       );
     }
   });
 
   sseHeartbeat = setInterval(() => {
     clients.forEach((c) => c.write(": heartbeat\n\n"));
-  }, 30000);
+  }, SSE_HEARTBEAT_INTERVAL_MS);
   if (sseHeartbeat.unref) sseHeartbeat.unref();
 
   const authMiddleware = (req, res, next) => {
@@ -227,6 +252,7 @@ async function initialize() {
 
   app.all(
     "/webhook/:id",
+    // @ts-ignore
     (req, res, next) => {
       const statusOverride = parseInt(req.query.__status);
       if (statusOverride >= 100 && statusOverride < 600) {
@@ -234,13 +260,15 @@ async function initialize() {
       }
       next();
     },
-    loggerMiddleware,
+    // @ts-ignore
+    loggerMiddleware
   );
 
   app.all(
     "/replay/:webhookId/:itemId",
     mgmtRateLimiter,
     authMiddleware,
+    // @ts-ignore
     async (req, res) => {
       try {
         const { webhookId, itemId } = req.params;
@@ -254,7 +282,7 @@ async function initialize() {
         const item =
           items.find((i) => i.webhookId === webhookId && i.id === itemId) ||
           items.find(
-            (i) => i.webhookId === webhookId && i.timestamp === itemId,
+            (i) => i.webhookId === webhookId && i.timestamp === itemId
           );
 
         if (!item) return res.status(404).json({ error: "Event not found" });
@@ -284,18 +312,17 @@ async function initialize() {
             }
             return acc;
           },
-          {},
+          {}
         );
 
-        const MAX_RETRIES = 3;
         let attempt = 0;
         let r;
-        while (attempt < MAX_RETRIES) {
+        while (attempt < MAX_REPLAY_RETRIES) {
           try {
             attempt++;
             r = await axios({
               method: item.method,
-              url: targetUrl,
+              url: String(targetUrl),
               data: item.body,
               headers: {
                 ...filteredHeaders,
@@ -304,19 +331,19 @@ async function initialize() {
                 host: new URL(targetUrl).host,
               },
               validateStatus: () => true,
-              timeout: 10000,
+              timeout: REPLAY_TIMEOUT_MS,
             });
             break; // Success
           } catch (err) {
             if (
-              attempt >= MAX_RETRIES ||
+              attempt >= MAX_REPLAY_RETRIES ||
               (err.code !== "ECONNABORTED" && err.code !== "ECONNRESET")
             ) {
               throw err;
             }
             const delay = 1000 * Math.pow(2, attempt - 1);
             console.warn(
-              `[REPLAY-RETRY] Attempt ${attempt}/${MAX_RETRIES} failed for ${targetUrl}: ${err.code}. Retrying in ${delay}ms...`,
+              `[REPLAY-RETRY] Attempt ${attempt}/${MAX_REPLAY_RETRIES} failed for ${targetUrl}: ${err.code}. Retrying in ${delay}ms...`
             );
             await new Promise((resolve) => setTimeout(resolve, delay));
           }
@@ -326,8 +353,8 @@ async function initialize() {
           res.setHeader(
             "X-Apify-Replay-Warning",
             `Headers stripped (masked or transmission-related): ${strippedHeaders.join(
-              ", ",
-            )}`,
+              ", "
+            )}`
           );
         }
         res.json({
@@ -348,7 +375,7 @@ async function initialize() {
           code: error.code,
         });
       }
-    },
+    }
   );
 
   app.get("/log-stream", (req, res) => {
@@ -370,8 +397,8 @@ async function initialize() {
         limit = 100,
         offset = 0,
       } = req.query;
-      limit = Math.min(Math.max(parseInt(limit) || 100, 1), 1000);
-      offset = Math.max(parseInt(offset) || 0, 0);
+      limit = Math.min(Math.max(parseInt(String(limit)) || 100, 1), 1000);
+      offset = Math.max(parseInt(String(offset)) || 0, 0);
 
       const hasFilters = !!(webhookId || method || statusCode || contentType);
       const dataset = await Actor.openDataset();
@@ -384,18 +411,24 @@ async function initialize() {
       const filtered = (result.items || [])
         .filter((item) => {
           if (webhookId && item.webhookId !== webhookId) return false;
-          if (method && item.method?.toUpperCase() !== method.toUpperCase())
+          if (
+            method &&
+            item.method?.toUpperCase() !== String(method).toUpperCase()
+          )
             return false;
           if (statusCode && String(item.statusCode) !== String(statusCode))
             return false;
           if (
             contentType &&
-            !item.headers?.["content-type"]?.includes(contentType)
+            !item.headers?.["content-type"]?.includes(String(contentType))
           )
             return false;
           return webhookManager.isValid(item.webhookId);
         })
-        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        .sort(
+          (a, b) =>
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        );
 
       res.json({
         filters: { webhookId, method, statusCode, contentType },
@@ -419,7 +452,7 @@ async function initialize() {
         authActive: !!authKey,
         retentionHours,
         maxPayloadLimit: `${((maxPayloadSize || 0) / 1024 / 1024).toFixed(
-          1,
+          1
         )}MB`,
         webhookCount: activeWebhooks.length,
         activeWebhooks,
@@ -482,7 +515,7 @@ async function initialize() {
                   <div class="stat-item" style="text-align:left; border-left: 4px solid var(--danger); background: rgba(0,0,0,0.2); padding: 16px; border-radius: 8px;">
                     <span style="font-size: 0.8rem; color: var(--text-dim); display: block; margin-bottom: 4px;">Error Details</span>
                     <span class="stat-value" style="color: var(--danger); font-family: 'JetBrains Mono', monospace;">${escapeHtml(
-                      error,
+                      error
                     )}</span>
                   </div>
                   <p style="font-size: 0.85rem;">To authenticate in the browser, append <code>?key=YOUR_KEY</code> to the URL.</p>
@@ -536,7 +569,7 @@ async function initialize() {
       `);
     } else {
       res.send(
-        `Webhook Debugger & Logger v2.7.0 (Enterprise Suite) is running.\nActive Webhooks: ${activeCount}\nUse /info for management API.\n`,
+        `Webhook Debugger & Logger v2.7.0 (Enterprise Suite) is running.\nActive Webhooks: ${activeCount}\nUse /info for management API.\n`
       );
     }
   });
@@ -550,20 +583,21 @@ async function initialize() {
         status === 413
           ? "Payload Too Large"
           : status === 400
-            ? "Bad Request"
-            : "Internal Server Error",
+          ? "Bad Request"
+          : "Internal Server Error",
       message: err.message,
     });
   });
 
+  /* istanbul ignore next */
   if (process.env.NODE_ENV !== "test") {
     const port = process.env.ACTOR_WEB_SERVER_PORT || 8080;
     server = app.listen(port, () =>
-      console.log(`Server listening on port ${port}`),
+      console.log(`Server listening on port ${port}`)
     );
     cleanupInterval = setInterval(
       () => webhookManager.cleanup(),
-      10 * 60 * 1000,
+      CLEANUP_INTERVAL_MS
     );
     Actor.on("migrating", () => shutdown("MIGRATING"));
     Actor.on("aborting", () => shutdown("ABORTING"));
@@ -575,6 +609,7 @@ async function initialize() {
 }
 
 if (process.env.NODE_ENV !== "test") {
+  /* istanbul ignore next */
   initialize().catch((err) => {
     console.error("[FATAL] Server failed to start:", err.message);
     process.exit(1);

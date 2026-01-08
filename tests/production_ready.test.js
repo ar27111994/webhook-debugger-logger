@@ -1,4 +1,11 @@
-import { jest } from "@jest/globals";
+import {
+  jest,
+  describe,
+  test,
+  expect,
+  beforeAll,
+  afterAll,
+} from "@jest/globals";
 
 jest.unstable_mockModule("apify", async () => {
   const { apifyMock } = await import("./helpers/shared-mocks.js");
@@ -19,7 +26,7 @@ describe("Production Readiness Tests (v2.6.0)", () => {
   let webhookId;
 
   beforeAll(async () => {
-    Actor.getInput.mockResolvedValue({
+    jest.mocked(Actor.getInput).mockResolvedValue({
       authKey: "top-secret",
       rateLimitPerMinute: 2,
       maskSensitiveData: true,
@@ -76,19 +83,25 @@ describe("Production Readiness Tests (v2.6.0)", () => {
         .set("X-API-Key", "my-key")
         .send({ foo: "bar" });
 
-      const matchedCall = Actor.pushData.mock.calls.find(
+      const matchedCall = jest.mocked(Actor.pushData).mock.calls.find(
         (call) =>
           call[0] &&
+          // @ts-ignore
           call[0].method === "POST" &&
-          call[0].webhookId === webhookId,
+          // @ts-ignore
+          call[0].webhookId === webhookId
       );
 
       expect(matchedCall).toBeDefined();
       const lastPush = matchedCall[0];
 
+      // @ts-ignore
       expect(lastPush.headers["authorization"]).toBe("[MASKED]");
+      // @ts-ignore
       expect(lastPush.headers["cookie"]).toBe("[MASKED]");
+      // @ts-ignore
       expect(lastPush.headers["x-api-key"]).toBe("[MASKED]");
+      // @ts-ignore
       expect(lastPush.headers["host"]).toBeDefined(); // Non-sensitive header should remain
     });
   });
@@ -134,10 +147,12 @@ describe("Production Readiness Tests (v2.6.0)", () => {
       };
 
       const mockDataset = {
+        // @ts-ignore
         getData: jest.fn().mockResolvedValue({ items: [mockEvent] }),
         pushData: jest.fn(),
       };
-      Actor.openDataset.mockResolvedValue(mockDataset);
+      // @ts-ignore
+      jest.mocked(Actor.openDataset).mockResolvedValue(mockDataset);
 
       const res = await request(app)
         .post(`/replay/${webhookId}/${eventId}?url=${targetUrl}`)
@@ -145,8 +160,9 @@ describe("Production Readiness Tests (v2.6.0)", () => {
         .expect(200);
 
       const { default: axiosMock } = await import("axios");
+      // @ts-ignore
       const axiosCall = axiosMock.mock.calls.find(
-        (c) => c[0].url === targetUrl,
+        (c) => c[0].url === targetUrl
       );
       expect(axiosCall).toBeDefined();
 

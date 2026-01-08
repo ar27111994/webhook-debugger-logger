@@ -1,4 +1,11 @@
-import { jest } from "@jest/globals";
+import {
+  jest,
+  describe,
+  test,
+  expect,
+  beforeAll,
+  afterAll,
+} from "@jest/globals";
 
 // Mock Apify
 jest.unstable_mockModule("apify", async () => {
@@ -7,15 +14,16 @@ jest.unstable_mockModule("apify", async () => {
 });
 
 const request = (await import("supertest")).default;
-const { app, webhookManager, initialize, shutdown } =
-  await import("../src/main.js");
+const { app, webhookManager, initialize, shutdown } = await import(
+  "../src/main.js"
+);
 const { Actor } = await import("apify");
 
 describe("Edge Case Tests", () => {
   let webhookId;
 
   beforeAll(async () => {
-    Actor.getInput.mockResolvedValue({
+    jest.mocked(Actor.getInput).mockResolvedValue({
       maxPayloadSize: 1024,
       enableJSONParsing: true,
     });
@@ -60,8 +68,10 @@ describe("Edge Case Tests", () => {
     expect(res.text).toBe("OK");
 
     // Check if it was saved as string
-    const lastCall =
-      Actor.pushData.mock.calls[Actor.pushData.mock.calls.length - 1][0];
+    const lastCall = jest.mocked(Actor.pushData).mock.calls[
+      jest.mocked(Actor.pushData).mock.calls.length - 1
+    ][0];
+    // @ts-ignore
     expect(typeof lastCall.body).toBe("string");
   });
 

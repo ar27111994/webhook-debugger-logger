@@ -1,4 +1,11 @@
-import { jest } from "@jest/globals";
+import {
+  jest,
+  describe,
+  test,
+  expect,
+  beforeAll,
+  afterAll,
+} from "@jest/globals";
 
 jest.unstable_mockModule("apify", async () => {
   const { apifyMock } = await import("./helpers/shared-mocks.js");
@@ -11,8 +18,9 @@ jest.unstable_mockModule("axios", async () => {
 });
 
 const request = (await import("supertest")).default;
-const { app, webhookManager, initialize, shutdown } =
-  await import("../src/main.js");
+const { app, webhookManager, initialize, shutdown } = await import(
+  "../src/main.js"
+);
 const { Actor } = await import("apify");
 
 describe("API E2E Tests", () => {
@@ -54,7 +62,9 @@ describe("API E2E Tests", () => {
       body: '{"test":"data"}',
       timestamp: new Date().toISOString(),
     };
+    // @ts-ignore
     Actor.openDataset.mockReturnValue({
+      // @ts-ignore
       getData: jest.fn().mockResolvedValue({ items: [mockItem] }),
     });
 
@@ -74,12 +84,15 @@ describe("API E2E Tests", () => {
       body: '{"test":"data"}',
       headers: {},
     };
+    // @ts-ignore
     Actor.openDataset.mockReturnValue({
+      // @ts-ignore
       getData: jest.fn().mockResolvedValue({ items: [mockItem] }),
     });
 
     // Mock axios to prevent real network calls
     const axios = (await import("axios")).default;
+    // @ts-ignore
     axios.mockResolvedValue({ status: 200, data: "OK" });
 
     const res = await request(app)
@@ -98,7 +111,9 @@ describe("API E2E Tests", () => {
       body: '{"foo":"bar"}',
       headers: {},
     };
+    // @ts-ignore
     Actor.openDataset.mockReturnValue({
+      // @ts-ignore
       getData: jest.fn().mockResolvedValue({ items: [mockItem] }),
     });
 

@@ -1,4 +1,11 @@
-import { jest } from "@jest/globals";
+import {
+  jest,
+  describe,
+  test,
+  expect,
+  afterAll,
+  beforeEach,
+} from "@jest/globals";
 
 // 1. Define mocks before any imports
 jest.unstable_mockModule("apify", async () => {
@@ -17,9 +24,11 @@ describe("Webhook Lifecycle & Scaling Tests", () => {
     jest.clearAllMocks();
     mockKV = {
       getValue: jest.fn(),
+      // @ts-ignore
       setValue: jest.fn().mockResolvedValue(),
     };
-    Actor.openKeyValueStore.mockResolvedValue(mockKV);
+    // @ts-ignore
+    jest.mocked(Actor.openKeyValueStore).mockResolvedValue(mockKV);
   });
 
   afterAll(async () => {
@@ -35,7 +44,9 @@ describe("Webhook Lifecycle & Scaling Tests", () => {
     });
 
     // 2. Mock input asking for 3 webhooks
-    Actor.getInput.mockResolvedValue({ urlCount: 3, retentionHours: 1 });
+    jest
+      .mocked(Actor.getInput)
+      .mockResolvedValue({ urlCount: 3, retentionHours: 1 });
 
     await initialize();
 
@@ -58,7 +69,9 @@ describe("Webhook Lifecycle & Scaling Tests", () => {
     mockKV.getValue.mockResolvedValue(state);
 
     // 2. Mock input asking for only 1 webhook
-    Actor.getInput.mockResolvedValue({ urlCount: 1, retentionHours: 1 });
+    jest
+      .mocked(Actor.getInput)
+      .mockResolvedValue({ urlCount: 1, retentionHours: 1 });
 
     await initialize();
 
@@ -76,7 +89,9 @@ describe("Webhook Lifecycle & Scaling Tests", () => {
     });
 
     // 2. Mock input asking for 24 hour retention
-    Actor.getInput.mockResolvedValue({ urlCount: 1, retentionHours: 24 });
+    jest
+      .mocked(Actor.getInput)
+      .mockResolvedValue({ urlCount: 1, retentionHours: 24 });
 
     await initialize();
 
