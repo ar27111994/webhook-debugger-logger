@@ -23,6 +23,7 @@ const { app, webhookManager, initialize, shutdown } =
 const { Actor } = await import("apify");
 
 describe("API E2E Tests", () => {
+  /** @type {string} */
   let webhookId;
 
   beforeAll(async () => {
@@ -61,11 +62,11 @@ describe("API E2E Tests", () => {
       body: '{"test":"data"}',
       timestamp: new Date().toISOString(),
     };
-    // @ts-ignore
-    Actor.openDataset.mockReturnValue({
-      // @ts-ignore
-      getData: jest.fn().mockResolvedValue({ items: [mockItem] }),
-    });
+    jest.mocked(Actor.openDataset).mockResolvedValue(
+      /** @type {any} */ ({
+        getData: jest.fn(async () => ({ items: [mockItem] })),
+      }),
+    );
 
     const res = await request(app).get("/logs").query({ webhookId });
     expect(res.statusCode).toBe(200);
@@ -83,16 +84,15 @@ describe("API E2E Tests", () => {
       body: '{"test":"data"}',
       headers: {},
     };
-    // @ts-ignore
-    Actor.openDataset.mockReturnValue({
-      // @ts-ignore
-      getData: jest.fn().mockResolvedValue({ items: [mockItem] }),
-    });
+    jest.mocked(Actor.openDataset).mockResolvedValue(
+      /** @type {any} */ ({
+        getData: jest.fn(async () => ({ items: [mockItem] })),
+      }),
+    );
 
     // Mock axios to prevent real network calls
     const axios = (await import("axios")).default;
-    // @ts-ignore
-    axios.mockResolvedValue({ status: 200, data: "OK" });
+    /** @type {any} */ (axios).mockResolvedValue({ status: 200, data: "OK" });
 
     const res = await request(app)
       .get(`/replay/${webhookId}/evt_123`)
@@ -111,10 +111,11 @@ describe("API E2E Tests", () => {
       headers: {},
     };
     // @ts-ignore
-    Actor.openDataset.mockReturnValue({
-      // @ts-ignore
-      getData: jest.fn().mockResolvedValue({ items: [mockItem] }),
-    });
+    jest.mocked(Actor.openDataset).mockResolvedValue(
+      /** @type {any} */ ({
+        getData: jest.fn(async () => ({ items: [mockItem] })),
+      }),
+    );
 
     const res = await request(app)
       .post(`/replay/${webhookId}/evt_789`)
@@ -127,7 +128,7 @@ describe("API E2E Tests", () => {
   test("GET / should return version info", async () => {
     const res = await request(app).get("/");
     expect(res.statusCode).toBe(200);
-    expect(res.text).toContain("v2.7.0");
+    expect(res.text).toContain("v2.7.1");
   });
 
   test("GET / with readiness probe header", async () => {

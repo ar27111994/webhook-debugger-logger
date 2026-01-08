@@ -1,5 +1,6 @@
 import { jest } from "@jest/globals";
 
+/** @type {any} */
 let actorInstance = null;
 
 /**
@@ -16,39 +17,40 @@ export function createApifyMock(inputOverrides = {}) {
   }
 
   const store = {
-    // @ts-ignore
+    // @ts-expect-error - Mock typing limitation with @types/jest 30
     getValue: jest.fn().mockResolvedValue(null),
-    // @ts-ignore
+    // @ts-expect-error - Mock typing limitation with @types/jest 30
     setValue: jest.fn().mockResolvedValue({}),
   };
 
   const dataset = {
-    // @ts-ignore
+    // @ts-expect-error - Mock typing limitation with @types/jest 30
     getData: jest.fn().mockResolvedValue({ items: [] }),
-    // @ts-ignore
+    // @ts-expect-error - Mock typing limitation with @types/jest 30
     pushData: jest.fn().mockResolvedValue({}),
   };
 
+  /** @type {Function | undefined} */
   let inputHandler;
 
   actorInstance = {
-    // @ts-ignore
+    // @ts-expect-error - Mock typing limitation with @types/jest 30
     init: jest.fn().mockResolvedValue({}),
-    // @ts-ignore
+    // @ts-expect-error - Mock typing limitation with @types/jest 30
     getInput: jest.fn().mockResolvedValue(inputOverrides),
-    // @ts-ignore
+    // @ts-expect-error - Mock typing limitation with @types/jest 30
     openKeyValueStore: jest.fn().mockResolvedValue(store),
-    // @ts-ignore
+    // @ts-expect-error - Mock typing limitation with @types/jest 30
     openDataset: jest.fn().mockResolvedValue(dataset),
-    // @ts-ignore
+    // @ts-expect-error - Mock typing limitation with @types/jest 30
     pushData: jest.fn().mockResolvedValue({}),
     on: jest.fn((event, handler) => {
-      if (event === "input") inputHandler = handler;
+      if (event === "input") inputHandler = /** @type {Function} */ (handler);
     }),
-    emitInput: async (data) => {
+    emitInput: async (/** @type {any} */ data) => {
       if (inputHandler) await inputHandler(data);
     },
-    // @ts-ignore
+    // @ts-expect-error - Mock typing limitation with @types/jest 30
     exit: jest.fn().mockResolvedValue({}),
   };
 

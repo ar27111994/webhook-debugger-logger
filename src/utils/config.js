@@ -1,8 +1,25 @@
 /**
+ * @typedef {Object} WebhookConfig
+ * @property {string} [authKey]
+ * @property {string[]} [allowedIps]
+ * @property {number} [defaultResponseCode]
+ * @property {string} [defaultResponseBody]
+ * @property {Object.<string, string>} [defaultResponseHeaders]
+ * @property {number} [responseDelayMs]
+ * @property {string} [forwardUrl]
+ * @property {boolean} [forwardHeaders]
+ * @property {Object} [jsonSchema]
+ * @property {string} [customScript]
+ * @property {boolean} [maskSensitiveData]
+ * @property {number} [maxPayloadSize]
+ * @property {number} [rateLimitPerMinute]
+ */
+
+/**
  * Parses and normalizes Actor input options with sensible defaults.
  *
- * @param {Object} options - Raw input options from Actor.getInput()
- * @returns {Object} Normalized configuration object
+ * @param {WebhookConfig} options - Raw input options from Actor.getInput()
+ * @returns {WebhookConfig} Normalized configuration object
  */
 export function parseWebhookOptions(options = {}) {
   return {

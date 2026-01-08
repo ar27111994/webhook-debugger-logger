@@ -22,17 +22,21 @@ const SCRIPT_EXECUTION_TIMEOUT_MS = 1000;
  * @property {string} timestamp
  * @property {string} webhookId
  * @property {string} method
- * @property {Object.<string, string>} headers
+ * @property {Object.<string, string | string[] | undefined>} headers
  * @property {Object.<string, any>} query
  * @property {string|Object} body
  * @property {string} contentType
- * @property {number} size
+ * @property {number | undefined} size
  * @property {number} statusCode
  * @property {string|Object} [responseBody]
  * @property {Object.<string, string>} [responseHeaders]
  * @property {number} processingTime
- * @property {string} remoteIp
- * @property {string} [userAgent]
+ * @property {string | undefined} remoteIp
+ * @property {string | undefined} [userAgent]
+ */
+
+/**
+ * @typedef {import('./utils/config.js').WebhookConfig} LoggerOptions
  */
 
 /**
@@ -40,12 +44,13 @@ const SCRIPT_EXECUTION_TIMEOUT_MS = 1000;
  *
  * @param {import("express").Request} req
  * @param {string} webhookId
- * @param {Object} options
+ * @param {LoggerOptions} options
  * @param {import("./webhook_manager.js").WebhookManager} webhookManager
  * @returns {{ isValid: boolean, statusCode?: number, error?: string, remoteIp?: string, contentLength?: number, received?: number }}
  */
 function validateWebhookRequest(req, webhookId, options, webhookManager) {
-  const { authKey, allowedIps } = options;
+  const authKey = options.authKey || "";
+  const allowedIps = options.allowedIps || [];
 
   // 1. Basic ID Validation
   if (!webhookManager.isValid(webhookId)) {
@@ -59,7 +64,7 @@ function validateWebhookRequest(req, webhookId, options, webhookManager) {
   // 2. IP Whitelisting
   const remoteIp = req.ip || req.socket.remoteAddress;
   if (allowedIps.length > 0) {
-    const isAllowed = ipRangeCheck(remoteIp, allowedIps);
+    const isAllowed = ipRangeCheck(remoteIp || "", allowedIps);
     if (!isAllowed) {
       return {
         isValid: false,
@@ -71,18 +76,21 @@ function validateWebhookRequest(req, webhookId, options, webhookManager) {
   }
 
   // 3. Authentication Check
-  const { isValid: isAuthValid, error: authError } = validateAuth(req, authKey);
-  if (!isAuthValid) {
+  const authResult = /** @type {{isValid: boolean; error?: string}} */ (
+    validateAuth(req, authKey)
+  );
+  if (!authResult.isValid) {
     return {
       isValid: false,
       statusCode: 401,
-      error: authError,
+      error: authResult.error,
     };
   }
 
   // 4. Payload size check
   const contentLength = parseInt(req.headers["content-length"] || "0");
-  if (contentLength > options.maxPayloadSize) {
+  const maxSize = options.maxPayloadSize || 1048576; // 1MB default
+  if (contentLength > maxSize) {
     return {
       isValid: false,
       statusCode: 413,
@@ -98,8 +106,8 @@ function validateWebhookRequest(req, webhookId, options, webhookManager) {
  * Prepares the request body, validates JSON schema, and masks headers.
  *
  * @param {import("express").Request} req
- * @param {Object} options
- * @param {import("ajv").ValidateFunction} validate
+ * @param {LoggerOptions} options
+ * @param {import("ajv").ValidateFunction | null} validate
  * @returns {{ loggedBody: string, loggedHeaders: Object, contentType: string }}
  */
 function prepareRequestData(req, options, validate) {
@@ -171,7 +179,7 @@ function prepareRequestData(req, options, validate) {
  *
  * @param {WebhookEvent} event
  * @param {import("express").Request} req
- * @param {vm.Script} compiledScript
+ * @param {vm.Script | null} compiledScript
  */
 function transformRequestData(event, req, compiledScript) {
   if (compiledScript) {
@@ -181,9 +189,13 @@ function transformRequestData(event, req, compiledScript) {
         timeout: SCRIPT_EXECUTION_TIMEOUT_MS,
       });
     } catch (err) {
+      const errorMessage = /** @type {Error} */ (err).message;
+      const isTimeout = errorMessage?.includes("Script execution timed out");
       console.error(
         `[SCRIPT-EXEC-ERROR] Failed to run custom script for ${event.webhookId}:`,
-        err.message,
+        isTimeout
+          ? `Script execution timed out after ${SCRIPT_EXECUTION_TIMEOUT_MS}ms`
+          : errorMessage,
       );
     }
   }
@@ -194,7 +206,7 @@ function transformRequestData(event, req, compiledScript) {
  *
  * @param {import("express").Response} res
  * @param {WebhookEvent} event
- * @param {Object} options
+ * @param {LoggerOptions} options
  */
 function sendResponse(res, event, options) {
   const { defaultResponseBody, defaultResponseHeaders } = options;
@@ -232,7 +244,7 @@ function sendResponse(res, event, options) {
  *
  * @param {WebhookEvent} event
  * @param {import("express").Request} req
- * @param {Object} options
+ * @param {LoggerOptions} options
  * @param {Function} onEvent
  */
 async function executeBackgroundTasks(event, req, options, onEvent) {
@@ -274,7 +286,7 @@ async function executeBackgroundTasks(event, req, options, onEvent) {
             ];
 
             const forwardingHeaders =
-              options.forwardHeaders !== false
+              /** @type {unknown} */ (options.forwardHeaders) !== false
                 ? Object.fromEntries(
                     Object.entries(req.headers).filter(
                       ([key]) => !sensitiveHeaders.includes(key.toLowerCase()),
@@ -295,6 +307,8 @@ async function executeBackgroundTasks(event, req, options, onEvent) {
             });
             success = true;
           } catch (err) {
+            const axiosError =
+              /** @type {{code?: string; message?: string}} */ (err);
             const transientErrors = [
               "ECONNABORTED",
               "ECONNRESET",
@@ -303,12 +317,14 @@ async function executeBackgroundTasks(event, req, options, onEvent) {
               "EHOSTUNREACH",
               "EAI_AGAIN",
             ];
-            const isTransient = transientErrors.includes(err.code);
+            const isTransient = transientErrors.includes(axiosError.code || "");
             const delay = 1000 * Math.pow(2, attempt - 1);
 
             console.error(
               `[FORWARD-ERROR] Attempt ${attempt}/${MAX_FORWARD_RETRIES} failed for ${validatedUrl}:`,
-              err.code === "ECONNABORTED" ? "Timed out" : err.message,
+              axiosError.code === "ECONNABORTED"
+                ? "Timed out"
+                : axiosError.message,
             );
 
             if (attempt >= MAX_FORWARD_RETRIES || !isTransient) {
@@ -321,14 +337,16 @@ async function executeBackgroundTasks(event, req, options, onEvent) {
                   type: "forward_error",
                   body: `Forwarding to ${validatedUrl} failed${
                     !isTransient ? " (Non-transient error)" : ""
-                  } after ${attempt} attempts. Last error: ${err.message}`,
+                  } after ${attempt} attempts. Last error: ${
+                    axiosError.message
+                  }`,
                   statusCode: 500,
                   originalEventId: event.id,
                 });
               } catch (pushErr) {
                 console.error(
                   "[CRITICAL] Failed to log forward error:",
-                  pushErr.message,
+                  /** @type {Error} */ (pushErr).message,
                 );
               }
               break; // Stop retrying
@@ -342,17 +360,18 @@ async function executeBackgroundTasks(event, req, options, onEvent) {
       await forwardingPromise;
     }
   } catch (error) {
+    const errorMessage = /** @type {Error} */ (error).message;
     const isPlatformError =
-      error.message &&
-      (error.message.includes("Dataset") ||
-        error.message.includes("quota") ||
-        error.message.includes("limit"));
+      errorMessage &&
+      (errorMessage.includes("Dataset") ||
+        errorMessage.includes("quota") ||
+        errorMessage.includes("limit"));
 
     console.error(
       `[CRITICAL] ${
         isPlatformError ? "PLATFORM-LIMIT" : "BACKGROUND-ERROR"
       } for ${event.webhookId}:`,
-      error.message,
+      errorMessage,
     );
 
     if (isPlatformError) {
@@ -379,10 +398,16 @@ async function executeBackgroundTasks(event, req, options, onEvent) {
  * @returns {LoggerMiddleware & { updateOptions: Function }}
  */
 export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
+  /** @type {LoggerOptions | undefined} */
   let options; // Initialized as undefined to trigger initial compilation
-  let compiledScript;
-  let validate;
+  /** @type {vm.Script | null} */
+  let compiledScript = null;
+  /** @type {import("ajv").ValidateFunction | null} */
+  let validate = null;
 
+  /**
+   * @param {LoggerOptions} newOptions
+   */
   const refreshCompilations = (newOptions) => {
     // 1. Smart script re-compilation
     if (!options || newOptions.customScript !== options.customScript) {
@@ -391,7 +416,10 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
           compiledScript = new vm.Script(newOptions.customScript);
           console.log("[SYSTEM] Custom script re-compiled successfully.");
         } catch (err) {
-          console.error("[SCRIPT-ERROR] Invalid Custom Script:", err.message);
+          console.error(
+            "[SCRIPT-ERROR] Invalid Custom Script:",
+            /** @type {Error} */ (err).message,
+          );
         }
       } else {
         compiledScript = null;
@@ -418,7 +446,10 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
           validate = ajv.compile(schema);
           console.log("[SYSTEM] JSON Schema re-compiled successfully.");
         } catch (err) {
-          console.error("[SCHEMA-ERROR] Invalid JSON Schema:", err.message);
+          console.error(
+            "[SCHEMA-ERROR] Invalid JSON Schema:",
+            /** @type {Error} */ (err).message,
+          );
         }
       } else {
         validate = null;
@@ -431,6 +462,10 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
   refreshCompilations(initialOptions);
   options = initialOptions;
 
+  /**
+   * @param {import("express").Request} req
+   * @param {import("express").Response} res
+   */
   const middleware = async (req, res) => {
     const startTime = Date.now();
     const webhookId = req.params.id;
@@ -463,7 +498,7 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
       webhookManager,
     );
     if (!validation.isValid) {
-      return res.status(validation.statusCode).json({
+      return res.status(validation.statusCode || 400).json({
         error: validation.error,
         ip: validation.remoteIp,
         received: validation.received,
@@ -481,30 +516,38 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
       );
 
       // 3. Transform
+      /** @type {WebhookEvent} */
       const event = {
         id: nanoid(10),
         timestamp: new Date().toISOString(),
         webhookId,
         method: req.method,
-        headers: loggedHeaders,
+        headers: /** @type {Object.<string, string | string[] | undefined>} */ (
+          loggedHeaders
+        ),
         query: req.query,
         body: loggedBody,
         contentType,
         size: validation.contentLength,
-        statusCode: req.forcedStatus || mergedOptions.defaultResponseCode,
+        statusCode: /** @type {number} */ (
+          /** @type {any} */ (req).forcedStatus ||
+            mergedOptions.defaultResponseCode ||
+            200
+        ),
         responseBody: undefined, // Custom scripts can set this
         responseHeaders: {}, // Custom scripts can add headers
         processingTime: 0,
         remoteIp: validation.remoteIp,
-        userAgent: req.headers["user-agent"],
+        userAgent: req.headers["user-agent"]?.toString(),
       };
 
       transformRequestData(event, req, compiledScript);
 
       // 4. Orchestration: Respond synchronous-ish, then race background tasks
-      if (mergedOptions.responseDelayMs > 0) {
+      const delayMs = mergedOptions.responseDelayMs || 0;
+      if (delayMs > 0) {
         await new Promise((resolve) =>
-          setTimeout(resolve, Math.min(mergedOptions.responseDelayMs, 10000)),
+          setTimeout(resolve, Math.min(delayMs, 10000)),
         );
       }
 
@@ -518,7 +561,7 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
         } catch (err) {
           console.error(
             `[CRITICAL] Background tasks for ${event.id} failed:`,
-            err.message,
+            /** @type {Error} */ (err).message,
           );
         }
       };
@@ -530,33 +573,44 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
           : BACKGROUND_TASK_TIMEOUT_PROD;
       await Promise.race([
         backgroundPromise(),
-        new Promise((resolve) => {
-          const t = setTimeout(() => {
-            if (process.env.NODE_ENV !== "test") {
-              const readableTimeout =
-                timeoutMs < 1000 ? `${timeoutMs}ms` : `${timeoutMs / 1000}s`;
-              console.warn(
-                `[TIMEOUT] Background tasks for ${event.id} exceeded ${readableTimeout}. Continuing...`,
-              );
-            }
-            resolve();
-          }, timeoutMs);
-          if (t.unref) t.unref();
-        }),
+        /** @type {Promise<void>} */
+        (
+          new Promise((resolve) => {
+            const t = setTimeout(() => {
+              if (process.env.NODE_ENV !== "test") {
+                const readableTimeout =
+                  timeoutMs < 1000 ? `${timeoutMs}ms` : `${timeoutMs / 1000}s`;
+                console.warn(
+                  `[TIMEOUT] Background tasks for ${event.id} exceeded ${readableTimeout}. Continuing...`,
+                );
+              }
+              resolve();
+            }, timeoutMs);
+            if (t.unref) t.unref();
+          })
+        ),
       ]);
     } catch (err) {
-      if (err.statusCode) {
-        return res.status(err.statusCode).json({
-          error: err.error,
-          details: err.details,
+      const middlewareError =
+        /** @type {{statusCode?: number; error?: string; details?: unknown; message?: string}} */ (
+          err
+        );
+      if (middlewareError.statusCode) {
+        return res.status(middlewareError.statusCode).json({
+          error: middlewareError.error,
+          details: middlewareError.details,
         });
       }
-      console.error("[CRITICAL] Internal Middleware Error:", err.message);
+      console.error(
+        "[CRITICAL] Internal Middleware Error:",
+        middlewareError.message,
+      );
       res.status(500).json({ error: "Internal Server Error" });
     }
   };
 
   // Add hot-reload capability
+  /** @param {Object} newRawOptions */
   middleware.updateOptions = (newRawOptions) => {
     const newOptions = parseWebhookOptions(newRawOptions);
     refreshCompilations(newOptions);

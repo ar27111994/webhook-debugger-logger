@@ -10,7 +10,9 @@ const { Actor } = await import("apify");
 const { WebhookManager } = await import("../src/webhook_manager.js");
 
 describe("WebhookManager", () => {
+  /** @type {import('../src/webhook_manager.js').WebhookManager} */
   let webhookManager;
+  /** @type {any} */
   let mockKvStore;
 
   beforeEach(() => {
@@ -18,8 +20,9 @@ describe("WebhookManager", () => {
       getValue: jest.fn(),
       setValue: jest.fn(),
     };
-    // @ts-ignore
-    jest.mocked(Actor.openKeyValueStore).mockResolvedValue(mockKvStore);
+    jest
+      .mocked(Actor.openKeyValueStore)
+      .mockResolvedValue(/** @type {any} */ (mockKvStore));
     webhookManager = new WebhookManager();
   });
 

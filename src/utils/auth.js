@@ -3,9 +3,9 @@ import { timingSafeEqual } from "crypto";
 /**
  * Validates the authentication key from query or headers.
  *
- * @param {Object} req - Express request object
+ * @param {import('express').Request} req - Express request object
  * @param {string} authKey - The configured authentication key
- * @returns {Object} Validation result { isValid: boolean, error?: string }
+ * @returns {{ isValid: boolean, error?: string }} Validation result { isValid: boolean, error?: string }
  */
 export function validateAuth(req, authKey) {
   if (!authKey) {
@@ -20,7 +20,7 @@ export function validateAuth(req, authKey) {
     providedKey = authHeader.substring(7).trim();
   } else if (req.query.key) {
     // 2. Fallback to query param (Deprecated/Riskier)
-    providedKey = req.query.key;
+    providedKey = /** @type {string} */ (req.query.key);
     console.warn(
       "[SECURITY] API key provided in query string. Use Authorization header instead.",
     );

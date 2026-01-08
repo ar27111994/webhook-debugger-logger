@@ -19,6 +19,7 @@ const { Actor } = await import("apify");
 const { initialize, shutdown, webhookManager } = await import("../src/main.js");
 
 describe("Hot-Reloading Configuration Tests", () => {
+  /** @type {import('express').Express} */
   let app;
 
   beforeAll(async () => {
@@ -28,7 +29,7 @@ describe("Hot-Reloading Configuration Tests", () => {
       urlCount: 1,
       retentionHours: 1,
     });
-    app = await initialize();
+    app = /** @type {import('express').Express} */ (await initialize());
   });
 
   afterAll(async () => {
@@ -43,8 +44,7 @@ describe("Hot-Reloading Configuration Tests", () => {
     expect(res1.statusCode).toBe(200);
 
     // Update to new key
-    // @ts-ignore
-    await Actor.emitInput({
+    await /** @type {any} */ (Actor).emitInput({
       authKey: "new-super-secret",
       urlCount: 1,
       retentionHours: 1,
@@ -68,8 +68,7 @@ describe("Hot-Reloading Configuration Tests", () => {
     expect(initialActive).toBe(1);
 
     // Scale up to 3
-    // @ts-ignore
-    await Actor.emitInput({
+    await /** @type {any} */ (Actor).emitInput({
       authKey: "new-super-secret",
       urlCount: 3,
       retentionHours: 1,
@@ -91,8 +90,7 @@ describe("Hot-Reloading Configuration Tests", () => {
     expect(res1.text).toBe("OK");
 
     // 2. Add custom script via hot-reload
-    // @ts-ignore
-    await Actor.emitInput({
+    await /** @type {any} */ (Actor).emitInput({
       authKey: "new-super-secret",
       urlCount: 3,
       retentionHours: 1,
@@ -114,8 +112,7 @@ describe("Hot-Reloading Configuration Tests", () => {
       .spyOn(console, "error")
       .mockImplementation(() => {});
 
-    // @ts-ignore
-    await Actor.emitInput({
+    await /** @type {any} */ (Actor).emitInput({
       jsonSchema: "{ invalid json: }", // Malformed
     });
 
@@ -129,7 +126,7 @@ describe("Hot-Reloading Configuration Tests", () => {
     // Verify app is still responsive
     const res = await request(app)
       .get("/info")
-      .set("Authorization", "Bearer last-key");
+      .set("Authorization", "Bearer new-super-secret");
 
     // Ensure we got a response (not a connection refused/crash)
     expect(res.statusCode).toBeDefined();

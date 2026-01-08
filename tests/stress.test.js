@@ -16,6 +16,7 @@ const { app, webhookManager, initialize, shutdown } =
   await import("../src/main.js");
 
 describe("Stress Tests", () => {
+  /** @type {string} */
   let webhookId;
 
   beforeAll(async () => {

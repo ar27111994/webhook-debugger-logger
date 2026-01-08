@@ -19,6 +19,7 @@ const { app, webhookManager, initialize, shutdown } =
 const { Actor } = await import("apify");
 
 describe("Edge Case Tests", () => {
+  /** @type {string} */
   let webhookId;
 
   beforeAll(async () => {
@@ -67,10 +68,12 @@ describe("Edge Case Tests", () => {
     expect(res.text).toBe("OK");
 
     // Check if it was saved as string
-    const lastCall = jest.mocked(Actor.pushData).mock.calls[
-      jest.mocked(Actor.pushData).mock.calls.length - 1
-    ][0];
-    // @ts-ignore
+    /** @type {{body: unknown}} */
+    const lastCall = /** @type {any} */ (
+      jest.mocked(Actor.pushData).mock.calls[
+        jest.mocked(Actor.pushData).mock.calls.length - 1
+      ][0]
+    );
     expect(typeof lastCall.body).toBe("string");
   });
 
@@ -81,10 +84,13 @@ describe("Edge Case Tests", () => {
 
     // Set a very high delay directly in the Map
     const data = webhookManager.getWebhookData(slowWebhookId);
-    webhookManager.webhooks.set(slowWebhookId, {
-      ...data,
-      responseDelayMs: 15000,
-    });
+    webhookManager.webhooks.set(
+      slowWebhookId,
+      /** @type {any} */ ({
+        ...data,
+        responseDelayMs: 15000,
+      }),
+    );
 
     const startTime = Date.now();
     const res = await request(app)

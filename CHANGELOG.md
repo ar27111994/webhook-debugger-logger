@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [2.7.1] - 2026-01-08
 
-### Improved
+### Improved (2.7.1)
 
 - **Quality Assurance**: Achieved >90% test coverage for Lines/Statements and implemented strict type checking across the entire test suite.
 - **Reliability**: Hardened forwarding retry logic and platform limit handling with comprehensive new test cases.
@@ -12,7 +12,7 @@ All notable changes to this project will be documented in this file.
 
 ## [2.7.0] - 2025-12-31
 
-### Added
+### Added (2.7.0)
 
 - **Dynamic Infrastructure Scaling & Hot-Reloading**:
   - Implemented **Actor Hot-Reloading**: Configuration changes (Auth Keys, Allowed IPs, Scripts, Schemas) now apply in real-time via `Actor.on('input')` without Actor restarts.
@@ -32,7 +32,7 @@ All notable changes to this project will be documented in this file.
   - **Documentation Playbooks**: Added new guides for `Revenue Recovery`, `Low-Code Bridge`, and `Legacy Migration`.
   - **Example Saturation**: Added 3+ comprehensive end-to-end input/output examples to satisfying Apify Quality Score requirements.
 
-### Improved
+### Improved (2.7.0)
 
 - **Auth Security**: Eliminated all `authKey` leakage by removing automatic query parameter propagation in management links and API responses.
 - **Replay Accuracy**: Prioritized nanoid `id` over timestamps in event lookup to eliminate collisions during high-concurrency replays.
@@ -44,14 +44,14 @@ All notable changes to this project will be documented in this file.
 
 ## [2.6.0] - 2025-12-27
 
-### Added
+### Added (2.6.0)
 
 - **Management Rate Limiting**: Implemented a memory-efficient rate limiter for `/info`, `/logs`, and `/replay` endpoints to prevent brute-force attacks on API keys.
 - **Sensitive Data Masking**: Added opt-in masking for sensitive headers (Authorization, Cookie, etc.) in captured logs to enhance user privacy.
 - **Resource Offloading**: Dataset schemas and processing have been optimized for better platform performance.
 - **Detailed Log Views**: Added "Full Payloads" view to the Apify Dataset for easier inspection of headers and bodies in the console.
 
-### Improved
+### Improved (2.6.0)
 
 - **SSE Scalability**: Refactored Server-Sent Events to use a high-performance global heartbeat mechanism, significantly reducing memory overhead per concurrent listener.
 - **Input Schema Quality**: Added detailed tooltips, grouping, and prefill examples for all v2.0+ features.
@@ -64,35 +64,35 @@ All notable changes to this project will be documented in this file.
 - **Test & Exit**: Added a hidden `testAndExit` input to allow automated health checks to complete and exit cleanly.
 - **Readiness Probes**: Implemented explicit handling for Apify's `x-apify-container-server-readiness-probe` header in the root endpoint.
 
-### Fixed
+### Fixed (2.5.0)
 
 - Resolved "Under maintenance" flag by ensuring the Actor does not timeout during automated platform tests.
 - Improved version consistency across all project manifest files.
 
 ## [2.4.2] - 2025-12-22
 
-### Added
+### Added (2.4.2)
 
 - **Stress Testing**: Added a comprehensive stress test suite to verify the system's stability under high load.
 - **Documentation**: Added missing Pricing, FAQ, Support, Security & Permissions, and Privacy sections to `README.md`.
 - **Schema Quality**: Populated `dataset_schema.json` with concrete example values for all fields.
 - **Reliability**: Implemented retry logic with exponential backoff (3 attempts) for both HTTP Forwarding and the `/replay` API.
 
-### Fixed
+### Fixed (2.4.2)
 
 - **Stress Testing**: Fixed a memory leak in the stress test suite.
 - **Stress Testing**: Fixed a timeout issue in the stress test suite.
 
 ## [2.4.1] - 2025-12-22
 
-### Fixed
+### Fixed (2.4.1)
 
 - **ESM Compatibility**: Fixed `eventsource` import in `demo_cli.js` to support latest named exports.
 - **Version Sync**: Synchronized project version across all manifests.
 
 ## [2.4.0] - 2025-12-22
 
-### Added
+### Added (2.4.0)
 
 - **Comprehensive Test Suite**: 15+ Automated tests covering unit, integration, and E2E scenarios.
 - **Testing Framework**: Integrated Jest and Supertest with full ESM/VM support.
@@ -100,7 +100,7 @@ All notable changes to this project will be documented in this file.
 
 ## [2.3.1] - 2025-12-22
 
-### Fixed
+### Fixed (2.3.1)
 
 - **Edge Case Hardening**: Added input sanitization and hard-caps for `/logs` API.
 - **Safety**: Added object validation for custom response headers to prevent runtime crashes.
@@ -108,7 +108,7 @@ All notable changes to this project will be documented in this file.
 
 ## [2.3.0] - 2025-12-22
 
-### Added
+### Added (2.3.0)
 
 - **v2.2 Comprehensive Robustness Update**:
   - Global Express error handling to catch malformed bodies and unhandled exceptions.
@@ -119,20 +119,20 @@ All notable changes to this project will be documented in this file.
 
 ## [2.1.1] - 2025-12-22
 
-### Fixed
+### Fixed (2.1.1)
 
 - **Hotfix**: Added missing `editor` fields to `input_schema.json` to resolve Apify platform validation errors.
 
 ## [2.1.0] - 2025-12-22
 
-### Added
+### Added (2.1.0)
 
 - **v2.1 Custom Scripting**: Allow users to provide JavaScript snippets for advanced data transformation before logging.
 - Prepared submission for the $1M Challenge with a unified enterprise feature set.
 
 ## [2.0.0] - 2025-12-21
 
-### Added
+### Added (2.0.0)
 
 - **v2.0 Enterprise Features**:
   - **Security**: CIDR IP Whitelisting and API Key/Bearer Auth support.
@@ -143,14 +143,14 @@ All notable changes to this project will be documented in this file.
   - **Validation**: JSON Schema validation with professional error reporting.
 - New "Enterprise" sections in input schema for easier configuration.
 
-### Improved
+### Improved (2.0.0)
 
 - Middleware refactored into a high-performance pipeline.
 - Upgraded dependencies: `ajv` for validation and `ip-range-check` for security.
 
 ## [1.1.0] - 2025-12-21
 
-### Added
+### Added (1.1.0)
 
 - Narrated walkthrough video integrated into README for Quality Score boost.
 - 5+ comprehensive FAQs added to documentation.
@@ -158,7 +158,7 @@ All notable changes to this project will be documented in this file.
 - Example values added to Dataset Schema for improved platform documentation.
 - Developer Support Guarantee (24h response time) added.
 
-### Improved
+### Improved (1.1.0)
 
 - Input Schema sections and tooltips polished for better UX.
 - [CRITICAL] Safety checks added to logging middleware to prevent data loss.
@@ -166,7 +166,7 @@ All notable changes to this project will be documented in this file.
 
 ## [1.0.0] - 2025-12-20
 
-### Added
+### Added (1.0.0)
 
 - Initial release of Webhook Debugger & Logger.
 - Standby mode support for sub-10ms response times.

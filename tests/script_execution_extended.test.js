@@ -16,14 +16,16 @@ const { createLoggerMiddleware } = await import("../src/logger_middleware.js");
 const httpMocks = (await import("node-mocks-http")).default;
 
 describe("Script Execution Extended", () => {
+  /** @type {import('../src/webhook_manager.js').WebhookManager} */
   let webhookManager;
+  /** @type {jest.Mock} */
   let onEvent;
 
   beforeEach(() => {
-    webhookManager = {
+    webhookManager = /** @type {any} */ ({
       isValid: jest.fn().mockReturnValue(true),
       getWebhookData: jest.fn().mockReturnValue({}),
-    };
+    });
     onEvent = jest.fn();
   });
 
@@ -50,7 +52,7 @@ describe("Script Execution Extended", () => {
 
     expect(consoleErrorSpy).toHaveBeenCalledWith(
       expect.stringContaining("[SCRIPT-EXEC-ERROR]"),
-      expect.stringContaining("Script execution timed out"),
+      expect.stringContaining("Script execution timed out after"),
     );
     consoleErrorSpy.mockRestore();
   });

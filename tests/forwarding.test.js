@@ -16,15 +16,18 @@ const axios = (await import("axios")).default;
 const { Actor } = await import("apify");
 
 describe("Forwarding Security", () => {
+  /** @type {import('../src/webhook_manager.js').WebhookManager} */
   let webhookManager;
+  /** @type {import('../src/logger_middleware.js').LoggerOptions} */
   let options;
+  /** @type {jest.Mock} */
   let onEvent;
 
   beforeEach(() => {
-    webhookManager = {
+    webhookManager = /** @type {any} */ ({
       isValid: jest.fn().mockReturnValue(true),
       getWebhookData: jest.fn().mockReturnValue({}),
-    };
+    });
     onEvent = jest.fn();
     options = {
       forwardUrl: "http://target.com/ingest",
@@ -51,9 +54,11 @@ describe("Forwarding Security", () => {
 
     await middleware(req, res);
 
+    /** @type {any} */
     const axiosCall = jest.mocked(axios.post).mock.calls[0];
     expect(axiosCall).toBeDefined();
 
+    /** @type {Object.<string, string>} */
     const sentHeaders = axiosCall[2].headers;
     expect(sentHeaders["authorization"]).toBeUndefined();
     expect(sentHeaders["cookie"]).toBeUndefined();
@@ -80,7 +85,9 @@ describe("Forwarding Security", () => {
 
     await middleware(req, res);
 
+    /** @type {any} */
     const axiosCall = jest.mocked(axios.post).mock.calls[0];
+    /** @type {Object.<string, string>} */
     const sentHeaders = axiosCall[2].headers;
 
     expect(sentHeaders["content-type"]).toBe("application/json");
@@ -210,6 +217,10 @@ describe("Forwarding Security", () => {
 
   describe("Platform Limits Handling", () => {
     test("should catch and log platform limit errors", async () => {
+      const consoleErrorSpy = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
+
       // Logic that triggers Actor.pushData failure
       jest
         .mocked(Actor.pushData)
@@ -230,8 +241,11 @@ describe("Forwarding Security", () => {
       // Should not throw
       await middleware(req, res);
 
-      // We can't easily assert console.error / warn unless spied
-      // But coverage will be satisfied if logic executes
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining("PLATFORM-LIMIT"),
+        expect.stringContaining("Dataset quota exceeded"),
+      );
+      consoleErrorSpy.mockRestore();
     });
   });
 });

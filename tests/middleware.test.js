@@ -14,15 +14,18 @@ const { createLoggerMiddleware } = await import("../src/logger_middleware.js");
 const httpMocks = (await import("node-mocks-http")).default;
 
 describe("Logger Middleware", () => {
+  /** @type {import('../src/webhook_manager.js').WebhookManager} */
   let webhookManager;
+  /** @type {import('../src/logger_middleware.js').LoggerOptions} */
   let options;
+  /** @type {jest.Mock} */
   let onEvent;
 
   beforeEach(() => {
-    webhookManager = {
+    webhookManager = /** @type {any} */ ({
       isValid: jest.fn().mockReturnValue(true),
       getWebhookData: jest.fn().mockReturnValue({}),
-    };
+    });
     onEvent = jest.fn();
     options = {
       maxPayloadSize: 1024,
@@ -32,7 +35,7 @@ describe("Logger Middleware", () => {
   });
 
   test("should block invalid webhook ID", async () => {
-    webhookManager.isValid.mockReturnValue(false);
+    /** @type {jest.Mock} */ (webhookManager.isValid).mockReturnValue(false);
     const middleware = createLoggerMiddleware(webhookManager, options, onEvent);
     const req = httpMocks.createRequest({ params: { id: "invalid" } });
     const res = httpMocks.createResponse();
@@ -106,8 +109,7 @@ describe("Logger Middleware", () => {
     const req = httpMocks.createRequest({
       params: { id: "wh_123" },
       query: { key: "secret" }, // Bypass Auth
-      // @ts-ignore
-      body: "original",
+      body: /** @type {any} */ ("original"),
     });
     const res = httpMocks.createResponse();
 
@@ -116,7 +118,7 @@ describe("Logger Middleware", () => {
 
     // The middleware ends by calling res.send/json after onEvent
     // We check the event passed to onEvent
-    const event = onEvent.mock.calls[0][0];
+    const event = /** @type {any} */ (onEvent.mock.calls[0][0]);
     expect(event.body).toBe("TRANSFORMED");
   });
 });

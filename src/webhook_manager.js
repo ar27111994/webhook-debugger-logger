@@ -3,7 +3,9 @@ import { nanoid } from "nanoid";
 
 export class WebhookManager {
   constructor() {
+    /** @type {Map<string, {expiresAt: string}>} */
     this.webhooks = new Map();
+    /** @type {import('apify').KeyValueStore | null} */
     this.kvStore = null;
     this.STATE_KEY = "WEBHOOK_STATE";
   }
@@ -21,7 +23,7 @@ export class WebhookManager {
     } catch (error) {
       console.error(
         "[CRITICAL] Failed to initialize WebhookManager state:",
-        error.message,
+        /** @type {Error} */ (error).message,
       );
       // Fallback to empty map is already handled by constructor
     }
@@ -30,15 +32,23 @@ export class WebhookManager {
   async persist() {
     try {
       const state = Object.fromEntries(this.webhooks);
-      await this.kvStore.setValue(this.STATE_KEY, state);
+      if (this.kvStore) {
+        await this.kvStore.setValue(this.STATE_KEY, state);
+      }
     } catch (error) {
       console.error(
         "[STORAGE-ERROR] Failed to persist webhook state:",
-        error.message,
+        /** @type {Error} */ (error).message,
       );
     }
   }
 
+  /**
+   * Generates new webhooks.
+   * @param {number} count Number of webhooks to generate
+   * @param {number} retentionHours Retention period in hours
+   * @returns {Promise<string[]>} List of generated IDs
+   */
   async generateWebhooks(count, retentionHours) {
     const expiresAt = new Date(
       Date.now() + retentionHours * 60 * 60 * 1000,
@@ -55,6 +65,11 @@ export class WebhookManager {
     return newIds;
   }
 
+  /**
+   * Checks if a webhook ID is valid and not expired.
+   * @param {string} id Webhook ID
+   * @returns {boolean} True if valid
+   */
   isValid(id) {
     const webhook = this.webhooks.get(id);
     if (!webhook) return false;
@@ -80,6 +95,11 @@ export class WebhookManager {
     }
   }
 
+  /**
+   * Retrieves data for a webhook.
+   * @param {string} id Webhook ID
+   * @returns {{expiresAt: string} | undefined} Webhook data
+   */
   getWebhookData(id) {
     return this.webhooks.get(id);
   }
@@ -91,6 +111,10 @@ export class WebhookManager {
     }));
   }
 
+  /**
+   * Updates retention for all active webhooks.
+   * @param {number} retentionHours New retention period in hours
+   */
   async updateRetention(retentionHours) {
     const now = Date.now();
     const newExpiresAt = new Date(

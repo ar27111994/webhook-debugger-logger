@@ -19,6 +19,7 @@ const { app, webhookManager, initialize, shutdown } =
 const { Actor } = await import("apify");
 
 describe("Concurrency Tests", () => {
+  /** @type {string} */
   let webhookId;
 
   beforeAll(async () => {

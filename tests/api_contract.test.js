@@ -18,13 +18,13 @@ jest.unstable_mockModule("axios", async () => {
   return { default: axiosMock };
 });
 
-// @ts-ignore
 const request = (await import("supertest")).default;
 const { app, initialize, shutdown, webhookManager } =
   await import("../src/main.js");
 const { Actor } = await import("apify");
 
 describe("API Contract & Regression Tests", () => {
+  /** @type {string} */
   let webhookId;
 
   beforeAll(async () => {
@@ -48,13 +48,15 @@ describe("API Contract & Regression Tests", () => {
       const body = res.body;
 
       // Top-level
-      expect(body.version).toBe("2.7.0");
+      expect(body.version).toBe("2.7.1");
       expect(body.status).toBe("Enterprise Suite Online");
 
       // System block
       expect(body.system).toBeDefined();
       expect(body.system.authActive).toBe(true);
-      const activeIds = body.system.activeWebhooks.map((w) => w.id);
+      const activeIds = body.system.activeWebhooks.map(
+        (/** @type {{id: string}} */ w) => w.id,
+      );
       expect(activeIds).toContain(webhookId);
       expect(body.system.webhookCount).toBeGreaterThanOrEqual(1);
 
@@ -97,10 +99,11 @@ describe("API Contract & Regression Tests", () => {
         },
       ];
 
-      jest.mocked(Actor.openDataset).mockResolvedValue({
-        // @ts-ignore
-        getData: jest.fn().mockResolvedValue({ items: mockItems }),
-      });
+      jest.mocked(Actor.openDataset).mockResolvedValue(
+        /** @type {any} */ ({
+          getData: jest.fn(async () => ({ items: mockItems })),
+        }),
+      );
 
       const res = await request(app)
         .get("/logs")
@@ -119,13 +122,10 @@ describe("API Contract & Regression Tests", () => {
     });
 
     test("should fetch with limit * 5 when filters are present", async () => {
-      // @ts-ignore
-      const getDataMock = jest.fn().mockResolvedValue({ items: [] });
-      // @ts-ignore
+      const getDataMock = jest.fn(async () => ({ items: [] }));
       jest
         .mocked(Actor.openDataset)
-        // @ts-ignore
-        .mockResolvedValue({ getData: getDataMock });
+        .mockResolvedValue(/** @type {any} */ ({ getData: getDataMock }));
 
       await request(app)
         .get("/logs")
@@ -138,13 +138,10 @@ describe("API Contract & Regression Tests", () => {
     });
 
     test("should fetch with limit * 1 when NO filters are present", async () => {
-      // @ts-ignore
-      const getDataMock = jest.fn().mockResolvedValue({ items: [] });
-      // @ts-ignore
+      const getDataMock = jest.fn(async () => ({ items: [] }));
       jest
         .mocked(Actor.openDataset)
-        // @ts-ignore
-        .mockResolvedValue({ getData: getDataMock });
+        .mockResolvedValue(/** @type {any} */ ({ getData: getDataMock }));
 
       await request(app)
         .get("/logs")
@@ -186,10 +183,11 @@ describe("API Contract & Regression Tests", () => {
         },
       };
 
-      jest.mocked(Actor.openDataset).mockResolvedValue({
-        // @ts-ignore
-        getData: jest.fn().mockResolvedValue({ items: [mockItem] }),
-      });
+      jest.mocked(Actor.openDataset).mockResolvedValue(
+        /** @type {any} */ ({
+          getData: jest.fn(async () => ({ items: [mockItem] })),
+        }),
+      );
 
       const res = await request(app)
         .get(`/replay/${webhookId}/evt_strip`)
@@ -225,10 +223,11 @@ describe("API Contract & Regression Tests", () => {
         },
       ];
 
-      jest.mocked(Actor.openDataset).mockResolvedValue({
-        // @ts-ignore
-        getData: jest.fn().mockResolvedValue({ items: mockItems }),
-      });
+      jest.mocked(Actor.openDataset).mockResolvedValue(
+        /** @type {any} */ ({
+          getData: jest.fn(async () => ({ items: mockItems })),
+        }),
+      );
 
       // We request the FIRST one by its ID
       const res = await request(app)
@@ -238,8 +237,10 @@ describe("API Contract & Regression Tests", () => {
 
       expect(res.statusCode).toBe(200);
       const { default: axiosMock } = await import("axios");
-      // @ts-ignore
-      const lastCall = axiosMock.mock.calls[axiosMock.mock.calls.length - 1];
+      /** @type {any} */
+      const lastCall = /** @type {any} */ (axiosMock).mock.calls[
+        /** @type {any} */ (axiosMock).mock.calls.length - 1
+      ];
       expect(lastCall[0].data).toContain("i am the correct one");
 
       // We request the SECOND one by its ID (this would fail if we matched purely by timestamp first)
@@ -249,8 +250,10 @@ describe("API Contract & Regression Tests", () => {
         .set("Authorization", "Bearer test-secret");
 
       expect(res2.statusCode).toBe(200);
-      // @ts-ignore
-      const lastCall2 = axiosMock.mock.calls[axiosMock.mock.calls.length - 1];
+      /** @type {any} */
+      const lastCall2 = /** @type {any} */ (axiosMock).mock.calls[
+        /** @type {any} */ (axiosMock).mock.calls.length - 1
+      ];
       expect(lastCall2[0].data).toContain(
         "i am an interloper with same timestamp",
       );

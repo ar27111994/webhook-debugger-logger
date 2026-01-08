@@ -4,15 +4,15 @@ import { createApifyMock } from "./apify-mock.js";
 /**
  * Standard axios mock for mirroring internal behavior.
  */
-// @ts-ignore
+// @ts-expect-error - Mock typing limitation with @types/jest 30
 const axiosBase = jest.fn().mockResolvedValue({ status: 200, data: "OK" });
-// @ts-ignore
+// @ts-expect-error - Mock typing limitation with @types/jest 30
 axiosBase.post = jest.fn().mockResolvedValue({ status: 200, data: "OK" });
-// @ts-ignore
+// @ts-expect-error - Mock typing limitation with @types/jest 30
 axiosBase.get = jest.fn().mockResolvedValue({ status: 200, data: "OK" });
-// @ts-ignore
+// @ts-expect-error - Mock typing limitation with @types/jest 30
 axiosBase.delete = jest.fn().mockResolvedValue({ status: 200, data: "OK" });
-// @ts-ignore
+// @ts-expect-error - Mock typing limitation with @types/jest 30
 axiosBase.put = jest.fn().mockResolvedValue({ status: 200, data: "OK" });
 
 export const axiosMock = axiosBase;

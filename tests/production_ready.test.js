@@ -23,6 +23,7 @@ const { app, webhookManager, sseHeartbeat, initialize, shutdown } =
 const { Actor } = await import("apify");
 
 describe("Production Readiness Tests (v2.6.0)", () => {
+  /** @type {string} */
   let webhookId;
 
   beforeAll(async () => {
@@ -42,7 +43,10 @@ describe("Production Readiness Tests (v2.6.0)", () => {
     try {
       await shutdown("TEST_COMPLETE");
     } catch (e) {
-      console.warn("Cleanup shutdown failed:", e.message);
+      console.warn(
+        "Cleanup shutdown failed:",
+        /** @type {Error} */ (e).message,
+      );
     }
   });
 
@@ -83,26 +87,24 @@ describe("Production Readiness Tests (v2.6.0)", () => {
         .set("X-API-Key", "my-key")
         .send({ foo: "bar" });
 
-      const matchedCall = jest.mocked(Actor.pushData).mock.calls.find(
-        (call) =>
-          call[0] &&
-          // @ts-ignore
-          call[0].method === "POST" &&
-          // @ts-ignore
-          call[0].webhookId === webhookId,
+      /** @type {{method: string; webhookId: string; headers: Record<string, string>} | undefined} */
+      const matchedCall = /** @type {any} */ (
+        jest
+          .mocked(Actor.pushData)
+          .mock.calls.find(
+            (call) =>
+              call[0] &&
+              /** @type {any} */ (call[0]).method === "POST" &&
+              /** @type {any} */ (call[0]).webhookId === webhookId,
+          )?.[0]
       );
 
       expect(matchedCall).toBeDefined();
-      const lastPush = matchedCall[0];
 
-      // @ts-ignore
-      expect(lastPush.headers["authorization"]).toBe("[MASKED]");
-      // @ts-ignore
-      expect(lastPush.headers["cookie"]).toBe("[MASKED]");
-      // @ts-ignore
-      expect(lastPush.headers["x-api-key"]).toBe("[MASKED]");
-      // @ts-ignore
-      expect(lastPush.headers["host"]).toBeDefined(); // Non-sensitive header should remain
+      expect(matchedCall?.headers["authorization"]).toBe("[MASKED]");
+      expect(matchedCall?.headers["cookie"]).toBe("[MASKED]");
+      expect(matchedCall?.headers["x-api-key"]).toBe("[MASKED]");
+      expect(matchedCall?.headers["host"]).toBeDefined();
     });
   });
 
@@ -146,13 +148,12 @@ describe("Production Readiness Tests (v2.6.0)", () => {
         body: '{\n  "hello": "world"\n}', // 22 characters
       };
 
-      const mockDataset = {
-        // @ts-ignore
-        getData: jest.fn().mockResolvedValue({ items: [mockEvent] }),
-        pushData: jest.fn(),
-      };
-      // @ts-ignore
-      jest.mocked(Actor.openDataset).mockResolvedValue(mockDataset);
+      jest.mocked(Actor.openDataset).mockResolvedValue(
+        /** @type {any} */ ({
+          getData: jest.fn(async () => ({ items: [mockEvent] })),
+          pushData: jest.fn(),
+        }),
+      );
 
       const res = await request(app)
         .post(`/replay/${webhookId}/${eventId}?url=${targetUrl}`)
@@ -160,10 +161,10 @@ describe("Production Readiness Tests (v2.6.0)", () => {
         .expect(200);
 
       const { default: axiosMock } = await import("axios");
-      // @ts-ignore
-      const axiosCall = axiosMock.mock.calls.find(
-        (c) => c[0].url === targetUrl,
-      );
+      /** @type {Array<[{url: string; headers: Record<string, unknown>}]>} */
+      const axioCalls = /** @type {any} */ (axiosMock).mock.calls;
+      /** @type {any} */
+      const axiosCall = axioCalls.find((c) => c[0].url === targetUrl);
       expect(axiosCall).toBeDefined();
 
       const sentHeaders = axiosCall[0].headers;

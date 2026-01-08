@@ -18,17 +18,18 @@ const { Actor } = await import("apify");
 const { initialize, shutdown, webhookManager } = await import("../src/main.js");
 
 describe("Webhook Lifecycle & Scaling Tests", () => {
+  /** @type {any} */
   let mockKV;
 
   beforeEach(() => {
     jest.clearAllMocks();
     mockKV = {
       getValue: jest.fn(),
-      // @ts-ignore
-      setValue: jest.fn().mockResolvedValue(),
+      setValue: jest.fn().mockResolvedValue(/** @type {never} */ (undefined)),
     };
-    // @ts-ignore
-    jest.mocked(Actor.openKeyValueStore).mockResolvedValue(mockKV);
+    jest
+      .mocked(Actor.openKeyValueStore)
+      .mockResolvedValue(/** @type {any} */ (mockKV));
   });
 
   afterAll(async () => {
@@ -96,7 +97,9 @@ describe("Webhook Lifecycle & Scaling Tests", () => {
     await initialize();
 
     // 3. Verify retention was extended
-    const webhook = webhookManager.getWebhookData(existingId);
+    const webhook = /** @type {{expiresAt: string}} */ (
+      /** @type {unknown} */ (webhookManager.getWebhookData(existingId))
+    );
     const newExpiry = new Date(webhook.expiresAt).getTime();
     const threshold = Date.now() + 23 * 3600000; // Should be at least 23h+ out
     expect(newExpiry).toBeGreaterThan(threshold);

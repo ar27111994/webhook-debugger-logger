@@ -30,7 +30,7 @@ describe("UI & Landing Page Tests", () => {
     expect(res.statusCode).toBe(200);
     expect(res.headers["content-type"]).toContain("text/html");
     expect(res.text).toContain("Webhook Debugger");
-    expect(res.text).toContain("v2.7.0");
+    expect(res.text).toContain("v2.7.1");
     expect(res.text).toContain("System Online");
   });
 

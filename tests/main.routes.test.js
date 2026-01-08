@@ -54,7 +54,6 @@ describe("Log Filtering Routes", () => {
     // @ts-ignore
     webhookManager.isValid = jest.fn().mockReturnValue(true);
     // @ts-ignore
-    // @ts-ignore
     jest.mocked(Actor.openDataset).mockResolvedValue({
       // @ts-ignore
       getData: jest.fn().mockResolvedValue({ items }),
@@ -86,7 +85,6 @@ describe("Log Filtering Routes", () => {
       webhookId: "wh_1",
       timestamp: new Date().toISOString(),
     }));
-    // @ts-ignore
     // @ts-ignore
     jest.mocked(Actor.openDataset).mockResolvedValue({
       // @ts-ignore

@@ -17,13 +17,14 @@ const { createLoggerMiddleware } = await import("../src/logger_middleware.js");
 
 describe("Custom Script Timeout", () => {
   let webhookId = "wh_test_123";
+  /** @type {import('../src/webhook_manager.js').WebhookManager} */
   let webhookManager;
 
   beforeEach(() => {
-    webhookManager = {
+    webhookManager = /** @type {any} */ ({
       isValid: jest.fn().mockReturnValue(true),
       getWebhookData: jest.fn().mockReturnValue({}),
-    };
+    });
   });
 
   test("Should terminate infinite loop script within 1s", async () => {
