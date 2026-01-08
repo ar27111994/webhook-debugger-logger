@@ -1,4 +1,11 @@
-import { jest, describe, test, expect, beforeEach } from "@jest/globals";
+import {
+  jest,
+  describe,
+  test,
+  expect,
+  beforeEach,
+  afterEach,
+} from "@jest/globals";
 
 jest.unstable_mockModule("axios", async () => {
   const { axiosMock } = await import("./helpers/shared-mocks.js");
@@ -120,13 +127,13 @@ describe("Forwarding Security", () => {
     expect(Actor.pushData).toHaveBeenCalled();
 
     const pushedData = jest.mocked(Actor.pushData).mock.calls[0][0];
-    // @ts-ignore
+    // @ts-expect-error - Mock typing limitation
     expect(pushedData.headers["authorization"]).toBe("[MASKED]");
-    // @ts-ignore
+    // @ts-expect-error - Mock typing limitation
     expect(pushedData.headers["cookie"]).toBe("[MASKED]");
-    // @ts-ignore
+    // @ts-expect-error - Mock typing limitation
     expect(pushedData.headers["x-api-key"]).toBe("[MASKED]");
-    // @ts-ignore
+    // @ts-expect-error - Mock typing limitation
     expect(pushedData.headers["user-agent"]).toBe("test-agent");
   });
 
@@ -156,7 +163,7 @@ describe("Forwarding Security", () => {
     test("should retry transient errors (ECONNABORTED) and log failure", async () => {
       // Mock failure
       const error = new Error("Timeout");
-      // @ts-ignore
+      // @ts-expect-error - Mock typing limitation
       error.code = "ECONNABORTED";
       jest.mocked(axios.post).mockRejectedValue(error);
 
@@ -193,7 +200,7 @@ describe("Forwarding Security", () => {
 
     test("should NOT retry non-transient errors", async () => {
       const error = new Error("Bad Request");
-      // @ts-ignore
+      // @ts-expect-error - Mock typing limitation
       error.response = { status: 400 };
       jest.mocked(axios.post).mockRejectedValue(error);
 

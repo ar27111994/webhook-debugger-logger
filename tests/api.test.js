@@ -1,3 +1,7 @@
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+const { version } = require("../package.json");
+
 import {
   jest,
   describe,
@@ -35,6 +39,12 @@ describe("API E2E Tests", () => {
 
   afterAll(async () => {
     await shutdown("TEST_COMPLETE");
+  });
+
+  test("GET / should return version info", async () => {
+    const res = await request(app).get("/");
+    expect(res.statusCode).toBe(200);
+    expect(res.text).toContain(`v${version}`);
   });
 
   test("GET /info should return status and webhooks", async () => {
@@ -110,7 +120,6 @@ describe("API E2E Tests", () => {
       body: '{"foo":"bar"}',
       headers: {},
     };
-    // @ts-ignore
     jest.mocked(Actor.openDataset).mockResolvedValue(
       /** @type {any} */ ({
         getData: jest.fn(async () => ({ items: [mockItem] })),
@@ -128,7 +137,7 @@ describe("API E2E Tests", () => {
   test("GET / should return version info", async () => {
     const res = await request(app).get("/");
     expect(res.statusCode).toBe(200);
-    expect(res.text).toContain("v2.7.1");
+    expect(res.text).toContain(`v${version}`);
   });
 
   test("GET / with readiness probe header", async () => {

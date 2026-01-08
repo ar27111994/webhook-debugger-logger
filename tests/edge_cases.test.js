@@ -84,13 +84,13 @@ describe("Edge Case Tests", () => {
 
     // Set a very high delay directly in the Map
     const data = webhookManager.getWebhookData(slowWebhookId);
-    webhookManager.webhooks.set(
-      slowWebhookId,
-      /** @type {any} */ ({
-        ...data,
-        responseDelayMs: 15000,
-      }),
-    );
+    /** @type {import('../src/webhook_manager.js').WebhookData} */
+    const modifiedData = {
+      ...data,
+      expiresAt: data?.expiresAt || "", // Ensure string
+      responseDelayMs: 15000,
+    };
+    webhookManager.webhooks.set(slowWebhookId, modifiedData);
 
     const startTime = Date.now();
     const res = await request(app)

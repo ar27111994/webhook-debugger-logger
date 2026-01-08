@@ -1,3 +1,7 @@
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+const { version } = require("../package.json");
+
 import {
   jest,
   describe,
@@ -30,7 +34,7 @@ describe("UI & Landing Page Tests", () => {
     expect(res.statusCode).toBe(200);
     expect(res.headers["content-type"]).toContain("text/html");
     expect(res.text).toContain("Webhook Debugger");
-    expect(res.text).toContain("v2.7.1");
+    expect(res.text).toContain(`v${version}`);
     expect(res.text).toContain("System Online");
   });
 

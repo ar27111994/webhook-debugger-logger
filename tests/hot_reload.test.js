@@ -129,6 +129,6 @@ describe("Hot-Reloading Configuration Tests", () => {
       .set("Authorization", "Bearer new-super-secret");
 
     // Ensure we got a response (not a connection refused/crash)
-    expect(res.statusCode).toBeDefined();
+    expect(res.statusCode).toBe(200);
   });
 });

@@ -7,7 +7,8 @@ import vm from "vm";
 import { validateAuth } from "./utils/auth.js";
 import { parseWebhookOptions } from "./utils/config.js";
 
-// @ts-ignore
+/** @type {import("ajv").default} */
+// @ts-expect-error - Ajv default import nuance
 const ajv = new Ajv();
 
 const FORWARD_TIMEOUT_MS = 10000;
@@ -189,13 +190,15 @@ function transformRequestData(event, req, compiledScript) {
         timeout: SCRIPT_EXECUTION_TIMEOUT_MS,
       });
     } catch (err) {
-      const errorMessage = /** @type {Error} */ (err).message;
-      const isTimeout = errorMessage?.includes("Script execution timed out");
+      const error = /** @type {Error & {code?: string}} */ (err);
+      const isTimeout =
+        error.code === "ERR_SCRIPT_EXECUTION_TIMEOUT" ||
+        error.message?.includes("Script execution timed out");
       console.error(
         `[SCRIPT-EXEC-ERROR] Failed to run custom script for ${event.webhookId}:`,
         isTimeout
           ? `Script execution timed out after ${SCRIPT_EXECUTION_TIMEOUT_MS}ms`
-          : errorMessage,
+          : error.message,
       );
     }
   }
@@ -530,8 +533,8 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
         contentType,
         size: validation.contentLength,
         statusCode: /** @type {number} */ (
-          /** @type {any} */ (req).forcedStatus ||
-            mergedOptions.defaultResponseCode ||
+          /** @type {any} */ (req).forcedStatus ??
+            mergedOptions.defaultResponseCode ??
             200
         ),
         responseBody: undefined, // Custom scripts can set this

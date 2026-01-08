@@ -15,6 +15,8 @@
  * @property {number} [rateLimitPerMinute]
  */
 
+const DEFAULT_MAX_PAYLOAD_SIZE = 10485760; // 10MB
+
 /**
  * Parses and normalizes Actor input options with sensible defaults.
  *
@@ -34,7 +36,7 @@ export function parseWebhookOptions(options = {}) {
     jsonSchema: options.jsonSchema,
     customScript: options.customScript,
     maskSensitiveData: options.maskSensitiveData ?? true, // Default to true
-    maxPayloadSize: options.maxPayloadSize ?? 10485760, // 10MB default
+    maxPayloadSize: options.maxPayloadSize ?? DEFAULT_MAX_PAYLOAD_SIZE,
     rateLimitPerMinute: options.rateLimitPerMinute ?? 60,
   };
 }

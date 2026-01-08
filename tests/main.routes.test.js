@@ -51,13 +51,12 @@ describe("Log Filtering Routes", () => {
       },
     ];
 
-    // @ts-ignore
-    webhookManager.isValid = jest.fn().mockReturnValue(true);
-    // @ts-ignore
-    jest.mocked(Actor.openDataset).mockResolvedValue({
-      // @ts-ignore
-      getData: jest.fn().mockResolvedValue({ items }),
-    });
+    jest.spyOn(webhookManager, "isValid").mockReturnValue(true);
+    /** @type {any} */ (Actor.openDataset).mockResolvedValue(
+      /** @type {any} */ ({
+        getData: /** @type {any} */ (jest.fn()).mockResolvedValue({ items }),
+      }),
+    );
 
     // Filter by Method
     let res = await request(app).get("/logs").query({ method: "GET" });

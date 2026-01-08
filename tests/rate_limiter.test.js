@@ -1,4 +1,3 @@
-// @ts-nocheck
 import {
   jest,
   describe,
@@ -30,11 +29,11 @@ describe("RateLimiter Unit Tests", () => {
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
     const next = jest.fn();
 
-    mw(/** @type {any} */ (req), res, next);
-    mw(/** @type {any} */ (req), res, next);
+    mw(/** @type {any} */ (req), /** @type {any} */ (res), next);
+    mw(/** @type {any} */ (req), /** @type {any} */ (res), next);
     expect(next).toHaveBeenCalledTimes(2);
 
-    mw(/** @type {any} */ (req), res, next);
+    mw(/** @type {any} */ (req), /** @type {any} */ (res), next);
     expect(res.status).toHaveBeenCalledWith(429);
     expect(next).toHaveBeenCalledTimes(2);
   });
@@ -46,12 +45,12 @@ describe("RateLimiter Unit Tests", () => {
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
     const next = jest.fn();
 
-    mw(/** @type {any} */ (req), res, next);
+    mw(/** @type {any} */ (req), /** @type {any} */ (res), next);
     expect(next).toHaveBeenCalledTimes(1);
 
     jest.advanceTimersByTime(1100);
 
-    mw(/** @type {any} */ (req), res, next);
+    mw(/** @type {any} */ (req), /** @type {any} */ (res), next);
     expect(next).toHaveBeenCalledTimes(2);
   });
 
@@ -62,11 +61,23 @@ describe("RateLimiter Unit Tests", () => {
     const next = jest.fn();
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
 
-    mw(/** @type {any} */ ({ ip: "user1", headers: {} }), res, next);
-    mw(/** @type {any} */ ({ ip: "user2", headers: {} }), res, next);
+    mw(
+      /** @type {any} */ ({ ip: "user1", headers: {} }),
+      /** @type {any} */ (res),
+      next,
+    );
+    mw(
+      /** @type {any} */ ({ ip: "user2", headers: {} }),
+      /** @type {any} */ (res),
+      next,
+    );
     expect(rateLimiter.hits.size).toBe(2);
 
-    mw(/** @type {any} */ ({ ip: "user3", headers: {} }), res, next);
+    mw(
+      /** @type {any} */ ({ ip: "user3", headers: {} }),
+      /** @type {any} */ (res),
+      next,
+    );
     expect(rateLimiter.hits.size).toBe(2);
     expect(rateLimiter.hits.has("user1")).toBe(false);
     expect(rateLimiter.hits.has("user3")).toBe(true);
@@ -80,14 +91,30 @@ describe("RateLimiter Unit Tests", () => {
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
 
     // 1. Insert user1, then user2
-    mw(/** @type {any} */ ({ ip: "user1", headers: {} }), res, next);
-    mw(/** @type {any} */ ({ ip: "user2", headers: {} }), res, next);
+    mw(
+      /** @type {any} */ ({ ip: "user1", headers: {} }),
+      /** @type {any} */ (res),
+      next,
+    );
+    mw(
+      /** @type {any} */ ({ ip: "user2", headers: {} }),
+      /** @type {any} */ (res),
+      next,
+    );
 
     // 2. Access user1 again (should move to end of Map, making user2 the oldest)
-    mw(/** @type {any} */ ({ ip: "user1", headers: {} }), res, next);
+    mw(
+      /** @type {any} */ ({ ip: "user1", headers: {} }),
+      /** @type {any} */ (res),
+      next,
+    );
 
     // 3. Insert user3 (should trigger eviction of user2, NOT user1)
-    mw(/** @type {any} */ ({ ip: "user3", headers: {} }), res, next);
+    mw(
+      /** @type {any} */ ({ ip: "user3", headers: {} }),
+      /** @type {any} */ (res),
+      next,
+    );
 
     expect(rateLimiter.hits.has("user1")).toBe(true);
     expect(rateLimiter.hits.has("user2")).toBe(false);
@@ -104,7 +131,11 @@ describe("RateLimiter Unit Tests", () => {
     const next = jest.fn();
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
 
-    mw(/** @type {any} */ ({ ip: "userA", headers: {} }), res, next);
+    mw(
+      /** @type {any} */ ({ ip: "userA", headers: {} }),
+      /** @type {any} */ (res),
+      next,
+    );
     expect(rateLimiter.hits.size).toBe(1);
 
     // Advancing past the 60s hardcoded interval
@@ -125,7 +156,7 @@ describe("RateLimiter Unit Tests", () => {
 
     const consoleSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
 
-    mw(/** @type {any} */ (req), res, next);
+    mw(/** @type {any} */ (req), /** @type {any} */ (res), next);
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith(
@@ -144,7 +175,7 @@ describe("RateLimiter Unit Tests", () => {
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
     const next = jest.fn();
 
-    mw(/** @type {any} */ (req), res, next);
+    mw(/** @type {any} */ (req), /** @type {any} */ (res), next);
     expect(next).toHaveBeenCalled();
     expect(rateLimiter.hits.has("9.9.9.9")).toBe(true);
   });
@@ -158,7 +189,7 @@ describe("RateLimiter Unit Tests", () => {
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
     const next = jest.fn();
 
-    mw(/** @type {any} */ (req), res, next);
+    mw(/** @type {any} */ (req), /** @type {any} */ (res), next);
     expect(next).toHaveBeenCalled();
     expect(rateLimiter.hits.has("10.0.0.1")).toBe(true);
   });
@@ -170,7 +201,7 @@ describe("RateLimiter Unit Tests", () => {
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
     const next = jest.fn();
 
-    mw(/** @type {any} */ (req), res, next);
+    mw(/** @type {any} */ (req), /** @type {any} */ (res), next);
     expect(next).toHaveBeenCalled();
     expect(rateLimiter.hits.has("172.16.0.1")).toBe(true);
   });
@@ -182,13 +213,25 @@ describe("RateLimiter Unit Tests", () => {
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
 
     // User A hits limit
-    mw(/** @type {any} */ ({ ip: "userA", headers: {} }), res, next);
+    mw(
+      /** @type {any} */ ({ ip: "userA", headers: {} }),
+      /** @type {any} */ (res),
+      next,
+    );
     expect(next).toHaveBeenCalledTimes(1);
-    mw(/** @type {any} */ ({ ip: "userA", headers: {} }), res, next);
+    mw(
+      /** @type {any} */ ({ ip: "userA", headers: {} }),
+      /** @type {any} */ (res),
+      next,
+    );
     expect(res.status).toHaveBeenCalledWith(429);
 
     // User B should still be allowed (independent counter)
-    mw(/** @type {any} */ ({ ip: "userB", headers: {} }), res, next);
+    mw(
+      /** @type {any} */ ({ ip: "userB", headers: {} }),
+      /** @type {any} */ (res),
+      next,
+    );
     expect(next).toHaveBeenCalledTimes(2);
   });
 
@@ -199,7 +242,7 @@ describe("RateLimiter Unit Tests", () => {
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
     const next = jest.fn();
 
-    mw(/** @type {any} */ (req), res, next);
+    mw(/** @type {any} */ (req), /** @type {any} */ (res), next);
     expect(res.status).toHaveBeenCalledWith(429);
     expect(next).not.toHaveBeenCalled();
   });
@@ -212,11 +255,11 @@ describe("RateLimiter Unit Tests", () => {
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
     const next = jest.fn();
 
-    mw(/** @type {any} */ (req), res, next);
+    mw(/** @type {any} */ (req), /** @type {any} */ (res), next);
     expect(next).toHaveBeenCalledTimes(1);
 
     jest.advanceTimersByTime(11);
-    mw(/** @type {any} */ (req), res, next);
+    mw(/** @type {any} */ (req), /** @type {any} */ (res), next);
     expect(next).toHaveBeenCalledTimes(2);
   });
 
@@ -228,15 +271,15 @@ describe("RateLimiter Unit Tests", () => {
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
     const next = jest.fn();
 
-    mw(/** @type {any} */ (req), res, next);
+    mw(/** @type {any} */ (req), /** @type {any} */ (res), next);
     expect(next).toHaveBeenCalledTimes(1);
 
     jest.advanceTimersByTime(590000); // Almost there
-    mw(/** @type {any} */ (req), res, next);
+    mw(/** @type {any} */ (req), /** @type {any} */ (res), next);
     expect(res.status).toHaveBeenCalledWith(429);
 
     jest.advanceTimersByTime(10001); // Expired
-    mw(/** @type {any} */ (req), res, next);
+    mw(/** @type {any} */ (req), /** @type {any} */ (res), next);
     expect(next).toHaveBeenCalledTimes(2);
   });
 
@@ -273,7 +316,7 @@ describe("RateLimiter Unit Tests", () => {
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
     const next = jest.fn();
 
-    mw(/** @type {any} */ (req), res, next);
+    mw(/** @type {any} */ (req), /** @type {any} */ (res), next);
     // Should use req.ip, NOT x-forwarded-for
     expect(rateLimiter.hits.has("1.2.3.4")).toBe(true);
     expect(rateLimiter.hits.has("9.9.9.9")).toBe(false);
@@ -281,7 +324,7 @@ describe("RateLimiter Unit Tests", () => {
     // Enabled: true
     const trustedRL = new RateLimiter(10, 1000, 100, true);
     const trustedMW = trustedRL.middleware();
-    trustedMW(/** @type {any} */ (req), res, next);
+    trustedMW(/** @type {any} */ (req), /** @type {any} */ (res), next);
     expect(trustedRL.hits.has("9.9.9.9")).toBe(true);
     trustedRL.destroy();
   });
@@ -299,7 +342,7 @@ describe("RateLimiter Unit Tests", () => {
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
     const next = jest.fn();
 
-    mw(/** @type {any} */ (req), res, next);
+    mw(/** @type {any} */ (req), /** @type {any} */ (res), next);
     // Should fall back to req.ip because both headers are malformed/invalid
     expect(rateLimiter.hits.has("1.2.3.4")).toBe(true);
     expect(rateLimiter.hits.has("malformed-ip")).toBe(false);

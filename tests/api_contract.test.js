@@ -237,10 +237,8 @@ describe("API Contract & Regression Tests", () => {
 
       expect(res.statusCode).toBe(200);
       const { default: axiosMock } = await import("axios");
-      /** @type {any} */
-      const lastCall = /** @type {any} */ (axiosMock).mock.calls[
-        /** @type {any} */ (axiosMock).mock.calls.length - 1
-      ];
+      const axiosCalls = /** @type {any} */ (axiosMock).mock.calls;
+      const lastCall = axiosCalls[axiosCalls.length - 1];
       expect(lastCall[0].data).toContain("i am the correct one");
 
       // We request the SECOND one by its ID (this would fail if we matched purely by timestamp first)
@@ -250,10 +248,7 @@ describe("API Contract & Regression Tests", () => {
         .set("Authorization", "Bearer test-secret");
 
       expect(res2.statusCode).toBe(200);
-      /** @type {any} */
-      const lastCall2 = /** @type {any} */ (axiosMock).mock.calls[
-        /** @type {any} */ (axiosMock).mock.calls.length - 1
-      ];
+      const lastCall2 = axiosCalls[axiosCalls.length - 1];
       expect(lastCall2[0].data).toContain(
         "i am an interloper with same timestamp",
       );

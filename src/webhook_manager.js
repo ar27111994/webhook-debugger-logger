@@ -1,6 +1,15 @@
 import { Actor } from "apify";
 import { nanoid } from "nanoid";
 
+/**
+ * @typedef {Object} WebhookData
+ * @property {string} expiresAt
+ * @property {number} [responseDelayMs]
+ * @property {number} [defaultResponseCode]
+ * @property {string} [defaultResponseBody]
+ * @property {Object.<string, string>} [defaultResponseHeaders]
+ */
+
 export class WebhookManager {
   constructor() {
     /** @type {Map<string, {expiresAt: string}>} */
@@ -50,6 +59,11 @@ export class WebhookManager {
    * @returns {Promise<string[]>} List of generated IDs
    */
   async generateWebhooks(count, retentionHours) {
+    if (!Number.isInteger(count) || count < 0) {
+      throw new Error(
+        `Invalid count: ${count}. Must be a non-negative integer.`,
+      );
+    }
     const expiresAt = new Date(
       Date.now() + retentionHours * 60 * 60 * 1000,
     ).toISOString();
@@ -120,7 +134,7 @@ export class WebhookManager {
     const newExpiresAt = new Date(
       now + retentionHours * 60 * 60 * 1000,
     ).toISOString();
-    let changed = false;
+    let updatedCount = 0;
 
     for (const [id, data] of this.webhooks.entries()) {
       const currentExpiry = new Date(data.expiresAt).getTime();
@@ -130,13 +144,13 @@ export class WebhookManager {
       // that the user might have expected to stay longer based on previous settings.
       if (newExpiry > currentExpiry) {
         this.webhooks.set(id, { ...data, expiresAt: newExpiresAt });
-        changed = true;
+        updatedCount++;
       }
     }
 
-    if (changed) {
+    if (updatedCount > 0) {
       console.log(
-        `[STORAGE] Extended retention for ${this.webhooks.size} webhooks to ${retentionHours}h.`,
+        `[STORAGE] Extended retention for ${updatedCount} of ${this.webhooks.size} webhooks to ${retentionHours}h.`,
       );
       await this.persist();
     }

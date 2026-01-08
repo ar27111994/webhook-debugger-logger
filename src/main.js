@@ -146,12 +146,12 @@ async function initialize() {
   if (active.length < urlCount) {
     const diff = urlCount - active.length;
     console.log(
-      `[SYSTEM] Scaling up: Generating ${diff} additional webhook(s).`
+      `[SYSTEM] Scaling up: Generating ${diff} additional webhook(s).`,
     );
     await webhookManager.generateWebhooks(diff, retentionHours);
   } else if (active.length > urlCount) {
     console.log(
-      `[SYSTEM] Notice: Active webhooks (${active.length}) exceed requested count (${urlCount}). No new IDs generated.`
+      `[SYSTEM] Notice: Active webhooks (${active.length}) exceed requested count (${urlCount}). No new IDs generated.`,
     );
   } else {
     console.log(`[SYSTEM] Resuming with ${active.length} active webhooks.`);
@@ -191,7 +191,7 @@ async function initialize() {
   const loggerMiddleware = createLoggerMiddleware(
     webhookManager,
     { ...config, maxPayloadSize },
-    broadcast
+    broadcast,
   );
 
   // --- Hot Reloading Logic ---
@@ -207,7 +207,7 @@ async function initialize() {
         );
       const newRateLimit = Math.max(
         1,
-        Math.floor(newConfig.rateLimitPerMinute || 60)
+        Math.floor(newConfig.rateLimitPerMinute || 60),
       );
 
       // 1. Update Middleware
@@ -225,7 +225,7 @@ async function initialize() {
       if (activeWebhooks.length < currentUrlCount) {
         const diff = currentUrlCount - activeWebhooks.length;
         console.log(
-          `[SYSTEM] Dynamic Scale-up: Generating ${diff} additional webhook(s).`
+          `[SYSTEM] Dynamic Scale-up: Generating ${diff} additional webhook(s).`,
         );
         await webhookManager.generateWebhooks(diff, currentRetentionHours);
       }
@@ -238,7 +238,7 @@ async function initialize() {
     } catch (err) {
       console.error(
         "[SYSTEM-ERROR] Failed to apply new settings:",
-        /** @type {Error} */ (err).message
+        /** @type {Error} */ (err).message,
       );
     }
   });
@@ -269,34 +269,49 @@ async function initialize() {
 
   // --- Routes ---
 
+  /**
+   * Wraps an async handler to be compatible with Express RequestHandler.
+   * @param {(req: import("express").Request, res: import("express").Response, next: import("express").NextFunction) => Promise<void>} fn
+   * @returns {import("express").RequestHandler}
+   */
+  const asyncHandler = (fn) => (req, res, next) => {
+    Promise.resolve(fn(req, res, next)).catch(next);
+  };
+
   app.all(
     "/webhook/:id",
-    // @ts-ignore
-    (req, res, next) => {
-      const statusOverride = parseInt(req.query.__status);
+    (
+      /** @type {import("express").Request} */ req,
+      /** @type {import("express").Response} */ _res,
+      /** @type {import("express").NextFunction} */ next,
+    ) => {
+      const statusOverride = parseInt(
+        /** @type {string} */ (req.query.__status),
+      );
       if (statusOverride >= 100 && statusOverride < 600) {
-        req.forcedStatus = statusOverride;
+        /** @type {any} */ (req).forcedStatus = statusOverride;
       }
       next();
     },
     // @ts-ignore
-    loggerMiddleware
+    loggerMiddleware,
   );
 
   app.all(
     "/replay/:webhookId/:itemId",
     mgmtRateLimiter,
     authMiddleware,
-    // @ts-ignore
-    async (req, res) => {
+    asyncHandler(async (req, res) => {
       try {
         const { webhookId, itemId } = req.params;
         let targetUrl = req.query.url;
         if (Array.isArray(targetUrl)) {
           targetUrl = targetUrl[0];
         }
-        if (!targetUrl)
-          return res.status(400).json({ error: "Missing 'url' parameter" });
+        if (!targetUrl) {
+          res.status(400).json({ error: "Missing 'url' parameter" });
+          return;
+        }
 
         const dataset = await Actor.openDataset();
         const { items } = await dataset.getData();
@@ -304,10 +319,13 @@ async function initialize() {
         const item =
           items.find((i) => i.webhookId === webhookId && i.id === itemId) ||
           items.find(
-            (i) => i.webhookId === webhookId && i.timestamp === itemId
+            (i) => i.webhookId === webhookId && i.timestamp === itemId,
           );
 
-        if (!item) return res.status(404).json({ error: "Event not found" });
+        if (!item) {
+          res.status(404).json({ error: "Event not found" });
+          return;
+        }
 
         const headersToIgnore = [
           "content-length",
@@ -336,7 +354,7 @@ async function initialize() {
             }
             return acc;
           },
-          {}
+          {},
         );
 
         let attempt = 0;
@@ -371,7 +389,7 @@ async function initialize() {
             }
             const delay = 1000 * Math.pow(2, attempt - 1);
             console.warn(
-              `[REPLAY-RETRY] Attempt ${attempt}/${MAX_REPLAY_RETRIES} failed for ${targetUrl}: ${axiosError.code}. Retrying in ${delay}ms...`
+              `[REPLAY-RETRY] Attempt ${attempt}/${MAX_REPLAY_RETRIES} failed for ${targetUrl}: ${axiosError.code}. Retrying in ${delay}ms...`,
             );
             await new Promise((resolve) => setTimeout(resolve, delay));
           }
@@ -381,8 +399,8 @@ async function initialize() {
           res.setHeader(
             "X-Apify-Replay-Warning",
             `Headers stripped (masked or transmission-related): ${strippedHeaders.join(
-              ", "
-            )}`
+              ", ",
+            )}`,
           );
         }
         res.json({
@@ -406,7 +424,7 @@ async function initialize() {
           code: axiosError.code,
         });
       }
-    }
+    }),
   );
 
   app.get("/log-stream", (req, res) => {
@@ -418,62 +436,68 @@ async function initialize() {
     req.on("close", () => clients.delete(res));
   });
 
-  app.get("/logs", mgmtRateLimiter, authMiddleware, async (req, res) => {
-    try {
-      let {
-        webhookId,
-        method,
-        statusCode,
-        contentType,
-        limit = 100,
-        offset = 0,
-      } = req.query;
-      limit = Math.min(Math.max(parseInt(String(limit)) || 100, 1), 1000);
-      offset = Math.max(parseInt(String(offset)) || 0, 0);
+  app.get(
+    "/logs",
+    mgmtRateLimiter,
+    authMiddleware,
+    asyncHandler(async (req, res) => {
+      try {
+        let {
+          webhookId,
+          method,
+          statusCode,
+          contentType,
+          limit = 100,
+          offset = 0,
+        } = req.query;
+        limit = Math.min(Math.max(parseInt(String(limit)) || 100, 1), 1000);
+        offset = Math.max(parseInt(String(offset)) || 0, 0);
 
-      const hasFilters = !!(webhookId || method || statusCode || contentType);
-      const dataset = await Actor.openDataset();
-      const result = await dataset.getData({
-        limit: hasFilters ? limit * 5 : limit,
-        offset,
-        desc: true,
-      });
+        const hasFilters = !!(webhookId || method || statusCode || contentType);
+        const dataset = await Actor.openDataset();
+        const result = await dataset.getData({
+          limit: hasFilters ? limit * 5 : limit,
+          offset,
+          desc: true,
+        });
 
-      const filtered = (result.items || [])
-        .filter((item) => {
-          if (webhookId && item.webhookId !== webhookId) return false;
-          if (
-            method &&
-            item.method?.toUpperCase() !== String(method).toUpperCase()
-          )
-            return false;
-          if (statusCode && String(item.statusCode) !== String(statusCode))
-            return false;
-          if (
-            contentType &&
-            !item.headers?.["content-type"]?.includes(String(contentType))
-          )
-            return false;
-          return webhookManager.isValid(item.webhookId);
-        })
-        .sort(
-          (a, b) =>
-            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-        );
+        const filtered = (result.items || [])
+          .filter((item) => {
+            if (webhookId && item.webhookId !== webhookId) return false;
+            if (
+              method &&
+              item.method?.toUpperCase() !== String(method).toUpperCase()
+            )
+              return false;
+            if (statusCode && String(item.statusCode) !== String(statusCode))
+              return false;
+            if (
+              contentType &&
+              !item.headers?.["content-type"]?.includes(String(contentType))
+            )
+              return false;
+            return webhookManager.isValid(item.webhookId);
+          })
+          .sort(
+            (a, b) =>
+              new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+          );
 
-      res.json({
-        filters: { webhookId, method, statusCode, contentType },
-        count: Math.min(filtered.length, limit),
-        total: filtered.length,
-        items: filtered.slice(0, limit),
-      });
-    } catch (e) {
-      res.status(500).json({
-        error: "Logs failed",
-        message: /** @type {Error} */ (e).message,
-      });
-    }
-  });
+        res.json({
+          filters: { webhookId, method, statusCode, contentType },
+          count: Math.min(filtered.length, limit),
+          total: filtered.length,
+          items: filtered.slice(0, limit),
+        });
+        return;
+      } catch (e) {
+        res.status(500).json({
+          error: "Logs failed",
+          message: /** @type {Error} */ (e).message,
+        });
+      }
+    }),
+  );
 
   app.get("/info", mgmtRateLimiter, authMiddleware, (req, res) => {
     const baseUrl = `${req.protocol}://${req.get("host")}`;
@@ -486,7 +510,7 @@ async function initialize() {
         authActive: !!authKey,
         retentionHours,
         maxPayloadLimit: `${((maxPayloadSize || 0) / 1024 / 1024).toFixed(
-          1
+          1,
         )}MB`,
         webhookCount: activeWebhooks.length,
         activeWebhooks,
@@ -551,7 +575,7 @@ async function initialize() {
                   <div class="stat-item" style="text-align:left; border-left: 4px solid var(--danger); background: rgba(0,0,0,0.2); padding: 16px; border-radius: 8px;">
                     <span style="font-size: 0.8rem; color: var(--text-dim); display: block; margin-bottom: 4px;">Error Details</span>
                     <span class="stat-value" style="color: var(--danger); font-family: 'JetBrains Mono', monospace;">${escapeHtml(
-                      authResult.error || "Unknown Error"
+                      authResult.error || "Unknown Error",
                     )}</span>
                   </div>
                   <p style="font-size: 0.85rem;">To authenticate in the browser, append <code>?key=YOUR_KEY</code> to the URL.</p>
@@ -607,7 +631,7 @@ async function initialize() {
       `);
     } else {
       res.send(
-        `Webhook Debugger & Logger v2.7.1 (Enterprise Suite) is running.\nActive Webhooks: ${activeCount}\nUse /info for management API.\n`
+        `Webhook Debugger & Logger v2.7.1 (Enterprise Suite) is running.\nActive Webhooks: ${activeCount}\nUse /info for management API.\n`,
       );
     }
   });
@@ -635,22 +659,22 @@ async function initialize() {
           status === 413
             ? "Payload Too Large"
             : status === 400
-            ? "Bad Request"
-            : "Internal Server Error",
+              ? "Bad Request"
+              : "Internal Server Error",
         message: err.message,
       });
-    }
+    },
   );
 
   /* istanbul ignore next */
   if (process.env.NODE_ENV !== "test") {
     const port = process.env.ACTOR_WEB_SERVER_PORT || 8080;
     server = app.listen(port, () =>
-      console.log(`Server listening on port ${port}`)
+      console.log(`Server listening on port ${port}`),
     );
     cleanupInterval = setInterval(
       () => webhookManager.cleanup(),
-      CLEANUP_INTERVAL_MS
+      CLEANUP_INTERVAL_MS,
     );
     Actor.on("migrating", () => shutdown("MIGRATING"));
     Actor.on("aborting", () => shutdown("ABORTING"));

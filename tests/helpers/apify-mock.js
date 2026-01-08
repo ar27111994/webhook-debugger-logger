@@ -1,8 +1,5 @@
 import { jest } from "@jest/globals";
 
-/** @type {any} */
-let actorInstance = null;
-
 /**
  * Creates or retrieves a standard Apify Actor mock structure for testing.
  *
@@ -10,12 +7,6 @@ let actorInstance = null;
  * @returns {Object} Mocked Actor object
  */
 export function createApifyMock(inputOverrides = {}) {
-  if (actorInstance) {
-    // Update input if provided
-    actorInstance.getInput.mockResolvedValue(inputOverrides);
-    return actorInstance;
-  }
-
   const store = {
     // @ts-expect-error - Mock typing limitation with @types/jest 30
     getValue: jest.fn().mockResolvedValue(null),
@@ -33,7 +24,7 @@ export function createApifyMock(inputOverrides = {}) {
   /** @type {Function | undefined} */
   let inputHandler;
 
-  actorInstance = {
+  const actorInstance = {
     // @ts-expect-error - Mock typing limitation with @types/jest 30
     init: jest.fn().mockResolvedValue({}),
     // @ts-expect-error - Mock typing limitation with @types/jest 30
@@ -55,11 +46,4 @@ export function createApifyMock(inputOverrides = {}) {
   };
 
   return actorInstance;
-}
-
-/**
- * Resets the mocked Actor singleton.
- */
-export function resetApifyMock() {
-  actorInstance = null;
 }
