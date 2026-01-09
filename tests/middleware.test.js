@@ -121,4 +121,77 @@ describe("Logger Middleware", () => {
     const event = /** @type {any} */ (onEvent.mock.calls[0][0]);
     expect(event.body).toBe("TRANSFORMED");
   });
+
+  test("should convert Buffer body to string for logging", async () => {
+    const middleware = createLoggerMiddleware(webhookManager, options, onEvent);
+    const bufferContent = Buffer.from('{"key":"value"}');
+    const req = httpMocks.createRequest({
+      params: { id: "wh_123" },
+      query: { key: "secret" },
+      headers: { "content-type": "application/json" },
+      body: bufferContent,
+    });
+    const res = httpMocks.createResponse();
+
+    await middleware(req, res);
+
+    const event = /** @type {any} */ (onEvent.mock.calls[0][0]);
+    expect(typeof event.body).toBe("string");
+    expect(event.body).toContain("key");
+  });
+
+  test("should return JSON response for 4xx error status codes", async () => {
+    options.defaultResponseCode = 400;
+    const middleware = createLoggerMiddleware(webhookManager, options, onEvent);
+    const req = httpMocks.createRequest({
+      params: { id: "wh_123" },
+      query: { key: "secret" },
+      body: { test: "data" },
+    });
+    const res = httpMocks.createResponse();
+
+    await middleware(req, res);
+
+    expect(res.statusCode).toBe(400);
+    // 4xx with no custom body should return a JSON object
+    const responseData = res._getJSONData();
+    expect(responseData).toHaveProperty("webhookId");
+  });
+
+  test("should return object responseBody as JSON", async () => {
+    options.defaultResponseCode = 200;
+    /** @type {any} */ (options).defaultResponseBody = {
+      status: "ok",
+      custom: "response",
+    };
+    const middleware = createLoggerMiddleware(webhookManager, options, onEvent);
+    const req = httpMocks.createRequest({
+      params: { id: "wh_123" },
+      query: { key: "secret" },
+      body: { test: "data" },
+    });
+    const res = httpMocks.createResponse();
+
+    await middleware(req, res);
+
+    expect(res.statusCode).toBe(200);
+    const responseData = res._getJSONData();
+    expect(responseData.status).toBe("ok");
+    expect(responseData.custom).toBe("response");
+  });
+
+  test("should apply custom response headers from options", async () => {
+    options.defaultResponseHeaders = { "X-Custom-Header": "CustomValue" };
+    const middleware = createLoggerMiddleware(webhookManager, options, onEvent);
+    const req = httpMocks.createRequest({
+      params: { id: "wh_123" },
+      query: { key: "secret" },
+      body: { test: "data" },
+    });
+    const res = httpMocks.createResponse();
+
+    await middleware(req, res);
+
+    expect(res.getHeader("X-Custom-Header")).toBe("CustomValue");
+  });
 });

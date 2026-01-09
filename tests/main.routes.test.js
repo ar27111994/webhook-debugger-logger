@@ -84,11 +84,11 @@ describe("Log Filtering Routes", () => {
       webhookId: "wh_1",
       timestamp: new Date().toISOString(),
     }));
-    // @ts-ignore
-    jest.mocked(Actor.openDataset).mockResolvedValue({
-      // @ts-ignore
-      getData: jest.fn().mockResolvedValue({ items }),
-    });
+    /** @type {any} */
+    const mockDataset = {
+      getData: jest.fn(async () => ({ items })),
+    };
+    jest.mocked(Actor.openDataset).mockResolvedValue(mockDataset);
 
     const res = await request(app).get("/logs").query({ limit: 10 });
     expect(res.body.items).toHaveLength(10);

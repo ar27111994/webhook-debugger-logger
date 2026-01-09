@@ -146,4 +146,81 @@ describe("API E2E Tests", () => {
       .set("x-apify-container-server-readiness-probe", "true");
     expect(res.statusCode).toBe(200);
   });
+
+  test("GET /log-stream should set SSE headers and be connectable", (done) => {
+    // Use native http module for SSE endpoints since supertest can't handle streaming
+    const http = require("http");
+    const port = 9999;
+    const testServer = app.listen(port, () => {
+      const req = http.get(`http://localhost:${port}/log-stream`, (res) => {
+        // Verify SSE headers
+        expect(res.headers["content-type"]).toContain("text/event-stream");
+        expect(res.headers["cache-control"]).toBe("no-cache");
+        expect(res.headers["connection"]).toBe("keep-alive");
+        // Close the request immediately after verifying headers
+        req.destroy();
+        testServer.close(() => done());
+      });
+      req.on("error", () => {
+        // Expected when we abort
+        testServer.close(() => done());
+      });
+    });
+  });
+
+  test("POST /webhook/:id with __status should set forcedStatus", async () => {
+    const res = await request(app)
+      .post(`/webhook/${webhookId}`)
+      .query({ __status: "201" })
+      .send({ test: "data" });
+
+    // forcedStatus is validated and coerced - 201 is valid
+    expect(res.statusCode).toBe(201);
+  });
+
+  test("POST /webhook/:id with invalid __status should use default", async () => {
+    const res = await request(app)
+      .post(`/webhook/${webhookId}`)
+      .query({ __status: "invalid" })
+      .send({ test: "data" });
+
+    // Invalid status should fall back to default (200)
+    expect(res.statusCode).toBe(200);
+  });
+
+  test("GET /replay/:webhookId/:itemId without url should return 400", async () => {
+    jest.mocked(Actor.openDataset).mockResolvedValue(
+      /** @type {any} */ ({
+        getData: jest.fn(async () => ({ items: [] })),
+      }),
+    );
+
+    const res = await request(app).get(`/replay/${webhookId}/evt_123`);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error).toBe("Missing 'url' parameter");
+  });
+
+  test("GET /replay/:webhookId/:itemId with non-existent event should return 404", async () => {
+    jest.mocked(Actor.openDataset).mockResolvedValue(
+      /** @type {any} */ ({
+        getData: jest.fn(async () => ({ items: [] })),
+      }),
+    );
+
+    const axios = (await import("axios")).default;
+    // @ts-expect-error - Mock function on imported module
+    axios.mockResolvedValue({ status: 200 });
+
+    const dns = (await import("dns/promises")).default;
+    // @ts-expect-error - Mock function on imported module
+    dns.resolve4?.mockResolvedValue?.(["93.184.216.34"]);
+
+    const res = await request(app)
+      .get(`/replay/${webhookId}/evt_nonexistent`)
+      .query({ url: "http://example.com" });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.body.error).toBe("Event not found");
+  });
 });

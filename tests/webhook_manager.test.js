@@ -82,4 +82,88 @@ describe("WebhookManager", () => {
     expect(webhookManager.webhooks.has("wh_past")).toBe(false);
     expect(webhookManager.webhooks.has("wh_active")).toBe(true);
   });
+
+  test("generateWebhooks() should throw on invalid count (negative)", async () => {
+    await webhookManager.init();
+    await expect(webhookManager.generateWebhooks(-1, 24)).rejects.toThrow(
+      "Invalid count: -1. Must be a non-negative integer.",
+    );
+  });
+
+  test("generateWebhooks() should throw on invalid count (non-integer)", async () => {
+    await webhookManager.init();
+    await expect(webhookManager.generateWebhooks(1.5, 24)).rejects.toThrow(
+      "Invalid count: 1.5. Must be a non-negative integer.",
+    );
+  });
+
+  test("generateWebhooks() should throw on invalid retentionHours (zero)", async () => {
+    await webhookManager.init();
+    await expect(webhookManager.generateWebhooks(1, 0)).rejects.toThrow(
+      "Invalid retentionHours: 0. Must be a positive number.",
+    );
+  });
+
+  test("generateWebhooks() should throw on invalid retentionHours (negative)", async () => {
+    await webhookManager.init();
+    await expect(webhookManager.generateWebhooks(1, -5)).rejects.toThrow(
+      "Invalid retentionHours: -5. Must be a positive number.",
+    );
+  });
+
+  test("generateWebhooks() should throw on invalid retentionHours (Infinity)", async () => {
+    await webhookManager.init();
+    await expect(webhookManager.generateWebhooks(1, Infinity)).rejects.toThrow(
+      "Invalid retentionHours: Infinity. Must be a positive number.",
+    );
+  });
+
+  test("updateRetention() should throw on invalid retentionHours", async () => {
+    await webhookManager.init();
+    await expect(webhookManager.updateRetention(0)).rejects.toThrow(
+      "Invalid retentionHours: 0. Must be a positive number.",
+    );
+    await expect(webhookManager.updateRetention(-1)).rejects.toThrow(
+      "Invalid retentionHours: -1. Must be a positive number.",
+    );
+    await expect(webhookManager.updateRetention(NaN)).rejects.toThrow(
+      "Invalid retentionHours: NaN. Must be a positive number.",
+    );
+  });
+
+  test("persist() should handle setValue errors gracefully", async () => {
+    mockKvStore.setValue.mockRejectedValue(new Error("Write failure"));
+    await webhookManager.init();
+    webhookManager.webhooks.set("wh_test", {
+      expiresAt: new Date(Date.now() + 10000).toISOString(),
+    });
+    // Should not throw
+    await webhookManager.persist();
+    expect(mockKvStore.setValue).toHaveBeenCalled();
+  });
+
+  test("persist() should handle non-Error thrown values", async () => {
+    mockKvStore.setValue.mockRejectedValue("String error");
+    await webhookManager.init();
+    webhookManager.webhooks.set("wh_test", {
+      expiresAt: new Date(Date.now() + 10000).toISOString(),
+    });
+    // Should not throw
+    await webhookManager.persist();
+  });
+
+  test("getWebhookData() should return undefined for non-existent ID", () => {
+    expect(webhookManager.getWebhookData("nonexistent")).toBeUndefined();
+  });
+
+  test("getAllActive() should return all webhooks with IDs", async () => {
+    const expiry = new Date(Date.now() + 10000).toISOString();
+    webhookManager.webhooks.set("wh_a", { expiresAt: expiry });
+    webhookManager.webhooks.set("wh_b", { expiresAt: expiry });
+
+    const active = webhookManager.getAllActive();
+    expect(active).toHaveLength(2);
+    expect(active[0]).toHaveProperty("id");
+    expect(active[0]).toHaveProperty("expiresAt");
+  });
 });

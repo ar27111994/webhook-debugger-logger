@@ -3,6 +3,8 @@ import express from "express";
 import bodyParser from "body-parser";
 import compression from "compression";
 import axios from "axios";
+import dns from "dns/promises";
+import ipRangeCheck from "ip-range-check";
 import { WebhookManager } from "./webhook_manager.js";
 import { createLoggerMiddleware } from "./logger_middleware.js";
 import { parseWebhookOptions } from "./utils/config.js";
@@ -15,6 +17,30 @@ const STARTUP_TEST_EXIT_DELAY_MS = 5000;
 const CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
 const MAX_REPLAY_RETRIES = 3;
 const REPLAY_TIMEOUT_MS = 10000;
+
+// SSRF protection: block internal/reserved IP ranges
+const SSRF_BLOCKED_RANGES = [
+  "0.0.0.0/8", // Current network
+  "10.0.0.0/8", // Private (Class A)
+  "100.64.0.0/10", // Carrier-grade NAT
+  "127.0.0.0/8", // Loopback
+  "169.254.0.0/16", // Link-local / cloud metadata
+  "172.16.0.0/12", // Private (Class B)
+  "192.0.0.0/24", // IETF Protocol Assignments
+  "192.0.2.0/24", // Documentation (TEST-NET-1)
+  "192.88.99.0/24", // 6to4 Relay Anycast
+  "192.168.0.0/16", // Private (Class C)
+  "198.18.0.0/15", // Benchmarking
+  "198.51.100.0/24", // Documentation (TEST-NET-2)
+  "203.0.113.0/24", // Documentation (TEST-NET-3)
+  "224.0.0.0/4", // Multicast
+  "240.0.0.0/4", // Reserved
+  "255.255.255.255/32", // Broadcast
+  "::1/128", // IPv6 loopback
+  "fc00::/7", // IPv6 unique local
+  "fe80::/10", // IPv6 link-local
+  "ff00::/8", // IPv6 multicast
+];
 
 /** @type {import("http").Server | undefined} */
 let server;
@@ -62,7 +88,13 @@ const escapeHtml = (unsafe) => {
  */
 const broadcast = (data) => {
   const message = `data: ${JSON.stringify(data)}\n\n`;
-  clients.forEach((client) => client.write(message));
+  clients.forEach((client) => {
+    try {
+      client.write(message);
+    } catch {
+      clients.delete(client);
+    }
+  });
 };
 
 /**
@@ -195,7 +227,7 @@ async function initialize() {
   );
 
   // --- Hot Reloading Logic ---
-  // @ts-ignore
+  // @ts-expect-error - Actor.on("input") is not in Apify types but exists at runtime
   Actor.on("input", async (newInput) => {
     if (!newInput) return;
     console.log("[SYSTEM] Detected input update! Applying new settings...");
@@ -331,6 +363,51 @@ async function initialize() {
         }
         if (!["http:", "https:"].includes(target.protocol)) {
           res.status(400).json({ error: "Only http/https URLs are allowed" });
+          return;
+        }
+
+        // SSRF prevention: resolve hostname and check if IPs are internal/reserved
+        try {
+          // Check if hostname is already an IP literal
+          const hostname = target.hostname;
+          const isIpLiteral =
+            /^(\d{1,3}\.){3}\d{1,3}$/.test(hostname) ||
+            hostname.startsWith("[");
+          /** @type {string[]} */
+          let ipsToCheck;
+          if (isIpLiteral) {
+            // Clean IPv6 brackets if present
+            ipsToCheck = [hostname.replace(/^\[|\]$/g, "")];
+          } else {
+            // Resolve DNS - get both A and AAAA records
+            const [ipv4Results, ipv6Results] = await Promise.allSettled([
+              dns.resolve4(hostname),
+              dns.resolve6(hostname),
+            ]);
+            ipsToCheck = [
+              ...(ipv4Results.status === "fulfilled" ? ipv4Results.value : []),
+              ...(ipv6Results.status === "fulfilled" ? ipv6Results.value : []),
+            ];
+            if (ipsToCheck.length === 0) {
+              res
+                .status(400)
+                .json({ error: "Unable to resolve hostname for 'url'" });
+              return;
+            }
+          }
+          // Check all resolved IPs against blocked ranges
+          for (const ip of ipsToCheck) {
+            if (ipRangeCheck(ip, SSRF_BLOCKED_RANGES)) {
+              res
+                .status(400)
+                .json({ error: "URL resolves to internal/reserved IP range" });
+              return;
+            }
+          }
+        } catch {
+          res.status(400).json({
+            error: "Unable to validate 'url' parameter (DNS failure)",
+          });
           return;
         }
 
@@ -674,6 +751,11 @@ async function initialize() {
     (err, _req, res, next) => {
       if (res.headersSent) return next(err);
       const status = err.statusCode || err.status || 500;
+      // Sanitize: don't leak internal error details for 500-level errors
+      const isServerError = status >= 500;
+      if (isServerError) {
+        console.error("[SERVER-ERROR]", err.stack || err.message || err);
+      }
       res.status(status).json({
         status,
         error:
@@ -682,7 +764,7 @@ async function initialize() {
             : status === 400
               ? "Bad Request"
               : "Internal Server Error",
-        message: err.message,
+        message: isServerError ? "Internal Server Error" : err.message,
       });
     },
   );

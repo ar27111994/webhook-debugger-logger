@@ -299,6 +299,14 @@ async function executeBackgroundTasks(event, req, options, onEvent) {
               "set-cookie",
               "x-api-key",
               "api-key",
+              // hop-by-hop / request-specific headers
+              "content-length",
+              "host",
+              "connection",
+              "transfer-encoding",
+              "keep-alive",
+              "proxy-connection",
+              "upgrade",
             ];
 
             const forwardingHeaders =
@@ -310,7 +318,6 @@ async function executeBackgroundTasks(event, req, options, onEvent) {
                   )
                 : {
                     "content-type": req.headers["content-type"],
-                    "content-length": req.headers["content-length"],
                   };
 
             await axios.post(validatedUrl, req.body, {
@@ -433,10 +440,10 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
           compiledScript = new vm.Script(newOptions.customScript);
           console.log("[SYSTEM] Custom script re-compiled successfully.");
         } catch (err) {
-          console.error(
-            "[SCRIPT-ERROR] Invalid Custom Script:",
-            /** @type {Error} */ (err).message,
-          );
+          const message =
+            err instanceof Error ? err.message : String(err ?? "Unknown error");
+          console.error("[SCRIPT-ERROR] Invalid Custom Script:", message);
+          compiledScript = null; // Clear on failure
         }
       } else {
         compiledScript = null;
@@ -463,10 +470,10 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
           validate = ajv.compile(schema);
           console.log("[SYSTEM] JSON Schema re-compiled successfully.");
         } catch (err) {
-          console.error(
-            "[SCHEMA-ERROR] Invalid JSON Schema:",
-            /** @type {Error} */ (err).message,
-          );
+          const message =
+            err instanceof Error ? err.message : String(err ?? "Unknown error");
+          console.error("[SCHEMA-ERROR] Invalid JSON Schema:", message);
+          validate = null; // Clear on failure
         }
       } else {
         validate = null;
@@ -547,11 +554,14 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
         body: loggedBody,
         contentType,
         size: validation.contentLength,
-        statusCode: /** @type {number} */ (
-          /** @type {any} */ (req).forcedStatus ??
-            mergedOptions.defaultResponseCode ??
-            200
-        ),
+        statusCode: (() => {
+          // Coerce and validate forcedStatus
+          const forced = Number(/** @type {any} */ (req).forcedStatus);
+          if (Number.isFinite(forced) && forced >= 100 && forced < 600) {
+            return forced;
+          }
+          return mergedOptions.defaultResponseCode ?? 200;
+        })(),
         responseBody: undefined, // Custom scripts can set this
         responseHeaders: {}, // Custom scripts can add headers
         processingTime: 0,
@@ -589,12 +599,16 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
         process.env.NODE_ENV === "test"
           ? BACKGROUND_TASK_TIMEOUT_TEST
           : BACKGROUND_TASK_TIMEOUT_PROD;
+      /** @type {ReturnType<typeof setTimeout> | undefined} */
+      let timeoutHandle;
       await Promise.race([
-        backgroundPromise(),
+        backgroundPromise().finally(() => {
+          if (timeoutHandle) clearTimeout(timeoutHandle);
+        }),
         /** @type {Promise<void>} */
         (
           new Promise((resolve) => {
-            const t = setTimeout(() => {
+            timeoutHandle = setTimeout(() => {
               if (process.env.NODE_ENV !== "test") {
                 const readableTimeout =
                   timeoutMs < 1000 ? `${timeoutMs}ms` : `${timeoutMs / 1000}s`;
@@ -604,7 +618,7 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
               }
               resolve();
             }, timeoutMs);
-            if (t.unref) t.unref();
+            if (timeoutHandle.unref) timeoutHandle.unref();
           })
         ),
       ]);

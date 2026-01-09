@@ -98,7 +98,8 @@ describe("Forwarding Security", () => {
     const sentHeaders = axiosCall[2].headers;
 
     expect(sentHeaders["content-type"]).toBe("application/json");
-    expect(sentHeaders["content-length"]).toBe("15");
+    // content-length is NOT forwarded - axios auto-calculates it per HTTP spec
+    expect(sentHeaders["content-length"]).toBeUndefined();
     expect(sentHeaders["user-agent"]).toBeUndefined();
     expect(sentHeaders["x-custom"]).toBeUndefined();
     expect(sentHeaders["X-Forwarded-By"]).toBe("Apify-Webhook-Debugger");
@@ -192,7 +193,7 @@ describe("Forwarding Security", () => {
       // Verify error log push
       const calls = jest.mocked(Actor.pushData).mock.calls;
       const errorLog = calls.find(
-        // @ts-ignore
+        // @ts-expect-error - Mock call data has dynamic structure
         (c) => c[0].type === "forward_error" && c[0].statusCode === 500,
       );
       expect(errorLog).toBeDefined();

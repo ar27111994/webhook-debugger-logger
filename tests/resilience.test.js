@@ -147,7 +147,7 @@ describe("Resilience & Retry Tests", () => {
   describe("Background Tasks Resilience", () => {
     test("should NOT block response if background tasks are slow (Timeout Verification)", async () => {
       // Mock Actor.pushData to be very slow
-      // @ts-ignore
+      // @ts-expect-error - Mock implementation differs from actual signature
       jest.mocked(Actor.pushData).mockImplementation(
         () =>
           new Promise((resolve) => {

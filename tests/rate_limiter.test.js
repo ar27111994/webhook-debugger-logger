@@ -352,7 +352,7 @@ describe("RateLimiter Unit Tests", () => {
     expect(() => new RateLimiter(-1, 1000)).toThrow(
       "RateLimiter: limit must be a finite integer >= 0",
     );
-    // @ts-ignore
+    // @ts-expect-error - Testing invalid type for limit parameter
     expect(() => new RateLimiter("10", 1000)).toThrow(
       "RateLimiter: limit must be a finite integer >= 0",
     );
@@ -371,7 +371,7 @@ describe("RateLimiter Unit Tests", () => {
     expect(() => new RateLimiter(10, 1000, -5)).toThrow(
       "RateLimiter: maxEntries must be a finite integer > 0",
     );
-    // @ts-ignore
+    // @ts-expect-error - Testing invalid type for maxEntries parameter
     expect(() => new RateLimiter(10, 1000, "100")).toThrow(
       "RateLimiter: maxEntries must be a finite integer > 0",
     );
@@ -385,7 +385,7 @@ describe("RateLimiter Unit Tests", () => {
     rateLimiter.destroy();
     expect(clearIntervalSpy).toHaveBeenCalledWith(intervalId);
 
-    // @ts-ignore
+    // @ts-expect-error - Intentionally nullify to prevent afterEach from destroying again
     rateLimiter = null; // Prevent afterEach from destroying it again
     clearIntervalSpy.mockRestore();
   });

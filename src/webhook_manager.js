@@ -12,7 +12,7 @@ import { nanoid } from "nanoid";
 
 export class WebhookManager {
   constructor() {
-    /** @type {Map<string, {expiresAt: string}>} */
+    /** @type {Map<string, WebhookData>} */
     this.webhooks = new Map();
     /** @type {import('apify').KeyValueStore | null} */
     this.kvStore = null;
@@ -30,9 +30,13 @@ export class WebhookManager {
         );
       }
     } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : String(error ?? "Unknown error");
       console.error(
         "[CRITICAL] Failed to initialize WebhookManager state:",
-        /** @type {Error} */ (error).message,
+        message,
       );
       // Fallback to empty map is already handled by constructor
     }
@@ -45,9 +49,13 @@ export class WebhookManager {
         await this.kvStore.setValue(this.STATE_KEY, state);
       }
     } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : String(error ?? "Unknown error");
       console.error(
         "[STORAGE-ERROR] Failed to persist webhook state:",
-        /** @type {Error} */ (error).message,
+        message,
       );
     }
   }
@@ -139,19 +147,26 @@ export class WebhookManager {
    * @param {number} retentionHours New retention period in hours
    */
   async updateRetention(retentionHours) {
+    if (
+      typeof retentionHours !== "number" ||
+      retentionHours <= 0 ||
+      !Number.isFinite(retentionHours)
+    ) {
+      throw new Error(
+        `Invalid retentionHours: ${retentionHours}. Must be a positive number.`,
+      );
+    }
     const now = Date.now();
-    const newExpiresAt = new Date(
-      now + retentionHours * 60 * 60 * 1000,
-    ).toISOString();
+    const newExpiryMs = now + retentionHours * 60 * 60 * 1000;
+    const newExpiresAt = new Date(newExpiryMs).toISOString();
     let updatedCount = 0;
 
     for (const [id, data] of this.webhooks.entries()) {
       const currentExpiry = new Date(data.expiresAt).getTime();
-      const newExpiry = new Date(newExpiresAt).getTime();
 
       // We only EXTEND retention. We don't shrink it to avoid premature deletion of data
       // that the user might have expected to stay longer based on previous settings.
-      if (newExpiry > currentExpiry) {
+      if (newExpiryMs > currentExpiry) {
         this.webhooks.set(id, { ...data, expiresAt: newExpiresAt });
         updatedCount++;
       }
