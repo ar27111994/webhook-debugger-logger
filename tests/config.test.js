@@ -17,6 +17,7 @@ describe("Config Utils", () => {
     expect(opts2.maxPayloadSize).toBe(small);
 
     // Test invalid input (non-number)
+    // @ts-expect-error - Invalid input type for maxPayloadSize
     const opts3 = parseWebhookOptions({ maxPayloadSize: "invalid" });
     expect(opts3.maxPayloadSize).toBe(DEFAULT_MAX_PAYLOAD_SIZE);
 

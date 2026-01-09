@@ -93,48 +93,48 @@ describe("WebhookManager", () => {
   test("generateWebhooks() should throw on invalid count (negative)", async () => {
     await webhookManager.init();
     await expect(webhookManager.generateWebhooks(-1, 24)).rejects.toThrow(
-      "Invalid count: -1. Must be a non-negative integer."
+      "Invalid count: -1. Must be a non-negative integer.",
     );
   });
 
   test("generateWebhooks() should throw on invalid count (non-integer)", async () => {
     await webhookManager.init();
     await expect(webhookManager.generateWebhooks(1.5, 24)).rejects.toThrow(
-      "Invalid count: 1.5. Must be a non-negative integer."
+      "Invalid count: 1.5. Must be a non-negative integer.",
     );
   });
 
   test("generateWebhooks() should throw on invalid retentionHours (zero)", async () => {
     await webhookManager.init();
     await expect(webhookManager.generateWebhooks(1, 0)).rejects.toThrow(
-      "Invalid retentionHours: 0. Must be a positive number."
+      "Invalid retentionHours: 0. Must be a positive number.",
     );
   });
 
   test("generateWebhooks() should throw on invalid retentionHours (negative)", async () => {
     await webhookManager.init();
     await expect(webhookManager.generateWebhooks(1, -5)).rejects.toThrow(
-      "Invalid retentionHours: -5. Must be a positive number."
+      "Invalid retentionHours: -5. Must be a positive number.",
     );
   });
 
   test("generateWebhooks() should throw on invalid retentionHours (Infinity)", async () => {
     await webhookManager.init();
     await expect(webhookManager.generateWebhooks(1, Infinity)).rejects.toThrow(
-      "Invalid retentionHours: Infinity. Must be a positive number."
+      "Invalid retentionHours: Infinity. Must be a positive number.",
     );
   });
 
   test("updateRetention() should throw on invalid retentionHours", async () => {
     await webhookManager.init();
     await expect(webhookManager.updateRetention(0)).rejects.toThrow(
-      "Invalid retentionHours: 0. Must be a positive number."
+      "Invalid retentionHours: 0. Must be a positive number.",
     );
     await expect(webhookManager.updateRetention(-1)).rejects.toThrow(
-      "Invalid retentionHours: -1. Must be a positive number."
+      "Invalid retentionHours: -1. Must be a positive number.",
     );
     await expect(webhookManager.updateRetention(NaN)).rejects.toThrow(
-      "Invalid retentionHours: NaN. Must be a positive number."
+      "Invalid retentionHours: NaN. Must be a positive number.",
     );
   });
 
