@@ -15,7 +15,7 @@
  * @property {number} [rateLimitPerMinute]
  */
 
-const DEFAULT_MAX_PAYLOAD_SIZE = 10485760; // 10MB
+export const DEFAULT_MAX_PAYLOAD_SIZE = 10485760; // 10MB
 
 /**
  * Parses and normalizes Actor input options with sensible defaults.
@@ -24,6 +24,12 @@ const DEFAULT_MAX_PAYLOAD_SIZE = 10485760; // 10MB
  * @returns {WebhookConfig} Normalized configuration object
  */
 export function parseWebhookOptions(options = {}) {
+  const maxPayloadSizeRaw = Number(options.maxPayloadSize);
+  const maxPayloadSize =
+    Number.isFinite(maxPayloadSizeRaw) && maxPayloadSizeRaw > 0
+      ? Math.min(maxPayloadSizeRaw, DEFAULT_MAX_PAYLOAD_SIZE)
+      : DEFAULT_MAX_PAYLOAD_SIZE;
+
   return {
     authKey: options.authKey,
     allowedIps: options.allowedIps ?? [],
@@ -36,7 +42,7 @@ export function parseWebhookOptions(options = {}) {
     jsonSchema: options.jsonSchema,
     customScript: options.customScript,
     maskSensitiveData: options.maskSensitiveData ?? true, // Default to true
-    maxPayloadSize: options.maxPayloadSize ?? DEFAULT_MAX_PAYLOAD_SIZE,
+    maxPayloadSize,
     rateLimitPerMinute: options.rateLimitPerMinute ?? 60,
   };
 }

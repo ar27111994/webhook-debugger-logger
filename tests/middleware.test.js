@@ -138,6 +138,38 @@ describe("Logger Middleware", () => {
     const event = /** @type {any} */ (onEvent.mock.calls[0][0]);
     expect(typeof event.body).toBe("string");
     expect(event.body).toContain("key");
+    expect(event.body).toContain("key");
+  });
+
+  test("should calculate size correctly for object bodies", async () => {
+    const middleware = createLoggerMiddleware(webhookManager, options, onEvent);
+    const bodyObj = { foo: "bar", baz: 123 };
+    const req = httpMocks.createRequest({
+      params: { id: "wh_123" },
+      query: { key: "secret" },
+      headers: { "content-type": "application/json" },
+      body: bodyObj,
+    });
+    const res = httpMocks.createResponse();
+
+    await middleware(req, res);
+
+    const event = /** @type {any} */ (onEvent.mock.calls[0][0]);
+    // {"foo":"bar","baz":123} is 23 chars
+    expect(event.size).toBe(Buffer.byteLength(JSON.stringify(bodyObj)));
+  });
+
+  test("should handle array auth key by taking first element", async () => {
+    const middleware = createLoggerMiddleware(webhookManager, options, onEvent);
+    const req = httpMocks.createRequest({
+      params: { id: "wh_123" },
+      query: { key: ["secret", "wrong"] },
+    });
+    const res = httpMocks.createResponse();
+
+    await middleware(req, res);
+
+    expect(res.statusCode).toBe(200);
   });
 
   test("should return JSON response for 4xx error status codes", async () => {

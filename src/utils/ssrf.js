@@ -57,7 +57,9 @@ export async function validateUrlForSsrf(urlString) {
   try {
     const hostname = target.hostname;
     const isIpLiteral =
-      /^(\d{1,3}\.){3}\d{1,3}$/.test(hostname) || hostname.startsWith("[");
+      /^(\d{1,3}\.){3}\d{1,3}$/.test(hostname) ||
+      hostname.includes(":") ||
+      hostname.startsWith("[");
 
     /** @type {string[]} */
     let ipsToCheck;

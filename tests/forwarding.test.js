@@ -175,7 +175,7 @@ describe("Forwarding Security", () => {
       const middleware = createLoggerMiddleware(
         webhookManager,
         options,
-        onEvent
+        onEvent,
       );
       const req = httpMocks.createRequest({
         params: { id: "wh_retry" },
@@ -198,7 +198,7 @@ describe("Forwarding Security", () => {
       const calls = jest.mocked(Actor.pushData).mock.calls;
       const errorLog = calls.find(
         // @ts-expect-error - Mock call data has dynamic structure
-        (c) => c[0].type === "forward_error" && c[0].statusCode === 500
+        (c) => c[0].type === "forward_error" && c[0].statusCode === 500,
       );
       expect(errorLog).toBeDefined();
     });
@@ -212,7 +212,7 @@ describe("Forwarding Security", () => {
       const middleware = createLoggerMiddleware(
         webhookManager,
         options,
-        onEvent
+        onEvent,
       );
       const req = httpMocks.createRequest({
         params: { id: "wh_fail_fast" },
@@ -241,7 +241,7 @@ describe("Forwarding Security", () => {
       const middleware = createLoggerMiddleware(
         webhookManager,
         options,
-        onEvent
+        onEvent,
       );
       const req = httpMocks.createRequest({
         params: { id: "wh_limit" },
@@ -255,7 +255,7 @@ describe("Forwarding Security", () => {
 
       expect(consoleErrorSpy).toHaveBeenCalledWith(
         expect.stringContaining("PLATFORM-LIMIT"),
-        expect.stringContaining("Dataset quota exceeded")
+        expect.stringContaining("Dataset quota exceeded"),
       );
       consoleErrorSpy.mockRestore();
     });

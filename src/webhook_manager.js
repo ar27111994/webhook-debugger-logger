@@ -45,9 +45,10 @@ export class WebhookManager {
   async persist() {
     try {
       const state = Object.fromEntries(this.webhooks);
-      if (this.kvStore) {
-        await this.kvStore.setValue(this.STATE_KEY, state);
+      if (!this.kvStore) {
+        this.kvStore = await Actor.openKeyValueStore();
       }
+      await this.kvStore.setValue(this.STATE_KEY, state);
     } catch (error) {
       const message =
         error instanceof Error

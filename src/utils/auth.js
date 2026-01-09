@@ -18,9 +18,12 @@ export function validateAuth(req, authKey) {
 
   if (authHeader.toLowerCase().startsWith("bearer ")) {
     providedKey = authHeader.substring(7).trim();
-  } else if (req.query.key && typeof req.query.key === "string") {
+  } else if (req.query.key) {
     // 2. Fallback to query param (Deprecated/Riskier)
-    providedKey = req.query.key;
+    const rawKey = Array.isArray(req.query.key)
+      ? req.query.key[0]
+      : req.query.key;
+    if (typeof rawKey === "string") providedKey = rawKey.trim();
     console.warn(
       "[SECURITY] API key provided in query string. Use Authorization header instead.",
     );
