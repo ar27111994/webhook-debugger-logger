@@ -352,8 +352,7 @@ describe("RateLimiter Unit Tests", () => {
     expect(() => new RateLimiter(-1, 1000)).toThrow(
       "RateLimiter: limit must be a finite integer >= 0",
     );
-    // @ts-expect-error - Testing invalid type for limit parameter
-    expect(() => new RateLimiter("10", 1000)).toThrow(
+    expect(() => new RateLimiter(/** @type {any} */ ("10"), 1000)).toThrow(
       "RateLimiter: limit must be a finite integer >= 0",
     );
     expect(() => new RateLimiter(10, 0)).toThrow(
@@ -371,8 +370,7 @@ describe("RateLimiter Unit Tests", () => {
     expect(() => new RateLimiter(10, 1000, -5)).toThrow(
       "RateLimiter: maxEntries must be a finite integer > 0",
     );
-    // @ts-expect-error - Testing invalid type for maxEntries parameter
-    expect(() => new RateLimiter(10, 1000, "100")).toThrow(
+    expect(() => new RateLimiter(10, 1000, /** @type {any} */ ("100"))).toThrow(
       "RateLimiter: maxEntries must be a finite integer > 0",
     );
   });

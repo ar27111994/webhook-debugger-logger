@@ -2,18 +2,31 @@ import { jest } from "@jest/globals";
 import { createApifyMock } from "./apify-mock.js";
 
 /**
+ * @typedef {jest.MockedFunction<any> & { get: jest.Mock; post: jest.Mock; delete: jest.Mock; put: jest.Mock }} AxiosMock
+ */
+
+/**
  * Standard axios mock for mirroring internal behavior.
  */
-// @ts-expect-error - Mock typing limitation with @types/jest 30
-const axiosBase = jest.fn().mockResolvedValue({ status: 200, data: "OK" });
-// @ts-expect-error - Mock typing limitation with @types/jest 30
-axiosBase.post = jest.fn().mockResolvedValue({ status: 200, data: "OK" });
-// @ts-expect-error - Mock typing limitation with @types/jest 30
-axiosBase.get = jest.fn().mockResolvedValue({ status: 200, data: "OK" });
-// @ts-expect-error - Mock typing limitation with @types/jest 30
-axiosBase.delete = jest.fn().mockResolvedValue({ status: 200, data: "OK" });
-// @ts-expect-error - Mock typing limitation with @types/jest 30
-axiosBase.put = jest.fn().mockResolvedValue({ status: 200, data: "OK" });
+const axiosBase = /** @type {AxiosMock} */ (jest.fn());
+
+axiosBase.mockResolvedValue({ status: 200, data: "OK" });
+axiosBase.post = /** @type {AxiosMock} */ (jest.fn()).mockResolvedValue({
+  status: 200,
+  data: "OK",
+});
+axiosBase.get = /** @type {AxiosMock} */ (jest.fn()).mockResolvedValue({
+  status: 200,
+  data: "OK",
+});
+axiosBase.delete = /** @type {AxiosMock} */ (jest.fn()).mockResolvedValue({
+  status: 200,
+  data: "OK",
+});
+axiosBase.put = /** @type {AxiosMock} */ (jest.fn()).mockResolvedValue({
+  status: 200,
+  data: "OK",
+});
 
 export const axiosMock = axiosBase;
 
@@ -27,8 +40,22 @@ export const apifyMock = createApifyMock();
  * Resolves to safe external IPs by default.
  */
 export const dnsPromisesMock = {
-  // @ts-expect-error - Mock typing limitation with @types/jest 30
-  resolve4: jest.fn().mockResolvedValue(["93.184.216.34"]),
-  // @ts-expect-error - Mock typing limitation with @types/jest 30
-  resolve6: jest.fn().mockResolvedValue([]),
+  resolve4: /** @type {jest.Mock<any>} */ (jest.fn()).mockResolvedValue([
+    "93.184.216.34",
+  ]),
+  resolve6: /** @type {jest.Mock<any>} */ (jest.fn()).mockResolvedValue([]),
 };
+
+/**
+ * Creates a mock dataset with predefined items.
+ * @param {Array<any>} [items]
+ * @returns {{ getData: jest.Mock, pushData: jest.Mock }}
+ */
+export const createDatasetMock = (items = []) => ({
+  getData: /** @type {jest.Mock<any>} */ (jest.fn()).mockResolvedValue({
+    items,
+  }),
+  pushData: /** @type {jest.Mock<any>} */ (jest.fn()).mockResolvedValue(
+    undefined,
+  ),
+});

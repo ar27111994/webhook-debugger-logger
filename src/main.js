@@ -9,18 +9,33 @@ import { createLoggerMiddleware } from "./logger_middleware.js";
 import { parseWebhookOptions } from "./utils/config.js";
 import { validateAuth } from "./utils/auth.js";
 import { RateLimiter } from "./utils/rate_limiter.js";
+import {
+  CLEANUP_INTERVAL_MS,
+  INPUT_POLL_INTERVAL_PROD_MS,
+  INPUT_POLL_INTERVAL_TEST_MS,
+  MAX_PAYLOAD_SIZE_DEFAULT,
+  MAX_REPLAY_RETRIES,
+  REPLAY_HEADERS_TO_IGNORE,
+  REPLAY_TIMEOUT_MS,
+  SHUTDOWN_TIMEOUT_MS,
+  SSE_HEARTBEAT_INTERVAL_MS,
+  STARTUP_TEST_EXIT_DELAY_MS,
+} from "./consts.js";
+import "./typedefs.js";
 
-const SSE_HEARTBEAT_INTERVAL_MS = 30000;
-const SHUTDOWN_TIMEOUT_MS = 30000;
-const STARTUP_TEST_EXIT_DELAY_MS = 5000;
-const CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
-const MAX_REPLAY_RETRIES = 3;
-const REPLAY_TIMEOUT_MS = 10000;
+const INPUT_POLL_INTERVAL_MS =
+  process.env.NODE_ENV === "test"
+    ? INPUT_POLL_INTERVAL_TEST_MS
+    : INPUT_POLL_INTERVAL_PROD_MS;
 
 /** @type {import("http").Server | undefined} */
 let server;
 /** @type {ReturnType<typeof setInterval> | undefined} */
 let sseHeartbeat;
+/** @type {ReturnType<typeof setInterval> | undefined} */
+let inputPollInterval;
+/** @type {Promise<void> | null} */
+let activePollPromise = null;
 /** @type {ReturnType<typeof setInterval> | undefined} */
 let cleanupInterval;
 /** @type {RateLimiter | undefined} */
@@ -30,17 +45,6 @@ const webhookManager = new WebhookManager();
 /** @type {Set<import("http").ServerResponse>} */
 const clients = new Set();
 const app = express(); // Exported for tests
-
-/**
- * @typedef {Object} WebhookItem
- * @property {string} id
- * @property {string} webhookId
- * @property {string} method
- * @property {Object} headers
- * @property {any} body
- * @property {string} timestamp
- * @property {number} statusCode
- */
 
 /**
  * Simple HTML escaping for security.
@@ -79,6 +83,8 @@ const broadcast = (data) => {
 const shutdown = async (signal) => {
   if (cleanupInterval) clearInterval(cleanupInterval);
   if (sseHeartbeat) clearInterval(sseHeartbeat);
+  if (inputPollInterval) clearInterval(inputPollInterval);
+  if (activePollPromise) await activePollPromise;
   if (webhookRateLimiter) webhookRateLimiter.destroy();
 
   if (process.env.NODE_ENV === "test" && signal !== "TEST_COMPLETE") return;
@@ -111,16 +117,11 @@ async function initialize() {
   await Actor.init();
 
   const input = /** @type {any} */ ((await Actor.getInput()) || {});
-  const config =
-    /** @type {{authKey?: string; rateLimitPerMinute?: number}} */ (
-      parseWebhookOptions(input)
-    );
-  const {
-    urlCount = 3,
-    retentionHours = 24,
-    maxPayloadSize = 10485760,
-    enableJSONParsing = true,
-  } = input;
+  const config = /** @type {import("./utils/config.js").WebhookConfig} */ (
+    parseWebhookOptions(input)
+  );
+  const { urlCount = 3, retentionHours = 24, enableJSONParsing = true } = input;
+  const maxPayloadSize = config.maxPayloadSize || MAX_PAYLOAD_SIZE_DEFAULT;
 
   const authKey = config.authKey || "";
   const rawRateLimit = config.rateLimitPerMinute;
@@ -197,58 +198,73 @@ async function initialize() {
   const mgmtRateLimiter = webhookRateLimiter.middleware();
   const loggerMiddleware = createLoggerMiddleware(
     webhookManager,
-    { ...config, maxPayloadSize },
+    config,
     broadcast,
   );
 
   // --- Hot Reloading Logic ---
-  // @ts-expect-error - Actor.on("input") is not in Apify types but exists at runtime
-  Actor.on("input", async (newInput) => {
-    if (!newInput) return;
-    console.log("[SYSTEM] Detected input update! Applying new settings...");
+  let lastInputStr = JSON.stringify(input);
 
-    try {
-      const newConfig =
-        /** @type {{authKey?: string; rateLimitPerMinute?: number}} */ (
-          parseWebhookOptions(newInput)
+  inputPollInterval = setInterval(() => {
+    activePollPromise = (async () => {
+      try {
+        const newInput = /** @type {Record<string, any> | null} */ (
+          await Actor.getInput()
         );
-      const newRateLimit = Math.max(
-        1,
-        Math.floor(newConfig.rateLimitPerMinute || 60),
-      );
+        if (!newInput) return;
 
-      // 1. Update Middleware
-      loggerMiddleware.updateOptions({ ...newConfig, maxPayloadSize });
+        const newInputStr = JSON.stringify(newInput);
+        if (newInputStr === lastInputStr) return;
 
-      // 2. Update Rate Limiter
-      if (webhookRateLimiter) webhookRateLimiter.limit = newRateLimit;
+        lastInputStr = newInputStr;
+        console.log("[SYSTEM] Detected input update! Applying new settings...");
 
-      // 3. Update Auth Key
-      currentAuthKey = newConfig.authKey || "";
-
-      // 4. Re-reconcile URL count
-      currentUrlCount = newInput.urlCount || currentUrlCount;
-      const activeWebhooks = webhookManager.getAllActive();
-      if (activeWebhooks.length < currentUrlCount) {
-        const diff = currentUrlCount - activeWebhooks.length;
-        console.log(
-          `[SYSTEM] Dynamic Scale-up: Generating ${diff} additional webhook(s).`,
+        const newConfig =
+          /** @type {{authKey?: string; rateLimitPerMinute?: number}} */ (
+            parseWebhookOptions(newInput)
+          );
+        const newRateLimit = Math.max(
+          1,
+          Math.floor(newConfig.rateLimitPerMinute || 60),
         );
-        await webhookManager.generateWebhooks(diff, currentRetentionHours);
+
+        // 1. Update Middleware
+        loggerMiddleware.updateOptions({ ...newConfig, maxPayloadSize });
+
+        // 2. Update Rate Limiter
+        if (webhookRateLimiter) webhookRateLimiter.limit = newRateLimit;
+
+        // 3. Update Auth Key
+        currentAuthKey = newConfig.authKey || "";
+
+        // 4. Re-reconcile URL count
+        currentUrlCount = newInput.urlCount || currentUrlCount;
+        const activeWebhooks = webhookManager.getAllActive();
+        if (activeWebhooks.length < currentUrlCount) {
+          const diff = currentUrlCount - activeWebhooks.length;
+          console.log(
+            `[SYSTEM] Dynamic Scale-up: Generating ${diff} additional webhook(s).`,
+          );
+          await webhookManager.generateWebhooks(diff, currentRetentionHours);
+        }
+
+        // 5. Update Retention
+        currentRetentionHours =
+          newInput.retentionHours || currentRetentionHours;
+        await webhookManager.updateRetention(currentRetentionHours);
+
+        console.log("[SYSTEM] Hot-reload complete. New settings are active.");
+      } catch (err) {
+        console.error(
+          "[SYSTEM-ERROR] Failed to apply new settings:",
+          /** @type {Error} */ (err).message,
+        );
+      } finally {
+        activePollPromise = null;
       }
-
-      // 5. Update Retention
-      currentRetentionHours = newInput.retentionHours || currentRetentionHours;
-      await webhookManager.updateRetention(currentRetentionHours);
-
-      console.log("[SYSTEM] Hot-reload complete. New settings are active.");
-    } catch (err) {
-      console.error(
-        "[SYSTEM-ERROR] Failed to apply new settings:",
-        /** @type {Error} */ (err).message,
-      );
-    }
-  });
+    })();
+  }, INPUT_POLL_INTERVAL_MS);
+  if (inputPollInterval.unref) inputPollInterval.unref();
 
   sseHeartbeat = setInterval(() => {
     clients.forEach((c) => {
@@ -327,9 +343,8 @@ async function initialize() {
         }
 
         // Validate URL and check for SSRF
-        const ssrfResult = await validateUrlForSsrf(
-          String(req.query.url || ""),
-        );
+        // Use normalized targetUrl for validation
+        const ssrfResult = await validateUrlForSsrf(String(targetUrl));
         if (!ssrfResult.safe) {
           if (ssrfResult.error === "Unable to resolve hostname") {
             res
@@ -366,18 +381,7 @@ async function initialize() {
           return;
         }
 
-        const headersToIgnore = [
-          "content-length",
-          "content-encoding",
-          "transfer-encoding",
-          "host",
-          "connection",
-          "keep-alive",
-          "proxy-authorization",
-          "te",
-          "trailer",
-          "upgrade",
-        ];
+        const headersToIgnore = REPLAY_HEADERS_TO_IGNORE;
         /** @type {string[]} */
         const strippedHeaders = [];
         /** @type {Record<string, unknown>} */
@@ -412,6 +416,7 @@ async function initialize() {
                 "X-Original-Webhook-Id": webhookId,
                 host: target.host,
               },
+              maxRedirects: 0,
               validateStatus: () => true,
               timeout: REPLAY_TIMEOUT_MS,
             });
@@ -458,7 +463,9 @@ async function initialize() {
         res.status(isTimeout ? 504 : 500).json({
           error: "Replay failed",
           message: isTimeout
-            ? "Target destination timed out after 3 attempts and 10s timeout"
+            ? `Target destination timed out after ${MAX_REPLAY_RETRIES} attempts and ${
+                REPLAY_TIMEOUT_MS / 1000
+              }s timeout`
             : axiosError.message,
           code: axiosError.code,
         });
@@ -543,11 +550,11 @@ async function initialize() {
     const activeWebhooks = webhookManager.getAllActive();
 
     res.json({
-      version: "2.7.1",
+      version: "2.7.2",
       status: "Enterprise Suite Online",
       system: {
-        authActive: !!authKey,
-        retentionHours,
+        authActive: !!currentAuthKey,
+        retentionHours: currentRetentionHours,
         maxPayloadLimit: `${((maxPayloadSize || 0) / 1024 / 1024).toFixed(
           1,
         )}MB`,
@@ -583,7 +590,7 @@ async function initialize() {
 
     // 2. Auth Check for Root
     const authResult = /** @type {{isValid: boolean; error?: string}} */ (
-      validateAuth(req, authKey)
+      validateAuth(req, currentAuthKey)
     );
     if (!authResult.isValid) {
       if (isBrowser) {
@@ -639,7 +646,7 @@ async function initialize() {
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Webhook Debugger v2.7.1</title>
+            <title>Webhook Debugger v2.7.2</title>
             <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono&display=swap" rel="stylesheet">
             <style>
                 :root { --primary: #5865F2; --success: #2ecc71; --bg: #0f172a; --card: #1e293b; --text: #f8fafc; --text-dim: #94a3b8; }
@@ -659,7 +666,7 @@ async function initialize() {
         <body>
             <div class="container">
                 <h1>Webhook Debugger</h1>
-                <span class="version">v2.7.1 "Enterprise Suite"</span>
+                <span class="version">v2.7.2 "Enterprise Suite"</span>
                 <div class="status"><div class="dot"></div>System Online & Optimized</div>
                 <div class="stat-item"><span class="stat-label">Active Webhooks (Live TTL)</span><span class="stat-value">${activeCount} active endpoints</span></div>
                 <div class="stat-item"><span class="stat-label">Quick Start</span><span class="stat-value">GET <a href="/info">/info</a> to view routing and management APIs</span></div>
@@ -670,7 +677,7 @@ async function initialize() {
       `);
     } else {
       res.send(
-        `Webhook Debugger & Logger v2.7.1 (Enterprise Suite) is running.\nActive Webhooks: ${activeCount}\nUse /info for management API.\n`,
+        `Webhook Debugger & Logger v2.7.2 (Enterprise Suite) is running.\nActive Webhooks: ${activeCount}\nUse /info for management API.\n`,
       );
     }
   });

@@ -9,6 +9,10 @@ assignees: ""
 **Describe the bug**
 A clear and concise description of what the bug is.
 
+**Security-related bugs**
+If this is a security vulnerability, please do not open a public issue.
+Refer to our [SECURITY.md](../../SECURITY.md) for responsible disclosure guidelines.
+
 **To Reproduce**
 Steps to reproduce the behavior:
 

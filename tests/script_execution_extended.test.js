@@ -48,13 +48,16 @@ describe("Script Execution Extended", () => {
       .spyOn(console, "error")
       .mockImplementation(() => {});
 
-    await middleware(req, res);
+    try {
+      await middleware(req, res);
 
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining("[SCRIPT-EXEC-ERROR]"),
-      expect.stringContaining("Script execution timed out after"),
-    );
-    consoleErrorSpy.mockRestore();
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining("[SCRIPT-EXEC-ERROR]"),
+        expect.stringContaining("Script execution timed out after"),
+      );
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
   });
 
   test("should handle script execution error", async () => {
@@ -76,12 +79,15 @@ describe("Script Execution Extended", () => {
       .spyOn(console, "error")
       .mockImplementation(() => {});
 
-    await middleware(req, res);
+    try {
+      await middleware(req, res);
 
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining("[SCRIPT-EXEC-ERROR]"),
-      "Boom",
-    );
-    consoleErrorSpy.mockRestore();
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining("[SCRIPT-EXEC-ERROR]"),
+        "Boom",
+      );
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
   });
 });

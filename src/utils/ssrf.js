@@ -94,6 +94,6 @@ export async function validateUrlForSsrf(urlString) {
 
     return { safe: true, href: target.href, host: target.host };
   } catch {
-    return { safe: false, error: "DNS resolution failed" };
+    return { safe: false, error: "URL validation failed" };
   }
 }

@@ -15,6 +15,7 @@ jest.unstable_mockModule("apify", async () => {
   const { apifyMock } = await import("./helpers/shared-mocks.js");
   return { Actor: apifyMock };
 });
+const { createDatasetMock } = await import("./helpers/shared-mocks.js");
 
 jest.unstable_mockModule("axios", async () => {
   const { axiosMock } = await import("./helpers/shared-mocks.js");
@@ -77,11 +78,9 @@ describe("API E2E Tests", () => {
       body: '{"test":"data"}',
       timestamp: new Date().toISOString(),
     };
-    jest.mocked(Actor.openDataset).mockResolvedValue(
-      /** @type {any} */ ({
-        getData: jest.fn(async () => ({ items: [mockItem] })),
-      }),
-    );
+    jest
+      .mocked(Actor.openDataset)
+      .mockResolvedValue(/** @type {any} */ (createDatasetMock([mockItem])));
 
     const res = await request(app).get("/logs").query({ webhookId });
     expect(res.statusCode).toBe(200);
@@ -99,11 +98,9 @@ describe("API E2E Tests", () => {
       body: '{"test":"data"}',
       headers: {},
     };
-    jest.mocked(Actor.openDataset).mockResolvedValue(
-      /** @type {any} */ ({
-        getData: jest.fn(async () => ({ items: [mockItem] })),
-      }),
-    );
+    jest
+      .mocked(Actor.openDataset)
+      .mockResolvedValue(/** @type {any} */ (createDatasetMock([mockItem])));
 
     // Mock axios to prevent real network calls
     const axios = (await import("axios")).default;
@@ -125,11 +122,9 @@ describe("API E2E Tests", () => {
       body: '{"foo":"bar"}',
       headers: {},
     };
-    jest.mocked(Actor.openDataset).mockResolvedValue(
-      /** @type {any} */ ({
-        getData: jest.fn(async () => ({ items: [mockItem] })),
-      }),
-    );
+    jest
+      .mocked(Actor.openDataset)
+      .mockResolvedValue(/** @type {any} */ (createDatasetMock([mockItem])));
 
     const res = await request(app)
       .post(`/replay/${webhookId}/evt_789`)
@@ -149,17 +144,22 @@ describe("API E2E Tests", () => {
   test("GET /log-stream should set SSE headers and be connectable", (done) => {
     // Use native http module for SSE endpoints since supertest can't handle streaming
     const http = require("http");
-    const port = 9999;
+    const port = 0;
     const testServer = app.listen(port, () => {
-      const req = http.get(`http://localhost:${port}/log-stream`, (res) => {
-        // Verify SSE headers
-        expect(res.headers["content-type"]).toContain("text/event-stream");
-        expect(res.headers["cache-control"]).toBe("no-cache");
-        expect(res.headers["connection"]).toBe("keep-alive");
-        // Close the request immediately after verifying headers
-        req.destroy();
-        testServer.close(() => done());
-      });
+      const addr = testServer.address();
+      const allocatedPort = typeof addr === "object" ? addr?.port : port;
+      const req = http.get(
+        `http://localhost:${allocatedPort}/log-stream`,
+        (res) => {
+          // Verify SSE headers
+          expect(res.headers["content-type"]).toContain("text/event-stream");
+          expect(res.headers["cache-control"]).toBe("no-cache");
+          expect(res.headers["connection"]).toBe("keep-alive");
+          // Close the request immediately after verifying headers
+          req.destroy();
+          testServer.close(() => done());
+        },
+      );
       req.on("error", () => {
         // Expected when we abort
         testServer.close(() => done());
@@ -188,11 +188,9 @@ describe("API E2E Tests", () => {
   });
 
   test("GET /replay/:webhookId/:itemId without url should return 400", async () => {
-    jest.mocked(Actor.openDataset).mockResolvedValue(
-      /** @type {any} */ ({
-        getData: jest.fn(async () => ({ items: [] })),
-      }),
-    );
+    jest
+      .mocked(Actor.openDataset)
+      .mockResolvedValue(/** @type {any} */ (createDatasetMock([])));
 
     const res = await request(app).get(`/replay/${webhookId}/evt_123`);
 
@@ -201,19 +199,19 @@ describe("API E2E Tests", () => {
   });
 
   test("GET /replay/:webhookId/:itemId with non-existent event should return 404", async () => {
-    jest.mocked(Actor.openDataset).mockResolvedValue(
-      /** @type {any} */ ({
-        getData: jest.fn(async () => ({ items: [] })),
-      }),
-    );
+    jest
+      .mocked(Actor.openDataset)
+      .mockResolvedValue(/** @type {any} */ (createDatasetMock([])));
 
     const axios = (await import("axios")).default;
-    // @ts-expect-error - Mock function on imported module
-    axios.mockResolvedValue({ status: 200 });
+    /** @type {import("./helpers/shared-mocks.js").AxiosMock} */ (
+      axios
+    ).mockResolvedValue({ status: 200 });
 
     // DNS mock is registered at module level via shared-mocks
-    const dns = (await import("dns/promises")).default;
-    /** @type {any} */ (dns.resolve4).mockResolvedValue(["93.184.216.34"]);
+    /** @type {typeof import("./helpers/shared-mocks.js").dnsPromisesMock} */
+    const dns = /** @type {any} */ (await import("dns/promises")).default;
+    dns.resolve4.mockResolvedValue(["93.184.216.34"]);
 
     const res = await request(app)
       .get(`/replay/${webhookId}/evt_nonexistent`)

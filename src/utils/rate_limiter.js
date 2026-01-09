@@ -125,7 +125,9 @@ export class RateLimiter {
           typeof xForwardedFor === "string"
             ? xForwardedFor.split(",")[0].trim()
             : Array.isArray(xForwardedFor)
-              ? xForwardedFor[0]
+              ? String(xForwardedFor[0] || "")
+                  .split(",")[0]
+                  .trim()
               : undefined;
 
         const xRealIp = req.headers?.["x-real-ip"];

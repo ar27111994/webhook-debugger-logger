@@ -7,6 +7,13 @@ export default [
     languageOptions: {
       globals: {
         ...globals.node,
+      },
+    },
+  },
+  {
+    files: ["**/tests/**", "**/*.test.js", "**/*.spec.js"],
+    languageOptions: {
+      globals: {
         ...globals.jest,
       },
     },

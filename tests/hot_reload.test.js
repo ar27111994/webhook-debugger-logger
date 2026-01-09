@@ -18,6 +18,11 @@ const request = (await import("supertest")).default;
 const { Actor } = await import("apify");
 const { initialize, shutdown, webhookManager } = await import("../src/main.js");
 
+const sleep = (/** @type {number} */ ms) =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+const reloadSleepMs = 150;
+
 describe("Hot-Reloading Configuration Tests", () => {
   /** @type {import('express').Express} */
   let app;
@@ -49,6 +54,7 @@ describe("Hot-Reloading Configuration Tests", () => {
       urlCount: 1,
       retentionHours: 1,
     });
+    await sleep(reloadSleepMs);
 
     // Verify old key fails
     const res2 = await request(app)
@@ -73,6 +79,7 @@ describe("Hot-Reloading Configuration Tests", () => {
       urlCount: 3,
       retentionHours: 1,
     });
+    await sleep(reloadSleepMs);
 
     const newActive = webhookManager.getAllActive().length;
     expect(newActive).toBe(3);
@@ -97,6 +104,7 @@ describe("Hot-Reloading Configuration Tests", () => {
       customScript:
         "event.statusCode = 201; event.responseBody = 'Transformed!';",
     });
+    await sleep(reloadSleepMs);
 
     // 3. Verify transformation applies immediately
     const res2 = await request(app)
@@ -114,7 +122,9 @@ describe("Hot-Reloading Configuration Tests", () => {
 
     await /** @type {any} */ (Actor).emitInput({
       jsonSchema: "{ invalid json: }", // Malformed
+      authKey: "new-super-secret",
     });
+    await sleep(reloadSleepMs);
 
     // Verify error was logged
     expect(consoleSpy).toHaveBeenCalledWith(

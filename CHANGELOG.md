@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.7.2] - 2026-01-09
+
+### Refactored (2.7.2)
+
+- **Code Reusability**: Centralized system constants and type definitions into `src/consts.js` and `src/typedefs.js` for better maintainability.
+- **Test Infrastructure**: Standardized mock generation (`createDatasetMock`) and utility helpers to reduce test boilerplate and improve stability.
+
 ## [2.7.1] - 2026-01-08
 
 ### Improved (2.7.1)

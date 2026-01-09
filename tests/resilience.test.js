@@ -1,4 +1,3 @@
-// @ts-nocheck
 import {
   jest,
   describe,
@@ -14,6 +13,7 @@ jest.unstable_mockModule("apify", async () => {
   const { apifyMock } = await import("./helpers/shared-mocks.js");
   return { Actor: apifyMock };
 });
+const { createDatasetMock } = await import("./helpers/shared-mocks.js");
 
 jest.unstable_mockModule("axios", async () => {
   const { axiosMock } = await import("./helpers/shared-mocks.js");
@@ -60,13 +60,9 @@ describe("Resilience & Retry Tests", () => {
         headers: {},
       };
 
-      jest.mocked(Actor.openDataset).mockResolvedValue(
-        /** @type {any} */ ({
-          getData: jest
-            .fn()
-            .mockResolvedValue(/** @type {any} */ ({ items: [mockItem] })),
-        }),
-      );
+      jest
+        .mocked(Actor.openDataset)
+        .mockResolvedValue(/** @type {any} */ (createDatasetMock([mockItem])));
 
       // Mock axios to fail twice then succeed
       /** @type {any} */ (axios)
@@ -95,11 +91,9 @@ describe("Resilience & Retry Tests", () => {
         headers: {},
       };
 
-      jest.mocked(Actor.openDataset).mockResolvedValue(
-        /** @type {any} */ ({
-          getData: jest.fn().mockResolvedValue({ items: [mockItem] }),
-        }),
-      );
+      jest
+        .mocked(Actor.openDataset)
+        .mockResolvedValue(/** @type {any} */ (createDatasetMock([mockItem])));
 
       // Always fail
       /** @type {any} */ (axios).mockRejectedValue({ code: "ECONNABORTED" });
@@ -122,11 +116,9 @@ describe("Resilience & Retry Tests", () => {
         headers: {},
       };
 
-      jest.mocked(Actor.openDataset).mockResolvedValue(
-        /** @type {any} */ ({
-          getData: jest.fn().mockResolvedValue({ items: [mockItem] }),
-        }),
-      );
+      jest
+        .mocked(Actor.openDataset)
+        .mockResolvedValue(/** @type {any} */ (createDatasetMock([mockItem])));
 
       // Axios returns a response with 404 status (no exception thrown if validateStatus allows it)
       // But in our Replay logic we use validateStatus: () => true, so it wont throw.
@@ -147,16 +139,17 @@ describe("Resilience & Retry Tests", () => {
   describe("Background Tasks Resilience", () => {
     test("should NOT block response if background tasks are slow (Timeout Verification)", async () => {
       // Mock Actor.pushData to be very slow
-      // @ts-expect-error - Mock implementation differs from actual signature
       jest.mocked(Actor.pushData).mockImplementation(
-        () =>
-          new Promise((resolve) => {
-            const t = setTimeout(
-              () => resolve(/** @type {any} */ (undefined)),
-              1000,
-            );
-            if (t.unref) t.unref();
-          }),
+        /** @type {any} */ (
+          () =>
+            new Promise((resolve) => {
+              const t = setTimeout(
+                () => resolve(/** @type {any} */ (undefined)),
+                1000,
+              );
+              if (t.unref) t.unref();
+            })
+        ),
       );
 
       const startTime = Date.now();

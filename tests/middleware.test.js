@@ -138,7 +138,6 @@ describe("Logger Middleware", () => {
     const event = /** @type {any} */ (onEvent.mock.calls[0][0]);
     expect(typeof event.body).toBe("string");
     expect(event.body).toContain("key");
-    expect(event.body).toContain("key");
   });
 
   test("should calculate size correctly for object bodies", async () => {

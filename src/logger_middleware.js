@@ -7,39 +7,24 @@ import vm from "vm";
 import { validateAuth } from "./utils/auth.js";
 import { parseWebhookOptions } from "./utils/config.js";
 import { validateUrlForSsrf } from "./utils/ssrf.js";
+import {
+  BACKGROUND_TASK_TIMEOUT_PROD_MS,
+  BACKGROUND_TASK_TIMEOUT_TEST_MS,
+  FORWARD_HEADERS_TO_IGNORE,
+  FORWARD_TIMEOUT_MS,
+  MAX_FORWARD_RETRIES,
+  MAX_PAYLOAD_SIZE_LIMIT,
+  SCRIPT_EXECUTION_TIMEOUT_MS,
+  SENSITIVE_HEADERS,
+} from "./consts.js";
 
-/** @type {import("ajv").default} */
+/**
+ * @typedef {import('./typedefs.js').WebhookEvent} WebhookEvent
+ * @typedef {import('./typedefs.js').LoggerOptions} LoggerOptions
+ */
+
 // @ts-expect-error - Ajv's default export is a class constructor but TypeScript infers namespace type; explicit cast required
 const ajv = new Ajv();
-
-const FORWARD_TIMEOUT_MS = 10000;
-const BACKGROUND_TASK_TIMEOUT_PROD = 10000;
-const BACKGROUND_TASK_TIMEOUT_TEST = 100;
-const MAX_FORWARD_RETRIES = 3;
-const SCRIPT_EXECUTION_TIMEOUT_MS = 1000;
-
-/**
- * @typedef {Object} WebhookEvent
- * @property {string} id
- * @property {string} timestamp
- * @property {string} webhookId
- * @property {string} method
- * @property {Object.<string, string | string[] | undefined>} headers
- * @property {Object.<string, any>} query
- * @property {string|Object} body
- * @property {string} contentType
- * @property {number | undefined} size
- * @property {number} statusCode
- * @property {string|Object} [responseBody]
- * @property {Object.<string, string>} [responseHeaders]
- * @property {number} processingTime
- * @property {string | undefined} remoteIp
- * @property {string | undefined} [userAgent]
- */
-
-/**
- * @typedef {import('./utils/config.js').WebhookConfig} LoggerOptions
- */
 
 /**
  * Validates the basic webhook request parameters and permissions.
@@ -131,7 +116,7 @@ function validateWebhookRequest(req, webhookId, options, webhookManager) {
 
   const contentLength = Number.isFinite(parsedLength) ? parsedLength : bodyLen;
 
-  const maxSize = options.maxPayloadSize || 1048576; // 1MB default
+  const maxSize = options.maxPayloadSize || MAX_PAYLOAD_SIZE_LIMIT; // 1MB default
   if (contentLength > maxSize) {
     return {
       isValid: false,
@@ -142,7 +127,7 @@ function validateWebhookRequest(req, webhookId, options, webhookManager) {
     };
   }
 
-  return { isValid: true, remoteIp, contentLength };
+  return { isValid: true, remoteIp, contentLength, received: contentLength };
 }
 
 /**
@@ -198,13 +183,7 @@ function prepareRequestData(req, options, validate) {
     loggedBody = "";
   }
 
-  const headersToMask = [
-    "authorization",
-    "cookie",
-    "set-cookie",
-    "x-api-key",
-    "api-key",
-  ];
+  const headersToMask = SENSITIVE_HEADERS;
   const loggedHeaders = maskSensitiveData
     ? Object.fromEntries(
         Object.entries(req.headers).map(([key, value]) => [
@@ -325,21 +304,7 @@ async function executeBackgroundTasks(event, req, options, onEvent) {
           try {
             attempt++;
 
-            const sensitiveHeaders = [
-              "authorization",
-              "cookie",
-              "set-cookie",
-              "x-api-key",
-              "api-key",
-              // hop-by-hop / request-specific headers
-              "content-length",
-              "host",
-              "connection",
-              "transfer-encoding",
-              "keep-alive",
-              "proxy-connection",
-              "upgrade",
-            ];
+            const sensitiveHeaders = FORWARD_HEADERS_TO_IGNORE;
 
             const forwardingHeaders =
               /** @type {unknown} */ (options.forwardHeaders) !== false
@@ -406,7 +371,10 @@ async function executeBackgroundTasks(event, req, options, onEvent) {
               }
               break; // Stop retrying
             } else {
-              await new Promise((resolve) => setTimeout(resolve, delay));
+              await new Promise((resolve) => {
+                const h = setTimeout(resolve, delay);
+                if (h.unref) h.unref();
+              });
             }
           }
         }
@@ -558,7 +526,7 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
       return res.status(validation.statusCode || 400).json({
         error: validation.error,
         ip: validation.remoteIp,
-        received: validation.received,
+        received: validation.contentLength,
         id: webhookId,
         docs: "https://apify.com/ar27111994/webhook-debugger-logger",
       });
@@ -625,8 +593,8 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
       // Wrap background work in Promise.race to ensure we don't hang the Actor if storage is slow
       const timeoutMs =
         process.env.NODE_ENV === "test"
-          ? BACKGROUND_TASK_TIMEOUT_TEST
-          : BACKGROUND_TASK_TIMEOUT_PROD;
+          ? BACKGROUND_TASK_TIMEOUT_TEST_MS
+          : BACKGROUND_TASK_TIMEOUT_PROD_MS;
       /** @type {ReturnType<typeof setTimeout> | undefined} */
       let timeoutHandle;
       await Promise.race([

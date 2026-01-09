@@ -1,13 +1,9 @@
 import { Actor } from "apify";
 import { nanoid } from "nanoid";
+import { MAX_BULK_CREATE } from "./consts.js";
 
 /**
- * @typedef {Object} WebhookData
- * @property {string} expiresAt
- * @property {number} [responseDelayMs]
- * @property {number} [defaultResponseCode]
- * @property {string} [defaultResponseBody]
- * @property {Object.<string, string>} [defaultResponseHeaders]
+ * @typedef {import('./typedefs.js').WebhookData} WebhookData
  */
 
 export class WebhookManager {
@@ -73,6 +69,13 @@ export class WebhookManager {
         `Invalid count: ${count}. Must be a non-negative integer.`,
       );
     }
+    // count check handled by MAX_BULK_CREATE usage below
+    if (count > MAX_BULK_CREATE) {
+      throw new Error(
+        `Invalid count: ${count}. Max allowed is ${MAX_BULK_CREATE}.`,
+      );
+    }
+
     if (
       typeof retentionHours !== "number" ||
       retentionHours <= 0 ||
@@ -167,7 +170,7 @@ export class WebhookManager {
 
       // We only EXTEND retention. We don't shrink it to avoid premature deletion of data
       // that the user might have expected to stay longer based on previous settings.
-      if (newExpiryMs > currentExpiry) {
+      if (!Number.isFinite(currentExpiry) || newExpiryMs > currentExpiry) {
         this.webhooks.set(id, { ...data, expiresAt: newExpiresAt });
         updatedCount++;
       }

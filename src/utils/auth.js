@@ -13,7 +13,10 @@ export function validateAuth(req, authKey) {
   }
 
   // 1. Extract token from Authorization header (Preferred)
-  const authHeader = req.headers["authorization"] || "";
+  const authHeaderRaw = req.headers["authorization"];
+  const authHeader = Array.isArray(authHeaderRaw)
+    ? (authHeaderRaw[0] ?? "")
+    : (authHeaderRaw ?? "");
   let providedKey = "";
 
   if (authHeader.toLowerCase().startsWith("bearer ")) {

@@ -30,7 +30,7 @@ const { Actor } = await import("apify");
 describe("Forwarding Security", () => {
   /** @type {import('../src/webhook_manager.js').WebhookManager} */
   let webhookManager;
-  /** @type {import('../src/logger_middleware.js').LoggerOptions} */
+  /** @type {import('../src/typedefs.js').LoggerOptions} */
   let options;
   /** @type {jest.Mock} */
   let onEvent;
@@ -131,14 +131,16 @@ describe("Forwarding Security", () => {
     // Explicitly assert that pushData was invoked before accessing mock.calls
     expect(Actor.pushData).toHaveBeenCalled();
 
-    const pushedData = jest.mocked(Actor.pushData).mock.calls[0][0];
-    // @ts-expect-error - Mock typing limitation
+    const pushedData = /** @type {any} */ (
+      jest.mocked(Actor.pushData).mock.calls[0][0]
+    );
+
     expect(pushedData.headers["authorization"]).toBe("[MASKED]");
-    // @ts-expect-error - Mock typing limitation
+
     expect(pushedData.headers["cookie"]).toBe("[MASKED]");
-    // @ts-expect-error - Mock typing limitation
+
     expect(pushedData.headers["x-api-key"]).toBe("[MASKED]");
-    // @ts-expect-error - Mock typing limitation
+
     expect(pushedData.headers["user-agent"]).toBe("test-agent");
   });
 
@@ -168,8 +170,8 @@ describe("Forwarding Security", () => {
     test("should retry transient errors (ECONNABORTED) and log failure", async () => {
       // Mock failure
       const error = new Error("Timeout");
-      // @ts-expect-error - Mock typing limitation
-      error.code = "ECONNABORTED";
+
+      /** @type {any} */ (error).code = "ECONNABORTED";
       jest.mocked(axios.post).mockRejectedValue(error);
 
       const middleware = createLoggerMiddleware(
@@ -197,16 +199,17 @@ describe("Forwarding Security", () => {
       // Verify error log push
       const calls = jest.mocked(Actor.pushData).mock.calls;
       const errorLog = calls.find(
-        // @ts-expect-error - Mock call data has dynamic structure
-        (c) => c[0].type === "forward_error" && c[0].statusCode === 500,
+        (c) =>
+          /** @type {any} */ (c[0]).type === "forward_error" &&
+          /** @type {any} */ (c[0]).statusCode === 500,
       );
       expect(errorLog).toBeDefined();
     });
 
     test("should NOT retry non-transient errors", async () => {
       const error = new Error("Bad Request");
-      // @ts-expect-error - Mock typing limitation
-      error.response = { status: 400 };
+
+      /** @type {any} */ (error).response = { status: 400 };
       jest.mocked(axios.post).mockRejectedValue(error);
 
       const middleware = createLoggerMiddleware(

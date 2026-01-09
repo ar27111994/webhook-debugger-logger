@@ -1,4 +1,4 @@
-# 🚀 Webhook Debugger & Logger v2.7.0 (Enterprise Suite)
+# 🚀 Webhook Debugger & Logger v2.7.2 (Enterprise Suite)
 
 [![Build Status](https://github.com/ar27111994/webhook-debugger-logger/actions/workflows/ci.yml/badge.svg)](https://github.com/ar27111994/webhook-debugger-logger/actions)
 [![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
@@ -8,7 +8,7 @@
 
 ![Dashboard Mockup](https://raw.githubusercontent.com/ar27111994/webhook-debugger-logger/main/assets/dashboard.png)
 
-<a href="https://www.producthunt.com/products/webhook-debugger-logger-api-mocker?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-webhook-debugger-logger-api-mocker" target="_blank" rel="noopener noreferrer"><img alt="Webhook Debugger, Logger & API Mocker - Debug webhooks 90% faster without localhost tunneling | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1057655&theme=light&t=1767529788592"></a>
+[![Webhook Debugger, Logger & API Mocker - Debug webhooks 90% faster without localhost tunneling | Product Hunt](https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1057655&theme=light&t=1767529788592)](https://www.producthunt.com/products/webhook-debugger-logger-api-mocker?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-webhook-debugger-logger-api-mocker)
 
 A high-performance Apify Actor built for developers to test, inspect, and automate incoming webhooks in real-time. This Actor is optimized for **Apify Standby Mode**, providing sub-10ms logic execution and zero cold-start latency.
 
