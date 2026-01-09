@@ -21,3 +21,14 @@ export const axiosMock = axiosBase;
  * Minimal Apify Actor mock for basic tests.
  */
 export const apifyMock = createApifyMock();
+
+/**
+ * DNS promises mock for SSRF testing.
+ * Resolves to safe external IPs by default.
+ */
+export const dnsPromisesMock = {
+  // @ts-expect-error - Mock typing limitation with @types/jest 30
+  resolve4: jest.fn().mockResolvedValue(["93.184.216.34"]),
+  // @ts-expect-error - Mock typing limitation with @types/jest 30
+  resolve6: jest.fn().mockResolvedValue([]),
+};

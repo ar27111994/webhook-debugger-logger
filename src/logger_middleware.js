@@ -6,9 +6,10 @@ import { nanoid } from "nanoid";
 import vm from "vm";
 import { validateAuth } from "./utils/auth.js";
 import { parseWebhookOptions } from "./utils/config.js";
+import { validateUrlForSsrf } from "./utils/ssrf.js";
 
 /** @type {import("ajv").default} */
-// @ts-expect-error - Ajv default import nuance
+// @ts-expect-error - Ajv's default export is a class constructor but TypeScript infers namespace type; explicit cast required
 const ajv = new Ajv();
 
 const FORWARD_TIMEOUT_MS = 10000;
@@ -39,6 +40,29 @@ const SCRIPT_EXECUTION_TIMEOUT_MS = 1000;
 /**
  * @typedef {import('./utils/config.js').WebhookConfig} LoggerOptions
  */
+
+/**
+ * Validates the basic webhook request parameters and permissions.
+ *
+ * @param {import("express").Request} req
+ * @param {string} webhookId
+ * @param {LoggerOptions} options
+ * @param {import("./webhook_manager.js").WebhookManager} webhookManager
+ * @returns {{ isValid: boolean, statusCode?: number, error?: string, remoteIp?: string, contentLength?: number, received?: number }}
+ */
+/**
+ * Validates and coerces a forced status code.
+ * @param {any} forcedStatus
+ * @param {number} [defaultCode=200]
+ * @returns {number}
+ */
+function getValidStatusCode(forcedStatus, defaultCode = 200) {
+  const forced = Number(forcedStatus);
+  if (Number.isFinite(forced) && forced >= 100 && forced < 600) {
+    return forced;
+  }
+  return defaultCode;
+}
 
 /**
  * Validates the basic webhook request parameters and permissions.
@@ -281,13 +305,16 @@ async function executeBackgroundTasks(event, req, options, onEvent) {
         let attempt = 0;
         let success = false;
 
-        let hostHeader = "";
-        try {
-          hostHeader = new URL(validatedUrl).host;
-        } catch (_) {
-          console.error(`[FORWARD-ERROR] Invalid forward URL: ${validatedUrl}`);
+        // SSRF validation for forwardUrl
+        const ssrfResult = await validateUrlForSsrf(validatedUrl);
+        if (!ssrfResult.safe) {
+          console.error(
+            `[FORWARD-ERROR] SSRF blocked: ${ssrfResult.error} for ${validatedUrl}`,
+          );
           return;
         }
+        const hostHeader = ssrfResult.host || "";
+        validatedUrl = ssrfResult.href || validatedUrl;
 
         while (attempt < MAX_FORWARD_RETRIES && !success) {
           try {
@@ -554,14 +581,10 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
         body: loggedBody,
         contentType,
         size: validation.contentLength,
-        statusCode: (() => {
-          // Coerce and validate forcedStatus
-          const forced = Number(/** @type {any} */ (req).forcedStatus);
-          if (Number.isFinite(forced) && forced >= 100 && forced < 600) {
-            return forced;
-          }
-          return mergedOptions.defaultResponseCode ?? 200;
-        })(),
+        statusCode: getValidStatusCode(
+          /** @type {any} */ (req).forcedStatus,
+          mergedOptions.defaultResponseCode ?? 200,
+        ),
         responseBody: undefined, // Custom scripts can set this
         responseHeaders: {}, // Custom scripts can add headers
         processingTime: 0,

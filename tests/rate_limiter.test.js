@@ -9,8 +9,8 @@ import {
 import { RateLimiter } from "../src/utils/rate_limiter.js";
 
 describe("RateLimiter Unit Tests", () => {
-  /** @type {RateLimiter} */
-  let rateLimiter;
+  /** @type {RateLimiter | null} */
+  let rateLimiter = null;
 
   beforeEach(() => {
     jest.useFakeTimers();
@@ -385,7 +385,6 @@ describe("RateLimiter Unit Tests", () => {
     rateLimiter.destroy();
     expect(clearIntervalSpy).toHaveBeenCalledWith(intervalId);
 
-    // @ts-expect-error - Intentionally nullify to prevent afterEach from destroying again
     rateLimiter = null; // Prevent afterEach from destroying it again
     clearIntervalSpy.mockRestore();
   });

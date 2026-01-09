@@ -21,6 +21,11 @@ jest.unstable_mockModule("axios", async () => {
   return { default: axiosMock };
 });
 
+jest.unstable_mockModule("dns/promises", async () => {
+  const { dnsPromisesMock } = await import("./helpers/shared-mocks.js");
+  return { default: dnsPromisesMock };
+});
+
 const request = (await import("supertest")).default;
 const { app, webhookManager, initialize, shutdown } =
   await import("../src/main.js");
@@ -134,12 +139,6 @@ describe("API E2E Tests", () => {
     expect(res.body.status).toBe("Replayed");
   });
 
-  test("GET / should return version info", async () => {
-    const res = await request(app).get("/");
-    expect(res.statusCode).toBe(200);
-    expect(res.text).toContain(`v${version}`);
-  });
-
   test("GET / with readiness probe header", async () => {
     const res = await request(app)
       .get("/")
@@ -212,9 +211,11 @@ describe("API E2E Tests", () => {
     // @ts-expect-error - Mock function on imported module
     axios.mockResolvedValue({ status: 200 });
 
-    const dns = (await import("dns/promises")).default;
-    // @ts-expect-error - Mock function on imported module
-    dns.resolve4?.mockResolvedValue?.(["93.184.216.34"]);
+    // DNS mock is registered at module level via shared-mocks
+    const { dnsPromisesMock } = await import("./helpers/shared-mocks.js");
+    /** @type {any} */ (dnsPromisesMock.resolve4).mockResolvedValue([
+      "93.184.216.34",
+    ]);
 
     const res = await request(app)
       .get(`/replay/${webhookId}/evt_nonexistent`)

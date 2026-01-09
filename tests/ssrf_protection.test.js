@@ -29,8 +29,9 @@ jest.unstable_mockModule("axios", async () => {
 
 const request = (await import("supertest")).default;
 const dns = (await import("dns/promises")).default;
-const { app, initialize, shutdown, webhookManager } =
-  await import("../src/main.js");
+const { app, initialize, shutdown, webhookManager } = await import(
+  "../src/main.js"
+);
 const { Actor } = await import("apify");
 
 describe("SSRF Protection Tests", () => {
@@ -49,6 +50,10 @@ describe("SSRF Protection Tests", () => {
   });
 
   beforeEach(() => {
+    // Reset DNS mocks to default behavior for test isolation
+    jest.mocked(dns.resolve4).mockReset();
+    jest.mocked(dns.resolve6).mockReset();
+
     // Setup mock dataset with an event
     const mockItem = {
       id: "evt_test",
@@ -62,7 +67,7 @@ describe("SSRF Protection Tests", () => {
     jest.mocked(Actor.openDataset).mockResolvedValue(
       /** @type {any} */ ({
         getData: jest.fn(async () => ({ items: [mockItem] })),
-      }),
+      })
     );
   });
 
@@ -150,7 +155,7 @@ describe("SSRF Protection Tests", () => {
         .set("Authorization", "Bearer test-secret");
 
       expect(res.statusCode).toBe(400);
-      expect(res.body.error).toBe("Invalid 'url' parameter");
+      expect(res.body.error).toBe("Invalid URL format");
     });
 
     test("should reject IPv6 loopback (::1)", async () => {
