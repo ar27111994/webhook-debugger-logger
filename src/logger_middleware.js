@@ -97,8 +97,8 @@ function validateWebhookRequest(req, webhookId, options, webhookManager) {
     typeof req.body === "string"
       ? Buffer.byteLength(req.body)
       : Buffer.isBuffer(req.body)
-      ? req.body.length
-      : 0;
+        ? req.body.length
+        : 0;
 
   const contentLength = Number.isFinite(parsedLength) ? parsedLength : bodyLen;
 
@@ -181,7 +181,7 @@ function prepareRequestData(req, options, validate) {
         Object.entries(req.headers).map(([key, value]) => [
           key,
           headersToMask.includes(key.toLowerCase()) ? "[MASKED]" : value,
-        ])
+        ]),
       )
     : req.headers;
 
@@ -211,7 +211,7 @@ function transformRequestData(event, req, compiledScript) {
         `[SCRIPT-EXEC-ERROR] Failed to run custom script for ${event.webhookId}:`,
         isTimeout
           ? `Script execution timed out after ${SCRIPT_EXECUTION_TIMEOUT_MS}ms`
-          : error.message
+          : error.message,
       );
     }
   }
@@ -305,8 +305,8 @@ async function executeBackgroundTasks(event, req, options, onEvent) {
               /** @type {unknown} */ (options.forwardHeaders) !== false
                 ? Object.fromEntries(
                     Object.entries(req.headers).filter(
-                      ([key]) => !sensitiveHeaders.includes(key.toLowerCase())
-                    )
+                      ([key]) => !sensitiveHeaders.includes(key.toLowerCase()),
+                    ),
                   )
                 : {
                     "content-type": req.headers["content-type"],
@@ -340,7 +340,7 @@ async function executeBackgroundTasks(event, req, options, onEvent) {
               `[FORWARD-ERROR] Attempt ${attempt}/${MAX_FORWARD_RETRIES} failed for ${validatedUrl}:`,
               axiosError.code === "ECONNABORTED"
                 ? "Timed out"
-                : axiosError.message
+                : axiosError.message,
             );
 
             if (attempt >= MAX_FORWARD_RETRIES || !isTransient) {
@@ -362,7 +362,7 @@ async function executeBackgroundTasks(event, req, options, onEvent) {
               } catch (pushErr) {
                 console.error(
                   "[CRITICAL] Failed to log forward error:",
-                  /** @type {Error} */ (pushErr).message
+                  /** @type {Error} */ (pushErr).message,
                 );
               }
               break; // Stop retrying
@@ -387,12 +387,12 @@ async function executeBackgroundTasks(event, req, options, onEvent) {
       `[CRITICAL] ${
         isPlatformError ? "PLATFORM-LIMIT" : "BACKGROUND-ERROR"
       } for ${event.webhookId}:`,
-      errorMessage
+      errorMessage,
     );
 
     if (isPlatformError) {
       console.warn(
-        "[ADVICE] Check your Apify platform limits or storage availability."
+        "[ADVICE] Check your Apify platform limits or storage availability.",
       );
     }
   }
@@ -435,7 +435,7 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
         } catch (err) {
           console.error(
             "[SCRIPT-ERROR] Invalid Custom Script:",
-            /** @type {Error} */ (err).message
+            /** @type {Error} */ (err).message,
           );
         }
       } else {
@@ -465,7 +465,7 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
         } catch (err) {
           console.error(
             "[SCHEMA-ERROR] Invalid JSON Schema:",
-            /** @type {Error} */ (err).message
+            /** @type {Error} */ (err).message,
           );
         }
       } else {
@@ -500,8 +500,8 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
     ];
     const webhookOverrides = Object.fromEntries(
       Object.entries(webhookData).filter(([key]) =>
-        allowedOverrides.includes(key)
-      )
+        allowedOverrides.includes(key),
+      ),
     );
 
     const mergedOptions = {
@@ -513,7 +513,7 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
       req,
       webhookId,
       mergedOptions,
-      webhookManager
+      webhookManager,
     );
     if (!validation.isValid) {
       return res.status(validation.statusCode || 400).json({
@@ -530,7 +530,7 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
       const { loggedBody, loggedHeaders, contentType } = prepareRequestData(
         req,
         mergedOptions,
-        validate
+        validate,
       );
 
       // 3. Transform
@@ -565,7 +565,7 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
       const delayMs = mergedOptions.responseDelayMs || 0;
       if (delayMs > 0) {
         await new Promise((resolve) =>
-          setTimeout(resolve, Math.min(delayMs, 10000))
+          setTimeout(resolve, Math.min(delayMs, 10000)),
         );
       }
 
@@ -579,7 +579,7 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
         } catch (err) {
           console.error(
             `[CRITICAL] Background tasks for ${event.id} failed:`,
-            /** @type {Error} */ (err).message
+            /** @type {Error} */ (err).message,
           );
         }
       };
@@ -599,7 +599,7 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
                 const readableTimeout =
                   timeoutMs < 1000 ? `${timeoutMs}ms` : `${timeoutMs / 1000}s`;
                 console.warn(
-                  `[TIMEOUT] Background tasks for ${event.id} exceeded ${readableTimeout}. Continuing...`
+                  `[TIMEOUT] Background tasks for ${event.id} exceeded ${readableTimeout}. Continuing...`,
                 );
               }
               resolve();
@@ -621,7 +621,7 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
       }
       console.error(
         "[CRITICAL] Internal Middleware Error:",
-        middlewareError.message
+        middlewareError.message,
       );
       res.status(500).json({ error: "Internal Server Error" });
     }

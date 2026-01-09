@@ -26,13 +26,13 @@ export class WebhookManager {
       if (savedState && typeof savedState === "object") {
         this.webhooks = new Map(Object.entries(savedState));
         console.log(
-          `[STORAGE] Restored ${this.webhooks.size} webhooks from state.`
+          `[STORAGE] Restored ${this.webhooks.size} webhooks from state.`,
         );
       }
     } catch (error) {
       console.error(
         "[CRITICAL] Failed to initialize WebhookManager state:",
-        /** @type {Error} */ (error).message
+        /** @type {Error} */ (error).message,
       );
       // Fallback to empty map is already handled by constructor
     }
@@ -47,7 +47,7 @@ export class WebhookManager {
     } catch (error) {
       console.error(
         "[STORAGE-ERROR] Failed to persist webhook state:",
-        /** @type {Error} */ (error).message
+        /** @type {Error} */ (error).message,
       );
     }
   }
@@ -61,7 +61,7 @@ export class WebhookManager {
   async generateWebhooks(count, retentionHours) {
     if (!Number.isInteger(count) || count < 0) {
       throw new Error(
-        `Invalid count: ${count}. Must be a non-negative integer.`
+        `Invalid count: ${count}. Must be a non-negative integer.`,
       );
     }
     if (
@@ -70,11 +70,11 @@ export class WebhookManager {
       !Number.isFinite(retentionHours)
     ) {
       throw new Error(
-        `Invalid retentionHours: ${retentionHours}. Must be a positive number.`
+        `Invalid retentionHours: ${retentionHours}. Must be a positive number.`,
       );
     }
     const expiresAt = new Date(
-      Date.now() + retentionHours * 60 * 60 * 1000
+      Date.now() + retentionHours * 60 * 60 * 1000,
     ).toISOString();
     const newIds = [];
 
@@ -141,7 +141,7 @@ export class WebhookManager {
   async updateRetention(retentionHours) {
     const now = Date.now();
     const newExpiresAt = new Date(
-      now + retentionHours * 60 * 60 * 1000
+      now + retentionHours * 60 * 60 * 1000,
     ).toISOString();
     let updatedCount = 0;
 
@@ -159,7 +159,7 @@ export class WebhookManager {
 
     if (updatedCount > 0) {
       console.log(
-        `[STORAGE] Extended retention for ${updatedCount} of ${this.webhooks.size} webhooks to ${retentionHours}h.`
+        `[STORAGE] Extended retention for ${updatedCount} of ${this.webhooks.size} webhooks to ${retentionHours}h.`,
       );
       await this.persist();
     }
