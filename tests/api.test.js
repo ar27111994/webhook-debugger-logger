@@ -27,9 +27,8 @@ jest.unstable_mockModule("dns/promises", async () => {
 });
 
 const request = (await import("supertest")).default;
-const { app, webhookManager, initialize, shutdown } = await import(
-  "../src/main.js"
-);
+const { app, webhookManager, initialize, shutdown } =
+  await import("../src/main.js");
 const { Actor } = await import("apify");
 
 describe("API E2E Tests", () => {
@@ -81,7 +80,7 @@ describe("API E2E Tests", () => {
     jest.mocked(Actor.openDataset).mockResolvedValue(
       /** @type {any} */ ({
         getData: jest.fn(async () => ({ items: [mockItem] })),
-      })
+      }),
     );
 
     const res = await request(app).get("/logs").query({ webhookId });
@@ -103,7 +102,7 @@ describe("API E2E Tests", () => {
     jest.mocked(Actor.openDataset).mockResolvedValue(
       /** @type {any} */ ({
         getData: jest.fn(async () => ({ items: [mockItem] })),
-      })
+      }),
     );
 
     // Mock axios to prevent real network calls
@@ -129,7 +128,7 @@ describe("API E2E Tests", () => {
     jest.mocked(Actor.openDataset).mockResolvedValue(
       /** @type {any} */ ({
         getData: jest.fn(async () => ({ items: [mockItem] })),
-      })
+      }),
     );
 
     const res = await request(app)
@@ -192,7 +191,7 @@ describe("API E2E Tests", () => {
     jest.mocked(Actor.openDataset).mockResolvedValue(
       /** @type {any} */ ({
         getData: jest.fn(async () => ({ items: [] })),
-      })
+      }),
     );
 
     const res = await request(app).get(`/replay/${webhookId}/evt_123`);
@@ -205,7 +204,7 @@ describe("API E2E Tests", () => {
     jest.mocked(Actor.openDataset).mockResolvedValue(
       /** @type {any} */ ({
         getData: jest.fn(async () => ({ items: [] })),
-      })
+      }),
     );
 
     const axios = (await import("axios")).default;
