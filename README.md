@@ -1,6 +1,10 @@
 # 🚀 Webhook Debugger & Logger v2.7.0 (Enterprise Suite)
 
-![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/ar27111994/webhook-debugger-logger?utm_source=oss&utm_medium=github&utm_campaign=ar27111994%2Fwebhook-debugger-logger&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
+[![Build Status](https://github.com/ar27111994/webhook-debugger-logger/actions/workflows/ci.yml/badge.svg)](https://github.com/ar27111994/webhook-debugger-logger/actions)
+[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
+[![Code Style: Prettier](https://img.shields.io/badge/code_style-prettier-ff69b4.svg)](https://github.com/prettier/prettier)
+[![GitHub issues](https://img.shields.io/github/issues/ar27111994/webhook-debugger-logger)](https://github.com/ar27111994/webhook-debugger-logger/issues)
+[![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/ar27111994/webhook-debugger-logger?utm_source=oss&utm_medium=github&utm_campaign=ar27111994%2Fwebhook-debugger-logger&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)](https://coderabbit.ai)
 
 ![Dashboard Mockup](https://raw.githubusercontent.com/ar27111994/webhook-debugger-logger/main/assets/dashboard.png)
 
