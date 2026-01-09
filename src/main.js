@@ -146,12 +146,12 @@ async function initialize() {
   if (active.length < urlCount) {
     const diff = urlCount - active.length;
     console.log(
-      `[SYSTEM] Scaling up: Generating ${diff} additional webhook(s).`,
+      `[SYSTEM] Scaling up: Generating ${diff} additional webhook(s).`
     );
     await webhookManager.generateWebhooks(diff, retentionHours);
   } else if (active.length > urlCount) {
     console.log(
-      `[SYSTEM] Notice: Active webhooks (${active.length}) exceed requested count (${urlCount}). No new IDs generated.`,
+      `[SYSTEM] Notice: Active webhooks (${active.length}) exceed requested count (${urlCount}). No new IDs generated.`
     );
   } else {
     console.log(`[SYSTEM] Resuming with ${active.length} active webhooks.`);
@@ -191,7 +191,7 @@ async function initialize() {
   const loggerMiddleware = createLoggerMiddleware(
     webhookManager,
     { ...config, maxPayloadSize },
-    broadcast,
+    broadcast
   );
 
   // --- Hot Reloading Logic ---
@@ -207,7 +207,7 @@ async function initialize() {
         );
       const newRateLimit = Math.max(
         1,
-        Math.floor(newConfig.rateLimitPerMinute || 60),
+        Math.floor(newConfig.rateLimitPerMinute || 60)
       );
 
       // 1. Update Middleware
@@ -225,7 +225,7 @@ async function initialize() {
       if (activeWebhooks.length < currentUrlCount) {
         const diff = currentUrlCount - activeWebhooks.length;
         console.log(
-          `[SYSTEM] Dynamic Scale-up: Generating ${diff} additional webhook(s).`,
+          `[SYSTEM] Dynamic Scale-up: Generating ${diff} additional webhook(s).`
         );
         await webhookManager.generateWebhooks(diff, currentRetentionHours);
       }
@@ -238,13 +238,19 @@ async function initialize() {
     } catch (err) {
       console.error(
         "[SYSTEM-ERROR] Failed to apply new settings:",
-        /** @type {Error} */ (err).message,
+        /** @type {Error} */ (err).message
       );
     }
   });
 
   sseHeartbeat = setInterval(() => {
-    clients.forEach((c) => c.write(": heartbeat\n\n"));
+    clients.forEach((c) => {
+      try {
+        c.write(": heartbeat\n\n");
+      } catch {
+        clients.delete(c);
+      }
+    });
   }, SSE_HEARTBEAT_INTERVAL_MS);
   if (sseHeartbeat.unref) sseHeartbeat.unref();
 
@@ -283,18 +289,18 @@ async function initialize() {
     (
       /** @type {import("express").Request} */ req,
       /** @type {import("express").Response} */ _res,
-      /** @type {import("express").NextFunction} */ next,
+      /** @type {import("express").NextFunction} */ next
     ) => {
       const statusOverride = parseInt(
-        /** @type {string} */ (req.query.__status),
+        /** @type {string} */ (req.query.__status)
       );
       if (statusOverride >= 100 && statusOverride < 600) {
         /** @type {any} */ (req).forcedStatus = statusOverride;
       }
       next();
     },
-    // @ts-ignore
-    loggerMiddleware,
+    // @ts-expect-error - LoggerMiddleware has updateOptions attached, Express overloads don't recognize intersection types
+    loggerMiddleware
   );
 
   app.all(
@@ -313,13 +319,28 @@ async function initialize() {
           return;
         }
 
+        // Validate URL to prevent SSRF
+        const targetUrlStr = String(targetUrl);
+        /** @type {URL} */
+        let target;
+        try {
+          target = new URL(targetUrlStr);
+        } catch {
+          res.status(400).json({ error: "Invalid 'url' parameter" });
+          return;
+        }
+        if (!["http:", "https:"].includes(target.protocol)) {
+          res.status(400).json({ error: "Only http/https URLs are allowed" });
+          return;
+        }
+
         const dataset = await Actor.openDataset();
         const { items } = await dataset.getData();
         // Prioritize exact ID match. Fallback to timestamp only if no ID matches.
         const item =
           items.find((i) => i.webhookId === webhookId && i.id === itemId) ||
           items.find(
-            (i) => i.webhookId === webhookId && i.timestamp === itemId,
+            (i) => i.webhookId === webhookId && i.timestamp === itemId
           );
 
         if (!item) {
@@ -354,7 +375,7 @@ async function initialize() {
             }
             return acc;
           },
-          {},
+          {}
         );
 
         let attempt = 0;
@@ -365,13 +386,13 @@ async function initialize() {
             attempt++;
             r = await axios({
               method: item.method,
-              url: String(targetUrl),
+              url: target.href,
               data: item.body,
               headers: {
                 ...filteredHeaders,
                 "X-Apify-Replay": "true",
                 "X-Original-Webhook-Id": webhookId,
-                host: new URL(targetUrl).host,
+                host: target.host,
               },
               validateStatus: () => true,
               timeout: REPLAY_TIMEOUT_MS,
@@ -389,7 +410,7 @@ async function initialize() {
             }
             const delay = 1000 * Math.pow(2, attempt - 1);
             console.warn(
-              `[REPLAY-RETRY] Attempt ${attempt}/${MAX_REPLAY_RETRIES} failed for ${targetUrl}: ${axiosError.code}. Retrying in ${delay}ms...`,
+              `[REPLAY-RETRY] Attempt ${attempt}/${MAX_REPLAY_RETRIES} failed for ${targetUrl}: ${axiosError.code}. Retrying in ${delay}ms...`
             );
             await new Promise((resolve) => setTimeout(resolve, delay));
           }
@@ -399,8 +420,8 @@ async function initialize() {
           res.setHeader(
             "X-Apify-Replay-Warning",
             `Headers stripped (masked or transmission-related): ${strippedHeaders.join(
-              ", ",
-            )}`,
+              ", "
+            )}`
           );
         }
         res.json({
@@ -424,7 +445,7 @@ async function initialize() {
           code: axiosError.code,
         });
       }
-    }),
+    })
   );
 
   app.get("/log-stream", (req, res) => {
@@ -480,7 +501,7 @@ async function initialize() {
           })
           .sort(
             (a, b) =>
-              new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+              new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
           );
 
         res.json({
@@ -496,7 +517,7 @@ async function initialize() {
           message: /** @type {Error} */ (e).message,
         });
       }
-    }),
+    })
   );
 
   app.get("/info", mgmtRateLimiter, authMiddleware, (req, res) => {
@@ -510,7 +531,7 @@ async function initialize() {
         authActive: !!authKey,
         retentionHours,
         maxPayloadLimit: `${((maxPayloadSize || 0) / 1024 / 1024).toFixed(
-          1,
+          1
         )}MB`,
         webhookCount: activeWebhooks.length,
         activeWebhooks,
@@ -575,7 +596,7 @@ async function initialize() {
                   <div class="stat-item" style="text-align:left; border-left: 4px solid var(--danger); background: rgba(0,0,0,0.2); padding: 16px; border-radius: 8px;">
                     <span style="font-size: 0.8rem; color: var(--text-dim); display: block; margin-bottom: 4px;">Error Details</span>
                     <span class="stat-value" style="color: var(--danger); font-family: 'JetBrains Mono', monospace;">${escapeHtml(
-                      authResult.error || "Unknown Error",
+                      authResult.error || "Unknown Error"
                     )}</span>
                   </div>
                   <p style="font-size: 0.85rem;">To authenticate in the browser, append <code>?key=YOUR_KEY</code> to the URL.</p>
@@ -631,7 +652,7 @@ async function initialize() {
       `);
     } else {
       res.send(
-        `Webhook Debugger & Logger v2.7.1 (Enterprise Suite) is running.\nActive Webhooks: ${activeCount}\nUse /info for management API.\n`,
+        `Webhook Debugger & Logger v2.7.1 (Enterprise Suite) is running.\nActive Webhooks: ${activeCount}\nUse /info for management API.\n`
       );
     }
   });
@@ -659,22 +680,22 @@ async function initialize() {
           status === 413
             ? "Payload Too Large"
             : status === 400
-              ? "Bad Request"
-              : "Internal Server Error",
+            ? "Bad Request"
+            : "Internal Server Error",
         message: err.message,
       });
-    },
+    }
   );
 
   /* istanbul ignore next */
   if (process.env.NODE_ENV !== "test") {
     const port = process.env.ACTOR_WEB_SERVER_PORT || 8080;
     server = app.listen(port, () =>
-      console.log(`Server listening on port ${port}`),
+      console.log(`Server listening on port ${port}`)
     );
     cleanupInterval = setInterval(
       () => webhookManager.cleanup(),
-      CLEANUP_INTERVAL_MS,
+      CLEANUP_INTERVAL_MS
     );
     Actor.on("migrating", () => shutdown("MIGRATING"));
     Actor.on("aborting", () => shutdown("ABORTING"));
