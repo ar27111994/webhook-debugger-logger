@@ -100,6 +100,7 @@ The Enterprise Update transforms this Actor into a professional API mocking and 
 - **IP Whitelisting**: Lock down your endpoints to specific IPs or CIDR ranges.
 - **Rate Limiting (v2.6)**: Protect your management endpoints (`/logs`, `/info`, `/replay`) with configurable per-IP rate limits.
 - **Sensitive Data Masking (v2.6)**: Automatically redact known sensitive headers like `Authorization` and `Cookie` from your logs.
+- **SSRF Protection (v2.8)**: Enterprise-grade Server-Side Request Forgery protection prevents your Actor from being used to scan internal networks (localhost, 10.x.x.x, etc.) during forwarding or replay.
 - **Zero-Downtime Hot-Reloading (v2.7)**: Update your `authKey`, `allowedIps`, or `rateLimits` while the Actor is running. Changes apply **automatically** via polling (approx. 5s) without dropping a single webhook.
 - **Dynamic Infrastructure Scaling (v2.7)**: Increase your `urlCount` without restarting. The Actor intelligently reconciles state, generating new IDs while preserving your existing ones.
 
@@ -112,7 +113,7 @@ The Enterprise Update transforms this Actor into a professional API mocking and 
 ### 🔄 Advanced Workflows
 
 - **Real-time Forwarding**: Automatically pipe captured webhooks to another destination (e.g., your local dev server).
-- **Request Replay**: Resend any captured event to a new URL using the `/replay` API.
+- **Request Replay (v2.8 Deep Search)**: Resend any captured event to a new URL using the `/replay` API. Includes robust paginated lookup to find events even in massive 1M+ item datasets without memory issues.
 
 ### ⚡ Technical Excellence & Platform Quality (v2.5)
 

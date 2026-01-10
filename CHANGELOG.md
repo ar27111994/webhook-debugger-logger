@@ -2,7 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
-## [2.7.2] - 2026-01-09
+## [2.8.0] - 2026-01-11
+
+### Added (2.8.0)
+
+- **Robust Paginated Replay Search**: Implemented "Deep Search" for the `/replay` endpoint. It now defaults to checking the 1000 most recent items (fast path) but automatically paginates through older history if the target event is not found, preventing 404s for valid older events while avoiding OOM crashes.
+- **SSRF Protection**: Added a shared `src/utils/ssrf.js` utility with DNS resolution and IP range validation. Applied this protection to both HTTP Forwarding and Replay APIs to prevent internal network scanning.
+- **Community Standards**: Added `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `SECURITY.md`, `LICENSE`, and GitHub Issue Templates to meet open-source best practices.
+
+### Improved (2.8.0)
+
+- **Configuration Refactoring**: Centralized input validation and default value logic (including `maxPayloadSize` and `rateLimitPerMinute`) into `src/utils/config.js` (`coerceRuntimeOptions`). This ensures consistent behavior between initial startup and hot-reloading.
+- **Test Suite overhaul**:
+  - Achieved **>90%** Statement/Line coverage and **>80%** Branch coverage (144 tests total).
+  - Enforced strict type checking (removed `@ts-nocheck`) and standardized Jest mocks across all test files.
+  - Added specific test suites for SSRF protection, Config Validation, and Edge Cases (`coverage_gaps.test.js`).
+- **Security Hardening**:
+  - **Header Stripping**: Automatically strips hop-by-hop headers and sensitive headers (Authorization, Cookie) during forwarding.
+  - **Input Sanitization**: Enhanced error handling to prevent information leakage and sanitized `req.query` inputs.
+- **Code Quality**: Applied Prettier formatting project-wide (trailing commas, consistent indentation) and resolved all ESLint/TypeScript errors.
+
+### Fixed (2.8.0)
+
+- **Replay Memory Safety**: Prevented `dataset.getData()` from loading the entire dataset into memory by enforcing pagination limit (1000 items/page).
+- **Hot-Reload Stability**: Fixed potential crashes during script re-compilation and ensured stale schemas are cleared on failure.
+- **API Robustness**:
+  - Added `req.forcedStatus` coercion validation.
+  - Fixed handling of "all retries exhausted" in replay logic to prevent `undefined` errors.
+  - Ensures correct handling of disconnected clients in SSE (`/log-stream`).
 
 ### Refactored (2.7.2)
 
