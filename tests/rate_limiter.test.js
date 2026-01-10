@@ -7,10 +7,13 @@ import {
   afterEach,
 } from "@jest/globals";
 import { RateLimiter } from "../src/utils/rate_limiter.js";
+import {
+  createMockRequest,
+  createMockResponse,
+  createMockNextFunction,
+} from "./helpers/test-utils.js";
 
-/** @typedef {import("express").Request} Request */
-/** @typedef {import("express").Response} Response */
-/** @typedef {import("express").NextFunction} NextFunction */
+/** @typedef {import("net").Socket} Socket */
 
 describe("RateLimiter Unit Tests", () => {
   /** @type {RateLimiter | null} */
@@ -29,18 +32,15 @@ describe("RateLimiter Unit Tests", () => {
   test("should enforce limit within windowMs", () => {
     rateLimiter = new RateLimiter(2, 1000); // 2 requests per 1s
     const mw = rateLimiter.middleware();
-    const req = /** @type {Request} */ ({ ip: "1.2.3.4", headers: {} });
-    const res = /** @type {Partial<Response>} */ ({
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn(),
-    });
-    const next = /** @type {NextFunction} */ (jest.fn());
+    const req = createMockRequest({ ip: "1.2.3.4", headers: {} });
+    const res = createMockResponse();
+    const next = createMockNextFunction();
 
-    mw(req, /** @type {Response} */ (res), next);
-    mw(req, /** @type {Response} */ (res), next);
+    mw(req, res, next);
+    mw(req, res, next);
     expect(next).toHaveBeenCalledTimes(2);
 
-    mw(req, /** @type {Response} */ (res), next);
+    mw(req, res, next);
     expect(res.status).toHaveBeenCalledWith(429);
     expect(next).toHaveBeenCalledTimes(2);
   });
@@ -48,19 +48,16 @@ describe("RateLimiter Unit Tests", () => {
   test("should reset hits after windowMs", () => {
     rateLimiter = new RateLimiter(1, 1000);
     const mw = rateLimiter.middleware();
-    const req = /** @type {Request} */ ({ ip: "1.1.1.1", headers: {} });
-    const res = /** @type {Partial<Response>} */ ({
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn(),
-    });
-    const next = /** @type {NextFunction} */ (jest.fn());
+    const req = createMockRequest({ ip: "1.1.1.1", headers: {} });
+    const res = createMockResponse();
+    const next = createMockNextFunction();
 
-    mw(req, /** @type {Response} */ (res), next);
+    mw(req, res, next);
     expect(next).toHaveBeenCalledTimes(1);
 
     jest.advanceTimersByTime(1100);
 
-    mw(req, /** @type {Response} */ (res), next);
+    mw(req, res, next);
     expect(next).toHaveBeenCalledTimes(2);
   });
 
@@ -68,29 +65,14 @@ describe("RateLimiter Unit Tests", () => {
     // limit=10, window=1m, maxEntries=2
     rateLimiter = new RateLimiter(10, 60000, 2);
     const mw = rateLimiter.middleware();
-    const next = /** @type {NextFunction} */ (jest.fn());
-    const res = /** @type {Partial<Response>} */ ({
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn(),
-    });
+    const next = createMockNextFunction();
+    const res = createMockResponse();
 
-    mw(
-      /** @type {Request} */ ({ ip: "user1", headers: {} }),
-      /** @type {Response} */ (res),
-      next,
-    );
-    mw(
-      /** @type {Request} */ ({ ip: "user2", headers: {} }),
-      /** @type {Response} */ (res),
-      next,
-    );
+    mw(createMockRequest({ ip: "user1", headers: {} }), res, next);
+    mw(createMockRequest({ ip: "user2", headers: {} }), res, next);
     expect(rateLimiter.hits.size).toBe(2);
 
-    mw(
-      /** @type {Request} */ ({ ip: "user3", headers: {} }),
-      /** @type {Response} */ (res),
-      next,
-    );
+    mw(createMockRequest({ ip: "user3", headers: {} }), res, next);
     expect(rateLimiter.hits.size).toBe(2);
     expect(rateLimiter.hits.has("user1")).toBe(false);
     expect(rateLimiter.hits.has("user3")).toBe(true);
@@ -100,37 +82,18 @@ describe("RateLimiter Unit Tests", () => {
     // limit=10, window=1m, maxEntries=2
     rateLimiter = new RateLimiter(10, 60000, 2);
     const mw = rateLimiter.middleware();
-    const next = /** @type {NextFunction} */ (jest.fn());
-    const res = /** @type {Partial<Response>} */ ({
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn(),
-    });
+    const next = createMockNextFunction();
+    const res = createMockResponse();
 
     // 1. Insert user1, then user2
-    mw(
-      /** @type {Request} */ ({ ip: "user1", headers: {} }),
-      /** @type {Response} */ (res),
-      next,
-    );
-    mw(
-      /** @type {Request} */ ({ ip: "user2", headers: {} }),
-      /** @type {Response} */ (res),
-      next,
-    );
+    mw(createMockRequest({ ip: "user1", headers: {} }), res, next);
+    mw(createMockRequest({ ip: "user2", headers: {} }), res, next);
 
     // 2. Access user1 again (should move to end of Map, making user2 the oldest)
-    mw(
-      /** @type {Request} */ ({ ip: "user1", headers: {} }),
-      /** @type {Response} */ (res),
-      next,
-    );
+    mw(createMockRequest({ ip: "user1", headers: {} }), res, next);
 
     // 3. Insert user3 (should trigger eviction of user2, NOT user1)
-    mw(
-      /** @type {Request} */ ({ ip: "user3", headers: {} }),
-      /** @type {Response} */ (res),
-      next,
-    );
+    mw(createMockRequest({ ip: "user3", headers: {} }), res, next);
 
     expect(rateLimiter.hits.has("user1")).toBe(true);
     expect(rateLimiter.hits.has("user2")).toBe(false);
@@ -144,17 +107,10 @@ describe("RateLimiter Unit Tests", () => {
   test("should prune expired entries in background", () => {
     rateLimiter = new RateLimiter(10, 1000, 100);
     const mw = rateLimiter.middleware();
-    const next = /** @type {NextFunction} */ (jest.fn());
-    const res = /** @type {Partial<Response>} */ ({
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn(),
-    });
+    const next = createMockNextFunction();
+    const res = createMockResponse();
 
-    mw(
-      /** @type {Request} */ ({ ip: "userA", headers: {} }),
-      /** @type {Response} */ (res),
-      next,
-    );
+    mw(createMockRequest({ ip: "userA", headers: {} }), res, next);
     expect(rateLimiter.hits.size).toBe(1);
 
     // Advancing past the 60s hardcoded interval
@@ -166,19 +122,27 @@ describe("RateLimiter Unit Tests", () => {
   test("should reject requests without identifiable IP", () => {
     rateLimiter = new RateLimiter(10, 1000);
     const mw = rateLimiter.middleware();
-    const req = /** @type {Request} */ ({
-      socket: {},
+    const req = createMockRequest({
+      socket: /** @type {Socket} */ ({}),
       headers: { "user-agent": "test-bot" },
     });
-    const res = /** @type {Partial<Response>} */ ({
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn(),
-    });
-    const next = /** @type {NextFunction} */ (jest.fn());
+    const res = createMockResponse();
+    const next = createMockNextFunction();
 
     const consoleSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
 
-    mw(req, /** @type {Response} */ (res), next);
+    mw(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: "Bad Request",
+        message: expect.stringContaining("Client IP could not be identified"),
+      }),
+    );
+    expect(consoleSpy).toHaveBeenCalled();
+
+    mw(req, res, next);
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith(
@@ -193,14 +157,11 @@ describe("RateLimiter Unit Tests", () => {
   test("should identify IP from Express req.ip (default behavior)", () => {
     rateLimiter = new RateLimiter(1, 1000);
     const mw = rateLimiter.middleware();
-    const req = /** @type {Request} */ ({ ip: "9.9.9.9", headers: {} });
-    const res = /** @type {Partial<Response>} */ ({
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn(),
-    });
-    const next = /** @type {NextFunction} */ (jest.fn());
+    const req = createMockRequest({ ip: "9.9.9.9", headers: {} });
+    const res = createMockResponse();
+    const next = createMockNextFunction();
 
-    mw(req, /** @type {Response} */ (res), next);
+    mw(req, res, next);
     expect(next).toHaveBeenCalled();
     expect(rateLimiter.hits.has("9.9.9.9")).toBe(true);
   });
@@ -208,16 +169,13 @@ describe("RateLimiter Unit Tests", () => {
   test("should use x-forwarded-for when trustProxy is enabled and req.ip is absent", () => {
     rateLimiter = new RateLimiter(1, 1000, 100, true);
     const mw = rateLimiter.middleware();
-    const req = /** @type {Partial<Request>} */ ({
+    const req = createMockRequest({
       headers: { "x-forwarded-for": "10.0.0.1, 192.168.1.1" },
     });
-    const res = /** @type {Partial<Response>} */ ({
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn(),
-    });
-    const next = /** @type {NextFunction} */ (jest.fn());
+    const res = createMockResponse();
+    const next = createMockNextFunction();
 
-    mw(/** @type {Request} */ (req), /** @type {Response} */ (res), next);
+    mw(req, res, next);
     expect(next).toHaveBeenCalled();
     expect(rateLimiter.hits.has("10.0.0.1")).toBe(true);
   });
@@ -225,16 +183,13 @@ describe("RateLimiter Unit Tests", () => {
   test("should use x-real-ip when trustProxy is enabled and req.ip is absent", () => {
     rateLimiter = new RateLimiter(1, 1000, 100, true);
     const mw = rateLimiter.middleware();
-    const req = /** @type {Partial<Request>} */ ({
+    const req = createMockRequest({
       headers: { "x-real-ip": "172.16.0.1" },
     });
-    const res = /** @type {Partial<Response>} */ ({
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn(),
-    });
-    const next = /** @type {NextFunction} */ (jest.fn());
+    const res = createMockResponse();
+    const next = createMockNextFunction();
 
-    mw(/** @type {Request} */ (req), /** @type {Response} */ (res), next);
+    mw(req, res, next);
     expect(next).toHaveBeenCalled();
     expect(rateLimiter.hits.has("172.16.0.1")).toBe(true);
   });
@@ -242,46 +197,28 @@ describe("RateLimiter Unit Tests", () => {
   test("should ensure isolation between distinct IPs", () => {
     rateLimiter = new RateLimiter(1, 1000);
     const mw = rateLimiter.middleware();
-    const next = /** @type {NextFunction} */ (jest.fn());
-    const res = /** @type {Partial<Response>} */ ({
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn(),
-    });
+    const next = createMockNextFunction();
+    const res = createMockResponse();
 
     // User A hits limit
-    mw(
-      /** @type {Request} */ ({ ip: "userA", headers: {} }),
-      /** @type {Response} */ (res),
-      next,
-    );
+    mw(createMockRequest({ ip: "userA", headers: {} }), res, next);
     expect(next).toHaveBeenCalledTimes(1);
-    mw(
-      /** @type {Request} */ ({ ip: "userA", headers: {} }),
-      /** @type {Response} */ (res),
-      next,
-    );
+    mw(createMockRequest({ ip: "userA", headers: {} }), res, next);
     expect(res.status).toHaveBeenCalledWith(429);
 
     // User B should still be allowed (independent counter)
-    mw(
-      /** @type {Request} */ ({ ip: "userB", headers: {} }),
-      /** @type {Response} */ (res),
-      next,
-    );
+    mw(createMockRequest({ ip: "userB", headers: {} }), res, next);
     expect(next).toHaveBeenCalledTimes(2);
   });
 
   test("should handle limit=0 (immediate blockage)", () => {
     rateLimiter = new RateLimiter(0, 1000);
     const mw = rateLimiter.middleware();
-    const req = /** @type {Request} */ ({ ip: "1.2.3.4", headers: {} });
-    const res = /** @type {Partial<Response>} */ ({
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn(),
-    });
-    const next = /** @type {NextFunction} */ (jest.fn());
+    const req = createMockRequest({ ip: "1.2.3.4", headers: {} });
+    const res = createMockResponse();
+    const next = createMockNextFunction();
 
-    mw(req, /** @type {Response} */ (res), next);
+    mw(req, res, next);
     expect(res.status).toHaveBeenCalledWith(429);
     expect(next).not.toHaveBeenCalled();
   });
@@ -290,18 +227,15 @@ describe("RateLimiter Unit Tests", () => {
     // Short: 10ms
     rateLimiter = new RateLimiter(1, 10);
     const mw = rateLimiter.middleware();
-    const req = /** @type {Request} */ ({ ip: "userS", headers: {} });
-    const res = /** @type {Partial<Response>} */ ({
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn(),
-    });
-    const next = /** @type {NextFunction} */ (jest.fn());
+    const req = createMockRequest({ ip: "userS", headers: {} });
+    const res = createMockResponse();
+    const next = createMockNextFunction();
 
-    mw(req, /** @type {Response} */ (res), next);
+    mw(req, res, next);
     expect(next).toHaveBeenCalledTimes(1);
 
     jest.advanceTimersByTime(11);
-    mw(req, /** @type {Response} */ (res), next);
+    mw(req, res, next);
     expect(next).toHaveBeenCalledTimes(2);
   });
 
@@ -309,22 +243,19 @@ describe("RateLimiter Unit Tests", () => {
     // Long: 10 minutes
     rateLimiter = new RateLimiter(1, 600000);
     const mw = rateLimiter.middleware();
-    const req = /** @type {Request} */ ({ ip: "userL", headers: {} });
-    const res = /** @type {Partial<Response>} */ ({
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn(),
-    });
-    const next = /** @type {NextFunction} */ (jest.fn());
+    const req = createMockRequest({ ip: "userL", headers: {} });
+    const res = createMockResponse();
+    const next = createMockNextFunction();
 
-    mw(req, /** @type {Response} */ (res), next);
+    mw(req, res, next);
     expect(next).toHaveBeenCalledTimes(1);
 
     jest.advanceTimersByTime(590000); // Almost there
-    mw(req, /** @type {Response} */ (res), next);
+    mw(req, res, next);
     expect(res.status).toHaveBeenCalledWith(429);
 
     jest.advanceTimersByTime(10001); // Expired
-    mw(req, /** @type {Response} */ (res), next);
+    mw(req, res, next);
     expect(next).toHaveBeenCalledTimes(2);
   });
 
@@ -351,32 +282,39 @@ describe("RateLimiter Unit Tests", () => {
   });
 
   test("should only trust proxy headers when trustProxy is enabled", () => {
-    // Default: false
+    // 1. Default: trustProxy = false
     rateLimiter = new RateLimiter(10, 1000, 100, false);
-    const mw = rateLimiter.middleware();
-    const req = /** @type {Partial<Request>} */ ({
+    let mw = rateLimiter.middleware();
+    let req = createMockRequest({
       ip: "1.2.3.4",
       headers: { "x-forwarded-for": "9.9.9.9" },
     });
-    const res = /** @type {Partial<Response>} */ ({
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn(),
-    });
-    const next = /** @type {NextFunction} */ (jest.fn());
+    const res = createMockResponse();
+    const next = createMockNextFunction();
 
-    mw(/** @type {Request} */ (req), /** @type {Response} */ (res), next);
+    mw(req, res, next);
     // Should use req.ip, NOT x-forwarded-for
     expect(rateLimiter.hits.has("1.2.3.4")).toBe(true);
     expect(rateLimiter.hits.has("9.9.9.9")).toBe(false);
 
-    // Enabled: true
+    // 2. Enabled: trustProxy = true
+    rateLimiter = new RateLimiter(10, 1000, 100, true);
+    mw = rateLimiter.middleware(); // Must update middleware reference!
+    req = createMockRequest({
+      ip: "1.2.3.4",
+      headers: { "x-forwarded-for": "9.9.9.9" },
+    });
+
+    mw(req, res, next);
+    // Should use x-forwarded-for, NOT req.ip
+    expect(rateLimiter.hits.has("9.9.9.9")).toBe(true);
+    expect(rateLimiter.hits.has("1.2.3.4")).toBe(false);
+
+    // 3. Enabled: trustProxy = true with multiple IPs
     const trustedRL = new RateLimiter(10, 1000, 100, true);
     const trustedMW = trustedRL.middleware();
-    trustedMW(
-      /** @type {Request} */ (req),
-      /** @type {Response} */ (res),
-      next,
-    );
+    trustedMW(req, res, next);
+    // Should still use the proxy header (already tested above, but keeping structure)
     expect(trustedRL.hits.has("9.9.9.9")).toBe(true);
     trustedRL.destroy();
   });
@@ -384,20 +322,17 @@ describe("RateLimiter Unit Tests", () => {
   test("should ignore malformed proxy headers even when trustProxy is enabled", () => {
     rateLimiter = new RateLimiter(10, 1000, 100, true);
     const mw = rateLimiter.middleware();
-    const req = /** @type {Partial<Request>} */ ({
+    const req = createMockRequest({
       ip: "1.2.3.4",
       headers: {
         "x-forwarded-for": "malformed-ip, 8.8.8.8",
         "x-real-ip": "invalid",
       },
     });
-    const res = /** @type {Partial<Response>} */ ({
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn(),
-    });
-    const next = /** @type {NextFunction} */ (jest.fn());
+    const res = createMockResponse();
+    const next = createMockNextFunction();
 
-    mw(/** @type {Request} */ (req), /** @type {Response} */ (res), next);
+    mw(req, res, next);
     // Should fall back to req.ip because both headers are malformed/invalid
     expect(rateLimiter.hits.has("1.2.3.4")).toBe(true);
     expect(rateLimiter.hits.has("malformed-ip")).toBe(false);
@@ -451,24 +386,13 @@ describe("RateLimiter Unit Tests", () => {
       rateLimiter = new RateLimiter(10, 60000, 1);
       const mw = rateLimiter.middleware();
       const next = jest.fn();
-      const res = /** @type {Partial<Response>} */ ({
-        status: jest.fn().mockReturnThis(),
-        json: jest.fn(),
-      });
+      const res = createMockResponse();
 
       // Fill
-      mw(
-        /** @type {Request} */ ({ ip: "user1", headers: {} }),
-        /** @type {Response} */ (res),
-        next,
-      );
+      mw(createMockRequest({ ip: "user1", headers: {} }), res, next);
 
       // Trigger eviction
-      mw(
-        /** @type {Request} */ ({ ip: "user2", headers: {} }),
-        /** @type {Response} */ (res),
-        next,
-      );
+      mw(createMockRequest({ ip: "user2", headers: {} }), res, next);
 
       expect(consoleSpy).toHaveBeenCalledWith(
         expect.stringContaining("[SYSTEM] RateLimiter evicted entry"),
