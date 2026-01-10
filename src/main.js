@@ -13,7 +13,7 @@ import {
   CLEANUP_INTERVAL_MS,
   INPUT_POLL_INTERVAL_PROD_MS,
   INPUT_POLL_INTERVAL_TEST_MS,
-  MAX_PAYLOAD_SIZE_DEFAULT,
+  BODY_PARSER_SIZE_LIMIT,
   MAX_REPLAY_RETRIES,
   REPLAY_HEADERS_TO_IGNORE,
   REPLAY_TIMEOUT_MS,
@@ -21,7 +21,16 @@ import {
   SSE_HEARTBEAT_INTERVAL_MS,
   STARTUP_TEST_EXIT_DELAY_MS,
 } from "./consts.js";
-import "./typedefs.js";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
+import { readFile } from "fs/promises";
+import cors from "cors";
+
+/** @typedef {import("express").Request} Request */
+/** @typedef {import("express").Response} Response */
+/** @typedef {import("express").NextFunction} NextFunction */
+/**@typedef {import("./typedefs.js").CommonError} CommonError */
+/**@typedef {ReturnType<typeof setInterval> | undefined} Interval */
 
 const INPUT_POLL_INTERVAL_MS =
   process.env.NODE_ENV === "test"
@@ -30,13 +39,13 @@ const INPUT_POLL_INTERVAL_MS =
 
 /** @type {import("http").Server | undefined} */
 let server;
-/** @type {ReturnType<typeof setInterval> | undefined} */
+/** @type {Interval} */
 let sseHeartbeat;
-/** @type {ReturnType<typeof setInterval> | undefined} */
+/** @type {Interval} */
 let inputPollInterval;
 /** @type {Promise<void> | null} */
 let activePollPromise = null;
-/** @type {ReturnType<typeof setInterval> | undefined} */
+/** @type {Interval} */
 let cleanupInterval;
 /** @type {RateLimiter | undefined} */
 let webhookRateLimiter;
@@ -117,15 +126,16 @@ async function initialize() {
   await Actor.init();
 
   const input = /** @type {any} */ ((await Actor.getInput()) || {});
-  const config = /** @type {import("./utils/config.js").WebhookConfig} */ (
-    parseWebhookOptions(input)
-  );
-  const { urlCount = 3, retentionHours = 24, enableJSONParsing = true } = input;
-  const maxPayloadSize = config.maxPayloadSize || MAX_PAYLOAD_SIZE_DEFAULT;
-
+  const config = parseWebhookOptions(input);
+  const { urlCount = 3, retentionHours = 24 } = input;
+  const maxPayloadSize = config.maxPayloadSize || BODY_PARSER_SIZE_LIMIT; // 10MB limit for body parsing
+  const enableJSONParsing =
+    config.enableJSONParsing !== undefined ? config.enableJSONParsing : true;
   const authKey = config.authKey || "";
-  const rawRateLimit = config.rateLimitPerMinute;
-  const rateLimitPerMinute = Math.max(1, Math.floor(rawRateLimit || 60));
+  const rateLimitPerMinute = Math.max(
+    1,
+    Math.floor(config.rateLimitPerMinute || 60),
+  );
   const testAndExit = input.testAndExit || false;
 
   await webhookManager.init();
@@ -168,14 +178,82 @@ async function initialize() {
   // 2. Sync Retention (Global Extension)
   await webhookManager.updateRetention(retentionHours);
 
+  // 3. Auth Middleware (Moved up for hoisting)
+  /**
+   * @param {Request} req
+   * @param {Response} res
+   * @param {NextFunction} next
+   */
+  const authMiddleware = (req, res, next) => {
+    // Bypass for readiness probe
+    if (req.headers["x-apify-container-server-readiness-probe"]) {
+      return next();
+    }
+
+    const authResult = validateAuth(req, currentAuthKey);
+
+    if (!authResult.isValid) {
+      // Return HTML for browsers
+      if (req.headers["accept"]?.includes("text/html")) {
+        res.status(401).send(`
+          <!DOCTYPE html>
+          <html>
+            <head><title>Access Restricted</title></head>
+            <body>
+              <h1>Access Restricted</h1>
+              <p>Strict Mode enabled.</p>
+              <p>${escapeHtml(authResult.error || "Unauthorized")}</p>
+            </body>
+          </html>
+        `);
+        return;
+      }
+
+      return res.status(401).json({
+        status: 401,
+        error: "Unauthorized",
+        message: authResult.error,
+      });
+    }
+    next();
+  };
+
   // --- Express Middleware ---
   app.set("trust proxy", true);
   app.use(compression());
-  app.use(bodyParser.urlencoded({ extended: true, limit: maxPayloadSize }));
+
+  const __dirname = dirname(fileURLToPath(import.meta.url));
+  app.get("/", authMiddleware, async (req, res) => {
+    if (req.headers["x-apify-container-server-readiness-probe"]) {
+      return res.send("OK");
+    }
+    if (req.headers["accept"]?.includes("text/plain")) {
+      return res.send("Webhook Debugger & Logger - Enterprise Suite");
+    }
+
+    try {
+      const template = await readFile(
+        join(__dirname, "..", "public", "index.html"),
+        "utf-8",
+      );
+      const activeCount = webhookManager.getAllActive().length;
+      const html = template
+        .replace("{{VERSION}}", `v${APP_VERSION}`)
+        .replace("{{ACTIVE_COUNT}}", String(activeCount));
+
+      res.send(html);
+    } catch (err) {
+      console.error("[SERVER-ERROR] Failed to load index.html:", err);
+      res.status(500).send("Internal Server Error");
+    }
+  });
+
+  app.use(cors());
+
   app.use(bodyParser.raw({ limit: maxPayloadSize, type: "*/*" }));
 
   if (enableJSONParsing) {
-    app.use((req, res, next) => {
+    app.use((req, _res, next) => {
       if (!req.body || Buffer.isBuffer(req.body) === false) return next();
       if (req.headers["content-type"]?.includes("application/json")) {
         try {
@@ -206,6 +284,8 @@ async function initialize() {
   let lastInputStr = JSON.stringify(input);
 
   inputPollInterval = setInterval(() => {
+    if (activePollPromise) return;
+
     activePollPromise = (async () => {
       try {
         const newInput = /** @type {Record<string, any> | null} */ (
@@ -219,10 +299,7 @@ async function initialize() {
         lastInputStr = newInputStr;
         console.log("[SYSTEM] Detected input update! Applying new settings...");
 
-        const newConfig =
-          /** @type {{authKey?: string; rateLimitPerMinute?: number}} */ (
-            parseWebhookOptions(newInput)
-          );
+        const newConfig = parseWebhookOptions(newInput);
         const newRateLimit = Math.max(
           1,
           Math.floor(newConfig.rateLimitPerMinute || 60),
@@ -277,30 +354,11 @@ async function initialize() {
   }, SSE_HEARTBEAT_INTERVAL_MS);
   if (sseHeartbeat.unref) sseHeartbeat.unref();
 
-  /**
-   * @param {import("express").Request} req
-   * @param {import("express").Response} res
-   * @param {import("express").NextFunction} next
-   */
-  const authMiddleware = (req, res, next) => {
-    const authResult = /** @type {{isValid: boolean; error?: string}} */ (
-      validateAuth(req, currentAuthKey)
-    );
-    if (!authResult.isValid) {
-      return res.status(401).json({
-        status: 401,
-        error: "Unauthorized",
-        message: authResult.error,
-      });
-    }
-    next();
-  };
-
   // --- Routes ---
 
   /**
    * Wraps an async handler to be compatible with Express RequestHandler.
-   * @param {(req: import("express").Request, res: import("express").Response, next: import("express").NextFunction) => Promise<void>} fn
+   * @param {(req: Request, res: Response, next: NextFunction) => Promise<void>} fn
    * @returns {import("express").RequestHandler}
    */
   const asyncHandler = (fn) => (req, res, next) => {
@@ -310,9 +368,9 @@ async function initialize() {
   app.all(
     "/webhook/:id",
     (
-      /** @type {import("express").Request} */ req,
-      /** @type {import("express").Response} */ _res,
-      /** @type {import("express").NextFunction} */ next,
+      /** @type {Request} */ req,
+      /** @type {Response} */ _res,
+      /** @type {NextFunction} */ next,
     ) => {
       const statusOverride = parseInt(
         /** @type {string} */ (req.query.__status),
@@ -422,8 +480,7 @@ async function initialize() {
             });
             break; // Success
           } catch (err) {
-            const axiosError =
-              /** @type {{code?: string; message?: string}} */ (err);
+            const axiosError = /** @type {CommonError} */ (err);
             if (
               attempt >= MAX_REPLAY_RETRIES ||
               (axiosError.code !== "ECONNABORTED" &&
@@ -456,9 +513,7 @@ async function initialize() {
             strippedHeaders.length > 0 ? strippedHeaders : undefined,
         });
       } catch (error) {
-        const axiosError = /** @type {{code?: string; message?: string}} */ (
-          error
-        );
+        const axiosError = /** @type {CommonError} */ (error);
         const isTimeout = axiosError.code === "ECONNABORTED";
         res.status(isTimeout ? 504 : 500).json({
           error: "Replay failed",
@@ -545,12 +600,14 @@ async function initialize() {
     }),
   );
 
+  const APP_VERSION = process.env.npm_package_version || "unknown";
+
   app.get("/info", mgmtRateLimiter, authMiddleware, (req, res) => {
     const baseUrl = `${req.protocol}://${req.get("host")}`;
     const activeWebhooks = webhookManager.getAllActive();
 
     res.json({
-      version: "2.7.2",
+      version: APP_VERSION,
       status: "Enterprise Suite Online",
       system: {
         authActive: !!currentAuthKey,
@@ -580,121 +637,19 @@ async function initialize() {
     });
   });
 
-  app.get("/", (req, res) => {
-    // 1. Readiness Probe (Always Public)
-    if (req.headers["x-apify-container-server-readiness-probe"]) {
-      return res.status(200).send("OK");
-    }
-
-    const isBrowser = req.headers["accept"]?.includes("text/html");
-
-    // 2. Auth Check for Root
-    const authResult = /** @type {{isValid: boolean; error?: string}} */ (
-      validateAuth(req, currentAuthKey)
-    );
-    if (!authResult.isValid) {
-      if (isBrowser) {
-        return res.status(401).send(`
-          <!DOCTYPE html>
-          <html lang="en">
-          <head>
-              <meta charset="UTF-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>Locked | Webhook Debugger</title>
-              <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono&display=swap" rel="stylesheet">
-              <style>
-                  :root { --primary: #5865F2; --danger: #f87171; --bg: #0f172a; --card: #1e293b; --text: #f8fafc; --text-dim: #94a3b8; }
-                  body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; text-align: center; }
-                  .container { max-width: 450px; background: var(--card); padding: 40px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
-                  h1 { font-weight: 800; color: var(--danger); margin: 0; font-size: 1.5rem; }
-                  .lock-icon { font-size: 3rem; margin-bottom: 16px; display: block; }
-                  p { color: var(--text-dim); line-height: 1.6; margin: 20px 0; }
-                  .code { font-family: 'JetBrains Mono', monospace; background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px; font-size: 0.85rem; color: var(--primary); word-break: break-all; }
-                  a { color: var(--primary); text-decoration: none; font-weight: 600; }
-              </style>
-          </head>
-          <body>
-              <div class="container">
-                  <span class="lock-icon">🔒</span>
-                  <h1>Access Restricted</h1>
-                  <p>This Actor is running in <b>Strict Mode</b>. You must provide an <code>authKey</code> to access the management interface.</p>
-                  <div class="stat-item" style="text-align:left; border-left: 4px solid var(--danger); background: rgba(0,0,0,0.2); padding: 16px; border-radius: 8px;">
-                    <span style="font-size: 0.8rem; color: var(--text-dim); display: block; margin-bottom: 4px;">Error Details</span>
-                    <span class="stat-value" style="color: var(--danger); font-family: 'JetBrains Mono', monospace;">${escapeHtml(
-                      authResult.error || "Unknown Error",
-                    )}</span>
-                  </div>
-                  <p style="font-size: 0.85rem;">To authenticate in the browser, append <code>?key=YOUR_KEY</code> to the URL.</p>
-                  <p style="margin-top:24px; font-size: 0.8rem; color: var(--text-dim);"><a href="https://apify.com/ar27111994/webhook-debugger-logger" target="_blank">View Documentation</a></p>
-              </div>
-          </body>
-          </html>
-        `);
-      }
-      return res
-        .status(401)
-        .json({ error: "Unauthorized", message: authResult.error });
-    }
-
-    // 3. Authenticated View
-    const activeCount = webhookManager.getAllActive().length;
-
-    if (isBrowser) {
-      res.send(`
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Webhook Debugger v2.7.2</title>
-            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono&display=swap" rel="stylesheet">
-            <style>
-                :root { --primary: #5865F2; --success: #2ecc71; --bg: #0f172a; --card: #1e293b; --text: #f8fafc; --text-dim: #94a3b8; }
-                body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; text-align: center; }
-                .container { max-width: 600px; background: var(--card); padding: 40px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
-                h1 { font-weight: 800; color: var(--primary); margin: 0; }
-                .version { font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; color: var(--text-dim); margin: 8px 0 24px; display: block; }
-                .status { display: inline-flex; align-items: center; gap: 8px; background: rgba(46, 204, 113, 0.1); color: var(--success); padding: 8px 16px; border-radius: 99px; font-weight: 600; margin-bottom: 32px; }
-                .dot { width: 8px; height: 8px; background: var(--success); border-radius: 50%; animation: pulse 2s infinite; }
-                .stat-item { background: rgba(0,0,0,0.2); padding: 16px; border-radius: 8px; border-left: 4px solid var(--primary); text-align: left; margin-bottom: 16px; }
-                .stat-label { font-size: 0.8rem; color: var(--text-dim); display: block; margin-bottom: 4px; }
-                .stat-value { font-family: 'JetBrains Mono', monospace; font-weight: 600; }
-                a { color: var(--primary); text-decoration: none; font-weight: 600; }
-                @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <h1>Webhook Debugger</h1>
-                <span class="version">v2.7.2 "Enterprise Suite"</span>
-                <div class="status"><div class="dot"></div>System Online & Optimized</div>
-                <div class="stat-item"><span class="stat-label">Active Webhooks (Live TTL)</span><span class="stat-value">${activeCount} active endpoints</span></div>
-                <div class="stat-item"><span class="stat-label">Quick Start</span><span class="stat-value">GET <a href="/info">/info</a> to view routing and management APIs</span></div>
-                <p style="margin-top:24px; font-size: 0.85rem; color: var(--text-dim);">Built for high-stakes launches • <a href="https://apify.com/ar27111994/webhook-debugger-logger" target="_blank">Documentation</a></p>
-            </div>
-        </body>
-        </html>
-      `);
-    } else {
-      res.send(
-        `Webhook Debugger & Logger v2.7.2 (Enterprise Suite) is running.\nActive Webhooks: ${activeCount}\nUse /info for management API.\n`,
-      );
-    }
-  });
-
   /**
    * Error handling middleware
-   * @param {any} err
-   * @param {import("express").Request} req
-   * @param {import("express").Response} res
-   * @param {import("express").NextFunction} next
+   * @param {CommonError} err
+   * @param {Request} req
+   * @param {Response} res
+   * @param {NextFunction} next
    */
   app.use(
     /**
-     * @param {any} err
-     * @param {import("express").Request} _req
-     * @param {import("express").Response} res
-     * @param {import("express").NextFunction} next
+     * @param {CommonError} err
+     * @param {Request} _req
+     * @param {Response} res
+     * @param {NextFunction} next
      */
     (err, _req, res, next) => {
       if (res.headersSent) return next(err);

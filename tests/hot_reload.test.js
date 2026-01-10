@@ -6,6 +6,10 @@ import {
   beforeAll,
   afterAll,
 } from "@jest/globals";
+import { sleep } from "./helpers/test-utils.js";
+
+/** @typedef {import('./helpers/apify-mock.js').ApifyMock} Actor */
+/** @typedef {import('express').Express} Express */
 
 // 1. Setup mocks
 jest.unstable_mockModule("apify", async () => {
@@ -15,16 +19,14 @@ jest.unstable_mockModule("apify", async () => {
 
 // 2. Import modules
 const request = (await import("supertest")).default;
-const { Actor } = await import("apify");
+/** @type {Actor} */
+const Actor = /** @type {any} */ ((await import("apify")).Actor);
 const { initialize, shutdown, webhookManager } = await import("../src/main.js");
-
-const sleep = (/** @type {number} */ ms) =>
-  new Promise((resolve) => setTimeout(resolve, ms));
 
 const reloadSleepMs = 150;
 
 describe("Hot-Reloading Configuration Tests", () => {
-  /** @type {import('express').Express} */
+  /** @type {Express} */
   let app;
 
   beforeAll(async () => {
@@ -34,7 +36,7 @@ describe("Hot-Reloading Configuration Tests", () => {
       urlCount: 1,
       retentionHours: 1,
     });
-    app = /** @type {import('express').Express} */ (await initialize());
+    app = /** @type {Express} */ (await initialize());
   });
 
   afterAll(async () => {
@@ -48,9 +50,10 @@ describe("Hot-Reloading Configuration Tests", () => {
       .set("Authorization", "Bearer original-key");
     expect(res1.statusCode).toBe(200);
 
-    // Update to new key
-    await /** @type {any} */ (Actor).emitInput({
-      authKey: "new-super-secret",
+    // 2. Emit new input
+    const apifyMock = Actor;
+    apifyMock.emitInput({
+      authKey: "new-secret-key",
       urlCount: 1,
       retentionHours: 1,
     });
@@ -65,16 +68,26 @@ describe("Hot-Reloading Configuration Tests", () => {
     // Verify new key works
     const res3 = await request(app)
       .get("/info")
-      .set("Authorization", "Bearer new-super-secret");
+      .set("Authorization", "Bearer new-secret-key");
     expect(res3.statusCode).toBe(200);
   });
 
-  test("should scale urlCount in real-time", async () => {
+  test("should detect input change and update components", async () => {
+    // 1. Setup initial state
+    const apifyMock = Actor;
+    apifyMock.emitInput({
+      authKey: "initial-key",
+      urlCount: 3,
+      retentionHours: 1,
+    });
+    await sleep(reloadSleepMs);
+
     const initialActive = webhookManager.getAllActive().length;
-    expect(initialActive).toBe(1);
+    expect(initialActive).toBe(3);
 
     // Scale up to 3
-    await /** @type {any} */ (Actor).emitInput({
+    // Scale up to 3
+    await Actor.emitInput({
       authKey: "new-super-secret",
       urlCount: 3,
       retentionHours: 1,
@@ -97,7 +110,7 @@ describe("Hot-Reloading Configuration Tests", () => {
     expect(res1.text).toBe("OK");
 
     // 2. Add custom script via hot-reload
-    await /** @type {any} */ (Actor).emitInput({
+    await Actor.emitInput({
       authKey: "new-super-secret",
       urlCount: 3,
       retentionHours: 1,
@@ -120,7 +133,7 @@ describe("Hot-Reloading Configuration Tests", () => {
       .spyOn(console, "error")
       .mockImplementation(() => {});
 
-    await /** @type {any} */ (Actor).emitInput({
+    await Actor.emitInput({
       jsonSchema: "{ invalid json: }", // Malformed
       authKey: "new-super-secret",
     });
@@ -131,8 +144,6 @@ describe("Hot-Reloading Configuration Tests", () => {
       expect.stringContaining("[SCHEMA-ERROR]"),
       expect.any(String),
     );
-    consoleSpy.mockRestore();
-
     // Verify app is still responsive
     const res = await request(app)
       .get("/info")

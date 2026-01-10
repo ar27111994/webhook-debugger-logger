@@ -16,14 +16,57 @@ const { app, webhookManager, initialize, shutdown } =
   await import("../src/main.js");
 const { Actor } = await import("apify");
 const request = (await import("supertest")).default;
+const authKey = "TEST_KEY";
+const authHeader = `Bearer ${authKey}`;
 
 describe("Log Filtering Routes", () => {
   beforeAll(async () => {
+    // Enforce auth to test 401 scenarios
+    jest.mocked(Actor.getInput).mockResolvedValue({ authKey });
     await initialize();
   });
 
   afterAll(async () => {
     await shutdown("TEST_COMPLETE");
+  });
+
+  describe("Root Route Content Negotiation", () => {
+    test("GET / should return 200 OK for readiness probe", async () => {
+      const res = await request(app)
+        .get("/")
+        .set("X-Apify-Container-Server-Readiness-Probe", "1");
+      expect(res.statusCode).toBe(200);
+      expect(res.text).toBe("OK");
+    });
+
+    test("GET / should return 401 HTML for browser without auth", async () => {
+      // Ensure we don't send auth headers
+      const res = await request(app).get("/").set("Accept", "text/html");
+
+      expect(res.statusCode).toBe(401);
+      expect(res.headers["content-type"]).toMatch(/text\/html/);
+      expect(res.text).toContain("Access Restricted");
+      expect(res.text).toContain("Strict Mode enabled");
+    });
+
+    test("GET / should return 401 JSON for non-browser without auth", async () => {
+      const res = await request(app).get("/").set("Accept", "application/json");
+
+      expect(res.statusCode).toBe(401);
+      expect(res.body.error).toBe("Unauthorized");
+    });
+
+    test("GET / should return 200 HTML with Dashboard loop for valid auth", async () => {
+      const res = await request(app)
+        .get("/")
+        .set("Accept", "text/html")
+        .set("Authorization", authHeader);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.text).toContain("Webhook Debugger");
+      expect(res.text).toContain("Enterprise Suite");
+      expect(res.text).toMatch(/\d+ active endpoints/);
+    });
   });
 
   test("GET /logs should filter by method, status, contentType", async () => {
@@ -52,29 +95,41 @@ describe("Log Filtering Routes", () => {
     ];
 
     jest.spyOn(webhookManager, "isValid").mockReturnValue(true);
-    /** @type {any} */ (Actor.openDataset).mockResolvedValue(
-      /** @type {any} */ ({
-        getData: /** @type {any} */ (jest.fn()).mockResolvedValue({ items }),
+    /** @type {jest.Mock<any>} */ (Actor.openDataset).mockResolvedValue({
+      getData: /** @type {jest.Mock<any>} */ (jest.fn()).mockResolvedValue({
+        items,
       }),
-    );
+    });
 
     // Filter by Method
-    let res = await request(app).get("/logs").query({ method: "GET" });
+    let res = await request(app)
+      .get("/logs")
+      .query({ method: "GET" })
+      .set("Authorization", authHeader);
     expect(res.body.items).toHaveLength(1);
     expect(res.body.items[0].method).toBe("GET");
 
     // Filter by StatusCode
-    res = await request(app).get("/logs").query({ statusCode: "404" });
+    res = await request(app)
+      .get("/logs")
+      .query({ statusCode: "404" })
+      .set("Authorization", authHeader);
     expect(res.body.items).toHaveLength(1);
     expect(res.body.items[0].statusCode).toBe(404);
 
     // Filter by ContentType
-    res = await request(app).get("/logs").query({ contentType: "text/plain" });
+    res = await request(app)
+      .get("/logs")
+      .query({ contentType: "text/plain" })
+      .set("Authorization", authHeader);
     expect(res.body.items).toHaveLength(1);
     expect(res.body.items[0].headers["content-type"]).toBe("text/plain");
 
     // Filter by WebhookId
-    res = await request(app).get("/logs").query({ webhookId: "wh_2" });
+    res = await request(app)
+      .get("/logs")
+      .query({ webhookId: "wh_2" })
+      .set("Authorization", authHeader);
     expect(res.body.items).toHaveLength(1);
     expect(res.body.items[0].webhookId).toBe("wh_2");
   });
@@ -84,13 +139,18 @@ describe("Log Filtering Routes", () => {
       webhookId: "wh_1",
       timestamp: new Date().toISOString(),
     }));
-    /** @type {any} */
+
     const mockDataset = {
       getData: jest.fn(async () => ({ items })),
     };
-    jest.mocked(Actor.openDataset).mockResolvedValue(mockDataset);
+    /** @type {jest.Mock<any>} */ (Actor.openDataset).mockResolvedValue(
+      mockDataset,
+    );
 
-    const res = await request(app).get("/logs").query({ limit: 10 });
+    const res = await request(app)
+      .get("/logs")
+      .query({ limit: 10 })
+      .set("Authorization", authHeader);
     expect(res.body.items).toHaveLength(10);
     expect(res.body.count).toBe(10);
   });

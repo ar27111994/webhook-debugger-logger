@@ -1,5 +1,7 @@
 import { jest, describe, test, expect, beforeEach } from "@jest/globals";
 
+/** @typedef {import('../src/webhook_manager.js').WebhookManager} WebhookManager */
+
 // Mock axios
 jest.unstable_mockModule("axios", async () => {
   const { axiosMock } = await import("./helpers/shared-mocks.js");
@@ -16,15 +18,19 @@ const { createLoggerMiddleware } = await import("../src/logger_middleware.js");
 const httpMocks = (await import("node-mocks-http")).default;
 
 describe("Script Execution Extended", () => {
-  /** @type {import('../src/webhook_manager.js').WebhookManager} */
+  /** @type {WebhookManager} */
   let webhookManager;
   /** @type {jest.Mock} */
   let onEvent;
 
   beforeEach(() => {
-    webhookManager = /** @type {any} */ ({
-      isValid: jest.fn().mockReturnValue(true),
-      getWebhookData: jest.fn().mockReturnValue({}),
+    webhookManager = /** @type {WebhookManager} */ ({
+      isValid: /** @type {WebhookManager['isValid']} */ (
+        jest.fn().mockReturnValue(true)
+      ),
+      getWebhookData: /** @type {WebhookManager['getWebhookData']} */ (
+        jest.fn().mockReturnValue({})
+      ),
     });
     onEvent = jest.fn();
   });

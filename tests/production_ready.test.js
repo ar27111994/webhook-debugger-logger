@@ -87,7 +87,7 @@ describe("Production Readiness Tests (v2.6.0)", () => {
         .set("X-API-Key", "my-key")
         .send({ foo: "bar" });
 
-      /** @type {{method: string; webhookId: string; headers: Record<string, string>} | undefined} */
+      /** @type {Partial<import('../src/typedefs.js').WebhookEvent>} */
       const matchedCall = /** @type {any} */ (
         jest
           .mocked(Actor.pushData)
@@ -100,11 +100,11 @@ describe("Production Readiness Tests (v2.6.0)", () => {
       );
 
       expect(matchedCall).toBeDefined();
-
-      expect(matchedCall?.headers["authorization"]).toBe("[MASKED]");
-      expect(matchedCall?.headers["cookie"]).toBe("[MASKED]");
-      expect(matchedCall?.headers["x-api-key"]).toBe("[MASKED]");
-      expect(matchedCall?.headers["host"]).toBeDefined();
+      expect(matchedCall?.headers).toBeDefined();
+      expect(matchedCall?.headers?.authorization).toBe("[MASKED]");
+      expect(matchedCall?.headers?.cookie).toBe("[MASKED]");
+      expect(matchedCall?.headers?.["x-api-key"]).toBe("[MASKED]");
+      expect(matchedCall?.headers?.host).toBeDefined();
     });
   });
 
@@ -162,7 +162,9 @@ describe("Production Readiness Tests (v2.6.0)", () => {
 
       const { default: axiosMock } = await import("axios");
       /** @type {Array<[{url: string; headers: Record<string, unknown>}]>} */
-      const axioCalls = /** @type {any} */ (axiosMock).mock.calls;
+      const axioCalls =
+        /** @type {import("./helpers/shared-mocks.js").AxiosMock} */ (axiosMock)
+          .mock.calls;
       /** @type {any} */
       const axiosCall = axioCalls.find((c) => c[0].url === targetUrl);
       expect(axiosCall).toBeDefined();

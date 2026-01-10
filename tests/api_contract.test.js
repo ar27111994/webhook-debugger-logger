@@ -241,8 +241,11 @@ describe("API Contract & Regression Tests", () => {
         .set("Authorization", "Bearer test-secret");
 
       expect(res.statusCode).toBe(200);
+
       const { default: axiosMock } = await import("axios");
-      const axiosCalls = /** @type {any} */ (axiosMock).mock.calls;
+      const axiosCalls =
+        /** @type {import("./helpers/shared-mocks.js").AxiosMock} */ (axiosMock)
+          .mock.calls;
       const lastCall = axiosCalls[axiosCalls.length - 1];
       expect(lastCall[0].data).toContain("i am the correct one");
 

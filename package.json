@@ -30,6 +30,7 @@
   "devDependencies": {
     "@eslint/js": "^9.17.0",
     "@types/compression": "^1.8.1",
+    "@types/cors": "^2.8.19",
     "@types/express": "^4.17.21",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.10.2",
@@ -46,7 +47,7 @@
     "coverageThreshold": {
       "global": {
         "branches": 80,
-        "functions": 85,
+        "functions": 90,
         "lines": 90,
         "statements": 90
       }

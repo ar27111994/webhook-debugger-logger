@@ -1,5 +1,7 @@
 import { jest, describe, test, expect, beforeEach } from "@jest/globals";
 
+/** @typedef {import('../src/webhook_manager.js').WebhookManager} WebhookManager */
+
 jest.unstable_mockModule("axios", async () => {
   const { axiosMock } = await import("./helpers/shared-mocks.js");
   return { default: axiosMock };
@@ -14,17 +16,21 @@ const { createLoggerMiddleware } = await import("../src/logger_middleware.js");
 const httpMocks = (await import("node-mocks-http")).default;
 
 describe("Logger Middleware", () => {
-  /** @type {import('../src/webhook_manager.js').WebhookManager} */
+  /** @type {WebhookManager} */
   let webhookManager;
-  /** @type {import('../src/logger_middleware.js').LoggerOptions} */
+  /** @type {import('../src/typedefs.js').LoggerOptions} */
   let options;
   /** @type {jest.Mock} */
   let onEvent;
 
   beforeEach(() => {
-    webhookManager = /** @type {any} */ ({
-      isValid: jest.fn().mockReturnValue(true),
-      getWebhookData: jest.fn().mockReturnValue({}),
+    webhookManager = /** @type {WebhookManager} */ ({
+      isValid: /** @type {WebhookManager['isValid']} */ (
+        jest.fn().mockReturnValue(true)
+      ),
+      getWebhookData: /** @type {WebhookManager['getWebhookData']} */ (
+        jest.fn().mockReturnValue({})
+      ),
     });
     onEvent = jest.fn();
     options = {
@@ -191,10 +197,10 @@ describe("Logger Middleware", () => {
 
   test("should return object responseBody as JSON", async () => {
     options.defaultResponseCode = 200;
-    /** @type {any} */ (options).defaultResponseBody = {
+    options.defaultResponseBody = /** @type any */ ({
       status: "ok",
       custom: "response",
-    };
+    });
     const middleware = createLoggerMiddleware(webhookManager, options, onEvent);
     const req = httpMocks.createRequest({
       params: { id: "wh_123" },

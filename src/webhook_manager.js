@@ -3,6 +3,7 @@ import { nanoid } from "nanoid";
 import { MAX_BULK_CREATE } from "./consts.js";
 
 /**
+ * @typedef {import('apify').KeyValueStore | null} KeyValueStore
  * @typedef {import('./typedefs.js').WebhookData} WebhookData
  */
 
@@ -10,7 +11,7 @@ export class WebhookManager {
   constructor() {
     /** @type {Map<string, WebhookData>} */
     this.webhooks = new Map();
-    /** @type {import('apify').KeyValueStore | null} */
+    /** @type {KeyValueStore} */
     this.kvStore = null;
     this.STATE_KEY = "WEBHOOK_STATE";
   }

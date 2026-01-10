@@ -10,17 +10,24 @@ import { validateUrlForSsrf } from "./utils/ssrf.js";
 import {
   BACKGROUND_TASK_TIMEOUT_PROD_MS,
   BACKGROUND_TASK_TIMEOUT_TEST_MS,
+  BODY_PARSER_SIZE_LIMIT,
   FORWARD_HEADERS_TO_IGNORE,
   FORWARD_TIMEOUT_MS,
   MAX_FORWARD_RETRIES,
-  MAX_PAYLOAD_SIZE_LIMIT,
   SCRIPT_EXECUTION_TIMEOUT_MS,
   SENSITIVE_HEADERS,
+  WEBHOOK_PAYLOAD_DEFAULT_LIMIT,
 } from "./consts.js";
 
 /**
+ * @typedef {import('express').Request} Request
+ * @typedef {import('express').Response} Response
+ * @typedef {import('express').NextFunction} NextFunction
+ * @typedef {import('ajv').ValidateFunction | null} ValidateFunction
+ * @typedef {import('./webhook_manager.js').WebhookManager} WebhookManager
  * @typedef {import('./typedefs.js').WebhookEvent} WebhookEvent
  * @typedef {import('./typedefs.js').LoggerOptions} LoggerOptions
+ * @typedef {import('./typedefs.js').CommonError} CommonError
  */
 
 // @ts-expect-error - Ajv's default export is a class constructor but TypeScript infers namespace type; explicit cast required
@@ -29,10 +36,10 @@ const ajv = new Ajv();
 /**
  * Validates the basic webhook request parameters and permissions.
  *
- * @param {import("express").Request} req
+ * @param {Request} req
  * @param {string} webhookId
  * @param {LoggerOptions} options
- * @param {import("./webhook_manager.js").WebhookManager} webhookManager
+ * @param {WebhookManager} webhookManager
  * @returns {{ isValid: boolean, statusCode?: number, error?: string, remoteIp?: string, contentLength?: number, received?: number }}
  */
 /**
@@ -52,11 +59,11 @@ function getValidStatusCode(forcedStatus, defaultCode = 200) {
 /**
  * Validates the basic webhook request parameters and permissions.
  *
- * @param {import("express").Request} req
+ * @param {Request} req
  * @param {string} webhookId
  * @param {LoggerOptions} options
- * @param {import("./webhook_manager.js").WebhookManager} webhookManager
- * @returns {{ isValid: boolean, statusCode?: number, error?: string, remoteIp?: string, contentLength?: number, received?: number }}
+ * @param {WebhookManager} webhookManager
+ * @returns {import("./typedefs.js").MiddlewareValidationResult}
  */
 function validateWebhookRequest(req, webhookId, options, webhookManager) {
   const authKey = options.authKey || "";
@@ -86,7 +93,7 @@ function validateWebhookRequest(req, webhookId, options, webhookManager) {
   }
 
   // 3. Authentication Check
-  const authResult = /** @type {{isValid: boolean; error?: string}} */ (
+  const authResult = /** @type {import('./typedefs.js').ValidationResult} */ (
     validateAuth(req, authKey)
   );
   if (!authResult.isValid) {
@@ -115,8 +122,11 @@ function validateWebhookRequest(req, webhookId, options, webhookManager) {
           : 0;
 
   const contentLength = Number.isFinite(parsedLength) ? parsedLength : bodyLen;
-
-  const maxSize = options.maxPayloadSize || MAX_PAYLOAD_SIZE_LIMIT; // 1MB default
+  const requestedMax = Number(options.maxPayloadSize);
+  const maxSize =
+    Number.isFinite(requestedMax) && requestedMax > 0
+      ? Math.min(Math.floor(requestedMax), BODY_PARSER_SIZE_LIMIT)
+      : WEBHOOK_PAYLOAD_DEFAULT_LIMIT;
   if (contentLength > maxSize) {
     return {
       isValid: false,
@@ -133,9 +143,9 @@ function validateWebhookRequest(req, webhookId, options, webhookManager) {
 /**
  * Prepares the request body, validates JSON schema, and masks headers.
  *
- * @param {import("express").Request} req
+ * @param {Request} req
  * @param {LoggerOptions} options
- * @param {import("ajv").ValidateFunction | null} validate
+ * @param {ValidateFunction} validate
  * @returns {{ loggedBody: string, loggedHeaders: Object, contentType: string }}
  */
 function prepareRequestData(req, options, validate) {
@@ -200,7 +210,7 @@ function prepareRequestData(req, options, validate) {
  * Executes a custom script to transform the event.
  *
  * @param {WebhookEvent} event
- * @param {import("express").Request} req
+ * @param {Request} req
  * @param {vm.Script | null} compiledScript
  */
 function transformRequestData(event, req, compiledScript) {
@@ -211,7 +221,7 @@ function transformRequestData(event, req, compiledScript) {
         timeout: SCRIPT_EXECUTION_TIMEOUT_MS,
       });
     } catch (err) {
-      const error = /** @type {Error & {code?: string}} */ (err);
+      const error = /** @type {CommonError} */ (err);
       const isTimeout =
         error.code === "ERR_SCRIPT_EXECUTION_TIMEOUT" ||
         error.message?.includes("Script execution timed out");
@@ -228,7 +238,7 @@ function transformRequestData(event, req, compiledScript) {
 /**
  * Sends the HTTP response back to the client.
  *
- * @param {import("express").Response} res
+ * @param {Response} res
  * @param {WebhookEvent} event
  * @param {LoggerOptions} options
  */
@@ -267,7 +277,7 @@ function sendResponse(res, event, options) {
  * Handles background tasks like storage and forwarding.
  *
  * @param {WebhookEvent} event
- * @param {import("express").Request} req
+ * @param {Request} req
  * @param {LoggerOptions} options
  * @param {Function} onEvent
  */
@@ -307,7 +317,7 @@ async function executeBackgroundTasks(event, req, options, onEvent) {
             const sensitiveHeaders = FORWARD_HEADERS_TO_IGNORE;
 
             const forwardingHeaders =
-              /** @type {unknown} */ (options.forwardHeaders) !== false
+              options.forwardHeaders !== false
                 ? Object.fromEntries(
                     Object.entries(req.headers).filter(
                       ([key]) => !sensitiveHeaders.includes(key.toLowerCase()),
@@ -327,8 +337,7 @@ async function executeBackgroundTasks(event, req, options, onEvent) {
             });
             success = true;
           } catch (err) {
-            const axiosError =
-              /** @type {{code?: string; message?: string}} */ (err);
+            const axiosError = /** @type {CommonError} */ (err);
             const transientErrors = [
               "ECONNABORTED",
               "ECONNRESET",
@@ -407,16 +416,16 @@ async function executeBackgroundTasks(event, req, options, onEvent) {
 
 /**
  * @typedef {Function} LoggerMiddleware
- * @param {import("express").Request} req
- * @param {import("express").Response} res
- * @param {import("express").NextFunction} [next]
+ * @param {Request} req
+ * @param {Response} res
+ * @param {NextFunction} [next]
  * @returns {Promise<void>}
  */
 
 /**
  * Creates the logger middleware instance with hot-reload support.
  *
- * @param {import("./webhook_manager.js").WebhookManager} webhookManager
+ * @param {WebhookManager} webhookManager
  * @param {Object} rawOptions
  * @param {Function} onEvent
  * @returns {LoggerMiddleware & { updateOptions: Function }}
@@ -426,7 +435,7 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
   let options; // Initialized as undefined to trigger initial compilation
   /** @type {vm.Script | null} */
   let compiledScript = null;
-  /** @type {import("ajv").ValidateFunction | null} */
+  /** @type {ValidateFunction} */
   let validate = null;
 
   /**
@@ -487,9 +496,9 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
   options = initialOptions;
 
   /**
-   * @param {import("express").Request} req
-   * @param {import("express").Response} res
-   * @param {import("express").NextFunction} [_next]
+   * @param {Request} req
+   * @param {Response} res
+   * @param {NextFunction} [_next]
    */
   const middleware = async (req, res, _next) => {
     const startTime = Date.now();
@@ -547,9 +556,7 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
         timestamp: new Date().toISOString(),
         webhookId,
         method: req.method,
-        headers: /** @type {Object.<string, string | string[] | undefined>} */ (
-          loggedHeaders
-        ),
+        headers: /** @type {WebhookEvent['headers']} */ (loggedHeaders),
         query: req.query,
         body: loggedBody,
         contentType,
@@ -619,10 +626,7 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
         ),
       ]);
     } catch (err) {
-      const middlewareError =
-        /** @type {{statusCode?: number; error?: string; details?: unknown; message?: string}} */ (
-          err
-        );
+      const middlewareError = /** @type {CommonError} */ (err);
       if (middlewareError.statusCode) {
         return res.status(middlewareError.statusCode).json({
           error: middlewareError.error,

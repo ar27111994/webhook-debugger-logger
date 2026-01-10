@@ -1,5 +1,8 @@
 import { jest, describe, test, expect, beforeEach } from "@jest/globals";
 
+/** @typedef {import('apify').KeyValueStore} KeyValueStore */
+/** @typedef {import('../src/webhook_manager.js').WebhookManager} WebhookManager */
+
 jest.unstable_mockModule("apify", () => ({
   Actor: {
     openKeyValueStore: jest.fn(),
@@ -10,25 +13,23 @@ const { Actor } = await import("apify");
 const { WebhookManager } = await import("../src/webhook_manager.js");
 
 describe("WebhookManager", () => {
-  /** @type {import('../src/webhook_manager.js').WebhookManager} */
+  /** @type {WebhookManager} */
   let webhookManager;
-  /** @type {any} */
+  /** @type {KeyValueStore} */
   let mockKvStore;
 
   beforeEach(() => {
-    mockKvStore = {
-      getValue: jest.fn(),
-      setValue: jest.fn(),
-    };
-    jest
-      .mocked(Actor.openKeyValueStore)
-      .mockResolvedValue(/** @type {any} */ (mockKvStore));
+    mockKvStore = /** @type {KeyValueStore} */ ({
+      getValue: /** @type {KeyValueStore['getValue']} */ (jest.fn()),
+      setValue: /** @type {KeyValueStore['setValue']} */ (jest.fn()),
+    });
+    jest.mocked(Actor.openKeyValueStore).mockResolvedValue(mockKvStore);
     webhookManager = new WebhookManager();
   });
 
   test("init() should restore webhooks from state", async () => {
     const savedState = { wh_123: { expiresAt: "2099-01-01T00:00:00Z" } };
-    mockKvStore.getValue.mockResolvedValue(savedState);
+    jest.mocked(mockKvStore.getValue).mockResolvedValue(savedState);
 
     await webhookManager.init();
 
@@ -37,11 +38,13 @@ describe("WebhookManager", () => {
   });
 
   test("init() should handle corrupted or missing state gracefully", async () => {
-    mockKvStore.getValue.mockResolvedValue(null);
+    jest.mocked(mockKvStore.getValue).mockResolvedValue(null);
     await webhookManager.init();
     expect(webhookManager.webhooks.size).toBe(0);
 
-    mockKvStore.getValue.mockRejectedValue(new Error("Storage failure"));
+    jest
+      .mocked(mockKvStore.getValue)
+      .mockRejectedValue(new Error("Storage failure"));
     await webhookManager.init(); // Should not throw
     expect(webhookManager.webhooks.size).toBe(0);
   });
@@ -53,7 +56,7 @@ describe("WebhookManager", () => {
     expect(ids).toHaveLength(2);
     expect(ids[0]).toMatch(/^wh_/);
     expect(webhookManager.webhooks.size).toBe(2);
-    expect(mockKvStore.setValue).toHaveBeenCalled();
+    expect(jest.mocked(mockKvStore.setValue)).toHaveBeenCalled();
   });
 
   test("isValid() should verify expiry correctly", async () => {
@@ -71,9 +74,10 @@ describe("WebhookManager", () => {
 
   test("persist() should initialize kvStore if missing", async () => {
     webhookManager.kvStore = null;
+    await webhookManager.init();
     await webhookManager.persist();
-    expect(Actor.openKeyValueStore).toHaveBeenCalled();
-    expect(mockKvStore.setValue).toHaveBeenCalled();
+    expect(jest.mocked(Actor.openKeyValueStore)).toHaveBeenCalled();
+    expect(jest.mocked(mockKvStore.setValue)).toHaveBeenCalled();
   });
 
   test("cleanup() should remove expired hooks", async () => {
@@ -139,18 +143,20 @@ describe("WebhookManager", () => {
   });
 
   test("persist() should handle setValue errors gracefully", async () => {
-    mockKvStore.setValue.mockRejectedValue(new Error("Write failure"));
+    jest
+      .mocked(mockKvStore.setValue)
+      .mockRejectedValue(new Error("Write failure"));
     await webhookManager.init();
     webhookManager.webhooks.set("wh_test", {
       expiresAt: new Date(Date.now() + 10000).toISOString(),
     });
     // Should not throw
     await webhookManager.persist();
-    expect(mockKvStore.setValue).toHaveBeenCalled();
+    expect(jest.mocked(mockKvStore.setValue)).toHaveBeenCalled();
   });
 
   test("persist() should handle non-Error thrown values", async () => {
-    mockKvStore.setValue.mockRejectedValue("String error");
+    jest.mocked(mockKvStore.setValue).mockRejectedValue("String error");
     await webhookManager.init();
     webhookManager.webhooks.set("wh_test", {
       expiresAt: new Date(Date.now() + 10000).toISOString(),

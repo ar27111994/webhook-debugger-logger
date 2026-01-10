@@ -6,6 +6,7 @@ import {
   beforeAll,
   afterAll,
 } from "@jest/globals";
+
 jest.unstable_mockModule("apify", async () => {
   const { apifyMock } = await import("./helpers/shared-mocks.js");
   return { Actor: apifyMock };

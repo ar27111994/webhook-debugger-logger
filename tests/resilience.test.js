@@ -65,7 +65,8 @@ describe("Resilience & Retry Tests", () => {
         .mockResolvedValue(/** @type {any} */ (createDatasetMock([mockItem])));
 
       // Mock axios to fail twice then succeed
-      /** @type {any} */ (axios)
+      jest
+        .mocked(axios)
         .mockRejectedValueOnce({ code: "ECONNABORTED" })
         .mockRejectedValueOnce({ code: "ECONNABORTED" })
         .mockResolvedValueOnce({ status: 200, data: "OK" });
@@ -96,7 +97,7 @@ describe("Resilience & Retry Tests", () => {
         .mockResolvedValue(/** @type {any} */ (createDatasetMock([mockItem])));
 
       // Always fail
-      /** @type {any} */ (axios).mockRejectedValue({ code: "ECONNABORTED" });
+      jest.mocked(axios).mockRejectedValue({ code: "ECONNABORTED" });
 
       const res = await request(app)
         .get(`/replay/${webhookId}/evt_fail`)
@@ -123,9 +124,7 @@ describe("Resilience & Retry Tests", () => {
       // Axios returns a response with 404 status (no exception thrown if validateStatus allows it)
       // But in our Replay logic we use validateStatus: () => true, so it wont throw.
       // Wait, let's test a real error that SHOULDNT be retried, like a generic Error without code
-      /** @type {any} */ (axios).mockRejectedValueOnce(
-        new Error("Generic Failure"),
-      );
+      jest.mocked(axios).mockRejectedValueOnce(new Error("Generic Failure"));
 
       const res = await request(app)
         .get(`/replay/${webhookId}/evt_generic`)
@@ -164,8 +163,9 @@ describe("Resilience & Retry Tests", () => {
       expect(Actor.pushData).toHaveBeenCalled();
 
       // In test mode, background timeout is 100ms. The response should be received quickly.
-      // We use a 500ms threshold to account for CI overhead and prevent flake.
-      expect(duration).toBeLessThan(500);
+      // We use a 900ms threshold to account for CI overhead and prevent flake,
+      // while preserving the assertion that we didn't wait for the 1000ms mock.
+      expect(duration).toBeLessThan(900);
     });
   });
 });

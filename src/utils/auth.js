@@ -5,7 +5,7 @@ import { timingSafeEqual } from "crypto";
  *
  * @param {import('express').Request} req - Express request object
  * @param {string} authKey - The configured authentication key
- * @returns {{ isValid: boolean, error?: string }} Validation result { isValid: boolean, error?: string }
+ * @returns {import('../typedefs.js').ValidationResult} Validation result
  */
 export function validateAuth(req, authKey) {
   if (!authKey) {
@@ -14,6 +14,12 @@ export function validateAuth(req, authKey) {
 
   // 1. Extract token from Authorization header (Preferred)
   const authHeaderRaw = req.headers["authorization"];
+  if (Array.isArray(authHeaderRaw) && authHeaderRaw.length > 1) {
+    return {
+      isValid: false,
+      error: "Multiple Authorization headers are not allowed",
+    };
+  }
   const authHeader = Array.isArray(authHeaderRaw)
     ? (authHeaderRaw[0] ?? "")
     : (authHeaderRaw ?? "");

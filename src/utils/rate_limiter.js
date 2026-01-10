@@ -1,6 +1,8 @@
 /**
  * Simple in-memory rate limiter with background pruning and eviction.
  */
+import net from "node:net";
+
 export class RateLimiter {
   /**
    * @param {number} limit - Max requests per window
@@ -66,7 +68,7 @@ export class RateLimiter {
 
   /**
    * Obfuscates an IP address for logging.
-   * @param {string | null} ip
+   * @param {string | undefined | null} ip
    * @returns {string}
    */
   maskIp(ip) {
@@ -87,18 +89,7 @@ export class RateLimiter {
    */
   isValidIp(ip) {
     if (typeof ip !== "string") return false;
-    // IPv4 check
-    if (
-      /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/.test(
-        ip,
-      )
-    ) {
-      return true;
-    }
-    // IPv6 check (simplified but effective for standard notation)
-    return (
-      /^(?:[A-F0-9]{1,4}:){7}[A-F0-9]{1,4}$/i.test(ip) || ip.includes("::")
-    );
+    return net.isIP(ip) !== 0;
   }
 
   destroy() {
@@ -177,7 +168,7 @@ export class RateLimiter {
         if (this.hits.size >= this.maxEntries) {
           const oldestKey = this.hits.keys().next().value;
           this.hits.delete(/** @type {string} */ (oldestKey));
-          if (process.env.NODE_ENV !== "test") {
+          if (process.env.NODE_ENV !== "test" && oldestKey !== undefined) {
             console.log(
               `[SYSTEM] RateLimiter evicted entry for ${this.maskIp(
                 /** @type {string} */ (oldestKey),

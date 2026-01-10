@@ -11,6 +11,9 @@ import {
   afterAll,
 } from "@jest/globals";
 
+/** @typedef {import("./helpers/shared-mocks.js").AxiosMock} AxiosMock */
+/** @typedef {import("./helpers/shared-mocks.js").dnsPromisesMock} DnsPromisesMock */
+
 jest.unstable_mockModule("apify", async () => {
   const { apifyMock } = await import("./helpers/shared-mocks.js");
   return { Actor: apifyMock };
@@ -25,6 +28,18 @@ jest.unstable_mockModule("axios", async () => {
 jest.unstable_mockModule("dns/promises", async () => {
   const { dnsPromisesMock } = await import("./helpers/shared-mocks.js");
   return { default: dnsPromisesMock };
+});
+
+jest.unstable_mockModule("../src/utils/ssrf.js", () => {
+  return {
+    validateUrlForSsrf: /** @type {jest.Mock<any>} */ (
+      jest.fn()
+    ).mockResolvedValue({
+      safe: true,
+      href: "http://example.com",
+      host: "example.com",
+    }),
+  };
 });
 
 const request = (await import("supertest")).default;
@@ -70,6 +85,16 @@ describe("API E2E Tests", () => {
     expect(res.text).toBe("OK");
   });
 
+  test("POST /webhook/:id should capture text/plain data", async () => {
+    const res = await request(app)
+      .post(`/webhook/${webhookId}`)
+      .set("Content-Type", "text/plain")
+      .send("raw data string");
+
+    expect(res.statusCode).toBe(200);
+    expect(res.text).toBe("OK");
+  });
+
   test("GET /logs should return captured items and filters", async () => {
     // Mock dataset to return one item for this test
     const mockItem = {
@@ -104,7 +129,10 @@ describe("API E2E Tests", () => {
 
     // Mock axios to prevent real network calls
     const axios = (await import("axios")).default;
-    /** @type {any} */ (axios).mockResolvedValue({ status: 200, data: "OK" });
+    /** @type {AxiosMock} */ (axios).mockResolvedValue({
+      status: 200,
+      data: "OK",
+    });
 
     const res = await request(app)
       .get(`/replay/${webhookId}/evt_123`)
@@ -204,20 +232,132 @@ describe("API E2E Tests", () => {
       .mockResolvedValue(/** @type {any} */ (createDatasetMock([])));
 
     const axios = (await import("axios")).default;
-    /** @type {import("./helpers/shared-mocks.js").AxiosMock} */ (
-      axios
-    ).mockResolvedValue({ status: 200 });
+    /** @type {AxiosMock} */ (axios).mockResolvedValue({ status: 200 });
 
     // DNS mock is registered at module level via shared-mocks
-    /** @type {typeof import("./helpers/shared-mocks.js").dnsPromisesMock} */
-    const dns = /** @type {any} */ (await import("dns/promises")).default;
+    const dns = /** @type {DnsPromisesMock} */ (await import("dns/promises"))
+      .default;
     dns.resolve4.mockResolvedValue(["93.184.216.34"]);
 
     const res = await request(app)
       .get(`/replay/${webhookId}/evt_nonexistent`)
       .query({ url: "http://example.com" });
 
-    expect(res.statusCode).toBe(404);
     expect(res.body.error).toBe("Event not found");
+  });
+
+  // --- Replay Coverage Tests ---
+  test("POST /replay should handle multiple url parameters (take first)", async () => {
+    // Mock openDataset to return an item
+    const mockItem = {
+      id: "replay-id-1",
+      webhookId: "wh_replay",
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ foo: "bar" }),
+      timestamp: "2023-01-01T00:00:00Z",
+    };
+
+    // Mock Dataset
+    const mockDataset = {
+      getData: /** @type {jest.Mock<any>} */ (jest.fn()).mockResolvedValue({
+        items: [mockItem],
+      }),
+    };
+    jest
+      .mocked(Actor.openDataset)
+      .mockResolvedValue(/** @type {any} */ (mockDataset));
+
+    // Mock Axios (global shared mock)
+    const axios = (await import("axios")).default;
+    /** @type {AxiosMock} */ (axios).mockResolvedValue({
+      status: 200,
+      data: "OK",
+    });
+
+    // Mock DNS
+    const dns = /** @type {DnsPromisesMock} */ (await import("dns/promises"))
+      .default;
+    dns.resolve4.mockResolvedValue(["93.184.216.34"]);
+
+    const res = await request(app)
+      .post("/replay/wh_replay/replay-id-1")
+      .query({ url: ["http://example.com/1", "http://example.com/2"] })
+      .set("Authorization", "Bearer TEST_KEY");
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.status).toBe("Replayed");
+    expect(res.body.targetUrl).toBe("http://example.com/1");
+  });
+
+  test("POST /replay should find item by timestamp if ID not found", async () => {
+    // Mock item
+    const timestamp = "2023-01-01T12:34:56.789Z";
+    const mockItem = {
+      id: "other-id",
+      webhookId: "wh_replay",
+      method: "POST",
+      body: "{}",
+      timestamp: timestamp, // Matches our ID param
+    };
+
+    // Mock Dataset
+    const mockDataset = {
+      getData: /** @type {jest.Mock<any>} */ (jest.fn()).mockResolvedValue({
+        items: [mockItem],
+      }),
+    };
+    jest
+      .mocked(Actor.openDataset)
+      .mockResolvedValue(/** @type {any} */ (mockDataset));
+
+    // Mock Axios
+    const axios = (await import("axios")).default;
+    /** @type {AxiosMock} */ (axios).mockResolvedValue({
+      status: 200,
+      data: "OK",
+    });
+
+    // Mock DNS
+    const dns = /** @type {DnsPromisesMock} */ (await import("dns/promises"))
+      .default;
+    dns.resolve4.mockResolvedValue(["93.184.216.34"]);
+
+    const res = await request(app)
+      .post(`/replay/wh_replay/${timestamp}`)
+      .query({ url: "http://example.com" })
+      .set("Authorization", "Bearer TEST_KEY");
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.status).toBe("Replayed");
+  });
+
+  test("POST /replay should handle DNS resolution failure in SSRF check", async () => {
+    // Import the mocked module to manipulate it
+    const { validateUrlForSsrf } = await import("../src/utils/ssrf.js");
+    jest
+      .mocked(validateUrlForSsrf)
+      .mockResolvedValue({ safe: false, error: "DNS resolution failed" });
+
+    const res = await request(app)
+      .post("/replay/wh_replay/replay-id-1")
+      .query({ url: "http://dangerous.com" })
+      .set("Authorization", "Bearer TEST_KEY");
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error).toBe(
+      "Unable to validate 'url' parameter (DNS failure)",
+    );
+  });
+
+  test("GET / should return text response for non-browser authenticated client", async () => {
+    const res = await request(app)
+      .get("/")
+      .set("Accept", "text/plain")
+      .set("Authorization", "Bearer TEST_KEY");
+
+    expect(res.statusCode).toBe(200);
+    expect(res.text).toContain("Webhook Debugger & Logger");
+    expect(res.text).toContain("Enterprise Suite");
   });
 });

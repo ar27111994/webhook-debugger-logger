@@ -7,6 +7,8 @@ import {
   afterEach,
 } from "@jest/globals";
 
+/** @typedef {import("../src/typedefs.js").CommonError} CommonError */
+
 jest.unstable_mockModule("axios", async () => {
   const { axiosMock } = await import("./helpers/shared-mocks.js");
   return { default: axiosMock };
@@ -171,7 +173,7 @@ describe("Forwarding Security", () => {
       // Mock failure
       const error = new Error("Timeout");
 
-      /** @type {any} */ (error).code = "ECONNABORTED";
+      /** @type {CommonError} */ (error).code = "ECONNABORTED";
       jest.mocked(axios.post).mockRejectedValue(error);
 
       const middleware = createLoggerMiddleware(
@@ -209,7 +211,7 @@ describe("Forwarding Security", () => {
     test("should NOT retry non-transient errors", async () => {
       const error = new Error("Bad Request");
 
-      /** @type {any} */ (error).response = { status: 400 };
+      /** @type {CommonError} */ (error).response = { status: 400 };
       jest.mocked(axios.post).mockRejectedValue(error);
 
       const middleware = createLoggerMiddleware(

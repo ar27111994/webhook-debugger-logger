@@ -16,8 +16,8 @@ export const MAX_FORWARD_RETRIES = 3;
 export const SCRIPT_EXECUTION_TIMEOUT_MS = 1000;
 
 export const MAX_BULK_CREATE = 1000;
-export const MAX_PAYLOAD_SIZE_DEFAULT = 10485760; // 10MB
-export const MAX_PAYLOAD_SIZE_LIMIT = 1048576; // 1MB middleware limit default
+export const BODY_PARSER_SIZE_LIMIT = 10485760; // 10MB
+export const WEBHOOK_PAYLOAD_DEFAULT_LIMIT = 1048576; // 1MB middleware limit default
 
 export const REPLAY_HEADERS_TO_IGNORE = [
   "content-length",

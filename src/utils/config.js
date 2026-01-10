@@ -13,6 +13,7 @@
  * @property {boolean} [maskSensitiveData]
  * @property {number} [maxPayloadSize]
  * @property {number} [rateLimitPerMinute]
+ * @property {boolean} [enableJSONParsing]
  */
 
 export const DEFAULT_MAX_PAYLOAD_SIZE = 10485760; // 10MB
@@ -44,5 +45,6 @@ export function parseWebhookOptions(options = {}) {
     maskSensitiveData: options.maskSensitiveData ?? true, // Default to true
     maxPayloadSize,
     rateLimitPerMinute: options.rateLimitPerMinute ?? 60,
+    enableJSONParsing: options.enableJSONParsing ?? true,
   };
 }
