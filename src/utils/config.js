@@ -1,3 +1,10 @@
+import {
+  DEFAULT_URL_COUNT,
+  DEFAULT_RETENTION_HOURS,
+  DEFAULT_RATE_LIMIT_PER_MINUTE,
+  BODY_PARSER_SIZE_LIMIT,
+} from "../consts.js";
+
 /**
  * @typedef {Object} WebhookConfig
  * @property {string} [authKey]
@@ -14,9 +21,9 @@
  * @property {number} [maxPayloadSize]
  * @property {number} [rateLimitPerMinute]
  * @property {boolean} [enableJSONParsing]
+ * @property {number} [urlCount]
+ * @property {number} [retentionHours]
  */
-
-export const DEFAULT_MAX_PAYLOAD_SIZE = 10485760; // 10MB
 
 /**
  * Parses and normalizes Actor input options with sensible defaults.
@@ -25,10 +32,7 @@ export const DEFAULT_MAX_PAYLOAD_SIZE = 10485760; // 10MB
  * @returns {WebhookConfig} Normalized configuration object
  */
 export function parseWebhookOptions(options = {}) {
-  // maxPayloadSize logic moved to coerceRuntimeOptions
-
   return {
-    authKey: options.authKey,
     allowedIps: options.allowedIps ?? [],
     defaultResponseCode: options.defaultResponseCode ?? 200,
     defaultResponseBody: options.defaultResponseBody ?? "OK",
@@ -39,7 +43,6 @@ export function parseWebhookOptions(options = {}) {
     jsonSchema: options.jsonSchema,
     customScript: options.customScript,
     maskSensitiveData: options.maskSensitiveData ?? true, // Default to true
-    // maxPayloadSize is now in ...coerceRuntimeOptions(options)
     enableJSONParsing: options.enableJSONParsing ?? true,
     ...coerceRuntimeOptions(options),
   };
@@ -55,27 +58,27 @@ export function coerceRuntimeOptions(input) {
   const urlCount =
     Number.isFinite(urlCountRaw) && urlCountRaw >= 1
       ? Math.floor(urlCountRaw)
-      : 3; // Default
+      : DEFAULT_URL_COUNT;
 
   const retentionRaw = Number(input.retentionHours);
   const retentionHours =
     Number.isFinite(retentionRaw) && retentionRaw >= 1
       ? Math.floor(retentionRaw)
-      : 24; // Default
+      : DEFAULT_RETENTION_HOURS;
 
   const rateLimitRaw = Number(input.rateLimitPerMinute);
   const rateLimitPerMinute =
     Number.isFinite(rateLimitRaw) && rateLimitRaw >= 1
       ? Math.floor(rateLimitRaw)
-      : 60; // Default
+      : DEFAULT_RATE_LIMIT_PER_MINUTE;
 
   const authKey = typeof input.authKey === "string" ? input.authKey.trim() : "";
 
   const maxPayloadSizeRaw = Number(input.maxPayloadSize);
   const maxPayloadSize =
     Number.isFinite(maxPayloadSizeRaw) && maxPayloadSizeRaw > 0
-      ? Math.min(maxPayloadSizeRaw, DEFAULT_MAX_PAYLOAD_SIZE)
-      : DEFAULT_MAX_PAYLOAD_SIZE;
+      ? Math.min(maxPayloadSizeRaw, BODY_PARSER_SIZE_LIMIT)
+      : BODY_PARSER_SIZE_LIMIT;
 
   return {
     urlCount,

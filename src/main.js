@@ -6,7 +6,7 @@ import axios from "axios";
 import { validateUrlForSsrf } from "./utils/ssrf.js";
 import { WebhookManager } from "./webhook_manager.js";
 import { createLoggerMiddleware } from "./logger_middleware.js";
-import { parseWebhookOptions } from "./utils/config.js";
+import { parseWebhookOptions, coerceRuntimeOptions } from "./utils/config.js";
 import { validateAuth } from "./utils/auth.js";
 import { RateLimiter } from "./utils/rate_limiter.js";
 import {
@@ -20,6 +20,10 @@ import {
   SHUTDOWN_TIMEOUT_MS,
   SSE_HEARTBEAT_INTERVAL_MS,
   STARTUP_TEST_EXIT_DELAY_MS,
+  DEFAULT_URL_COUNT,
+  DEFAULT_RETENTION_HOURS,
+  DEFAULT_RATE_LIMIT_PER_MINUTE,
+  DEFAULT_RATE_LIMIT_WINDOW_MS,
 } from "./consts.js";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
@@ -147,14 +151,17 @@ async function initialize() {
 
   const input = /** @type {any} */ ((await Actor.getInput()) || {});
   const config = parseWebhookOptions(input);
-  const { urlCount, retentionHours } = config; // Uses coerced defaults via config.js (which we updated)
+  const {
+    urlCount = DEFAULT_URL_COUNT,
+    retentionHours = DEFAULT_RETENTION_HOURS,
+  } = config; // Uses coerced defaults via config.js (which we updated)
   const maxPayloadSize = config.maxPayloadSize || BODY_PARSER_SIZE_LIMIT; // 10MB limit for body parsing
   const enableJSONParsing =
     config.enableJSONParsing !== undefined ? config.enableJSONParsing : true;
   const authKey = config.authKey || "";
   const rateLimitPerMinute = Math.max(
     1,
-    Math.floor(config.rateLimitPerMinute || 60)
+    Math.floor(config.rateLimitPerMinute || DEFAULT_RATE_LIMIT_PER_MINUTE)
   );
   const testAndExit = input.testAndExit || false;
 
@@ -293,7 +300,10 @@ async function initialize() {
   let currentRetentionHours = retentionHours;
   let currentUrlCount = urlCount;
 
-  webhookRateLimiter = new RateLimiter(rateLimitPerMinute, 60000);
+  webhookRateLimiter = new RateLimiter(
+    rateLimitPerMinute,
+    DEFAULT_RATE_LIMIT_WINDOW_MS
+  );
   const mgmtRateLimiter = webhookRateLimiter.middleware();
   const loggerMiddleware = createLoggerMiddleware(
     webhookManager,
@@ -321,7 +331,6 @@ async function initialize() {
         console.log("[SYSTEM] Detected input update! Applying new settings...");
 
         // Use shared coercion logic
-        const { coerceRuntimeOptions } = await import("./utils/config.js");
         const validated = coerceRuntimeOptions(newInput);
 
         const newConfig = parseWebhookOptions(newInput);

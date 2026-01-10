@@ -2,6 +2,7 @@
  * Simple in-memory rate limiter with background pruning and eviction.
  */
 import net from "node:net";
+import { DEFAULT_RATE_LIMIT_PER_MINUTE } from "../consts.js";
 
 export class RateLimiter {
   /**
@@ -59,10 +60,10 @@ export class RateLimiter {
 
       if (prunedCount > 0 && process.env.NODE_ENV !== "test") {
         console.log(
-          `[SYSTEM] RateLimiter pruned ${prunedCount} expired entries.`,
+          `[SYSTEM] RateLimiter pruned ${prunedCount} expired entries.`
         );
       }
-    }, 60000);
+    }, DEFAULT_RATE_LIMIT_PER_MINUTE * 1000);
     if (this.cleanupInterval.unref) this.cleanupInterval.unref();
   }
 
@@ -116,10 +117,10 @@ export class RateLimiter {
           typeof xForwardedFor === "string"
             ? xForwardedFor.split(",")[0].trim()
             : Array.isArray(xForwardedFor)
-              ? String(xForwardedFor[0] || "")
-                  .split(",")[0]
-                  .trim()
-              : undefined;
+            ? String(xForwardedFor[0] || "")
+                .split(",")[0]
+                .trim()
+            : undefined;
 
         const xRealIp = req.headers?.["x-real-ip"];
         const realIpStr = Array.isArray(xRealIp) ? xRealIp[0] : xRealIp;
@@ -144,8 +145,8 @@ export class RateLimiter {
         const safeHeaders = ["user-agent", "accept-language", "referer"];
         const loggedHeaders = Object.fromEntries(
           Object.entries(req.headers).filter(([key]) =>
-            safeHeaders.includes(key.toLowerCase()),
-          ),
+            safeHeaders.includes(key.toLowerCase())
+          )
         );
 
         console.warn("[SECURITY] Rejecting request with unidentifiable IP:", {
@@ -174,8 +175,8 @@ export class RateLimiter {
           ) {
             console.log(
               `[SYSTEM] RateLimiter evicted entry for ${this.maskIp(
-                oldestKey,
-              )} (Cap: ${this.maxEntries})`,
+                oldestKey
+              )} (Cap: ${this.maxEntries})`
             );
           }
         }

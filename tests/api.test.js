@@ -12,6 +12,7 @@ import {
   beforeEach,
 } from "@jest/globals";
 
+/** @typedef {import("http").Server} Server */
 /** @typedef {import("./helpers/shared-mocks.js").AxiosMock} AxiosMock */
 /** @typedef {typeof import("./helpers/shared-mocks.js").dnsPromisesMock} DnsPromisesMock */
 
@@ -185,7 +186,7 @@ describe("API E2E Tests", () => {
   test("GET /log-stream should set SSE headers and be connectable", (done) => {
     const http = require("http");
     const port = 0;
-    /** @type {any} */
+    /** @type {Server} */
     let testServer;
     let finished = false;
 
@@ -304,9 +305,10 @@ describe("API E2E Tests", () => {
     });
 
     // Mock DNS
-    const dns = /** @type {DnsPromisesMock} */ (await import("dns/promises"))
-      .default;
-    dns.resolve4.mockResolvedValue(["93.184.216.34"]);
+    const dns = /** @type {unknown} */ ((await import("dns/promises")).default);
+    /** @type {DnsPromisesMock} */ (dns).resolve4.mockResolvedValue([
+      "93.184.216.34",
+    ]);
 
     const res = await request(app)
       .post("/replay/wh_replay/replay-id-1")
@@ -342,9 +344,10 @@ describe("API E2E Tests", () => {
     });
 
     // Mock DNS
-    const dns = /** @type {DnsPromisesMock} */ (await import("dns/promises"))
-      .default;
-    dns.resolve4.mockResolvedValue(["93.184.216.34"]);
+    const dns = /** @type {unknown} */ ((await import("dns/promises")).default);
+    /** @type {DnsPromisesMock} */ (dns).resolve4.mockResolvedValue([
+      "93.184.216.34",
+    ]);
 
     const res = await request(app)
       .post(`/replay/wh_replay/${timestamp}`)

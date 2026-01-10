@@ -16,6 +16,10 @@ export const MAX_FORWARD_RETRIES = 3;
 export const SCRIPT_EXECUTION_TIMEOUT_MS = 1000;
 
 export const MAX_BULK_CREATE = 1000;
+export const DEFAULT_URL_COUNT = 3;
+export const DEFAULT_RETENTION_HOURS = 24;
+export const DEFAULT_RATE_LIMIT_PER_MINUTE = 60;
+export const DEFAULT_RATE_LIMIT_WINDOW_MS = 60000; // 1 minute
 export const BODY_PARSER_SIZE_LIMIT = 10485760; // 10MB
 export const WEBHOOK_PAYLOAD_DEFAULT_LIMIT = 1048576; // 1MB middleware limit default
 
