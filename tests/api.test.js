@@ -43,13 +43,21 @@ jest.unstable_mockModule("../src/utils/ssrf.js", () => {
 });
 
 const request = (await import("supertest")).default;
-const { app, webhookManager, initialize, shutdown } =
-  await import("../src/main.js");
+const { app, webhookManager, initialize, shutdown } = await import(
+  "../src/main.js"
+);
 const { Actor } = await import("apify");
 
 describe("API E2E Tests", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
+    // Reset SSRF mock to default safe response
+    const { validateUrlForSsrf } = await import("../src/utils/ssrf.js");
+    jest.mocked(validateUrlForSsrf).mockResolvedValue({
+      safe: true,
+      href: "http://example.com",
+      host: "example.com",
+    });
   });
 
   /** @type {string} */
@@ -177,6 +185,10 @@ describe("API E2E Tests", () => {
     // Use native http module for SSE endpoints since supertest can't handle streaming
     const http = require("http");
     const port = 0;
+    const timeout = setTimeout(() => {
+      testServer.close(() => done(new Error("SSE test timed out")));
+    }, 5000);
+
     const testServer = app.listen(port, () => {
       const addr = testServer.address();
       const allocatedPort = typeof addr === "object" ? addr?.port : port;
@@ -189,11 +201,13 @@ describe("API E2E Tests", () => {
           expect(res.headers["connection"]).toBe("keep-alive");
           // Close the request immediately after verifying headers
           req.destroy();
+          clearTimeout(timeout);
           testServer.close(() => done());
-        },
+        }
       );
       req.on("error", () => {
         // Expected when we abort
+        clearTimeout(timeout);
         testServer.close(() => done());
       });
     });
@@ -335,7 +349,7 @@ describe("API E2E Tests", () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.body.error).toBe(
-      "Unable to validate 'url' parameter (DNS failure)",
+      "Unable to validate 'url' parameter (DNS failure)"
     );
   });
 

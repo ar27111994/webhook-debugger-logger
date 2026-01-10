@@ -138,18 +138,7 @@ describe("RateLimiter Unit Tests", () => {
       expect.objectContaining({
         error: "Bad Request",
         message: expect.stringContaining("Client IP could not be identified"),
-      }),
-    );
-    expect(consoleSpy).toHaveBeenCalled();
-
-    mw(req, res, next);
-
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({
-        error: "Bad Request",
-        message: expect.stringContaining("Client IP could not be identified"),
-      }),
+      })
     );
     expect(consoleSpy).toHaveBeenCalled();
   });
@@ -271,7 +260,7 @@ describe("RateLimiter Unit Tests", () => {
     expect(rateLimiter.isValidIp("1.2.3.4")).toBe(true);
     expect(rateLimiter.isValidIp("255.255.255.255")).toBe(true);
     expect(
-      rateLimiter.isValidIp("2001:0db8:85a3:0000:0000:8a2e:0370:7334"),
+      rateLimiter.isValidIp("2001:0db8:85a3:0000:0000:8a2e:0370:7334")
     ).toBe(true);
     expect(rateLimiter.isValidIp("::1")).toBe(true);
 
@@ -341,28 +330,28 @@ describe("RateLimiter Unit Tests", () => {
 
   test("should throw on invalid constructor arguments", () => {
     expect(() => new RateLimiter(-1, 1000)).toThrow(
-      "RateLimiter: limit must be a finite integer >= 0",
+      "RateLimiter: limit must be a finite integer >= 0"
     );
     expect(() => new RateLimiter(/** @type {any} */ ("10"), 1000)).toThrow(
-      "RateLimiter: limit must be a finite integer >= 0",
+      "RateLimiter: limit must be a finite integer >= 0"
     );
     expect(() => new RateLimiter(10, 0)).toThrow(
-      "RateLimiter: windowMs must be a finite number > 0",
+      "RateLimiter: windowMs must be a finite number > 0"
     );
     expect(() => new RateLimiter(10, -500)).toThrow(
-      "RateLimiter: windowMs must be a finite number > 0",
+      "RateLimiter: windowMs must be a finite number > 0"
     );
     expect(() => new RateLimiter(10, Infinity)).toThrow(
-      "RateLimiter: windowMs must be a finite number > 0",
+      "RateLimiter: windowMs must be a finite number > 0"
     );
     expect(() => new RateLimiter(10, 1000, 0)).toThrow(
-      "RateLimiter: maxEntries must be a finite integer > 0",
+      "RateLimiter: maxEntries must be a finite integer > 0"
     );
     expect(() => new RateLimiter(10, 1000, -5)).toThrow(
-      "RateLimiter: maxEntries must be a finite integer > 0",
+      "RateLimiter: maxEntries must be a finite integer > 0"
     );
     expect(() => new RateLimiter(10, 1000, /** @type {any} */ ("100"))).toThrow(
-      "RateLimiter: maxEntries must be a finite integer > 0",
+      "RateLimiter: maxEntries must be a finite integer > 0"
     );
   });
 
@@ -386,7 +375,7 @@ describe("RateLimiter Unit Tests", () => {
     try {
       rateLimiter = new RateLimiter(10, 60000, 1);
       const mw = rateLimiter.middleware();
-      const next = jest.fn();
+      const next = createMockNextFunction();
       const res = createMockResponse();
 
       // Fill
@@ -396,7 +385,7 @@ describe("RateLimiter Unit Tests", () => {
       mw(createMockRequest({ ip: "user2", headers: {} }), res, next);
 
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining("[SYSTEM] RateLimiter evicted entry"),
+        expect.stringContaining("[SYSTEM] RateLimiter evicted entry")
       );
     } finally {
       process.env.NODE_ENV = originalEnv;
