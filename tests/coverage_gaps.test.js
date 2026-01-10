@@ -1,5 +1,6 @@
 // Mock Apify before imports
 import { jest } from "@jest/globals";
+
 jest.unstable_mockModule("apify", async () => {
   const { apifyMock } = await import("./helpers/shared-mocks.js");
   return { Actor: apifyMock };
@@ -20,6 +21,9 @@ import {
   createMockResponse,
   createMockNextFunction,
 } from "./helpers/test-utils.js";
+
+/** @typedef {import("express").Response} Response */
+/** @typedef {import("net").Socket} Socket */
 
 const request = (await import("supertest")).default;
 const { app, initialize, shutdown } = await import("../src/main.js");
@@ -73,7 +77,6 @@ describe("Coverage Improvement Tests", () => {
       .mockImplementation(() => {});
 
     const mw = createLoggerMiddleware(
-      // @ts-expect-error - Mocking WebhookManager for this test
       wm,
       {
         forwardUrl: "http://169.254.169.254/meta-data",
@@ -81,26 +84,27 @@ describe("Coverage Improvement Tests", () => {
       () => {}, // broadcast mock
     );
 
-    const req = {
+    const req = createMockRequest({
       body: "test",
       headers: {},
       query: {},
       params: { id: "test-wh" },
       method: "POST",
       ip: "127.0.0.1",
-      socket: { remoteAddress: "127.0.0.1" },
-    };
-    const res = {
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn(),
-      setHeader: jest.fn(),
-      send: jest.fn(),
-      on: jest.fn(),
-      emit: jest.fn(),
-    };
-    const next = jest.fn();
+      socket: /** @type {Socket} */ ({ remoteAddress: "127.0.0.1" }),
+    });
+    const res = createMockResponse(
+      /** @type {Partial<Response>} */ ({
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn(),
+        setHeader: jest.fn(),
+        send: jest.fn(),
+        on: jest.fn(),
+        emit: jest.fn(),
+      }),
+    );
+    const next = createMockNextFunction();
 
-    // @ts-expect-error - Partial mock objects
     mw(req, res, next);
 
     // Wait for async processing (it's fire-and-forget in middleware)

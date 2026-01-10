@@ -107,11 +107,9 @@ describe("API Contract & Regression Tests", () => {
         },
       ];
 
-      jest.mocked(Actor.openDataset).mockResolvedValue(
-        /** @type {any} */ ({
-          getData: jest.fn(async () => ({ items: mockItems })),
-        })
-      );
+      jest
+        .mocked(Actor.openDataset)
+        .mockResolvedValue(createDatasetMock(mockItems));
 
       const res = await request(app)
         .get("/logs")
@@ -130,33 +128,29 @@ describe("API Contract & Regression Tests", () => {
     });
 
     test("should fetch with limit * 5 when filters are present", async () => {
-      const getDataMock = jest.fn(async () => ({ items: [] }));
-      jest
-        .mocked(Actor.openDataset)
-        .mockResolvedValue(/** @type {any} */ ({ getData: getDataMock }));
+      const datasetMock = createDatasetMock([]);
+      jest.mocked(Actor.openDataset).mockResolvedValue(datasetMock);
 
       await request(app)
         .get("/logs")
         .query({ method: "POST", limit: 10 })
         .set("Authorization", "Bearer test-secret");
 
-      expect(getDataMock).toHaveBeenCalledWith(
+      expect(datasetMock.getData).toHaveBeenCalledWith(
         expect.objectContaining({ limit: 50 })
       );
     });
 
     test("should fetch with limit * 1 when NO filters are present", async () => {
-      const getDataMock = jest.fn(async () => ({ items: [] }));
-      jest
-        .mocked(Actor.openDataset)
-        .mockResolvedValue(/** @type {any} */ ({ getData: getDataMock }));
+      const datasetMock = createDatasetMock([]);
+      jest.mocked(Actor.openDataset).mockResolvedValue(datasetMock);
 
       await request(app)
         .get("/logs")
         .query({ limit: 10 })
         .set("Authorization", "Bearer test-secret");
 
-      expect(getDataMock).toHaveBeenCalledWith(
+      expect(datasetMock.getData).toHaveBeenCalledWith(
         expect.objectContaining({ limit: 10 })
       );
     });
@@ -191,11 +185,9 @@ describe("API Contract & Regression Tests", () => {
         },
       };
 
-      jest.mocked(Actor.openDataset).mockResolvedValue(
-        /** @type {any} */ ({
-          getData: jest.fn(async () => ({ items: [mockItem] })),
-        })
-      );
+      jest
+        .mocked(Actor.openDataset)
+        .mockResolvedValue(createDatasetMock([mockItem]));
 
       const res = await request(app)
         .get(`/replay/${webhookId}/evt_strip`)
@@ -231,11 +223,9 @@ describe("API Contract & Regression Tests", () => {
         },
       ];
 
-      jest.mocked(Actor.openDataset).mockResolvedValue(
-        /** @type {any} */ ({
-          getData: jest.fn(async () => ({ items: mockItems })),
-        })
-      );
+      jest
+        .mocked(Actor.openDataset)
+        .mockResolvedValue(createDatasetMock(mockItems));
 
       const { default: axiosMock } = await import("axios");
       /** @type {import("./helpers/shared-mocks.js").AxiosMock} */ (
