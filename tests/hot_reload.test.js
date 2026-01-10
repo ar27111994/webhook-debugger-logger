@@ -144,6 +144,8 @@ describe("Hot-Reloading Configuration Tests", () => {
       expect.stringContaining("[SCHEMA-ERROR]"),
       expect.any(String),
     );
+    consoleSpy.mockRestore();
+
     // Verify app is still responsive
     const res = await request(app)
       .get("/info")
