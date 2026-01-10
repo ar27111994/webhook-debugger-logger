@@ -1,4 +1,14 @@
-import { jest } from "@jest/globals";
+import {
+  jest,
+  describe,
+  test,
+  expect,
+  afterAll,
+  beforeEach,
+} from "@jest/globals";
+
+/** @typedef {import('apify').KeyValueStore} KeyValueStore */
+/** @typedef {import('../src/typedefs.js').WebhookData} WebhookData */
 
 // 1. Define mocks before any imports
 jest.unstable_mockModule("apify", async () => {
@@ -11,15 +21,18 @@ const { Actor } = await import("apify");
 const { initialize, shutdown, webhookManager } = await import("../src/main.js");
 
 describe("Webhook Lifecycle & Scaling Tests", () => {
+  /** @type {KeyValueStore} */
   let mockKV;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockKV = {
-      getValue: jest.fn(),
-      setValue: jest.fn().mockResolvedValue(),
-    };
-    Actor.openKeyValueStore.mockResolvedValue(mockKV);
+    mockKV = /** @type {KeyValueStore} */ ({
+      getValue: /** @type {KeyValueStore['getValue']} */ (jest.fn()),
+      setValue: /** @type {KeyValueStore['setValue']} */ (
+        jest.fn().mockResolvedValue(/** @type {never} */ (undefined))
+      ),
+    });
+    jest.mocked(Actor.openKeyValueStore).mockResolvedValue(mockKV);
   });
 
   afterAll(async () => {
@@ -30,12 +43,14 @@ describe("Webhook Lifecycle & Scaling Tests", () => {
     // 1. Start with 1 existing webhook in KV store
     const existingId = "wh_existing123";
     const oldExpiry = new Date(Date.now() + 100000).toISOString();
-    mockKV.getValue.mockResolvedValue({
+    jest.mocked(mockKV.getValue).mockResolvedValue({
       [existingId]: { expiresAt: oldExpiry },
     });
 
     // 2. Mock input asking for 3 webhooks
-    Actor.getInput.mockResolvedValue({ urlCount: 3, retentionHours: 1 });
+    jest
+      .mocked(Actor.getInput)
+      .mockResolvedValue({ urlCount: 3, retentionHours: 1 });
 
     await initialize();
 
@@ -55,10 +70,12 @@ describe("Webhook Lifecycle & Scaling Tests", () => {
       wh2: { expiresAt: new Date(Date.now() + 100000).toISOString() },
       wh3: { expiresAt: new Date(Date.now() + 100000).toISOString() },
     };
-    mockKV.getValue.mockResolvedValue(state);
+    jest.mocked(mockKV.getValue).mockResolvedValue(state);
 
     // 2. Mock input asking for only 1 webhook
-    Actor.getInput.mockResolvedValue({ urlCount: 1, retentionHours: 1 });
+    jest
+      .mocked(Actor.getInput)
+      .mockResolvedValue({ urlCount: 1, retentionHours: 1 });
 
     await initialize();
 
@@ -71,18 +88,25 @@ describe("Webhook Lifecycle & Scaling Tests", () => {
     // 1. Start with an existing webhook set to expire in 1 hour
     const existingId = "wh_short_ttl";
     const oneHourFromNow = new Date(Date.now() + 3600000).toISOString();
-    mockKV.getValue.mockResolvedValue({
+    jest.mocked(mockKV.getValue).mockResolvedValue({
       [existingId]: { expiresAt: oneHourFromNow },
     });
 
     // 2. Mock input asking for 24 hour retention
-    Actor.getInput.mockResolvedValue({ urlCount: 1, retentionHours: 24 });
+    jest
+      .mocked(Actor.getInput)
+      .mockResolvedValue({ urlCount: 1, retentionHours: 24 });
 
     await initialize();
 
     // 3. Verify retention was extended
     const webhook = webhookManager.getWebhookData(existingId);
-    const newExpiry = new Date(webhook.expiresAt).getTime();
+    expect(webhook).toBeDefined();
+
+    expect(webhook?.expiresAt).toBeDefined();
+    const newExpiry = new Date(
+      /** @type {string} */ (webhook?.expiresAt),
+    ).getTime();
     const threshold = Date.now() + 23 * 3600000; // Should be at least 23h+ out
     expect(newExpiry).toBeGreaterThan(threshold);
   });

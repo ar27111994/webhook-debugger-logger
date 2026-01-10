@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Webhook Debugger - {{VERSION}}</title>
+    <style>
+      /* Self-hosted fonts */
+      @font-face {
+        font-family: "Inter";
+        font-style: normal;
+        font-weight: 100 900;
+        font-display: swap;
+        src: url("/fonts/Inter-Latin.woff2") format("woff2");
+        unicode-range:
+          U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+          U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+          U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "JetBrains Mono";
+        font-style: normal;
+        font-weight: 400 700;
+        font-display: swap;
+        src: url("/fonts/JetBrainsMono-Latin.woff2") format("woff2");
+        unicode-range:
+          U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+          U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+          U+FEFF, U+FFFD;
+      }
+    </style>
+    <!-- Fonts self-hosted locally from /fonts directory -->
+    <style>
+      :root {
+        --primary: #5865f2;
+        --success: #2ecc71;
+        --bg: #0f172a;
+        --card: #1e293b;
+        --text: #f8fafc;
+        --text-dim: #94a3b8;
+      }
+      body {
+        font-family: "Inter", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        margin: 0;
+        padding: 20px;
+        text-align: center;
+      }
+      .container {
+        max-width: 600px;
+        background: var(--card);
+        padding: 40px;
+        border-radius: 16px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+      }
+      h1 {
+        font-weight: 800;
+        color: var(--primary);
+        margin: 0;
+      }
+      .version {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.9rem;
+        color: var(--text-dim);
+        margin: 8px 0 24px;
+        display: block;
+      }
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(46, 204, 113, 0.1);
+        color: var(--success);
+        padding: 8px 16px;
+        border-radius: 99px;
+        font-weight: 600;
+        margin-bottom: 32px;
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        background: var(--success);
+        border-radius: 50%;
+        animation: pulse 2s infinite;
+      }
+      .stat-item {
+        background: rgba(0, 0, 0, 0.2);
+        padding: 16px;
+        border-radius: 8px;
+        border-left: 4px solid var(--primary);
+        text-align: left;
+        margin-bottom: 16px;
+      }
+      .stat-label {
+        font-size: 0.8rem;
+        color: var(--text-dim);
+        display: block;
+        margin-bottom: 4px;
+      }
+      .stat-value {
+        font-family: "JetBrains Mono", monospace;
+        font-weight: 600;
+      }
+      a {
+        color: var(--primary);
+        text-decoration: none;
+        font-weight: 600;
+      }
+      @keyframes pulse {
+        0% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+        100% {
+          opacity: 1;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Webhook Debugger</h1>
+      <span class="version">{{VERSION}} "Enterprise Suite"</span>
+      <div class="status">
+        <div class="dot"></div>
+        System Online & Optimized
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Active Webhooks (Live TTL)</span
+        ><span class="stat-value">{{ACTIVE_COUNT}} active endpoints</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Quick Start</span
+        ><span class="stat-value"
+          >GET <a href="/info">/info</a> to view routing and management
+          APIs</span
+        >
+      </div>
+      <p style="margin-top: 24px; font-size: 0.85rem; color: var(--text-dim)">
+        Built for high-stakes launches •
+        <a
+          href="https://apify.com/ar27111994/webhook-debugger-logger"
+          target="_blank"
+          rel="noopener noreferrer"
+          >Documentation</a
+        >
+      </p>
+    </div>
+  </body>
+</html>

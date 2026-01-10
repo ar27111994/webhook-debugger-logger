@@ -1,4 +1,12 @@
-import { jest } from "@jest/globals";
+import {
+  jest,
+  describe,
+  test,
+  expect,
+  beforeAll,
+  afterAll,
+  beforeEach,
+} from "@jest/globals";
 
 jest.unstable_mockModule("apify", async () => {
   const { apifyMock } = await import("./helpers/shared-mocks.js");
@@ -11,6 +19,7 @@ const { app, webhookManager, initialize, shutdown } =
 const { Actor } = await import("apify");
 
 describe("Concurrency Tests", () => {
+  /** @type {string} */
   let webhookId;
 
   beforeAll(async () => {
@@ -24,12 +33,12 @@ describe("Concurrency Tests", () => {
   });
 
   beforeEach(() => {
-    Actor.pushData.mockClear();
+    jest.mocked(Actor.pushData).mockClear();
   });
 
   test("Should handle 50 concurrent webhook requests without data loss", async () => {
     const CONCURRENCY = 50;
-    const initialCallCount = Actor.pushData.mock.calls.length;
+    const initialCallCount = jest.mocked(Actor.pushData).mock.calls.length;
     const promises = [];
 
     for (let i = 0; i < CONCURRENCY; i++) {
@@ -51,8 +60,8 @@ describe("Concurrency Tests", () => {
     // Verify dataset push count in mock
     // Actor.pushData is called for each request
     // We expect the call count to increase by exactly CONCURRENCY
-    expect(Actor.pushData.mock.calls.length - initialCallCount).toBe(
-      CONCURRENCY,
-    );
+    expect(
+      jest.mocked(Actor.pushData).mock.calls.length - initialCallCount,
+    ).toBe(CONCURRENCY);
   });
 });

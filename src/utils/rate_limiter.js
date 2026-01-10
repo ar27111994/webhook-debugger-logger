@@ -1,6 +1,9 @@
 /**
  * Simple in-memory rate limiter with background pruning and eviction.
  */
+import net from "node:net";
+import { DEFAULT_RATE_LIMIT_WINDOW_MS } from "../consts.js";
+
 export class RateLimiter {
   /**
    * @param {number} limit - Max requests per window
@@ -37,7 +40,7 @@ export class RateLimiter {
     this.windowMs = windowMs;
     this.maxEntries = maxEntries;
     this.trustProxy = trustProxy;
-    this.hits = new Map();
+    this.hits = /** @type {Map<string, number[]>} */ (new Map());
 
     // Background pruning to avoid blocking the request path
     this.cleanupInterval = setInterval(() => {
@@ -60,12 +63,14 @@ export class RateLimiter {
           `[SYSTEM] RateLimiter pruned ${prunedCount} expired entries.`,
         );
       }
-    }, 60000);
+    }, DEFAULT_RATE_LIMIT_WINDOW_MS);
     if (this.cleanupInterval.unref) this.cleanupInterval.unref();
   }
 
   /**
    * Obfuscates an IP address for logging.
+   * @param {string | undefined | null} ip
+   * @returns {string}
    */
   maskIp(ip) {
     if (!ip) return "unknown";
@@ -80,21 +85,12 @@ export class RateLimiter {
 
   /**
    * Validates if a string is a valid IPv4 or IPv6 address.
+   * @param {any} ip
+   * @returns {boolean}
    */
   isValidIp(ip) {
     if (typeof ip !== "string") return false;
-    // IPv4 check
-    if (
-      /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/.test(
-        ip,
-      )
-    ) {
-      return true;
-    }
-    // IPv6 check (simplified but effective for standard notation)
-    return (
-      /^(?:[A-F0-9]{1,4}:){7}[A-F0-9]{1,4}$/i.test(ip) || ip.includes("::")
-    );
+    return net.isIP(ip) !== 0;
   }
 
   destroy() {
@@ -107,27 +103,42 @@ export class RateLimiter {
    * @security trustProxy allows spoofing if the Actor is exposed directly to the internet.
    * Only enable trustProxy if the Actor is behind a trusted reverse proxy (e.g., Apify API).
    * Headers are strictly validated to prevent malformed or malicious IP data propagation.
+   * @returns {import('express').RequestHandler}
    */
   middleware() {
     return (req, res, next) => {
+      /** @type {string | undefined} */
       let ip = req.ip || req.socket?.remoteAddress;
 
       if (this.trustProxy) {
-        const xForwardedFor = req.headers?.["x-forwarded-for"]
-          ?.split(",")[0]
-          .trim();
-        const xRealIp = req.headers?.["x-real-ip"];
+        const xForwardedFor = req.headers?.["x-forwarded-for"];
+        // Ensure xForwardedFor is treated as string for validation
+        const firstForwarded =
+          typeof xForwardedFor === "string"
+            ? xForwardedFor.split(",")[0].trim()
+            : Array.isArray(xForwardedFor)
+              ? String(xForwardedFor[0] || "")
+                  .split(",")[0]
+                  .trim()
+              : undefined;
 
-        if (xForwardedFor && this.isValidIp(xForwardedFor)) {
-          ip = xForwardedFor;
-        } else if (xRealIp && this.isValidIp(xRealIp)) {
-          ip = xRealIp;
+        const xRealIp = req.headers?.["x-real-ip"];
+        const realIpStr = Array.isArray(xRealIp) ? xRealIp[0] : xRealIp;
+
+        if (firstForwarded && this.isValidIp(firstForwarded)) {
+          ip = firstForwarded;
+        } else if (
+          realIpStr &&
+          typeof realIpStr === "string" &&
+          this.isValidIp(realIpStr)
+        ) {
+          ip = realIpStr;
         }
       }
 
       // Test hook to simulate missing IP metadata
       if (process.env.NODE_ENV === "test" && req.headers["x-simulate-no-ip"]) {
-        ip = null;
+        ip = undefined;
       }
 
       if (!ip) {
@@ -157,8 +168,11 @@ export class RateLimiter {
         // Enforce maxEntries cap for new clients
         if (this.hits.size >= this.maxEntries) {
           const oldestKey = this.hits.keys().next().value;
-          this.hits.delete(oldestKey);
-          if (process.env.NODE_ENV !== "test") {
+          if (typeof oldestKey === "string") this.hits.delete(oldestKey);
+          if (
+            process.env.NODE_ENV !== "test" &&
+            typeof oldestKey === "string"
+          ) {
             console.log(
               `[SYSTEM] RateLimiter evicted entry for ${this.maskIp(
                 oldestKey,

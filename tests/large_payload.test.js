@@ -1,4 +1,11 @@
-import { jest } from "@jest/globals";
+import {
+  jest,
+  describe,
+  test,
+  expect,
+  beforeAll,
+  afterAll,
+} from "@jest/globals";
 
 // Mock axios
 jest.unstable_mockModule("axios", async () => {
@@ -13,7 +20,7 @@ jest.unstable_mockModule("apify", async () => {
 });
 
 const request = (await import("supertest")).default;
-const { app, webhookManager, sseHeartbeat, initialize, shutdown } =
+const { app, webhookManager, initialize, shutdown } =
   await import("../src/main.js");
 
 describe("Large Payload Stability", () => {

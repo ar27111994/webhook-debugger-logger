@@ -1,4 +1,12 @@
-import { jest } from "@jest/globals";
+import {
+  jest,
+  describe,
+  test,
+  expect,
+  beforeAll,
+  afterAll,
+} from "@jest/globals";
+
 jest.unstable_mockModule("apify", async () => {
   const { apifyMock } = await import("./helpers/shared-mocks.js");
   return { Actor: apifyMock };
@@ -9,6 +17,7 @@ const { app, webhookManager, initialize, shutdown } =
   await import("../src/main.js");
 
 describe("Stress Tests", () => {
+  /** @type {string} */
   let webhookId;
 
   beforeAll(async () => {

@@ -1,4 +1,15 @@
-import { jest } from "@jest/globals";
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+const { version } = require("../package.json");
+
+import {
+  jest,
+  describe,
+  test,
+  expect,
+  beforeAll,
+  afterAll,
+} from "@jest/globals";
 
 jest.unstable_mockModule("apify", async () => {
   const { apifyMock } = await import("./helpers/shared-mocks.js");
@@ -23,7 +34,7 @@ describe("UI & Landing Page Tests", () => {
     expect(res.statusCode).toBe(200);
     expect(res.headers["content-type"]).toContain("text/html");
     expect(res.text).toContain("Webhook Debugger");
-    expect(res.text).toContain("v2.7.0");
+    expect(res.text).toContain(`v${version}`);
     expect(res.text).toContain("System Online");
   });
 

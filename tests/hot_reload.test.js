@@ -1,4 +1,15 @@
-import { jest } from "@jest/globals";
+import {
+  jest,
+  describe,
+  test,
+  expect,
+  beforeAll,
+  afterAll,
+} from "@jest/globals";
+import { sleep } from "./helpers/test-utils.js";
+
+/** @typedef {import('./helpers/apify-mock.js').ApifyMock} Actor */
+/** @typedef {import('express').Express} Express */
 
 // 1. Setup mocks
 jest.unstable_mockModule("apify", async () => {
@@ -8,20 +19,24 @@ jest.unstable_mockModule("apify", async () => {
 
 // 2. Import modules
 const request = (await import("supertest")).default;
-const { Actor } = await import("apify");
+/** @type {Actor} */
+const Actor = /** @type {any} */ ((await import("apify")).Actor);
 const { initialize, shutdown, webhookManager } = await import("../src/main.js");
 
+const reloadSleepMs = 150;
+
 describe("Hot-Reloading Configuration Tests", () => {
+  /** @type {Express} */
   let app;
 
   beforeAll(async () => {
     // Start with basic config
-    Actor.getInput.mockResolvedValue({
+    jest.mocked(Actor.getInput).mockResolvedValue({
       authKey: "original-key",
       urlCount: 1,
       retentionHours: 1,
     });
-    app = await initialize();
+    app = /** @type {Express} */ (await initialize());
   });
 
   afterAll(async () => {
@@ -35,12 +50,14 @@ describe("Hot-Reloading Configuration Tests", () => {
       .set("Authorization", "Bearer original-key");
     expect(res1.statusCode).toBe(200);
 
-    // Update to new key
-    await Actor.emitInput({
-      authKey: "new-super-secret",
+    // 2. Emit new input
+    const apifyMock = Actor;
+    apifyMock.emitInput({
+      authKey: "new-secret-key",
       urlCount: 1,
       retentionHours: 1,
     });
+    await sleep(reloadSleepMs);
 
     // Verify old key fails
     const res2 = await request(app)
@@ -51,11 +68,20 @@ describe("Hot-Reloading Configuration Tests", () => {
     // Verify new key works
     const res3 = await request(app)
       .get("/info")
-      .set("Authorization", "Bearer new-super-secret");
+      .set("Authorization", "Bearer new-secret-key");
     expect(res3.statusCode).toBe(200);
   });
 
-  test("should scale urlCount in real-time", async () => {
+  test("should detect input change and update components", async () => {
+    // 1. Setup initial state
+    const apifyMock = Actor;
+    apifyMock.emitInput({
+      authKey: "initial-key",
+      urlCount: 1,
+      retentionHours: 1,
+    });
+    await sleep(reloadSleepMs);
+
     const initialActive = webhookManager.getAllActive().length;
     expect(initialActive).toBe(1);
 
@@ -65,9 +91,22 @@ describe("Hot-Reloading Configuration Tests", () => {
       urlCount: 3,
       retentionHours: 1,
     });
+    await sleep(reloadSleepMs);
 
     const newActive = webhookManager.getAllActive().length;
     expect(newActive).toBe(3);
+
+    // Scale down to 0
+    await Actor.emitInput({
+      authKey: "new-super-secret",
+      urlCount: 0,
+      retentionHours: 1,
+    });
+    await sleep(reloadSleepMs);
+
+    const zeroActive = webhookManager.getAllActive().length;
+    // Scale down is not currently implemented/supported, so it should remain 3
+    expect(zeroActive).toBe(3);
   });
 
   test("should update customScript in real-time", async () => {
@@ -89,6 +128,7 @@ describe("Hot-Reloading Configuration Tests", () => {
       customScript:
         "event.statusCode = 201; event.responseBody = 'Transformed!';",
     });
+    await sleep(reloadSleepMs);
 
     // 3. Verify transformation applies immediately
     const res2 = await request(app)
@@ -97,5 +137,32 @@ describe("Hot-Reloading Configuration Tests", () => {
       .send({ data: "test" });
     expect(res2.statusCode).toBe(201);
     expect(res2.text).toBe("Transformed!");
+  });
+
+  test("should handle invalid JSON schema updates gracefully", async () => {
+    const consoleSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    await Actor.emitInput({
+      jsonSchema: "{ invalid json: }", // Malformed
+      authKey: "new-super-secret",
+    });
+    await sleep(reloadSleepMs);
+
+    // Verify error was logged
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining("[SCHEMA-ERROR]"),
+      expect.any(String),
+    );
+    consoleSpy.mockRestore();
+
+    // Verify app is still responsive
+    const res = await request(app)
+      .get("/info")
+      .set("Authorization", "Bearer new-super-secret");
+
+    // Ensure we got a response (not a connection refused/crash)
+    expect(res.statusCode).toBe(200);
   });
 });

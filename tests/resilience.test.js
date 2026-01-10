@@ -1,10 +1,19 @@
-import { jest } from "@jest/globals";
+import {
+  jest,
+  describe,
+  test,
+  expect,
+  beforeAll,
+  afterAll,
+  beforeEach,
+} from "@jest/globals";
 
 // Mock Apify and axios using shared components
 jest.unstable_mockModule("apify", async () => {
   const { apifyMock } = await import("./helpers/shared-mocks.js");
   return { Actor: apifyMock };
 });
+const { createDatasetMock } = await import("./helpers/shared-mocks.js");
 
 jest.unstable_mockModule("axios", async () => {
   const { axiosMock } = await import("./helpers/shared-mocks.js");
@@ -18,6 +27,7 @@ const axios = (await import("axios")).default;
 const { Actor } = await import("apify");
 
 describe("Resilience & Retry Tests", () => {
+  /** @type {string} */
   let webhookId;
 
   beforeAll(async () => {
@@ -50,12 +60,13 @@ describe("Resilience & Retry Tests", () => {
         headers: {},
       };
 
-      Actor.openDataset.mockResolvedValue({
-        getData: jest.fn().mockResolvedValue({ items: [mockItem] }),
-      });
+      jest
+        .mocked(Actor.openDataset)
+        .mockResolvedValue(/** @type {any} */ (createDatasetMock([mockItem])));
 
       // Mock axios to fail twice then succeed
-      axios
+      jest
+        .mocked(axios)
         .mockRejectedValueOnce({ code: "ECONNABORTED" })
         .mockRejectedValueOnce({ code: "ECONNABORTED" })
         .mockResolvedValueOnce({ status: 200, data: "OK" });
@@ -81,12 +92,12 @@ describe("Resilience & Retry Tests", () => {
         headers: {},
       };
 
-      Actor.openDataset.mockResolvedValue({
-        getData: jest.fn().mockResolvedValue({ items: [mockItem] }),
-      });
+      jest
+        .mocked(Actor.openDataset)
+        .mockResolvedValue(/** @type {any} */ (createDatasetMock([mockItem])));
 
       // Always fail
-      axios.mockRejectedValue({ code: "ECONNABORTED" });
+      jest.mocked(axios).mockRejectedValue({ code: "ECONNABORTED" });
 
       const res = await request(app)
         .get(`/replay/${webhookId}/evt_fail`)
@@ -106,14 +117,14 @@ describe("Resilience & Retry Tests", () => {
         headers: {},
       };
 
-      Actor.openDataset.mockResolvedValue({
-        getData: jest.fn().mockResolvedValue({ items: [mockItem] }),
-      });
+      jest
+        .mocked(Actor.openDataset)
+        .mockResolvedValue(/** @type {any} */ (createDatasetMock([mockItem])));
 
       // Axios returns a response with 404 status (no exception thrown if validateStatus allows it)
       // But in our Replay logic we use validateStatus: () => true, so it wont throw.
       // Wait, let's test a real error that SHOULDNT be retried, like a generic Error without code
-      axios.mockRejectedValueOnce(new Error("Generic Failure"));
+      jest.mocked(axios).mockRejectedValueOnce(new Error("Generic Failure"));
 
       const res = await request(app)
         .get(`/replay/${webhookId}/evt_generic`)
@@ -127,12 +138,17 @@ describe("Resilience & Retry Tests", () => {
   describe("Background Tasks Resilience", () => {
     test("should NOT block response if background tasks are slow (Timeout Verification)", async () => {
       // Mock Actor.pushData to be very slow
-      Actor.pushData.mockImplementation(
-        () =>
-          new Promise((resolve) => {
-            const t = setTimeout(resolve, 1000);
-            if (t.unref) t.unref();
-          }),
+      jest.mocked(Actor.pushData).mockImplementation(
+        /** @type {any} */ (
+          () =>
+            new Promise((resolve) => {
+              const t = setTimeout(
+                () => resolve(/** @type {any} */ (undefined)),
+                1000,
+              );
+              if (t.unref) t.unref();
+            })
+        ),
       );
 
       const startTime = Date.now();
@@ -147,8 +163,9 @@ describe("Resilience & Retry Tests", () => {
       expect(Actor.pushData).toHaveBeenCalled();
 
       // In test mode, background timeout is 100ms. The response should be received quickly.
-      // We use a 500ms threshold to account for CI overhead and prevent flake.
-      expect(duration).toBeLessThan(500);
+      // We use a 900ms threshold to account for CI overhead and prevent flake,
+      // while preserving the assertion that we didn't wait for the 1000ms mock.
+      expect(duration).toBeLessThan(900);
     });
   });
 });

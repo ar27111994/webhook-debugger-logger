@@ -1,4 +1,12 @@
-import { jest } from "@jest/globals";
+import {
+  jest,
+  describe,
+  test,
+  expect,
+  beforeAll,
+  beforeEach,
+  afterAll,
+} from "@jest/globals";
 
 // Mock Apify and axios using shared components
 jest.unstable_mockModule("apify", async () => {
@@ -11,16 +19,28 @@ jest.unstable_mockModule("axios", async () => {
   return { default: axiosMock };
 });
 
+const { createDatasetMock } = await import("./helpers/shared-mocks.js");
+
+import { createRequire } from "module";
+
+const require = createRequire(import.meta.url);
+const { version } = require("../package.json");
+
 const request = (await import("supertest")).default;
 const { app, initialize, shutdown, webhookManager } =
   await import("../src/main.js");
 const { Actor } = await import("apify");
 
 describe("API Contract & Regression Tests", () => {
+  /** @type {string} */
   let webhookId;
 
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   beforeAll(async () => {
-    Actor.getInput.mockResolvedValue({ authKey: "test-secret" });
+    jest.mocked(Actor.getInput).mockResolvedValue({ authKey: "test-secret" });
     await initialize();
     const ids = await webhookManager.generateWebhooks(1, 1);
     webhookId = ids[0];
@@ -40,13 +60,15 @@ describe("API Contract & Regression Tests", () => {
       const body = res.body;
 
       // Top-level
-      expect(body.version).toBe("2.7.0");
+      expect(body.version).toBe(version);
       expect(body.status).toBe("Enterprise Suite Online");
 
       // System block
       expect(body.system).toBeDefined();
       expect(body.system.authActive).toBe(true);
-      const activeIds = body.system.activeWebhooks.map((w) => w.id);
+      const activeIds = body.system.activeWebhooks.map(
+        (/** @type {{id: string}} */ w) => w.id,
+      );
       expect(activeIds).toContain(webhookId);
       expect(body.system.webhookCount).toBeGreaterThanOrEqual(1);
 
@@ -89,9 +111,9 @@ describe("API Contract & Regression Tests", () => {
         },
       ];
 
-      Actor.openDataset.mockResolvedValue({
-        getData: jest.fn().mockResolvedValue({ items: mockItems }),
-      });
+      jest
+        .mocked(Actor.openDataset)
+        .mockResolvedValue(/** @type {any} */ (createDatasetMock(mockItems)));
 
       const res = await request(app)
         .get("/logs")
@@ -110,8 +132,9 @@ describe("API Contract & Regression Tests", () => {
     });
 
     test("should fetch with limit * 5 when filters are present", async () => {
-      const getDataMock = jest.fn().mockResolvedValue({ items: [] });
-      Actor.openDataset.mockResolvedValue({ getData: getDataMock });
+      const datasetMock = /** @type {any} */ (createDatasetMock([]));
+      const getDataMock = jest.spyOn(datasetMock, "getData");
+      jest.mocked(Actor.openDataset).mockResolvedValue(datasetMock);
 
       await request(app)
         .get("/logs")
@@ -124,8 +147,9 @@ describe("API Contract & Regression Tests", () => {
     });
 
     test("should fetch with limit * 1 when NO filters are present", async () => {
-      const getDataMock = jest.fn().mockResolvedValue({ items: [] });
-      Actor.openDataset.mockResolvedValue({ getData: getDataMock });
+      const datasetMock = /** @type {any} */ (createDatasetMock([]));
+      const getDataMock = jest.spyOn(datasetMock, "getData");
+      jest.mocked(Actor.openDataset).mockResolvedValue(datasetMock);
 
       await request(app)
         .get("/logs")
@@ -167,9 +191,9 @@ describe("API Contract & Regression Tests", () => {
         },
       };
 
-      Actor.openDataset.mockResolvedValue({
-        getData: jest.fn().mockResolvedValue({ items: [mockItem] }),
-      });
+      jest
+        .mocked(Actor.openDataset)
+        .mockResolvedValue(/** @type {any} */ (createDatasetMock([mockItem])));
 
       const res = await request(app)
         .get(`/replay/${webhookId}/evt_strip`)
@@ -205,9 +229,14 @@ describe("API Contract & Regression Tests", () => {
         },
       ];
 
-      Actor.openDataset.mockResolvedValue({
-        getData: jest.fn().mockResolvedValue({ items: mockItems }),
-      });
+      jest
+        .mocked(Actor.openDataset)
+        .mockResolvedValue(/** @type {any} */ (createDatasetMock(mockItems)));
+
+      const { default: axiosMock } = await import("axios");
+      /** @type {import("./helpers/shared-mocks.js").AxiosMock} */ (
+        axiosMock
+      ).mockClear();
 
       // We request the FIRST one by its ID
       const res = await request(app)
@@ -216,8 +245,13 @@ describe("API Contract & Regression Tests", () => {
         .set("Authorization", "Bearer test-secret");
 
       expect(res.statusCode).toBe(200);
-      const { default: axiosMock } = await import("axios");
-      const lastCall = axiosMock.mock.calls[axiosMock.mock.calls.length - 1];
+
+      const axiosCalls =
+        /** @type {import("./helpers/shared-mocks.js").AxiosMock} */ (axiosMock)
+          .mock.calls;
+      expect(axiosCalls.length).toBeGreaterThan(0);
+
+      const lastCall = axiosCalls[axiosCalls.length - 1];
       expect(lastCall[0].data).toContain("i am the correct one");
 
       // We request the SECOND one by its ID (this would fail if we matched purely by timestamp first)
@@ -227,10 +261,48 @@ describe("API Contract & Regression Tests", () => {
         .set("Authorization", "Bearer test-secret");
 
       expect(res2.statusCode).toBe(200);
-      const lastCall2 = axiosMock.mock.calls[axiosMock.mock.calls.length - 1];
+
+      const axiosCalls2 =
+        /** @type {import("./helpers/shared-mocks.js").AxiosMock} */ (axiosMock)
+          .mock.calls;
+      const lastCall2 = axiosCalls2[axiosCalls2.length - 1];
       expect(lastCall2[0].data).toContain(
         "i am an interloper with same timestamp",
       );
+    });
+
+    test("POST /replay should retry on ETIMEDOUT and fail gracefully", async () => {
+      const mockItem = {
+        id: "evt_timeout",
+        webhookId,
+        method: "POST",
+        body: "{}",
+      };
+      jest
+        .mocked(Actor.openDataset)
+        .mockResolvedValue(/** @type {any} */ (createDatasetMock([mockItem])));
+
+      const { default: axiosMock } = await import("axios");
+      /** @type {import("./helpers/shared-mocks.js").AxiosMock} */ (axiosMock)
+        .mockClear()
+        .mockRejectedValue({
+          code: "ETIMEDOUT",
+          message: "Connect timeout",
+        });
+
+      const res = await request(app)
+        .get(`/replay/${webhookId}/evt_timeout`)
+        .query({ url: "http://timeout.com" })
+        .set("Authorization", "Bearer test-secret");
+
+      expect(res.statusCode).toBe(504);
+      expect(res.body.error).toBe("Replay failed");
+      expect(res.body.message).toContain("Target destination timed out");
+
+      const axiosCalls =
+        /** @type {import("./helpers/shared-mocks.js").AxiosMock} */ (axiosMock)
+          .mock.calls;
+      expect(axiosCalls.length).toBeGreaterThanOrEqual(3);
     });
   });
 });

@@ -1,4 +1,6 @@
-import { jest } from "@jest/globals";
+import { jest, describe, test, expect, beforeEach } from "@jest/globals";
+
+/** @typedef {import('../src/webhook_manager.js').WebhookManager} WebhookManager */
 
 jest.unstable_mockModule("axios", async () => {
   const { axiosMock } = await import("./helpers/shared-mocks.js");
@@ -12,19 +14,24 @@ jest.unstable_mockModule("apify", async () => {
 
 const { createLoggerMiddleware } = await import("../src/logger_middleware.js");
 const httpMocks = (await import("node-mocks-http")).default;
-const axios = (await import("axios")).default;
-const { Actor } = await import("apify");
 
 describe("Logger Middleware", () => {
+  /** @type {WebhookManager} */
   let webhookManager;
+  /** @type {import('../src/typedefs.js').LoggerOptions} */
   let options;
+  /** @type {jest.Mock} */
   let onEvent;
 
   beforeEach(() => {
-    webhookManager = {
-      isValid: jest.fn().mockReturnValue(true),
-      getWebhookData: jest.fn().mockReturnValue({}),
-    };
+    webhookManager = /** @type {WebhookManager} */ ({
+      isValid: /** @type {WebhookManager['isValid']} */ (
+        jest.fn().mockReturnValue(true)
+      ),
+      getWebhookData: /** @type {WebhookManager['getWebhookData']} */ (
+        jest.fn().mockReturnValue({})
+      ),
+    });
     onEvent = jest.fn();
     options = {
       maxPayloadSize: 1024,
@@ -34,7 +41,7 @@ describe("Logger Middleware", () => {
   });
 
   test("should block invalid webhook ID", async () => {
-    webhookManager.isValid.mockReturnValue(false);
+    /** @type {jest.Mock} */ (webhookManager.isValid).mockReturnValue(false);
     const middleware = createLoggerMiddleware(webhookManager, options, onEvent);
     const req = httpMocks.createRequest({ params: { id: "invalid" } });
     const res = httpMocks.createResponse();
@@ -108,7 +115,7 @@ describe("Logger Middleware", () => {
     const req = httpMocks.createRequest({
       params: { id: "wh_123" },
       query: { key: "secret" }, // Bypass Auth
-      body: "original",
+      body: /** @type {any} */ ("original"),
     });
     const res = httpMocks.createResponse();
 
@@ -117,7 +124,111 @@ describe("Logger Middleware", () => {
 
     // The middleware ends by calling res.send/json after onEvent
     // We check the event passed to onEvent
-    const event = onEvent.mock.calls[0][0];
+    const event = /** @type {any} */ (onEvent.mock.calls[0][0]);
     expect(event.body).toBe("TRANSFORMED");
+  });
+
+  test("should convert Buffer body to string for logging", async () => {
+    const middleware = createLoggerMiddleware(webhookManager, options, onEvent);
+    const bufferContent = Buffer.from('{"key":"value"}');
+    const req = httpMocks.createRequest({
+      params: { id: "wh_123" },
+      query: { key: "secret" },
+      headers: { "content-type": "application/json" },
+      body: bufferContent,
+    });
+    const res = httpMocks.createResponse();
+
+    await middleware(req, res);
+
+    const event = /** @type {any} */ (onEvent.mock.calls[0][0]);
+    expect(typeof event.body).toBe("string");
+    expect(event.body).toContain("key");
+  });
+
+  test("should calculate size correctly for object bodies", async () => {
+    const middleware = createLoggerMiddleware(webhookManager, options, onEvent);
+    const bodyObj = { foo: "bar", baz: 123 };
+    const req = httpMocks.createRequest({
+      params: { id: "wh_123" },
+      query: { key: "secret" },
+      headers: { "content-type": "application/json" },
+      body: bodyObj,
+    });
+    const res = httpMocks.createResponse();
+
+    await middleware(req, res);
+
+    const event = /** @type {any} */ (onEvent.mock.calls[0][0]);
+    // {"foo":"bar","baz":123} is 23 chars
+    expect(event.size).toBe(Buffer.byteLength(JSON.stringify(bodyObj)));
+  });
+
+  test("should handle array auth key by taking first element", async () => {
+    const middleware = createLoggerMiddleware(webhookManager, options, onEvent);
+    const req = httpMocks.createRequest({
+      params: { id: "wh_123" },
+      query: { key: ["secret", "wrong"] },
+    });
+    const res = httpMocks.createResponse();
+
+    await middleware(req, res);
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  test("should return JSON response for 4xx error status codes", async () => {
+    options.defaultResponseCode = 400;
+    const middleware = createLoggerMiddleware(webhookManager, options, onEvent);
+    const req = httpMocks.createRequest({
+      params: { id: "wh_123" },
+      query: { key: "secret" },
+      body: { test: "data" },
+    });
+    const res = httpMocks.createResponse();
+
+    await middleware(req, res);
+
+    expect(res.statusCode).toBe(400);
+    // 4xx with no custom body should return a JSON object
+    const responseData = res._getJSONData();
+    expect(responseData).toHaveProperty("webhookId");
+  });
+
+  test("should return object responseBody as JSON", async () => {
+    options.defaultResponseCode = 200;
+    options.defaultResponseBody = /** @type {any} */ ({
+      status: "ok",
+      custom: "response",
+    });
+    const middleware = createLoggerMiddleware(webhookManager, options, onEvent);
+    const req = httpMocks.createRequest({
+      params: { id: "wh_123" },
+      query: { key: "secret" },
+      body: { test: "data" },
+    });
+    const res = httpMocks.createResponse();
+
+    await middleware(req, res);
+
+    expect(res.statusCode).toBe(200);
+    const responseData = res._getJSONData();
+    expect(responseData.status).toBe("ok");
+    expect(responseData.custom).toBe("response");
+  });
+
+  test("should apply custom response headers from options", async () => {
+    options.defaultResponseHeaders = { "X-Custom-Header": "CustomValue" };
+    const middleware = createLoggerMiddleware(webhookManager, options, onEvent);
+    const req = httpMocks.createRequest({
+      params: { id: "wh_123" },
+      query: { key: "secret" },
+      body: { test: "data" },
+    });
+    const res = httpMocks.createResponse();
+
+    await middleware(req, res);
+
+    expect(res.getHeader("X-Custom-Header")).toBe("CustomValue");
   });
 });
