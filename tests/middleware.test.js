@@ -197,7 +197,7 @@ describe("Logger Middleware", () => {
 
   test("should return object responseBody as JSON", async () => {
     options.defaultResponseCode = 200;
-    options.defaultResponseBody = /** @type any */ ({
+    options.defaultResponseBody = /** @type {any} */ ({
       status: "ok",
       custom: "response",
     });

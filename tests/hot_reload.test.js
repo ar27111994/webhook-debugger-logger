@@ -77,15 +77,14 @@ describe("Hot-Reloading Configuration Tests", () => {
     const apifyMock = Actor;
     apifyMock.emitInput({
       authKey: "initial-key",
-      urlCount: 3,
+      urlCount: 1,
       retentionHours: 1,
     });
     await sleep(reloadSleepMs);
 
     const initialActive = webhookManager.getAllActive().length;
-    expect(initialActive).toBe(3);
+    expect(initialActive).toBe(1);
 
-    // Scale up to 3
     // Scale up to 3
     await Actor.emitInput({
       authKey: "new-super-secret",
@@ -142,7 +141,7 @@ describe("Hot-Reloading Configuration Tests", () => {
     // Verify error was logged
     expect(consoleSpy).toHaveBeenCalledWith(
       expect.stringContaining("[SCHEMA-ERROR]"),
-      expect.any(String),
+      expect.any(String)
     );
     consoleSpy.mockRestore();
 

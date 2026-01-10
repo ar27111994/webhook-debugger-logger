@@ -134,7 +134,7 @@ async function initialize() {
   const authKey = config.authKey || "";
   const rateLimitPerMinute = Math.max(
     1,
-    Math.floor(config.rateLimitPerMinute || 60),
+    Math.floor(config.rateLimitPerMinute || 60)
   );
   const testAndExit = input.testAndExit || false;
 
@@ -164,12 +164,12 @@ async function initialize() {
   if (active.length < urlCount) {
     const diff = urlCount - active.length;
     console.log(
-      `[SYSTEM] Scaling up: Generating ${diff} additional webhook(s).`,
+      `[SYSTEM] Scaling up: Generating ${diff} additional webhook(s).`
     );
     await webhookManager.generateWebhooks(diff, retentionHours);
   } else if (active.length > urlCount) {
     console.log(
-      `[SYSTEM] Notice: Active webhooks (${active.length}) exceed requested count (${urlCount}). No new IDs generated.`,
+      `[SYSTEM] Notice: Active webhooks (${active.length}) exceed requested count (${urlCount}). No new IDs generated.`
     );
   } else {
     console.log(`[SYSTEM] Resuming with ${active.length} active webhooks.`);
@@ -187,7 +187,8 @@ async function initialize() {
   const authMiddleware = (req, res, next) => {
     // Bypass for readiness probe
     if (req.headers["x-apify-container-server-readiness-probe"]) {
-      return next();
+      res.status(200).send("OK");
+      return;
     }
 
     const authResult = validateAuth(req, currentAuthKey);
@@ -224,9 +225,6 @@ async function initialize() {
 
   const __dirname = dirname(fileURLToPath(import.meta.url));
   app.get("/", authMiddleware, async (req, res) => {
-    if (req.headers["x-apify-container-server-readiness-probe"]) {
-      return res.send("OK");
-    }
     if (req.headers["accept"]?.includes("text/plain")) {
       return res.send("Webhook Debugger & Logger - Enterprise Suite");
     }
@@ -234,7 +232,7 @@ async function initialize() {
     try {
       const template = await readFile(
         join(__dirname, "..", "public", "index.html"),
-        "utf-8",
+        "utf-8"
       );
       const activeCount = webhookManager.getAllActive().length;
       const html = template
@@ -277,7 +275,7 @@ async function initialize() {
   const loggerMiddleware = createLoggerMiddleware(
     webhookManager,
     config,
-    broadcast,
+    broadcast
   );
 
   // --- Hot Reloading Logic ---
@@ -302,7 +300,7 @@ async function initialize() {
         const newConfig = parseWebhookOptions(newInput);
         const newRateLimit = Math.max(
           1,
-          Math.floor(newConfig.rateLimitPerMinute || 60),
+          Math.floor(newConfig.rateLimitPerMinute || 60)
         );
 
         // 1. Update Middleware
@@ -320,7 +318,7 @@ async function initialize() {
         if (activeWebhooks.length < currentUrlCount) {
           const diff = currentUrlCount - activeWebhooks.length;
           console.log(
-            `[SYSTEM] Dynamic Scale-up: Generating ${diff} additional webhook(s).`,
+            `[SYSTEM] Dynamic Scale-up: Generating ${diff} additional webhook(s).`
           );
           await webhookManager.generateWebhooks(diff, currentRetentionHours);
         }
@@ -334,7 +332,7 @@ async function initialize() {
       } catch (err) {
         console.error(
           "[SYSTEM-ERROR] Failed to apply new settings:",
-          /** @type {Error} */ (err).message,
+          /** @type {Error} */ (err).message
         );
       } finally {
         activePollPromise = null;
@@ -370,10 +368,10 @@ async function initialize() {
     (
       /** @type {Request} */ req,
       /** @type {Response} */ _res,
-      /** @type {NextFunction} */ next,
+      /** @type {NextFunction} */ next
     ) => {
       const statusOverride = parseInt(
-        /** @type {string} */ (req.query.__status),
+        /** @type {string} */ (req.query.__status)
       );
       if (statusOverride >= 100 && statusOverride < 600) {
         /** @type {any} */ (req).forcedStatus = statusOverride;
@@ -381,7 +379,7 @@ async function initialize() {
       next();
     },
     // @ts-expect-error - LoggerMiddleware has updateOptions attached, Express overloads don't recognize intersection types
-    loggerMiddleware,
+    loggerMiddleware
   );
 
   app.all(
@@ -431,7 +429,7 @@ async function initialize() {
         const item =
           items.find((i) => i.webhookId === webhookId && i.id === itemId) ||
           items.find(
-            (i) => i.webhookId === webhookId && i.timestamp === itemId,
+            (i) => i.webhookId === webhookId && i.timestamp === itemId
           );
 
         if (!item) {
@@ -455,7 +453,7 @@ async function initialize() {
             }
             return acc;
           },
-          {},
+          {}
         );
 
         let attempt = 0;
@@ -490,7 +488,7 @@ async function initialize() {
             }
             const delay = 1000 * Math.pow(2, attempt - 1);
             console.warn(
-              `[REPLAY-RETRY] Attempt ${attempt}/${MAX_REPLAY_RETRIES} failed for ${targetUrl}: ${axiosError.code}. Retrying in ${delay}ms...`,
+              `[REPLAY-RETRY] Attempt ${attempt}/${MAX_REPLAY_RETRIES} failed for ${targetUrl}: ${axiosError.code}. Retrying in ${delay}ms...`
             );
             await new Promise((resolve) => setTimeout(resolve, delay));
           }
@@ -500,8 +498,8 @@ async function initialize() {
           res.setHeader(
             "X-Apify-Replay-Warning",
             `Headers stripped (masked or transmission-related): ${strippedHeaders.join(
-              ", ",
-            )}`,
+              ", "
+            )}`
           );
         }
         res.json({
@@ -525,7 +523,7 @@ async function initialize() {
           code: axiosError.code,
         });
       }
-    }),
+    })
   );
 
   app.get("/log-stream", (req, res) => {
@@ -581,7 +579,7 @@ async function initialize() {
           })
           .sort(
             (a, b) =>
-              new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+              new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
           );
 
         res.json({
@@ -597,7 +595,7 @@ async function initialize() {
           message: /** @type {Error} */ (e).message,
         });
       }
-    }),
+    })
   );
 
   const APP_VERSION = process.env.npm_package_version || "unknown";
@@ -613,7 +611,7 @@ async function initialize() {
         authActive: !!currentAuthKey,
         retentionHours: currentRetentionHours,
         maxPayloadLimit: `${((maxPayloadSize || 0) / 1024 / 1024).toFixed(
-          1,
+          1
         )}MB`,
         webhookCount: activeWebhooks.length,
         activeWebhooks,
@@ -665,22 +663,22 @@ async function initialize() {
           status === 413
             ? "Payload Too Large"
             : status === 400
-              ? "Bad Request"
-              : "Internal Server Error",
+            ? "Bad Request"
+            : "Internal Server Error",
         message: isServerError ? "Internal Server Error" : err.message,
       });
-    },
+    }
   );
 
   /* istanbul ignore next */
   if (process.env.NODE_ENV !== "test") {
     const port = process.env.ACTOR_WEB_SERVER_PORT || 8080;
     server = app.listen(port, () =>
-      console.log(`Server listening on port ${port}`),
+      console.log(`Server listening on port ${port}`)
     );
     cleanupInterval = setInterval(
       () => webhookManager.cleanup(),
-      CLEANUP_INTERVAL_MS,
+      CLEANUP_INTERVAL_MS
     );
     Actor.on("migrating", () => shutdown("MIGRATING"));
     Actor.on("aborting", () => shutdown("ABORTING"));

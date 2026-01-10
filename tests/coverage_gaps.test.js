@@ -44,8 +44,9 @@ describe("Coverage Improvement Tests", () => {
 
   test("should log error when SSRF blocks validation during forwarding", async () => {
     // We need to import the middleware creator to test it in isolation or integration
-    const { createLoggerMiddleware } =
-      await import("../src/logger_middleware.js");
+    const { createLoggerMiddleware } = await import(
+      "../src/logger_middleware.js"
+    );
 
     // Mock WebhookManager properly
     const wm = /** @type {any} */ ({
@@ -73,7 +74,7 @@ describe("Coverage Improvement Tests", () => {
       {
         forwardUrl: "http://169.254.169.254/meta-data",
       },
-      () => {}, // broadcast mock
+      () => {} // broadcast mock
     );
 
     const req = {
@@ -95,9 +96,14 @@ describe("Coverage Improvement Tests", () => {
 
     await middleware(req, res, next);
 
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining("[FORWARD-ERROR] SSRF blocked"),
+    // Inspect all calls to find the matching argument
+    const allCalls = consoleErrorSpy.mock.calls.flat();
+    const hasSsrBlockedMsg = allCalls.some(
+      (arg) =>
+        typeof arg === "string" && arg.includes("[FORWARD-ERROR] SSRF blocked")
     );
+    expect(hasSsrBlockedMsg).toBe(true);
+
     consoleErrorSpy.mockRestore();
   });
 });

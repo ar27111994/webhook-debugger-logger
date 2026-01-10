@@ -19,7 +19,7 @@ export const MAX_BULK_CREATE = 1000;
 export const BODY_PARSER_SIZE_LIMIT = 10485760; // 10MB
 export const WEBHOOK_PAYLOAD_DEFAULT_LIMIT = 1048576; // 1MB middleware limit default
 
-export const REPLAY_HEADERS_TO_IGNORE = [
+export const REPLAY_HEADERS_TO_IGNORE = Object.freeze([
   "content-length",
   "content-encoding",
   "transfer-encoding",
@@ -30,17 +30,17 @@ export const REPLAY_HEADERS_TO_IGNORE = [
   "te",
   "trailer",
   "upgrade",
-];
+]);
 
-export const SENSITIVE_HEADERS = [
+export const SENSITIVE_HEADERS = Object.freeze([
   "authorization",
   "cookie",
   "set-cookie",
   "x-api-key",
   "api-key",
-];
+]);
 
-export const FORWARD_HEADERS_TO_IGNORE = [
+export const FORWARD_HEADERS_TO_IGNORE = Object.freeze([
   ...SENSITIVE_HEADERS,
   "content-length",
   "host",
@@ -49,4 +49,4 @@ export const FORWARD_HEADERS_TO_IGNORE = [
   "keep-alive",
   "proxy-connection",
   "upgrade",
-];
+]);
