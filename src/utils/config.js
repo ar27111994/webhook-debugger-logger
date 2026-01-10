@@ -2,7 +2,8 @@ import {
   DEFAULT_URL_COUNT,
   DEFAULT_RETENTION_HOURS,
   DEFAULT_RATE_LIMIT_PER_MINUTE,
-  BODY_PARSER_SIZE_LIMIT,
+  DEFAULT_PAYLOAD_LIMIT,
+  MAX_ALLOWED_PAYLOAD_SIZE,
 } from "../consts.js";
 
 /**
@@ -77,8 +78,8 @@ export function coerceRuntimeOptions(input) {
   const maxPayloadSizeRaw = Number(input.maxPayloadSize);
   const maxPayloadSize =
     Number.isFinite(maxPayloadSizeRaw) && maxPayloadSizeRaw > 0
-      ? Math.min(maxPayloadSizeRaw, BODY_PARSER_SIZE_LIMIT)
-      : BODY_PARSER_SIZE_LIMIT;
+      ? Math.min(maxPayloadSizeRaw, MAX_ALLOWED_PAYLOAD_SIZE)
+      : DEFAULT_PAYLOAD_LIMIT;
 
   return {
     urlCount,

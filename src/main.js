@@ -13,7 +13,7 @@ import {
   CLEANUP_INTERVAL_MS,
   INPUT_POLL_INTERVAL_PROD_MS,
   INPUT_POLL_INTERVAL_TEST_MS,
-  BODY_PARSER_SIZE_LIMIT,
+  DEFAULT_PAYLOAD_LIMIT,
   MAX_REPLAY_RETRIES,
   REPLAY_HEADERS_TO_IGNORE,
   REPLAY_TIMEOUT_MS,
@@ -155,7 +155,7 @@ async function initialize() {
     urlCount = DEFAULT_URL_COUNT,
     retentionHours = DEFAULT_RETENTION_HOURS,
   } = config; // Uses coerced defaults via config.js (which we updated)
-  const maxPayloadSize = config.maxPayloadSize || BODY_PARSER_SIZE_LIMIT; // 10MB limit for body parsing
+  const maxPayloadSize = config.maxPayloadSize || DEFAULT_PAYLOAD_LIMIT; // 10MB default limit for body parsing
   const enableJSONParsing =
     config.enableJSONParsing !== undefined ? config.enableJSONParsing : true;
   const authKey = config.authKey || "";
@@ -278,7 +278,12 @@ async function initialize() {
 
   app.use(cors());
 
-  app.use(bodyParser.raw({ limit: maxPayloadSize, type: "*/*" }));
+  app.use(
+    bodyParser.raw({
+      limit: maxPayloadSize ?? DEFAULT_PAYLOAD_LIMIT,
+      type: "*/*",
+    }),
+  );
 
   if (enableJSONParsing) {
     app.use((req, _res, next) => {

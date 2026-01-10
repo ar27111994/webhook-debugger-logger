@@ -10,13 +10,12 @@ import { validateUrlForSsrf } from "./utils/ssrf.js";
 import {
   BACKGROUND_TASK_TIMEOUT_PROD_MS,
   BACKGROUND_TASK_TIMEOUT_TEST_MS,
-  BODY_PARSER_SIZE_LIMIT,
   FORWARD_HEADERS_TO_IGNORE,
   FORWARD_TIMEOUT_MS,
   MAX_FORWARD_RETRIES,
   SCRIPT_EXECUTION_TIMEOUT_MS,
   SENSITIVE_HEADERS,
-  WEBHOOK_PAYLOAD_DEFAULT_LIMIT,
+  DEFAULT_PAYLOAD_LIMIT,
 } from "./consts.js";
 
 /**
@@ -113,11 +112,7 @@ function validateWebhookRequest(req, webhookId, options, webhookManager) {
           : 0;
 
   const contentLength = Number.isFinite(parsedLength) ? parsedLength : bodyLen;
-  const requestedMax = Number(options.maxPayloadSize);
-  const maxSize =
-    Number.isFinite(requestedMax) && requestedMax > 0
-      ? Math.min(Math.floor(requestedMax), BODY_PARSER_SIZE_LIMIT)
-      : WEBHOOK_PAYLOAD_DEFAULT_LIMIT;
+  const maxSize = options.maxPayloadSize ?? DEFAULT_PAYLOAD_LIMIT;
   if (contentLength > maxSize) {
     return {
       isValid: false,

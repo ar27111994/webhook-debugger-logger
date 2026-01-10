@@ -20,7 +20,8 @@ export const DEFAULT_URL_COUNT = 3;
 export const DEFAULT_RETENTION_HOURS = 24;
 export const DEFAULT_RATE_LIMIT_PER_MINUTE = 60;
 export const DEFAULT_RATE_LIMIT_WINDOW_MS = 60000; // 1 minute
-export const BODY_PARSER_SIZE_LIMIT = 10485760; // 10MB
+export const DEFAULT_PAYLOAD_LIMIT = 10485760; // 10MB
+export const MAX_ALLOWED_PAYLOAD_SIZE = 104857600; // 100MB
 export const WEBHOOK_PAYLOAD_DEFAULT_LIMIT = 1048576; // 1MB middleware limit default
 
 export const REPLAY_HEADERS_TO_IGNORE = Object.freeze([
