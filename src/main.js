@@ -132,6 +132,8 @@ const shutdown = async (signal) => {
 async function initialize() {
   await Actor.init();
 
+  const __dirname = dirname(fileURLToPath(import.meta.url));
+
   // Cache the HTML template once at startup
   let indexTemplate = "";
   try {
@@ -241,7 +243,6 @@ async function initialize() {
   app.set("trust proxy", true);
   app.use(compression());
 
-  const __dirname = dirname(fileURLToPath(import.meta.url));
   app.use("/fonts", express.static(join(__dirname, "..", "public", "fonts")));
 
   app.get("/", authMiddleware, async (req, res) => {

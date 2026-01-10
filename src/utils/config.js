@@ -25,11 +25,7 @@ export const DEFAULT_MAX_PAYLOAD_SIZE = 10485760; // 10MB
  * @returns {WebhookConfig} Normalized configuration object
  */
 export function parseWebhookOptions(options = {}) {
-  const maxPayloadSizeRaw = Number(options.maxPayloadSize);
-  const maxPayloadSize =
-    Number.isFinite(maxPayloadSizeRaw) && maxPayloadSizeRaw > 0
-      ? Math.min(maxPayloadSizeRaw, DEFAULT_MAX_PAYLOAD_SIZE)
-      : DEFAULT_MAX_PAYLOAD_SIZE;
+  // maxPayloadSize logic moved to coerceRuntimeOptions
 
   return {
     authKey: options.authKey,
@@ -43,7 +39,7 @@ export function parseWebhookOptions(options = {}) {
     jsonSchema: options.jsonSchema,
     customScript: options.customScript,
     maskSensitiveData: options.maskSensitiveData ?? true, // Default to true
-    maxPayloadSize,
+    // maxPayloadSize is now in ...coerceRuntimeOptions(options)
     enableJSONParsing: options.enableJSONParsing ?? true,
     ...coerceRuntimeOptions(options),
   };
@@ -52,7 +48,7 @@ export function parseWebhookOptions(options = {}) {
 /**
  * Coerces and validates runtime options for hot-reloading.
  * @param {Record<string, any>} input
- * @returns {{ urlCount: number, retentionHours: number, rateLimitPerMinute: number, authKey: string }}
+ * @returns {{ urlCount: number, retentionHours: number, rateLimitPerMinute: number, authKey: string, maxPayloadSize: number }}
  */
 export function coerceRuntimeOptions(input) {
   const urlCountRaw = Number(input.urlCount);
@@ -75,10 +71,17 @@ export function coerceRuntimeOptions(input) {
 
   const authKey = typeof input.authKey === "string" ? input.authKey.trim() : "";
 
+  const maxPayloadSizeRaw = Number(input.maxPayloadSize);
+  const maxPayloadSize =
+    Number.isFinite(maxPayloadSizeRaw) && maxPayloadSizeRaw > 0
+      ? Math.min(maxPayloadSizeRaw, DEFAULT_MAX_PAYLOAD_SIZE)
+      : DEFAULT_MAX_PAYLOAD_SIZE;
+
   return {
     urlCount,
     retentionHours,
     rateLimitPerMinute,
     authKey,
+    maxPayloadSize,
   };
 }
