@@ -43,15 +43,15 @@ jest.unstable_mockModule("../src/utils/ssrf.js", () => {
 });
 
 const request = (await import("supertest")).default;
-const { app, webhookManager, initialize, shutdown } = await import(
-  "../src/main.js"
-);
+const { app, webhookManager, initialize, shutdown } =
+  await import("../src/main.js");
 const { Actor } = await import("apify");
 
 describe("API E2E Tests", () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
+
   /** @type {string} */
   let webhookId;
 
@@ -190,7 +190,7 @@ describe("API E2E Tests", () => {
           // Close the request immediately after verifying headers
           req.destroy();
           testServer.close(() => done());
-        }
+        },
       );
       req.on("error", () => {
         // Expected when we abort
@@ -237,11 +237,6 @@ describe("API E2E Tests", () => {
 
     const axios = (await import("axios")).default;
     /** @type {AxiosMock} */ (axios).mockResolvedValue({ status: 200 });
-
-    // DNS mock is registered at module level via shared-mocks
-    const dns = /** @type {DnsPromisesMock} */ (await import("dns/promises"))
-      .default;
-    dns.resolve4.mockResolvedValue(["93.184.216.34"]);
 
     const res = await request(app)
       .get(`/replay/${webhookId}/evt_nonexistent`)
@@ -340,7 +335,7 @@ describe("API E2E Tests", () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.body.error).toBe(
-      "Unable to validate 'url' parameter (DNS failure)"
+      "Unable to validate 'url' parameter (DNS failure)",
     );
   });
 
