@@ -100,7 +100,7 @@ The Enterprise Update transforms this Actor into a professional API mocking and 
 - **IP Whitelisting**: Lock down your endpoints to specific IPs or CIDR ranges.
 - **Rate Limiting (v2.6)**: Protect your management endpoints (`/logs`, `/info`, `/replay`) with configurable per-IP rate limits.
 - **Sensitive Data Masking (v2.6)**: Automatically redact known sensitive headers like `Authorization` and `Cookie` from your logs.
-- **Zero-Downtime Hot-Reloading (v2.7)**: Update your `authKey`, `allowedIps`, or `rateLimits` while the Actor is running. Changes apply **instantly** via `Actor.on('input')` without dropping a single webhook.
+- **Zero-Downtime Hot-Reloading (v2.7)**: Update your `authKey`, `allowedIps`, or `rateLimits` while the Actor is running. Changes apply **instantly** via polling without dropping a single webhook.
 - **Dynamic Infrastructure Scaling (v2.7)**: Increase your `urlCount` without restarting. The Actor intelligently reconciles state, generating new IDs while preserving your existing ones.
 
 ### 🎭 API Mocking & Latency
