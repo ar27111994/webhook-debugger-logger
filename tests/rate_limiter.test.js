@@ -441,6 +441,7 @@ describe("RateLimiter Unit Tests", () => {
     rateLimiter = null; // Prevent afterEach from destroying it again
     clearIntervalSpy.mockRestore();
   });
+
   test("should log eviction when not in test environment", () => {
     const originalEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = "production";
@@ -450,13 +451,24 @@ describe("RateLimiter Unit Tests", () => {
       rateLimiter = new RateLimiter(10, 60000, 1);
       const mw = rateLimiter.middleware();
       const next = jest.fn();
-      const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+      const res = /** @type {Partial<Response>} */ ({
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn(),
+      });
 
       // Fill
-      mw({ ip: "user1", headers: {} }, res, next);
+      mw(
+        /** @type {Request} */ ({ ip: "user1", headers: {} }),
+        /** @type {Response} */ (res),
+        next
+      );
 
       // Trigger eviction
-      mw({ ip: "user2", headers: {} }, res, next);
+      mw(
+        /** @type {Request} */ ({ ip: "user2", headers: {} }),
+        /** @type {Response} */ (res),
+        next
+      );
 
       expect(consoleSpy).toHaveBeenCalledWith(
         expect.stringContaining("[SYSTEM] RateLimiter evicted entry")
