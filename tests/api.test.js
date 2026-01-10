@@ -45,9 +45,8 @@ jest.unstable_mockModule("../src/utils/ssrf.js", () => {
 });
 
 const request = (await import("supertest")).default;
-const { app, webhookManager, initialize, shutdown } = await import(
-  "../src/main.js"
-);
+const { app, webhookManager, initialize, shutdown } =
+  await import("../src/main.js");
 const { Actor } = await import("apify");
 
 describe("API E2E Tests", () => {
@@ -139,8 +138,7 @@ describe("API E2E Tests", () => {
     };
 
     const datasetMock = createDatasetMock([]); // Base mock
-    datasetMock.getData = jest
-      .fn()
+    datasetMock.getData = /** @type {jest.Mock<any>} */ (jest.fn())
       .mockResolvedValueOnce({ items: Array(1000).fill({ id: "noise" }) }) // Page 1: Noise
       .mockResolvedValueOnce({ items: [mockItem] }); // Page 2: Target
 
@@ -246,7 +244,7 @@ describe("API E2E Tests", () => {
             req.destroy();
             finalize(/** @type {Error} */ (e));
           }
-        }
+        },
       );
       req.on("error", () => {
         finalize(null); // Abort handled gracefully
@@ -392,7 +390,7 @@ describe("API E2E Tests", () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.body.error).toBe(
-      "Unable to validate 'url' parameter (DNS failure)"
+      "Unable to validate 'url' parameter (DNS failure)",
     );
   });
 
