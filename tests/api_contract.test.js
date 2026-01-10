@@ -245,7 +245,6 @@ describe("API Contract & Regression Tests", () => {
         .set("Authorization", "Bearer test-secret");
 
       expect(res.statusCode).toBe(200);
-      expect(res.statusCode).toBe(200);
 
       const axiosCalls =
         /** @type {import("./helpers/shared-mocks.js").AxiosMock} */ (axiosMock)

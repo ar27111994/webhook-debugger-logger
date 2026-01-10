@@ -24,7 +24,11 @@ import {
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { readFile } from "fs/promises";
+import { createRequire } from "module";
 import cors from "cors";
+
+const require = createRequire(import.meta.url);
+const packageJson = require("../package.json");
 
 /** @typedef {import("express").Request} Request */
 /** @typedef {import("express").Response} Response */
@@ -37,7 +41,8 @@ const INPUT_POLL_INTERVAL_MS =
     ? INPUT_POLL_INTERVAL_TEST_MS
     : INPUT_POLL_INTERVAL_PROD_MS;
 
-const APP_VERSION = process.env.npm_package_version || "unknown";
+const APP_VERSION =
+  process.env.npm_package_version || packageJson.version || "unknown";
 
 /** @type {import("http").Server | undefined} */
 let server;
@@ -127,9 +132,20 @@ const shutdown = async (signal) => {
 async function initialize() {
   await Actor.init();
 
+  // Cache the HTML template once at startup
+  let indexTemplate = "";
+  try {
+    indexTemplate = await readFile(
+      join(__dirname, "..", "public", "index.html"),
+      "utf-8"
+    );
+  } catch (err) {
+    console.warn("Failed to preload index.html:", err);
+  }
+
   const input = /** @type {any} */ ((await Actor.getInput()) || {});
   const config = parseWebhookOptions(input);
-  const { urlCount = 3, retentionHours = 24 } = input;
+  const { urlCount, retentionHours } = config; // Uses coerced defaults via config.js (which we updated)
   const maxPayloadSize = config.maxPayloadSize || BODY_PARSER_SIZE_LIMIT; // 10MB limit for body parsing
   const enableJSONParsing =
     config.enableJSONParsing !== undefined ? config.enableJSONParsing : true;
@@ -234,12 +250,14 @@ async function initialize() {
     }
 
     try {
-      const template = await readFile(
-        join(__dirname, "..", "public", "index.html"),
-        "utf-8"
-      );
+      if (!indexTemplate) {
+        indexTemplate = await readFile(
+          join(__dirname, "..", "public", "index.html"),
+          "utf-8"
+        );
+      }
       const activeCount = webhookManager.getAllActive().length;
-      const html = template
+      const html = indexTemplate
         .replace("{{VERSION}}", `v${APP_VERSION}`)
         .replace("{{ACTIVE_COUNT}}", String(activeCount));
 
@@ -301,11 +319,12 @@ async function initialize() {
         lastInputStr = newInputStr;
         console.log("[SYSTEM] Detected input update! Applying new settings...");
 
+        // Use shared coercion logic
+        const { coerceRuntimeOptions } = await import("./utils/config.js");
+        const validated = coerceRuntimeOptions(newInput);
+
         const newConfig = parseWebhookOptions(newInput);
-        const newRateLimit = Math.max(
-          1,
-          Math.floor(newConfig.rateLimitPerMinute || 60)
-        );
+        const newRateLimit = validated.rateLimitPerMinute;
 
         // 1. Update Middleware
         loggerMiddleware.updateOptions({ ...newConfig, maxPayloadSize });
@@ -314,10 +333,10 @@ async function initialize() {
         if (webhookRateLimiter) webhookRateLimiter.limit = newRateLimit;
 
         // 3. Update Auth Key
-        currentAuthKey = newConfig.authKey || "";
+        currentAuthKey = validated.authKey;
 
         // 4. Re-reconcile URL count
-        currentUrlCount = newInput.urlCount ?? currentUrlCount;
+        currentUrlCount = validated.urlCount;
         const activeWebhooks = webhookManager.getAllActive();
         if (activeWebhooks.length < currentUrlCount) {
           const diff = currentUrlCount - activeWebhooks.length;
@@ -328,8 +347,7 @@ async function initialize() {
         }
 
         // 5. Update Retention
-        currentRetentionHours =
-          newInput.retentionHours ?? currentRetentionHours;
+        currentRetentionHours = validated.retentionHours;
         await webhookManager.updateRetention(currentRetentionHours);
 
         console.log("[SYSTEM] Hot-reload complete. New settings are active.");
@@ -498,7 +516,7 @@ async function initialize() {
             }
             const delay = 1000 * Math.pow(2, attempt - 1);
             console.warn(
-              `[REPLAY-RETRY] Attempt ${attempt}/${MAX_REPLAY_RETRIES} failed for ${targetUrl}: ${axiosError.code}. Retrying in ${delay}ms...`
+              `[REPLAY-RETRY] Attempt ${attempt}/${MAX_REPLAY_RETRIES} failed for ${target.href}: ${axiosError.code}. Retrying in ${delay}ms...`
             );
             await new Promise((resolve) => setTimeout(resolve, delay));
           }
@@ -535,9 +553,9 @@ async function initialize() {
         res.status(isTimeout ? 504 : 500).json({
           error: "Replay failed",
           message: isTimeout
-            ? `Target destination timed out after ${MAX_REPLAY_RETRIES} attempts and ${
+            ? `Target destination timed out after ${MAX_REPLAY_RETRIES} attempts (${
                 REPLAY_TIMEOUT_MS / 1000
-              }s timeout`
+              }s timeout per attempt)`
             : axiosError.message,
           code: axiosError.code,
         });
@@ -545,7 +563,7 @@ async function initialize() {
     })
   );
 
-  app.get("/log-stream", (req, res) => {
+  app.get("/log-stream", mgmtRateLimiter, authMiddleware, (req, res) => {
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");

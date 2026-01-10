@@ -9,10 +9,11 @@ import {
   expect,
   beforeAll,
   afterAll,
+  beforeEach,
 } from "@jest/globals";
 
 /** @typedef {import("./helpers/shared-mocks.js").AxiosMock} AxiosMock */
-/** @typedef {import("./helpers/shared-mocks.js").dnsPromisesMock} DnsPromisesMock */
+/** @typedef {typeof import("./helpers/shared-mocks.js").dnsPromisesMock} DnsPromisesMock */
 
 jest.unstable_mockModule("apify", async () => {
   const { apifyMock } = await import("./helpers/shared-mocks.js");
@@ -43,8 +44,9 @@ jest.unstable_mockModule("../src/utils/ssrf.js", () => {
 });
 
 const request = (await import("supertest")).default;
-const { app, webhookManager, initialize, shutdown } =
-  await import("../src/main.js");
+const { app, webhookManager, initialize, shutdown } = await import(
+  "../src/main.js"
+);
 const { Actor } = await import("apify");
 
 describe("API E2E Tests", () => {
@@ -181,33 +183,52 @@ describe("API E2E Tests", () => {
   });
 
   test("GET /log-stream should set SSE headers and be connectable", (done) => {
-    // Use native http module for SSE endpoints since supertest can't handle streaming
     const http = require("http");
     const port = 0;
+    /** @type {any} */
+    let testServer;
+    let finished = false;
+
+    const finalize = (/** @type {Error|null} */ err) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timeout);
+      if (testServer) {
+        testServer.close(() => done(err || undefined));
+      } else {
+        done(err || undefined);
+      }
+    };
+
     const timeout = setTimeout(() => {
-      testServer.close(() => done(new Error("SSE test timed out")));
+      finalize(new Error("SSE test timed out"));
     }, 5000);
 
-    const testServer = app.listen(port, () => {
+    testServer = app.listen(port, () => {
       const addr = testServer.address();
       const allocatedPort = typeof addr === "object" ? addr?.port : port;
       const req = http.get(
         `http://localhost:${allocatedPort}/log-stream`,
-        (res) => {
-          // Verify SSE headers
-          expect(res.headers["content-type"]).toContain("text/event-stream");
-          expect(res.headers["cache-control"]).toBe("no-cache");
-          expect(res.headers["connection"]).toBe("keep-alive");
-          // Close the request immediately after verifying headers
-          req.destroy();
-          clearTimeout(timeout);
-          testServer.close(() => done());
+        {
+          headers: {
+            Authorization: "Bearer test-secret",
+          },
         },
+        (res) => {
+          try {
+            expect(res.headers["content-type"]).toContain("text/event-stream");
+            expect(res.headers["cache-control"]).toBe("no-cache");
+            expect(res.headers["connection"]).toBe("keep-alive");
+            req.destroy();
+            finalize(null);
+          } catch (e) {
+            req.destroy();
+            finalize(/** @type {Error} */ (e));
+          }
+        }
       );
       req.on("error", () => {
-        // Expected when we abort
-        clearTimeout(timeout);
-        testServer.close(() => done());
+        finalize(null); // Abort handled gracefully
       });
     });
   });
@@ -348,7 +369,7 @@ describe("API E2E Tests", () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.body.error).toBe(
-      "Unable to validate 'url' parameter (DNS failure)",
+      "Unable to validate 'url' parameter (DNS failure)"
     );
   });
 

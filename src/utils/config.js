@@ -44,7 +44,41 @@ export function parseWebhookOptions(options = {}) {
     customScript: options.customScript,
     maskSensitiveData: options.maskSensitiveData ?? true, // Default to true
     maxPayloadSize,
-    rateLimitPerMinute: options.rateLimitPerMinute ?? 60,
     enableJSONParsing: options.enableJSONParsing ?? true,
+    ...coerceRuntimeOptions(options),
+  };
+}
+
+/**
+ * Coerces and validates runtime options for hot-reloading.
+ * @param {Record<string, any>} input
+ * @returns {{ urlCount: number, retentionHours: number, rateLimitPerMinute: number, authKey: string }}
+ */
+export function coerceRuntimeOptions(input) {
+  const urlCountRaw = Number(input.urlCount);
+  const urlCount =
+    Number.isFinite(urlCountRaw) && urlCountRaw >= 1
+      ? Math.floor(urlCountRaw)
+      : 3; // Default
+
+  const retentionRaw = Number(input.retentionHours);
+  const retentionHours =
+    Number.isFinite(retentionRaw) && retentionRaw >= 1
+      ? Math.floor(retentionRaw)
+      : 24; // Default
+
+  const rateLimitRaw = Number(input.rateLimitPerMinute);
+  const rateLimitPerMinute =
+    Number.isFinite(rateLimitRaw) && rateLimitRaw >= 1
+      ? Math.floor(rateLimitRaw)
+      : 60; // Default
+
+  const authKey = typeof input.authKey === "string" ? input.authKey.trim() : "";
+
+  return {
+    urlCount,
+    retentionHours,
+    rateLimitPerMinute,
+    authKey,
   };
 }
