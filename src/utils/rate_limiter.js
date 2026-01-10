@@ -2,7 +2,7 @@
  * Simple in-memory rate limiter with background pruning and eviction.
  */
 import net from "node:net";
-import { DEFAULT_RATE_LIMIT_PER_MINUTE } from "../consts.js";
+import { DEFAULT_RATE_LIMIT_WINDOW_MS } from "../consts.js";
 
 export class RateLimiter {
   /**
@@ -63,7 +63,7 @@ export class RateLimiter {
           `[SYSTEM] RateLimiter pruned ${prunedCount} expired entries.`,
         );
       }
-    }, DEFAULT_RATE_LIMIT_PER_MINUTE * 1000);
+    }, DEFAULT_RATE_LIMIT_WINDOW_MS);
     if (this.cleanupInterval.unref) this.cleanupInterval.unref();
   }
 
