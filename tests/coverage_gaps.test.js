@@ -24,6 +24,7 @@ import {
 
 /** @typedef {import("express").Response} Response */
 /** @typedef {import("net").Socket} Socket */
+/** @typedef {import("../src/webhook_manager.js").WebhookManager & { get: jest.Mock<any>, shouldProcess: jest.Mock<any>, updateLastActive: jest.Mock<any> }} WebhookManagerMock */
 
 const request = (await import("supertest")).default;
 const { app, initialize, shutdown } = await import("../src/main.js");
@@ -54,22 +55,29 @@ describe("Coverage Improvement Tests", () => {
 
   test("should log error when SSRF blocks validation during forwarding", async () => {
     // We need to import the middleware creator to test it in isolation or integration
-    const { createLoggerMiddleware } =
-      await import("../src/logger_middleware.js");
+    const { createLoggerMiddleware } = await import(
+      "../src/logger_middleware.js"
+    );
     const { validateUrlForSsrf } = await import("../src/utils/ssrf.js");
 
     // Mock WebhookManager properly
-    const wm = /** @type {any} */ ({
-      get: jest.fn().mockReturnValue({
-        id: "test-wh",
-      }),
+    const wm = /** @type {WebhookManagerMock} */ ({
+      get: /** @type {jest.Mock<any>} */ (
+        jest.fn().mockReturnValue({
+          id: "test-wh",
+        })
+      ),
       // Add missing method called by middleware
-      getWebhookData: jest.fn().mockReturnValue({
-        forwardUrl: "http://169.254.169.254/meta-data", // Defined in webhook config
-      }),
+      getWebhookData: /** @type {WebhookManagerMock['getWebhookData']} */ (
+        jest.fn().mockReturnValue({
+          forwardUrl: "http://169.254.169.254/meta-data", // Defined in webhook config
+        })
+      ),
       shouldProcess: jest.fn().mockReturnValue(true),
       updateLastActive: jest.fn(),
-      isValid: jest.fn().mockReturnValue(true),
+      isValid: /** @type {WebhookManagerMock['isValid']} */ (
+        jest.fn().mockReturnValue(true)
+      ),
     });
 
     const consoleErrorSpy = jest
@@ -81,7 +89,7 @@ describe("Coverage Improvement Tests", () => {
       {
         forwardUrl: "http://169.254.169.254/meta-data",
       },
-      () => {}, // broadcast mock
+      () => {} // broadcast mock
     );
 
     const req = createMockRequest({
@@ -101,7 +109,7 @@ describe("Coverage Improvement Tests", () => {
         send: jest.fn(),
         on: jest.fn(),
         emit: jest.fn(),
-      }),
+      })
     );
     const next = createMockNextFunction();
 
@@ -112,7 +120,7 @@ describe("Coverage Improvement Tests", () => {
 
     // Verify SSRF validation was called with the blocked URL
     expect(validateUrlForSsrf).toHaveBeenCalledWith(
-      "http://169.254.169.254/meta-data",
+      "http://169.254.169.254/meta-data"
     );
 
     consoleErrorSpy.mockRestore();

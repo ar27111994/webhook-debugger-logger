@@ -27,10 +27,12 @@ jest.unstable_mockModule("axios", async () => {
   return { default: axiosMock };
 });
 
+const { createDatasetMock } = await import("./helpers/shared-mocks.js");
 const request = (await import("supertest")).default;
 const dns = (await import("dns/promises")).default;
-const { app, initialize, shutdown, webhookManager } =
-  await import("../src/main.js");
+const { app, initialize, shutdown, webhookManager } = await import(
+  "../src/main.js"
+);
 const { Actor } = await import("apify");
 
 describe("SSRF Protection Tests", () => {
@@ -63,11 +65,9 @@ describe("SSRF Protection Tests", () => {
       timestamp: new Date().toISOString(),
       statusCode: 200,
     };
-    jest.mocked(Actor.openDataset).mockResolvedValue(
-      /** @type {any} */ ({
-        getData: jest.fn(async () => ({ items: [mockItem] })),
-      }),
-    );
+    jest
+      .mocked(Actor.openDataset)
+      .mockResolvedValue(/** @type {any} */ (createDatasetMock([mockItem])));
   });
 
   describe("/replay SSRF Protection", () => {
