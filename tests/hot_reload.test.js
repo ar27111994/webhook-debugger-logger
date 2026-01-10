@@ -95,6 +95,18 @@ describe("Hot-Reloading Configuration Tests", () => {
 
     const newActive = webhookManager.getAllActive().length;
     expect(newActive).toBe(3);
+
+    // Scale down to 0
+    await Actor.emitInput({
+      authKey: "new-super-secret",
+      urlCount: 0,
+      retentionHours: 1,
+    });
+    await sleep(reloadSleepMs);
+
+    const zeroActive = webhookManager.getAllActive().length;
+    // Scale down is not currently implemented/supported, so it should remain 3
+    expect(zeroActive).toBe(3);
   });
 
   test("should update customScript in real-time", async () => {
@@ -141,7 +153,7 @@ describe("Hot-Reloading Configuration Tests", () => {
     // Verify error was logged
     expect(consoleSpy).toHaveBeenCalledWith(
       expect.stringContaining("[SCHEMA-ERROR]"),
-      expect.any(String),
+      expect.any(String)
     );
     consoleSpy.mockRestore();
 
