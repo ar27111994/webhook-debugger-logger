@@ -30,9 +30,8 @@ jest.unstable_mockModule("axios", async () => {
 const { createDatasetMock } = await import("./helpers/shared-mocks.js");
 const request = (await import("supertest")).default;
 const dns = (await import("dns/promises")).default;
-const { app, initialize, shutdown, webhookManager } = await import(
-  "../src/main.js"
-);
+const { app, initialize, shutdown, webhookManager } =
+  await import("../src/main.js");
 const { Actor } = await import("apify");
 
 describe("SSRF Protection Tests", () => {

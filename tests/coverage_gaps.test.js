@@ -55,9 +55,8 @@ describe("Coverage Improvement Tests", () => {
 
   test("should log error when SSRF blocks validation during forwarding", async () => {
     // We need to import the middleware creator to test it in isolation or integration
-    const { createLoggerMiddleware } = await import(
-      "../src/logger_middleware.js"
-    );
+    const { createLoggerMiddleware } =
+      await import("../src/logger_middleware.js");
     const { validateUrlForSsrf } = await import("../src/utils/ssrf.js");
 
     // Mock WebhookManager properly
@@ -89,7 +88,7 @@ describe("Coverage Improvement Tests", () => {
       {
         forwardUrl: "http://169.254.169.254/meta-data",
       },
-      () => {} // broadcast mock
+      () => {}, // broadcast mock
     );
 
     const req = createMockRequest({
@@ -109,7 +108,7 @@ describe("Coverage Improvement Tests", () => {
         send: jest.fn(),
         on: jest.fn(),
         emit: jest.fn(),
-      })
+      }),
     );
     const next = createMockNextFunction();
 
@@ -120,7 +119,7 @@ describe("Coverage Improvement Tests", () => {
 
     // Verify SSRF validation was called with the blocked URL
     expect(validateUrlForSsrf).toHaveBeenCalledWith(
-      "http://169.254.169.254/meta-data"
+      "http://169.254.169.254/meta-data",
     );
 
     consoleErrorSpy.mockRestore();
