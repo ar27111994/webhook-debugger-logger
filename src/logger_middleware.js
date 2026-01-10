@@ -34,15 +34,6 @@ import {
 const ajv = new Ajv();
 
 /**
- * Validates the basic webhook request parameters and permissions.
- *
- * @param {Request} req
- * @param {string} webhookId
- * @param {LoggerOptions} options
- * @param {WebhookManager} webhookManager
- * @returns {{ isValid: boolean, statusCode?: number, error?: string, remoteIp?: string, contentLength?: number, received?: number }}
- */
-/**
  * Validates and coerces a forced status code.
  * @param {any} forcedStatus
  * @param {number} [defaultCode=200]
