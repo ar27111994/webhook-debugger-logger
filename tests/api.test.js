@@ -45,8 +45,9 @@ jest.unstable_mockModule("../src/utils/ssrf.js", () => {
 });
 
 const request = (await import("supertest")).default;
-const { app, webhookManager, initialize, shutdown } =
-  await import("../src/main.js");
+const { app, webhookManager, initialize, shutdown } = await import(
+  "../src/main.js"
+);
 const { Actor } = await import("apify");
 
 describe("API E2E Tests", () => {
@@ -127,8 +128,8 @@ describe("API E2E Tests", () => {
     expect(res.body.items[0].webhookId).toBe(webhookId);
   });
 
-  test("GET /replay should resend event", async () => {
-    // Mock dataset to return the item to replay
+  test("GET /replay should resend event (Deep Search)", async () => {
+    // Mock dataset to return the item to replay ONLY on the second page
     const mockItem = {
       id: "evt_123",
       webhookId,
@@ -136,9 +137,16 @@ describe("API E2E Tests", () => {
       body: '{"test":"data"}',
       headers: {},
     };
+
+    const datasetMock = createDatasetMock([]); // Base mock
+    datasetMock.getData = jest
+      .fn()
+      .mockResolvedValueOnce({ items: Array(1000).fill({ id: "noise" }) }) // Page 1: Noise
+      .mockResolvedValueOnce({ items: [mockItem] }); // Page 2: Target
+
     jest
       .mocked(Actor.openDataset)
-      .mockResolvedValue(/** @type {any} */ (createDatasetMock([mockItem])));
+      .mockResolvedValue(/** @type {any} */ (datasetMock));
 
     // Mock axios to prevent real network calls
     const axios = (await import("axios")).default;
@@ -153,6 +161,19 @@ describe("API E2E Tests", () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body.status).toBe("Replayed");
+
+    // Verify it searched at least twice
+    expect(datasetMock.getData).toHaveBeenCalledTimes(2);
+    expect(datasetMock.getData).toHaveBeenNthCalledWith(1, {
+      desc: true,
+      limit: 1000,
+      offset: 0,
+    });
+    expect(datasetMock.getData).toHaveBeenNthCalledWith(2, {
+      desc: true,
+      limit: 1000,
+      offset: 1000,
+    });
   });
 
   test("POST /replay should also resend event", async () => {
@@ -225,7 +246,7 @@ describe("API E2E Tests", () => {
             req.destroy();
             finalize(/** @type {Error} */ (e));
           }
-        },
+        }
       );
       req.on("error", () => {
         finalize(null); // Abort handled gracefully
@@ -371,7 +392,7 @@ describe("API E2E Tests", () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.body.error).toBe(
-      "Unable to validate 'url' parameter (DNS failure)",
+      "Unable to validate 'url' parameter (DNS failure)"
     );
   });
 
