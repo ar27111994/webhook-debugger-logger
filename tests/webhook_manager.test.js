@@ -177,7 +177,6 @@ describe("WebhookManager", () => {
     const active = webhookManager.getAllActive();
     expect(active).toHaveLength(2);
     expect(active[0]).toHaveProperty("id");
-    expect(active[0]).toHaveProperty("id");
     expect(active[0]).toHaveProperty("expiresAt");
   });
 
