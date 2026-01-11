@@ -111,7 +111,7 @@ Updates to the following settings are applied immediately without restarting the
 - `customScript`
 - `rateLimitPerMinute`
 
-> **Note for Platform Users**: The Apify Console "Input" tab only applies changes to _future_ runs. To hot-reload a **running** Actor, you must edit the "INPUT" key in the running Actor's **Default Key-Value Store**.
+> **Note for Platform Users**: The Apify Console "Input" tab only applies changes to _future_ runs. To hot-reload a **running** Actor, you must update the "INPUT" key in the running Actor's **Default Key-Value Store** directly (e.g., via Apify API or Client), as the Console UI does not support editing Key-Value entries for running actors.
 
 ### 🔒 Enterprise Security (New in v2.0)
 

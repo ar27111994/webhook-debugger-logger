@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.8.1] - 2026-01-11
+
+### Fixed
+
+- **UI**: Fixed a regression where `{{VERSION}}` placeholders in `index.html` were not being fully replaced, causing raw template strings to be visible.
+
+### Improved
+
+- **UX**: The `/log-stream` SSE endpoint now sends an immediate `: connected` comment upon connection, preventing browsers from showing a "loading" state indefinetely while waiting for the first log event.
+
 ## [2.8.0] - 2026-01-11
 
 ### Added (2.8.0)
