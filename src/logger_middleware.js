@@ -457,11 +457,6 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
         : newOptions.jsonSchema;
 
     if (!options || newSchemaStr !== oldSchemaStr) {
-      console.log(
-        `[DEBUG] Schema Update detected. New Schema Length: ${
-          newSchemaStr?.length ?? 0
-        }`,
-      );
       if (newOptions.jsonSchema) {
         try {
           const schema =
@@ -478,7 +473,6 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
         }
       } else {
         validate = null;
-        console.log("[SYSTEM] JSON Schema cleared (validation disabled).");
       }
     }
   };

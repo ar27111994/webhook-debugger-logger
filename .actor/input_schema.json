@@ -164,7 +164,7 @@
       "title": "JSON Schema Guard",
       "description": "Enforce strict payload structure. Invalid requests will be rejected with a 400 Bad Request.",
       "example": "{\n  \"type\": \"object\",\n  \"required\": [\"userId\"],\n  \"properties\": {\n    \"userId\": { \"type\": \"string\" }\n  }\n}",
-      "prefill": "{}",
+      "prefill": "{\n  \"type\": \"object\",\n  \"required\": [\"event\"],\n  \"properties\": {\n    \"event\": { \"type\": \"string\" }\n  }\n}",
       "editor": "textarea"
     },
     "customScript": {
