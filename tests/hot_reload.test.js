@@ -173,7 +173,7 @@ describe("Hot-Reloading Configuration Tests", () => {
     // Verify error was logged
     expect(consoleSpy).toHaveBeenCalledWith(
       expect.stringContaining("[SCHEMA-ERROR]"),
-      expect.any(String),
+      expect.any(String)
     );
     consoleSpy.mockRestore();
 
@@ -238,5 +238,56 @@ describe("Hot-Reloading Configuration Tests", () => {
 
     // Should be blocked by middleware (413) or bodyParser (413)
     expect(res2.statusCode).toBe(413);
+  });
+
+  test("should disable schema validation when input is cleared", async () => {
+    const ids = webhookManager.getAllActive();
+    const whId = ids[0].id;
+
+    // 1. Set a restrictive schema
+    await Actor.emitInput({
+      authKey: "new-super-secret",
+      jsonSchema: JSON.stringify({
+        type: "object",
+        required: ["foo"],
+      }),
+    });
+
+    // Wait for it to apply
+    await waitForCondition(async () => {
+      const res = await request(app)
+        .post(`/webhook/${whId}`)
+        .set("Authorization", "Bearer new-super-secret")
+        .set("Content-Type", "application/json")
+        .send({ bar: "baz" });
+      return (
+        res.statusCode === 400 &&
+        res.body.error === "JSON Schema Validation Failed"
+      );
+    });
+
+    // 2. Clear schema (disable validation)
+    await Actor.emitInput({
+      authKey: "new-super-secret",
+      jsonSchema: "", // Simulate cleared input
+    });
+
+    // Wait for it to apply (validation should pass)
+    await waitForCondition(async () => {
+      const res = await request(app)
+        .post(`/webhook/${whId}`)
+        .set("Authorization", "Bearer new-super-secret")
+        .set("Content-Type", "application/json")
+        .send({ bar: "baz" });
+      return res.statusCode === 200;
+    });
+
+    const res = await request(app)
+      .post(`/webhook/${whId}`)
+      .set("Authorization", "Bearer new-super-secret")
+      .set("Content-Type", "application/json")
+      .send({ bar: "baz" });
+
+    expect(res.statusCode).toBe(200);
   });
 });
