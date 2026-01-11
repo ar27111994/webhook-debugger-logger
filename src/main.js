@@ -320,6 +320,8 @@ async function initialize() {
   );
 
   // --- Hot Reloading Logic ---
+  // Use KV Store directly to bypass local cache and enable platform hot-reload
+  const store = await Actor.openKeyValueStore();
   let lastInputStr = JSON.stringify(input);
 
   inputPollInterval = setInterval(() => {
@@ -328,7 +330,7 @@ async function initialize() {
     activePollPromise = (async () => {
       try {
         const newInput = /** @type {Record<string, any> | null} */ (
-          await Actor.getInput()
+          await store.getValue("INPUT")
         );
         if (!newInput) return;
 
