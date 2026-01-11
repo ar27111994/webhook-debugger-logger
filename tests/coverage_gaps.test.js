@@ -28,7 +28,10 @@ jest.unstable_mockModule("../src/utils/ssrf.js", async () => {
 
 // Mock compression to ensure res.write spy works
 jest.unstable_mockModule("compression", () => ({
-  default: () => (req, res, next) => next(),
+  default:
+    () =>
+    (/** @type {any} */ req, /** @type {any} */ res, /** @type {any} */ next) =>
+      next(),
 }));
 
 import {
@@ -166,7 +169,10 @@ describe("Coverage Improvement Tests", () => {
         if (typeof chunk === "string" && chunk.includes(": connected")) {
           throw new Error("Simulated Write Error");
         }
-        return originalWrite.apply(this, [chunk, ...args]);
+        return originalWrite.apply(
+          /** @type {import('http').ServerResponse} */ (this),
+          [chunk, ...args]
+        );
       });
 
     const consoleErrorSpy = jest
@@ -180,7 +186,7 @@ describe("Coverage Improvement Tests", () => {
         .get("/log-stream")
         .set("Authorization", "Bearer test-secret")
         .timeout(500);
-    } catch (e) {
+    } catch (_e) {
       // Expected timeout or connection close
     }
 
