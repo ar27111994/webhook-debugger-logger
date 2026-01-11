@@ -26,6 +26,11 @@ jest.unstable_mockModule("../src/utils/ssrf.js", async () => {
   };
 });
 
+// Mock compression to ensure res.write spy works
+jest.unstable_mockModule("compression", () => ({
+  default: () => (req, res, next) => next(),
+}));
+
 import {
   createMockRequest,
   createMockResponse,
@@ -73,8 +78,9 @@ describe("Coverage Improvement Tests", () => {
 
   test("should log error when SSRF blocks validation during forwarding", async () => {
     // We need to import the middleware creator to test it in isolation or integration
-    const { createLoggerMiddleware } =
-      await import("../src/logger_middleware.js");
+    const { createLoggerMiddleware } = await import(
+      "../src/logger_middleware.js"
+    );
     const { validateUrlForSsrf } = await import("../src/utils/ssrf.js");
 
     // Mock WebhookManager properly
@@ -106,7 +112,7 @@ describe("Coverage Improvement Tests", () => {
       {
         forwardUrl: "http://169.254.169.254/meta-data",
       },
-      () => {}, // broadcast mock
+      () => {} // broadcast mock
     );
 
     const req = createMockRequest({
@@ -126,7 +132,7 @@ describe("Coverage Improvement Tests", () => {
         send: jest.fn(),
         on: jest.fn(),
         emit: jest.fn(),
-      }),
+      })
     );
     const next = createMockNextFunction();
 
@@ -136,16 +142,89 @@ describe("Coverage Improvement Tests", () => {
     await waitForCondition(
       () => consoleErrorSpy.mock.calls.length > 0,
       1000,
-      10,
+      10
     );
 
     // Verify SSRF validation was called with the blocked URL
     expect(validateUrlForSsrf).toHaveBeenCalledWith(
-      "http://169.254.169.254/meta-data",
+      "http://169.254.169.254/meta-data"
     );
 
     expect(consoleErrorSpy).toHaveBeenCalled();
 
+    consoleErrorSpy.mockRestore();
+  });
+
+  test("should handle SSE initial write failure", async () => {
+    const http = await import("http");
+    const originalWrite = http.ServerResponse.prototype.write;
+
+    // Spy on write to throw when connection message is sent
+    const writeSpy = jest
+      .spyOn(http.ServerResponse.prototype, "write")
+      .mockImplementation(function (chunk, ...args) {
+        if (typeof chunk === "string" && chunk.includes(": connected")) {
+          throw new Error("Simulated Write Error");
+        }
+        return originalWrite.apply(this, [chunk, ...args]);
+      });
+
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    // Trigger the SSE endpoint
+    // It will hang because it's an open stream, so we race it with a timeout
+    try {
+      await request(app)
+        .get("/log-stream")
+        .set("Authorization", "Bearer test-secret")
+        .timeout(500);
+    } catch (e) {
+      // Expected timeout or connection close
+    }
+
+    // Wait a bit for async logs
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("[SSE-ERROR]"),
+      expect.stringContaining("Simulated Write Error")
+    );
+
+    writeSpy.mockRestore();
+    consoleErrorSpy.mockRestore();
+  });
+
+  test("should log 500 errors in global error handler", async () => {
+    const { webhookManager } = await import("../src/main.js");
+
+    // Generate a valid ID first (pass retention hours)
+    const [id] = await webhookManager.generateWebhooks(1, 24);
+
+    // Mock webhookManager.isValid to throw a generic error
+    const isValidSpy = jest
+      .spyOn(webhookManager, "isValid")
+      .mockImplementation(() => {
+        throw new Error("Simulated Server Crash");
+      });
+
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    const res = await request(app).post(`/webhook/${id}`);
+
+    expect(res.statusCode).toBe(500);
+    expect(res.body.error).toBe("Internal Server Error");
+    expect(res.body.message).toBe("Internal Server Error");
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "[SERVER-ERROR]",
+      expect.stringContaining("Simulated Server Crash")
+    );
+
+    isValidSpy.mockRestore();
     consoleErrorSpy.mockRestore();
   });
 });
