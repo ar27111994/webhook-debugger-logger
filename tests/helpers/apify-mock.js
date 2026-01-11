@@ -2,7 +2,7 @@ import { jest } from "@jest/globals";
 
 /**
  * @typedef {Object} KeyValueStoreMock
- * @property {jest.Mock<() => Promise<any>>} getValue
+ * @property {jest.Mock<(key: string) => Promise<any>>} getValue
  * @property {jest.Mock<(key: string, value: any) => Promise<void>>} setValue
  */
 
@@ -33,7 +33,7 @@ import { jest } from "@jest/globals";
 export function createApifyMock(inputOverrides = {}) {
   /** @type {KeyValueStoreMock} */
   const store = {
-    getValue: /** @type {jest.Mock<(...args: any[]) => Promise<any>>} */ (
+    getValue: /** @type {jest.Mock<(key: string) => Promise<any>>} */ (
       jest.fn()
     ).mockResolvedValue(null),
     setValue:
@@ -83,7 +83,7 @@ export function createApifyMock(inputOverrides = {}) {
       actorInstance.getInput.mockResolvedValue(data);
 
       // Update KV Store 'INPUT' value for live polling
-      store.getValue.mockImplementation(async (/** @type {string} */ key) => {
+      store.getValue.mockImplementation(async (key) => {
         if (key === "INPUT") return data;
         return null;
       });
