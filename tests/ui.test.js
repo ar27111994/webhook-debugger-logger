@@ -17,7 +17,8 @@ jest.unstable_mockModule("apify", async () => {
 });
 
 const request = (await import("supertest")).default;
-const { app, initialize, shutdown } = await import("../src/main.js");
+const { app, initialize, shutdown, webhookManager } =
+  await import("../src/main.js");
 
 describe("UI & Landing Page Tests", () => {
   beforeAll(async () => {
@@ -35,7 +36,12 @@ describe("UI & Landing Page Tests", () => {
     expect(res.headers["content-type"]).toContain("text/html");
     expect(res.text).toContain("Webhook Debugger");
     expect(res.text).toContain(`v${version}`);
+    expect(res.text).not.toContain("{{ACTIVE_COUNT}}");
+    expect(res.text).not.toContain("{{VERSION}}"); // Ensure all placeholders are replaced
     expect(res.text).toContain("System Online");
+
+    const activeCount = webhookManager.getAllActive().length;
+    expect(res.text).toContain(String(activeCount));
   });
 
   test("GET / should return plain text for non-browser clients", async () => {

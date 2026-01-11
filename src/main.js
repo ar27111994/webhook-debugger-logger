@@ -267,8 +267,8 @@ async function initialize() {
       }
       const activeCount = webhookManager.getAllActive().length;
       const html = indexTemplate
-        .replace("{{VERSION}}", `v${APP_VERSION}`)
-        .replace("{{ACTIVE_COUNT}}", String(activeCount));
+        .replaceAll("{{VERSION}}", `v${APP_VERSION}`)
+        .replaceAll("{{ACTIVE_COUNT}}", String(activeCount));
 
       res.send(html);
     } catch (err) {
