@@ -191,13 +191,13 @@ describe("Hot-Reloading Configuration Tests", () => {
     const whId = ids[0].id;
     const largePayload = "x".repeat(1024 * 1024 * 5); // 5MB
 
-    // 1. Set limit to 10MB (allow 5MB)
+    // 1. Set limit to 20MB (explicitly allow 5MB to ensure deterministic start)
     await Actor.emitInput({
       authKey: "new-super-secret",
-      maxPayloadSize: 1024 * 1024 * 10,
+      maxPayloadSize: 1024 * 1024 * 20,
     });
 
-    // Wait until large payload is accepted (should be almost immediate if default is already > 5MB)
+    // Wait until large payload is accepted
     await waitForCondition(async () => {
       const res = await request(app)
         .post(`/webhook/${whId}`)

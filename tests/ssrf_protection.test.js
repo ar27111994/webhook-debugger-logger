@@ -172,5 +172,25 @@ describe("SSRF Protection Tests", () => {
       expect(res.statusCode).toBe(400);
       expect(res.body.error).toBe(SSRF_ERRORS.INTERNAL_IP);
     });
+
+    test("should reject when DNS resolution times out", async () => {
+      // Mock slow DNS resolution
+      mockDns.resolve4.mockImplementation(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 6000)); // > 5000ms
+        return ["1.2.3.4"];
+      });
+      mockDns.resolve6.mockImplementation(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 6000));
+        return ["2001:db8::1"];
+      });
+
+      const res = await request(app)
+        .post(`/replay/${webhookId}/evt_test`)
+        .query({ url: "http://example.com/slow" })
+        .set("Authorization", validAuth);
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body.error).toBe(SSRF_ERRORS.VALIDATION_FAILED);
+    }, 10000); // Increase timeout for this specific test
   });
 });

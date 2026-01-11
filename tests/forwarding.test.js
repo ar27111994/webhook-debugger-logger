@@ -6,6 +6,7 @@ import {
   beforeEach,
   afterEach,
 } from "@jest/globals";
+import { waitForCondition } from "./helpers/test-utils.js";
 
 /** @typedef {import("../src/typedefs.js").CommonError} CommonError */
 
@@ -183,7 +184,12 @@ describe("Forwarding Security", () => {
     // Trigger background tasks by simulating response finish
     res.emit("finish");
 
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // Wait for the error to be logged
+    await waitForCondition(
+      () => consoleErrorSpy.mock.calls.length > 0,
+      1000,
+      10,
+    );
 
     expect(axios.post).not.toHaveBeenCalled();
     expect(consoleErrorSpy).toHaveBeenCalledWith(

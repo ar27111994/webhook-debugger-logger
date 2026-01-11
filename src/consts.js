@@ -57,5 +57,14 @@ export const FORWARD_HEADERS_TO_IGNORE = Object.freeze([
 
 export const ERROR_MESSAGES = Object.freeze({
   HOSTNAME_RESOLUTION_FAILED: "Unable to resolve hostname for 'url'",
-  DNS_FAILURE: "Unable to validate 'url' parameter (DNS failure)", // kept for history if needed, though unused now
+  DNS_FAILURE: "Unable to validate 'url' parameter (DNS failure)", // Deprecated: use HOSTNAME_RESOLUTION_FAILED instead
+});
+
+export const SSRF_INTERNAL_ERRORS = Object.freeze({
+  DNS_TIMEOUT: "DNS_TIMEOUT",
+});
+
+export const SSRF_LOG_MESSAGES = Object.freeze({
+  DNS_TIMEOUT: "DNS resolution timed out",
+  RESOLUTION_FAILED: "Resolution failed",
 });

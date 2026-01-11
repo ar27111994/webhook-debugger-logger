@@ -8,6 +8,8 @@ import {
   afterAll,
 } from "@jest/globals";
 
+/** @typedef {import('../src/typedefs.js').WebhookItem} WebhookItem */
+
 jest.unstable_mockModule("apify", async () => {
   const { apifyMock } = await import("./helpers/shared-mocks.js");
   return { Actor: apifyMock };
@@ -76,6 +78,7 @@ describe("Log Filtering Routes", () => {
   });
 
   test("GET /logs should filter by method, status, contentType", async () => {
+    /** @type {Array<Partial<WebhookItem>>} */
     const items = [
       {
         webhookId: "wh_1",
@@ -136,6 +139,72 @@ describe("Log Filtering Routes", () => {
       .set("Authorization", authHeader);
     expect(res.body.items).toHaveLength(1);
     expect(res.body.items[0].webhookId).toBe("wh_2");
+
+    // Combined Filters
+    res = await request(app)
+      .get("/logs")
+      .query({ method: "POST", statusCode: 200 })
+      .set("Authorization", authHeader);
+    expect(res.body.items).toHaveLength(2);
+    res.body.items.forEach((/** @type {WebhookItem} */ item) => {
+      expect(item.method).toBe("POST");
+      expect(item.statusCode).toBe(200);
+    });
+
+    // Invalid Webhook ID
+    res = await request(app)
+      .get("/logs")
+      .query({ webhookId: "non_existent" })
+      .set("Authorization", authHeader);
+    expect(res.body.items).toHaveLength(0);
+  });
+
+  test("GET /logs handles dataset errors gracefully", async () => {
+    jest
+      .mocked(Actor.openDataset)
+      .mockRejectedValue(new Error("Dataset access failed"));
+
+    const res = await request(app)
+      .get("/logs")
+      .set("Authorization", authHeader);
+
+    expect(res.statusCode).toBe(500);
+    expect(res.body.error).toBe("Logs failed");
+  });
+
+  test("GET /logs handles limit edge cases", async () => {
+    const items = new Array(5).fill(0).map(() => ({
+      webhookId: "wh_1",
+      timestamp: new Date().toISOString(),
+    }));
+    jest
+      .mocked(Actor.openDataset)
+      .mockResolvedValue(/** @type {any} */ (createDatasetMock(items)));
+
+    // Case 1: Limit 0 (Should return default or handle gracefully, assuming default 100)
+    let res = await request(app)
+      .get("/logs")
+      .query({ limit: 0 })
+      .set("Authorization", authHeader);
+    expect(res.statusCode).toBe(200);
+    // Our logic often defaults invalid/zero limit to DEFAULT_PAGINATION_LIMIT (100)
+    expect(res.body.items.length).toBeGreaterThan(0);
+
+    // Case 2: Negative Limit (Should be ignored or clamped)
+    res = await request(app)
+      .get("/logs")
+      .query({ limit: -10 })
+      .set("Authorization", authHeader);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.items.length).toBeGreaterThan(0);
+
+    // Case 3: Non-numeric Limit (Should use default)
+    res = await request(app)
+      .get("/logs")
+      .query({ limit: "invalid" })
+      .set("Authorization", authHeader);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.items.length).toBeGreaterThan(0);
   });
 
   test("GET /logs handles pagination limits", async () => {

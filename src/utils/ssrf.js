@@ -1,5 +1,6 @@
 import dns from "dns/promises";
 import ipaddr from "ipaddr.js";
+import { SSRF_INTERNAL_ERRORS, SSRF_LOG_MESSAGES } from "../consts.js";
 
 /** @typedef {import('ipaddr.js').IPv6} IP */
 
@@ -141,15 +142,34 @@ export async function validateUrlForSsrf(urlString) {
       ipsToCheck = [hostnameUnbracketed];
     } else {
       // Resolve DNS - get both A and AAAA records
+      const timeoutPromise = (/** @type {number} */ ms) =>
+        new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error(SSRF_INTERNAL_ERRORS.DNS_TIMEOUT)),
+            ms,
+          ),
+        );
+
       const [ipv4Results, ipv6Results] = await Promise.allSettled([
-        dns.resolve4(hostname),
-        dns.resolve6(hostname),
+        Promise.race([dns.resolve4(hostname), timeoutPromise(5000)]),
+        Promise.race([dns.resolve6(hostname), timeoutPromise(5000)]),
       ]);
       ipsToCheck = [
         ...(ipv4Results.status === "fulfilled" ? ipv4Results.value : []),
         ...(ipv6Results.status === "fulfilled" ? ipv6Results.value : []),
       ];
       if (ipsToCheck.length === 0) {
+        // Check if failure was due to timeout
+        const errors = [ipv4Results, ipv6Results]
+          .filter((r) => r.status === "rejected")
+          .map((r) => /** @type {Error} */ (r.reason));
+
+        if (
+          errors.some((e) => e.message === SSRF_INTERNAL_ERRORS.DNS_TIMEOUT)
+        ) {
+          throw new Error(SSRF_INTERNAL_ERRORS.DNS_TIMEOUT);
+        }
+
         return { safe: false, error: SSRF_ERRORS.HOSTNAME_RESOLUTION_FAILED };
       }
     }
@@ -169,9 +189,22 @@ export async function validateUrlForSsrf(urlString) {
       }
     }
 
+    /**
+     * ADVISORY: TOCTOU (Time-of-Check Time-of-Use) Race Condition
+     * This validation happens before the actual request. DNS records could change
+     * between this check and the subsequent HTTP request.
+     * Callers should ensure they do not cache this validation result for long periods.
+     */
     return { safe: true, href: target.href, host: target.host };
   } catch (e) {
-    console.error("[SSRF] Validation error:", e);
+    // Sanitize error to avoid leaking full URL/credentials in logs
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error(
+      "[SSRF] Validation error:",
+      msg === SSRF_INTERNAL_ERRORS.DNS_TIMEOUT
+        ? SSRF_LOG_MESSAGES.DNS_TIMEOUT
+        : SSRF_LOG_MESSAGES.RESOLUTION_FAILED,
+    );
     return { safe: false, error: SSRF_ERRORS.VALIDATION_FAILED };
   }
 }

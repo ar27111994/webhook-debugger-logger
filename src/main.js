@@ -284,12 +284,13 @@ async function initialize() {
   let currentRetentionHours = retentionHours;
   let currentUrlCount = urlCount;
 
-  app.use((req, res, next) => {
-    bodyParser.raw({
-      limit: currentMaxPayloadSize ?? DEFAULT_PAYLOAD_LIMIT,
-      type: "*/*",
-    })(req, res, next);
+  /** @type {import('express').Handler} */
+  let currentBodyParser = bodyParser.raw({
+    limit: currentMaxPayloadSize ?? DEFAULT_PAYLOAD_LIMIT,
+    type: "*/*",
   });
+
+  app.use((req, res, next) => currentBodyParser(req, res, next));
 
   if (enableJSONParsing) {
     app.use((req, _res, next) => {
@@ -342,9 +343,15 @@ async function initialize() {
 
         const newConfig = parseWebhookOptions(newInput);
         const newRateLimit = validated.rateLimitPerMinute;
-        currentMaxPayloadSize = validated.maxPayloadSize;
-
         // 1. Update Middleware
+        if (validated.maxPayloadSize !== currentMaxPayloadSize) {
+          currentMaxPayloadSize = validated.maxPayloadSize;
+          currentBodyParser = bodyParser.raw({
+            limit: currentMaxPayloadSize ?? DEFAULT_PAYLOAD_LIMIT,
+            type: "*/*",
+          });
+        }
+
         loggerMiddleware.updateOptions({
           ...newConfig,
           maxPayloadSize: currentMaxPayloadSize,

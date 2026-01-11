@@ -30,6 +30,7 @@ import {
   createMockRequest,
   createMockResponse,
   createMockNextFunction,
+  waitForCondition,
 } from "./helpers/test-utils.js";
 
 /** @typedef {import("express").Response} Response */
@@ -131,8 +132,12 @@ describe("Coverage Improvement Tests", () => {
 
     mw(req, res, next);
 
-    // Wait for async processing (it's fire-and-forget in middleware)
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // Wait for async processing to log the error
+    await waitForCondition(
+      () => consoleErrorSpy.mock.calls.length > 0,
+      1000,
+      10,
+    );
 
     // Verify SSRF validation was called with the blocked URL
     expect(validateUrlForSsrf).toHaveBeenCalledWith(
