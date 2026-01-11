@@ -615,6 +615,7 @@ async function initialize() {
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
     res.flushHeaders();
+    res.write(": connected\n\n");
     clients.add(res);
     req.on("close", () => clients.delete(res));
   });
