@@ -35,6 +35,7 @@ describe("UI & Landing Page Tests", () => {
     expect(res.headers["content-type"]).toContain("text/html");
     expect(res.text).toContain("Webhook Debugger");
     expect(res.text).toContain(`v${version}`);
+    expect(res.text).not.toContain("{{VERSION}}"); // Ensure all placeholders are replaced
     expect(res.text).toContain("System Online");
   });
 
