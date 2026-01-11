@@ -611,12 +611,28 @@ async function initialize() {
   );
 
   app.get("/log-stream", mgmtRateLimiter, authMiddleware, (req, res) => {
+    // 1. Optimize headers
+    res.setHeader("Content-Encoding", "identity"); // Disable compression
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
-    res.flushHeaders();
-    clients.add(res);
+
+    // 2. Register cleanup BEFORE writing to handle immediate close
     req.on("close", () => clients.delete(res));
+
+    res.flushHeaders();
+
+    // 3. Robust write (catch race condition where client closed immediately)
+    try {
+      res.write(": connected\n\n");
+      clients.add(res);
+    } catch (error) {
+      console.error(
+        "[SSE-ERROR] Failed to establish stream:",
+        /** @type {Error} */ (error).message,
+      );
+      // Cleanup handled by 'close' event
+    }
   });
 
   app.get(

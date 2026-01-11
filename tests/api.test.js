@@ -250,8 +250,15 @@ describe("API E2E Tests", () => {
             expect(res.headers["content-type"]).toContain("text/event-stream");
             expect(res.headers["cache-control"]).toBe("no-cache");
             expect(res.headers["connection"]).toBe("keep-alive");
-            req.destroy();
-            finalize(null);
+            expect(res.headers["content-encoding"]).toBe("identity"); // Ensure compression is disabled
+
+            res.on("data", (chunk) => {
+              const msg = chunk.toString();
+              if (msg.includes(": connected")) {
+                req.destroy(); // Connection successful, test passed
+                finalize(null);
+              }
+            });
           } catch (e) {
             req.destroy();
             finalize(/** @type {Error} */ (e));
