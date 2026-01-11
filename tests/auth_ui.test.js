@@ -98,6 +98,7 @@ describe("Auth UI Hardening Tests", () => {
     expect(res.statusCode).toBe(200);
     expect(res.body.endpoints.logs).not.toContain("key=");
     expect(res.body.endpoints.webhook).not.toContain("key=");
+    expect(res.body.endpoints.info).not.toContain("key=");
   });
 
   test("should reject /info access without any auth", async () => {
