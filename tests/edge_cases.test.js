@@ -1,4 +1,11 @@
-import { jest } from "@jest/globals";
+import {
+  jest,
+  describe,
+  test,
+  expect,
+  beforeAll,
+  afterAll,
+} from "@jest/globals";
 
 // Mock Apify
 jest.unstable_mockModule("apify", async () => {
@@ -12,10 +19,11 @@ const { app, webhookManager, initialize, shutdown } =
 const { Actor } = await import("apify");
 
 describe("Edge Case Tests", () => {
+  /** @type {string} */
   let webhookId;
 
   beforeAll(async () => {
-    Actor.getInput.mockResolvedValue({
+    jest.mocked(Actor.getInput).mockResolvedValue({
       maxPayloadSize: 1024,
       enableJSONParsing: true,
     });
@@ -60,8 +68,12 @@ describe("Edge Case Tests", () => {
     expect(res.text).toBe("OK");
 
     // Check if it was saved as string
-    const lastCall =
-      Actor.pushData.mock.calls[Actor.pushData.mock.calls.length - 1][0];
+    /** @type {{body: unknown}} */
+    const lastCall = /** @type {any} */ (
+      jest.mocked(Actor.pushData).mock.calls[
+        jest.mocked(Actor.pushData).mock.calls.length - 1
+      ][0]
+    );
     expect(typeof lastCall.body).toBe("string");
   });
 
@@ -72,10 +84,13 @@ describe("Edge Case Tests", () => {
 
     // Set a very high delay directly in the Map
     const data = webhookManager.getWebhookData(slowWebhookId);
-    webhookManager.webhooks.set(slowWebhookId, {
+    /** @type {import('../src/webhook_manager.js').WebhookData} */
+    const modifiedData = {
       ...data,
+      expiresAt: data?.expiresAt || new Date().toISOString(), // Ensure valid ISO string
       responseDelayMs: 15000,
-    });
+    };
+    webhookManager.webhooks.set(slowWebhookId, modifiedData);
 
     const startTime = Date.now();
     const res = await request(app)

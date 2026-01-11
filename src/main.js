@@ -3,23 +3,74 @@ import express from "express";
 import bodyParser from "body-parser";
 import compression from "compression";
 import axios from "axios";
+import { validateUrlForSsrf, SSRF_ERRORS } from "./utils/ssrf.js";
 import { WebhookManager } from "./webhook_manager.js";
 import { createLoggerMiddleware } from "./logger_middleware.js";
-import { parseWebhookOptions } from "./utils/config.js";
+import { parseWebhookOptions, coerceRuntimeOptions } from "./utils/config.js";
 import { validateAuth } from "./utils/auth.js";
 import { RateLimiter } from "./utils/rate_limiter.js";
+import {
+  CLEANUP_INTERVAL_MS,
+  INPUT_POLL_INTERVAL_PROD_MS,
+  INPUT_POLL_INTERVAL_TEST_MS,
+  DEFAULT_PAYLOAD_LIMIT,
+  MAX_REPLAY_RETRIES,
+  REPLAY_HEADERS_TO_IGNORE,
+  REPLAY_TIMEOUT_MS,
+  SHUTDOWN_TIMEOUT_MS,
+  SSE_HEARTBEAT_INTERVAL_MS,
+  STARTUP_TEST_EXIT_DELAY_MS,
+  DEFAULT_URL_COUNT,
+  DEFAULT_RETENTION_HOURS,
+  DEFAULT_RATE_LIMIT_PER_MINUTE,
+  DEFAULT_RATE_LIMIT_WINDOW_MS,
+  ERROR_MESSAGES,
+} from "./consts.js";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
+import { readFile } from "fs/promises";
+import { createRequire } from "module";
+import cors from "cors";
 
+const require = createRequire(import.meta.url);
+const packageJson = require("../package.json");
+
+/** @typedef {import("express").Request} Request */
+/** @typedef {import("express").Response} Response */
+/** @typedef {import("express").NextFunction} NextFunction */
+/**@typedef {import("./typedefs.js").CommonError} CommonError */
+/**@typedef {ReturnType<typeof setInterval> | undefined} Interval */
+
+const INPUT_POLL_INTERVAL_MS =
+  process.env.NODE_ENV === "test"
+    ? INPUT_POLL_INTERVAL_TEST_MS
+    : INPUT_POLL_INTERVAL_PROD_MS;
+
+const APP_VERSION =
+  process.env.npm_package_version || packageJson.version || "unknown";
+
+/** @type {import("http").Server | undefined} */
 let server;
+/** @type {Interval} */
 let sseHeartbeat;
+/** @type {Interval} */
+let inputPollInterval;
+/** @type {Promise<void> | null} */
+let activePollPromise = null;
+/** @type {Interval} */
 let cleanupInterval;
+/** @type {RateLimiter | undefined} */
 let webhookRateLimiter;
 
 const webhookManager = new WebhookManager();
+/** @type {Set<import("http").ServerResponse>} */
 const clients = new Set();
 const app = express(); // Exported for tests
 
 /**
  * Simple HTML escaping for security.
+ * @param {string} unsafe
+ * @returns {string}
  */
 const escapeHtml = (unsafe) => {
   if (!unsafe) return "";
@@ -33,33 +84,43 @@ const escapeHtml = (unsafe) => {
 
 /**
  * Broadcasts data to all connected SSE clients.
+ * @param {any} data
  */
 const broadcast = (data) => {
   const message = `data: ${JSON.stringify(data)}\n\n`;
-  clients.forEach((client) => client.write(message));
+  clients.forEach((client) => {
+    try {
+      client.write(message);
+    } catch {
+      clients.delete(client);
+    }
+  });
 };
 
 /**
  * Gracefully shuts down the server and persists state.
+ * @param {string} signal
  */
 const shutdown = async (signal) => {
   if (cleanupInterval) clearInterval(cleanupInterval);
   if (sseHeartbeat) clearInterval(sseHeartbeat);
+  if (inputPollInterval) clearInterval(inputPollInterval);
+  if (activePollPromise) await activePollPromise;
   if (webhookRateLimiter) webhookRateLimiter.destroy();
 
-  if (process.env.NODE_ENV === "test") return;
+  if (process.env.NODE_ENV === "test" && signal !== "TEST_COMPLETE") return;
 
   console.log(`Received ${signal}. Shutting down...`);
   const forceExitTimer = setTimeout(() => {
     console.error("Forceful shutdown after timeout");
     process.exit(1);
-  }, 30000);
+  }, SHUTDOWN_TIMEOUT_MS);
 
   const finalCleanup = async () => {
     await webhookManager.persist();
     await Actor.exit();
     clearTimeout(forceExitTimer);
-    process.exit(0);
+    if (process.env.NODE_ENV !== "test") process.exit(0);
   };
 
   if (server && server.listening) {
@@ -71,21 +132,38 @@ const shutdown = async (signal) => {
 
 /**
  * Main initialization logic.
+ * @returns {Promise<import("express").Application>}
  */
 async function initialize() {
   await Actor.init();
 
-  const input = (await Actor.getInput()) || {};
+  const __dirname = dirname(fileURLToPath(import.meta.url));
+
+  // Cache the HTML template once at startup
+  let indexTemplate = "";
+  try {
+    indexTemplate = await readFile(
+      join(__dirname, "..", "public", "index.html"),
+      "utf-8",
+    );
+  } catch (err) {
+    console.warn("Failed to preload index.html:", err);
+  }
+
+  const input = /** @type {any} */ ((await Actor.getInput()) || {});
   const config = parseWebhookOptions(input);
   const {
-    urlCount = 3,
-    retentionHours = 24,
-    maxPayloadSize = 10485760,
-    enableJSONParsing = true,
-  } = input;
-
-  const { authKey, rateLimitPerMinute: rawRateLimit } = config;
-  const rateLimitPerMinute = Math.max(1, Math.floor(rawRateLimit || 60));
+    urlCount = DEFAULT_URL_COUNT,
+    retentionHours = DEFAULT_RETENTION_HOURS,
+  } = config; // Uses coerced defaults via config.js (which we updated)
+  const maxPayloadSize = config.maxPayloadSize || DEFAULT_PAYLOAD_LIMIT; // 10MB default limit for body parsing
+  const enableJSONParsing =
+    config.enableJSONParsing !== undefined ? config.enableJSONParsing : true;
+  const authKey = config.authKey || "";
+  const rateLimitPerMinute = Math.max(
+    1,
+    Math.floor(config.rateLimitPerMinute || DEFAULT_RATE_LIMIT_PER_MINUTE),
+  );
   const testAndExit = input.testAndExit || false;
 
   await webhookManager.init();
@@ -102,9 +180,10 @@ async function initialize() {
       });
       console.log("🚀 Startup event pushed to dataset.");
     } catch (e) {
-      console.warn("Startup log failed:", e.message);
+      console.warn("Startup log failed:", /** @type {Error} */ (e).message);
     }
-    if (testAndExit) setTimeout(() => shutdown("TESTANDEXIT"), 5000);
+    if (testAndExit)
+      setTimeout(() => shutdown("TESTANDEXIT"), STARTUP_TEST_EXIT_DELAY_MS);
   }
 
   const active = webhookManager.getAllActive();
@@ -127,19 +206,99 @@ async function initialize() {
   // 2. Sync Retention (Global Extension)
   await webhookManager.updateRetention(retentionHours);
 
+  // 3. Auth Middleware (Moved up for hoisting)
+  /**
+   * @param {Request} req
+   * @param {Response} res
+   * @param {NextFunction} next
+   */
+  const authMiddleware = (req, res, next) => {
+    // Bypass for readiness probe
+    if (req.headers["x-apify-container-server-readiness-probe"]) {
+      res.status(200).send("OK");
+      return;
+    }
+
+    const authResult = validateAuth(req, currentAuthKey);
+
+    if (!authResult.isValid) {
+      // Return HTML for browsers
+      if (req.headers["accept"]?.includes("text/html")) {
+        res.status(401).send(`
+          <!DOCTYPE html>
+          <html>
+            <head><title>Access Restricted</title></head>
+            <body>
+              <h1>Access Restricted</h1>
+              <p>Strict Mode enabled.</p>
+              <p>${escapeHtml(authResult.error || "Unauthorized")}</p>
+            </body>
+          </html>
+        `);
+        return;
+      }
+
+      return res.status(401).json({
+        status: 401,
+        error: "Unauthorized",
+        message: authResult.error,
+      });
+    }
+    next();
+  };
+
   // --- Express Middleware ---
   app.set("trust proxy", true);
   app.use(compression());
-  app.use(bodyParser.urlencoded({ extended: true, limit: maxPayloadSize }));
-  app.use(bodyParser.raw({ limit: maxPayloadSize, type: "*/*" }));
+
+  app.use("/fonts", express.static(join(__dirname, "..", "public", "fonts")));
+
+  app.get("/", authMiddleware, async (req, res) => {
+    if (req.headers["accept"]?.includes("text/plain")) {
+      return res.send("Webhook Debugger & Logger - Enterprise Suite");
+    }
+
+    try {
+      if (!indexTemplate) {
+        indexTemplate = await readFile(
+          join(__dirname, "..", "public", "index.html"),
+          "utf-8",
+        );
+      }
+      const activeCount = webhookManager.getAllActive().length;
+      const html = indexTemplate
+        .replace("{{VERSION}}", `v${APP_VERSION}`)
+        .replace("{{ACTIVE_COUNT}}", String(activeCount));
+
+      res.send(html);
+    } catch (err) {
+      console.error("[SERVER-ERROR] Failed to load index.html:", err);
+      res.status(500).send("Internal Server Error");
+    }
+  });
+
+  app.use(cors());
+
+  let currentMaxPayloadSize = maxPayloadSize;
+  let currentAuthKey = authKey;
+  let currentRetentionHours = retentionHours;
+  let currentUrlCount = urlCount;
+
+  /** @type {import('express').Handler} */
+  let currentBodyParser = bodyParser.raw({
+    limit: currentMaxPayloadSize ?? DEFAULT_PAYLOAD_LIMIT,
+    type: "*/*",
+  });
+
+  app.use((req, res, next) => currentBodyParser(req, res, next));
 
   if (enableJSONParsing) {
-    app.use((req, res, next) => {
+    app.use((req, _res, next) => {
       if (!req.body || Buffer.isBuffer(req.body) === false) return next();
       if (req.headers["content-type"]?.includes("application/json")) {
         try {
           req.body = JSON.parse(req.body.toString());
-        } catch (e) {
+        } catch (_) {
           req.body = req.body.toString();
         }
       } else {
@@ -149,91 +308,127 @@ async function initialize() {
     });
   }
 
-  let currentAuthKey = authKey;
-  let currentRetentionHours = retentionHours;
-  let currentUrlCount = urlCount;
-
-  webhookRateLimiter = new RateLimiter(rateLimitPerMinute, 60000);
+  webhookRateLimiter = new RateLimiter(
+    rateLimitPerMinute,
+    DEFAULT_RATE_LIMIT_WINDOW_MS,
+  );
   const mgmtRateLimiter = webhookRateLimiter.middleware();
   const loggerMiddleware = createLoggerMiddleware(
     webhookManager,
-    { ...config, maxPayloadSize },
+    config,
     broadcast,
   );
 
   // --- Hot Reloading Logic ---
-  Actor.on("input", async (newInput) => {
-    if (!newInput) return;
-    console.log("[SYSTEM] Detected input update! Applying new settings...");
+  let lastInputStr = JSON.stringify(input);
 
-    try {
-      const newConfig = parseWebhookOptions(newInput);
-      const newRateLimit = Math.max(
-        1,
-        Math.floor(newConfig.rateLimitPerMinute || 60),
-      );
+  inputPollInterval = setInterval(() => {
+    if (activePollPromise) return;
 
-      // 1. Update Middleware
-      loggerMiddleware.updateOptions({ ...newConfig, maxPayloadSize });
-
-      // 2. Update Rate Limiter
-      webhookRateLimiter.limit = newRateLimit;
-
-      // 3. Update Auth Key
-      currentAuthKey = newConfig.authKey;
-
-      // 4. Re-reconcile URL count
-      currentUrlCount = newInput.urlCount || currentUrlCount;
-      const active = webhookManager.getAllActive();
-      if (active.length < currentUrlCount) {
-        const diff = currentUrlCount - active.length;
-        console.log(
-          `[SYSTEM] Dynamic Scale-up: Generating ${diff} additional webhook(s).`,
+    activePollPromise = (async () => {
+      try {
+        const newInput = /** @type {Record<string, any> | null} */ (
+          await Actor.getInput()
         );
-        await webhookManager.generateWebhooks(diff, currentRetentionHours);
+        if (!newInput) return;
+
+        const newInputStr = JSON.stringify(newInput);
+        if (newInputStr === lastInputStr) return;
+
+        lastInputStr = newInputStr;
+        console.log("[SYSTEM] Detected input update! Applying new settings...");
+
+        // Use shared coercion logic
+        const validated = coerceRuntimeOptions(newInput);
+
+        const newConfig = parseWebhookOptions(newInput);
+        const newRateLimit = validated.rateLimitPerMinute;
+        // 1. Update Middleware
+        if (validated.maxPayloadSize !== currentMaxPayloadSize) {
+          currentMaxPayloadSize = validated.maxPayloadSize;
+          currentBodyParser = bodyParser.raw({
+            limit: currentMaxPayloadSize ?? DEFAULT_PAYLOAD_LIMIT,
+            type: "*/*",
+          });
+        }
+
+        loggerMiddleware.updateOptions({
+          ...newConfig,
+          maxPayloadSize: currentMaxPayloadSize,
+        });
+
+        // 2. Update Rate Limiter
+        if (webhookRateLimiter) webhookRateLimiter.limit = newRateLimit;
+
+        // 3. Update Auth Key
+        currentAuthKey = validated.authKey;
+
+        // 4. Re-reconcile URL count
+        currentUrlCount = validated.urlCount;
+        const activeWebhooks = webhookManager.getAllActive();
+        if (activeWebhooks.length < currentUrlCount) {
+          const diff = currentUrlCount - activeWebhooks.length;
+          console.log(
+            `[SYSTEM] Dynamic Scale-up: Generating ${diff} additional webhook(s).`,
+          );
+          await webhookManager.generateWebhooks(diff, currentRetentionHours);
+        }
+
+        // 5. Update Retention
+        currentRetentionHours = validated.retentionHours;
+        await webhookManager.updateRetention(currentRetentionHours);
+
+        console.log("[SYSTEM] Hot-reload complete. New settings are active.");
+      } catch (err) {
+        console.error(
+          "[SYSTEM-ERROR] Failed to apply new settings:",
+          /** @type {Error} */ (err).message,
+        );
+      } finally {
+        activePollPromise = null;
       }
-
-      // 5. Update Retention
-      currentRetentionHours = newInput.retentionHours || currentRetentionHours;
-      await webhookManager.updateRetention(currentRetentionHours);
-
-      console.log("[SYSTEM] Hot-reload complete. New settings are active.");
-    } catch (err) {
-      console.error(
-        "[SYSTEM-ERROR] Failed to apply new settings:",
-        err.message,
-      );
-    }
-  });
+    })();
+  }, INPUT_POLL_INTERVAL_MS);
+  if (inputPollInterval.unref) inputPollInterval.unref();
 
   sseHeartbeat = setInterval(() => {
-    clients.forEach((c) => c.write(": heartbeat\n\n"));
-  }, 30000);
+    clients.forEach((c) => {
+      try {
+        c.write(": heartbeat\n\n");
+      } catch {
+        clients.delete(c);
+      }
+    });
+  }, SSE_HEARTBEAT_INTERVAL_MS);
   if (sseHeartbeat.unref) sseHeartbeat.unref();
-
-  const authMiddleware = (req, res, next) => {
-    const { isValid, error } = validateAuth(req, currentAuthKey);
-    if (!isValid) {
-      return res.status(401).json({
-        status: 401,
-        error: "Unauthorized",
-        message: error,
-      });
-    }
-    next();
-  };
 
   // --- Routes ---
 
+  /**
+   * Wraps an async handler to be compatible with Express RequestHandler.
+   * @param {(req: Request, res: Response, next: NextFunction) => Promise<void>} fn
+   * @returns {import("express").RequestHandler}
+   */
+  const asyncHandler = (fn) => (req, res, next) => {
+    Promise.resolve(fn(req, res, next)).catch(next);
+  };
+
   app.all(
     "/webhook/:id",
-    (req, res, next) => {
-      const statusOverride = parseInt(req.query.__status);
+    (
+      /** @type {Request} */ req,
+      /** @type {Response} */ _res,
+      /** @type {NextFunction} */ next,
+    ) => {
+      const statusOverride = parseInt(
+        /** @type {string} */ (req.query.__status),
+      );
       if (statusOverride >= 100 && statusOverride < 600) {
-        req.forcedStatus = statusOverride;
+        /** @type {any} */ (req).forcedStatus = statusOverride;
       }
       next();
     },
+    // @ts-expect-error - LoggerMiddleware has updateOptions attached, Express overloads don't recognize intersection types
     loggerMiddleware,
   );
 
@@ -241,39 +436,80 @@ async function initialize() {
     "/replay/:webhookId/:itemId",
     mgmtRateLimiter,
     authMiddleware,
-    async (req, res) => {
+    asyncHandler(async (req, res) => {
       try {
         const { webhookId, itemId } = req.params;
-        const targetUrl = req.query.url;
-        if (!targetUrl)
-          return res.status(400).json({ error: "Missing 'url' parameter" });
+        let targetUrl = req.query.url;
+        if (Array.isArray(targetUrl)) {
+          targetUrl = targetUrl[0];
+        }
+        if (!targetUrl) {
+          res.status(400).json({ error: "Missing 'url' parameter" });
+          return;
+        }
+
+        // Validate URL and check for SSRF
+        // Use normalized targetUrl for validation
+        const ssrfResult = await validateUrlForSsrf(String(targetUrl));
+        if (!ssrfResult.safe) {
+          if (ssrfResult.error === SSRF_ERRORS.HOSTNAME_RESOLUTION_FAILED) {
+            res
+              .status(400)
+              .json({ error: ERROR_MESSAGES.HOSTNAME_RESOLUTION_FAILED });
+            return;
+          }
+          // "DNS resolution failed" was previously checked here but was never emitted.
+          // HOSTNAME_RESOLUTION_FAILED covers the case where DNS resolves to empty list.
+          // Other DNS errors (throw) result in VALIDATION_FAILED or similar.
+          res.status(400).json({ error: ssrfResult.error });
+          return;
+        }
+
+        const target = {
+          href: ssrfResult.href,
+          host: ssrfResult.host,
+        };
 
         const dataset = await Actor.openDataset();
-        const { items } = await dataset.getData();
-        // Prioritize exact ID match. Fallback to timestamp only if no ID matches.
-        const item =
-          items.find((i) => i.webhookId === webhookId && i.id === itemId) ||
-          items.find(
-            (i) => i.webhookId === webhookId && i.timestamp === itemId,
-          );
 
-        if (!item) return res.status(404).json({ error: "Event not found" });
+        let item;
+        let offset = 0;
+        const limit = 1000;
 
-        const headersToIgnore = [
-          "content-length",
-          "content-encoding",
-          "transfer-encoding",
-          "host",
-          "connection",
-          "keep-alive",
-          "proxy-authorization",
-          "te",
-          "trailer",
-          "upgrade",
-        ];
+        // Paginate through dataset (newest first) to find the event
+        // This ensures we find the event even if it's deep in the history, while prioritizing recent events.
+        while (true) {
+          const { items } = await dataset.getData({
+            desc: true,
+            limit,
+            offset,
+          });
+
+          if (items.length === 0) break;
+
+          // Prioritize exact ID match. Fallback to timestamp only if no ID matches.
+          item =
+            items.find((i) => i.webhookId === webhookId && i.id === itemId) ||
+            items.find(
+              (i) => i.webhookId === webhookId && i.timestamp === itemId,
+            );
+
+          if (item) break;
+
+          offset += limit;
+        }
+
+        if (!item) {
+          res.status(404).json({ error: "Event not found" });
+          return;
+        }
+
+        const headersToIgnore = REPLAY_HEADERS_TO_IGNORE;
+        /** @type {string[]} */
         const strippedHeaders = [];
+        /** @type {Record<string, unknown>} */
         const filteredHeaders = Object.entries(item.headers || {}).reduce(
-          (acc, [key, value]) => {
+          (/** @type {Record<string, unknown>} */ acc, [key, value]) => {
             const lowerKey = key.toLowerCase();
             const isMasked =
               typeof value === "string" && value.toUpperCase() === "[MASKED]";
@@ -287,39 +523,56 @@ async function initialize() {
           {},
         );
 
-        const MAX_RETRIES = 3;
         let attempt = 0;
+        /** @type {import("axios").AxiosResponse | undefined} */
         let r;
-        while (attempt < MAX_RETRIES) {
+        while (attempt < MAX_REPLAY_RETRIES) {
           try {
             attempt++;
             r = await axios({
               method: item.method,
-              url: targetUrl,
+              url: target.href,
               data: item.body,
               headers: {
                 ...filteredHeaders,
                 "X-Apify-Replay": "true",
                 "X-Original-Webhook-Id": webhookId,
-                host: new URL(targetUrl).host,
+                host: target.host,
               },
+              maxRedirects: 0,
               validateStatus: () => true,
-              timeout: 10000,
+              timeout: REPLAY_TIMEOUT_MS,
             });
             break; // Success
           } catch (err) {
+            const axiosError = /** @type {CommonError} */ (err);
+            const retryableErrors = [
+              "ECONNABORTED",
+              "ECONNRESET",
+              "ETIMEDOUT",
+              "ENOTFOUND",
+              "EAI_AGAIN",
+            ];
             if (
-              attempt >= MAX_RETRIES ||
-              (err.code !== "ECONNABORTED" && err.code !== "ECONNRESET")
+              attempt >= MAX_REPLAY_RETRIES ||
+              !retryableErrors.includes(axiosError.code || "")
             ) {
               throw err;
             }
             const delay = 1000 * Math.pow(2, attempt - 1);
             console.warn(
-              `[REPLAY-RETRY] Attempt ${attempt}/${MAX_RETRIES} failed for ${targetUrl}: ${err.code}. Retrying in ${delay}ms...`,
+              `[REPLAY-RETRY] Attempt ${attempt}/${MAX_REPLAY_RETRIES} failed for ${target.href}: ${axiosError.code}. Retrying in ${delay}ms...`,
             );
             await new Promise((resolve) => setTimeout(resolve, delay));
           }
+        }
+
+        if (!r) {
+          res.status(504).json({
+            error: "Replay failed",
+            message: `All ${MAX_REPLAY_RETRIES} retry attempts exhausted`,
+          });
+          return;
         }
 
         if (strippedHeaders.length > 0) {
@@ -333,25 +586,29 @@ async function initialize() {
         res.json({
           status: "Replayed",
           targetUrl,
-          targetResponseCode: r.status,
-          targetResponseBody: r.data,
+          targetResponseCode: r?.status,
+          targetResponseBody: r?.data,
           strippedHeaders:
             strippedHeaders.length > 0 ? strippedHeaders : undefined,
         });
       } catch (error) {
-        const isTimeout = error.code === "ECONNABORTED";
+        const axiosError = /** @type {CommonError} */ (error);
+        const isTimeout =
+          axiosError.code === "ECONNABORTED" || axiosError.code === "ETIMEDOUT";
         res.status(isTimeout ? 504 : 500).json({
           error: "Replay failed",
           message: isTimeout
-            ? "Target destination timed out after 3 attempts and 10s timeout"
-            : error.message,
-          code: error.code,
+            ? `Target destination timed out after ${MAX_REPLAY_RETRIES} attempts (${
+                REPLAY_TIMEOUT_MS / 1000
+              }s timeout per attempt)`
+            : axiosError.message,
+          code: axiosError.code,
         });
       }
-    },
+    }),
   );
 
-  app.get("/log-stream", (req, res) => {
+  app.get("/log-stream", mgmtRateLimiter, authMiddleware, (req, res) => {
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
@@ -360,67 +617,84 @@ async function initialize() {
     req.on("close", () => clients.delete(res));
   });
 
-  app.get("/logs", mgmtRateLimiter, authMiddleware, async (req, res) => {
-    try {
-      let {
-        webhookId,
-        method,
-        statusCode,
-        contentType,
-        limit = 100,
-        offset = 0,
-      } = req.query;
-      limit = Math.min(Math.max(parseInt(limit) || 100, 1), 1000);
-      offset = Math.max(parseInt(offset) || 0, 0);
+  app.get(
+    "/logs",
+    mgmtRateLimiter,
+    authMiddleware,
+    asyncHandler(async (req, res) => {
+      try {
+        let {
+          webhookId,
+          method,
+          statusCode,
+          contentType,
+          limit = 100,
+          offset = 0,
+        } = req.query;
+        limit = Math.min(Math.max(parseInt(String(limit), 10) || 100, 1), 1000);
+        offset = Math.max(parseInt(String(offset), 10) || 0, 0);
 
-      const hasFilters = !!(webhookId || method || statusCode || contentType);
-      const dataset = await Actor.openDataset();
-      const result = await dataset.getData({
-        limit: hasFilters ? limit * 5 : limit,
-        offset,
-        desc: true,
-      });
+        const hasFilters = !!(webhookId || method || statusCode || contentType);
+        const dataset = await Actor.openDataset();
+        const result = await dataset.getData({
+          limit: hasFilters ? limit * 5 : limit,
+          offset,
+          desc: true,
+        });
 
-      const filtered = (result.items || [])
-        .filter((item) => {
-          if (webhookId && item.webhookId !== webhookId) return false;
-          if (method && item.method?.toUpperCase() !== method.toUpperCase())
-            return false;
-          if (statusCode && String(item.statusCode) !== String(statusCode))
-            return false;
-          if (
-            contentType &&
-            !item.headers?.["content-type"]?.includes(contentType)
-          )
-            return false;
-          return webhookManager.isValid(item.webhookId);
-        })
-        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        const filtered = (result.items || [])
+          .filter((item) => {
+            if (webhookId && item.webhookId !== webhookId) return false;
+            if (
+              method &&
+              item.method?.toUpperCase() !== String(method).toUpperCase()
+            )
+              return false;
+            if (statusCode && String(item.statusCode) !== String(statusCode))
+              return false;
+            if (
+              contentType &&
+              !item.headers?.["content-type"]?.includes(String(contentType))
+            )
+              return false;
+            return webhookManager.isValid(item.webhookId);
+          })
+          .sort(
+            (a, b) =>
+              new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+          );
 
-      res.json({
-        filters: { webhookId, method, statusCode, contentType },
-        count: Math.min(filtered.length, limit),
-        total: filtered.length,
-        items: filtered.slice(0, limit),
-      });
-    } catch (e) {
-      res.status(500).json({ error: "Logs failed", message: e.message });
-    }
-  });
+        res.json({
+          filters: { webhookId, method, statusCode, contentType },
+          count: Math.min(filtered.length, limit),
+          total: filtered.length,
+          items: filtered.slice(0, limit),
+        });
+        return;
+      } catch (e) {
+        res.status(500).json({
+          error: "Logs failed",
+          message: /** @type {Error} */ (e).message,
+        });
+      }
+    }),
+  );
 
   app.get("/info", mgmtRateLimiter, authMiddleware, (req, res) => {
     const baseUrl = `${req.protocol}://${req.get("host")}`;
     const activeWebhooks = webhookManager.getAllActive();
 
     res.json({
-      version: "2.7.0",
+      version: APP_VERSION,
       status: "Enterprise Suite Online",
       system: {
-        authActive: !!authKey,
-        retentionHours,
-        maxPayloadLimit: `${((maxPayloadSize || 0) / 1024 / 1024).toFixed(
-          1,
-        )}MB`,
+        authActive: !!currentAuthKey,
+        retentionHours: currentRetentionHours,
+        maxPayloadLimit: `${(
+          (currentMaxPayloadSize || 0) /
+          1024 /
+          1024
+        ).toFixed(1)}MB`,
         webhookCount: activeWebhooks.length,
         activeWebhooks,
       },
@@ -443,128 +717,52 @@ async function initialize() {
     });
   });
 
-  app.get("/", (req, res) => {
-    // 1. Readiness Probe (Always Public)
-    if (req.headers["x-apify-container-server-readiness-probe"]) {
-      return res.status(200).send("OK");
-    }
-
-    const isBrowser = req.headers["accept"]?.includes("text/html");
-
-    // 2. Auth Check for Root
-    const { isValid, error } = validateAuth(req, authKey);
-    if (!isValid) {
-      if (isBrowser) {
-        return res.status(401).send(`
-          <!DOCTYPE html>
-          <html lang="en">
-          <head>
-              <meta charset="UTF-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>Locked | Webhook Debugger</title>
-              <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono&display=swap" rel="stylesheet">
-              <style>
-                  :root { --primary: #5865F2; --danger: #f87171; --bg: #0f172a; --card: #1e293b; --text: #f8fafc; --text-dim: #94a3b8; }
-                  body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; text-align: center; }
-                  .container { max-width: 450px; background: var(--card); padding: 40px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
-                  h1 { font-weight: 800; color: var(--danger); margin: 0; font-size: 1.5rem; }
-                  .lock-icon { font-size: 3rem; margin-bottom: 16px; display: block; }
-                  p { color: var(--text-dim); line-height: 1.6; margin: 20px 0; }
-                  .code { font-family: 'JetBrains Mono', monospace; background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px; font-size: 0.85rem; color: var(--primary); word-break: break-all; }
-                  a { color: var(--primary); text-decoration: none; font-weight: 600; }
-              </style>
-          </head>
-          <body>
-              <div class="container">
-                  <span class="lock-icon">🔒</span>
-                  <h1>Access Restricted</h1>
-                  <p>This Actor is running in <b>Strict Mode</b>. You must provide an <code>authKey</code> to access the management interface.</p>
-                  <div class="stat-item" style="text-align:left; border-left: 4px solid var(--danger); background: rgba(0,0,0,0.2); padding: 16px; border-radius: 8px;">
-                    <span style="font-size: 0.8rem; color: var(--text-dim); display: block; margin-bottom: 4px;">Error Details</span>
-                    <span class="stat-value" style="color: var(--danger); font-family: 'JetBrains Mono', monospace;">${escapeHtml(
-                      error,
-                    )}</span>
-                  </div>
-                  <p style="font-size: 0.85rem;">To authenticate in the browser, append <code>?key=YOUR_KEY</code> to the URL.</p>
-                  <p style="margin-top:24px; font-size: 0.8rem; color: var(--text-dim);"><a href="https://apify.com/ar27111994/webhook-debugger-logger" target="_blank">View Documentation</a></p>
-              </div>
-          </body>
-          </html>
-        `);
+  /**
+   * Error handling middleware
+   * @param {CommonError} err
+   * @param {Request} req
+   * @param {Response} res
+   * @param {NextFunction} next
+   */
+  app.use(
+    /**
+     * @param {CommonError} err
+     * @param {Request} _req
+     * @param {Response} res
+     * @param {NextFunction} next
+     */
+    (err, _req, res, next) => {
+      if (res.headersSent) return next(err);
+      const status = err.statusCode || err.status || 500;
+      // Sanitize: don't leak internal error details for 500-level errors
+      const isServerError = status >= 500;
+      if (isServerError) {
+        console.error("[SERVER-ERROR]", err.stack || err.message || err);
       }
-      return res.status(401).json({ error: "Unauthorized", message: error });
-    }
+      res.status(status).json({
+        status,
+        error:
+          status === 413
+            ? "Payload Too Large"
+            : status === 400
+              ? "Bad Request"
+              : "Internal Server Error",
+        message: isServerError ? "Internal Server Error" : err.message,
+      });
+    },
+  );
 
-    // 3. Authenticated View
-    const activeCount = webhookManager.getAllActive().length;
-
-    if (isBrowser) {
-      res.send(`
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Webhook Debugger v2.7.0</title>
-            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono&display=swap" rel="stylesheet">
-            <style>
-                :root { --primary: #5865F2; --success: #2ecc71; --bg: #0f172a; --card: #1e293b; --text: #f8fafc; --text-dim: #94a3b8; }
-                body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; text-align: center; }
-                .container { max-width: 600px; background: var(--card); padding: 40px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
-                h1 { font-weight: 800; color: var(--primary); margin: 0; }
-                .version { font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; color: var(--text-dim); margin: 8px 0 24px; display: block; }
-                .status { display: inline-flex; align-items: center; gap: 8px; background: rgba(46, 204, 113, 0.1); color: var(--success); padding: 8px 16px; border-radius: 99px; font-weight: 600; margin-bottom: 32px; }
-                .dot { width: 8px; height: 8px; background: var(--success); border-radius: 50%; animation: pulse 2s infinite; }
-                .stat-item { background: rgba(0,0,0,0.2); padding: 16px; border-radius: 8px; border-left: 4px solid var(--primary); text-align: left; margin-bottom: 16px; }
-                .stat-label { font-size: 0.8rem; color: var(--text-dim); display: block; margin-bottom: 4px; }
-                .stat-value { font-family: 'JetBrains Mono', monospace; font-weight: 600; }
-                a { color: var(--primary); text-decoration: none; font-weight: 600; }
-                @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <h1>Webhook Debugger</h1>
-                <span class="version">v2.7.0 "Enterprise Suite"</span>
-                <div class="status"><div class="dot"></div>System Online & Optimized</div>
-                <div class="stat-item"><span class="stat-label">Active Webhooks (Live TTL)</span><span class="stat-value">${activeCount} active endpoints</span></div>
-                <div class="stat-item"><span class="stat-label">Quick Start</span><span class="stat-value">GET <a href="/info">/info</a> to view routing and management APIs</span></div>
-                <p style="margin-top:24px; font-size: 0.85rem; color: var(--text-dim);">Built for high-stakes launches • <a href="https://apify.com/ar27111994/webhook-debugger-logger" target="_blank">Documentation</a></p>
-            </div>
-        </body>
-        </html>
-      `);
-    } else {
-      res.send(
-        `Webhook Debugger & Logger v2.7.0 (Enterprise Suite) is running.\nActive Webhooks: ${activeCount}\nUse /info for management API.\n`,
-      );
-    }
-  });
-
-  app.use((err, req, res, next) => {
-    if (res.headersSent) return next(err);
-    const status = err.statusCode || err.status || 500;
-    res.status(status).json({
-      status,
-      error:
-        status === 413
-          ? "Payload Too Large"
-          : status === 400
-            ? "Bad Request"
-            : "Internal Server Error",
-      message: err.message,
-    });
-  });
-
+  /* istanbul ignore next */
   if (process.env.NODE_ENV !== "test") {
     const port = process.env.ACTOR_WEB_SERVER_PORT || 8080;
     server = app.listen(port, () =>
       console.log(`Server listening on port ${port}`),
     );
-    cleanupInterval = setInterval(
-      () => webhookManager.cleanup(),
-      10 * 60 * 1000,
-    );
+    cleanupInterval = setInterval(() => {
+      webhookManager.cleanup().catch((e) => {
+        console.error("[CLEANUP-ERROR]", e?.message || e);
+      });
+    }, CLEANUP_INTERVAL_MS);
     Actor.on("migrating", () => shutdown("MIGRATING"));
     Actor.on("aborting", () => shutdown("ABORTING"));
     process.on("SIGTERM", () => shutdown("SIGTERM"));
@@ -575,6 +773,7 @@ async function initialize() {
 }
 
 if (process.env.NODE_ENV !== "test") {
+  /* istanbul ignore next */
   initialize().catch((err) => {
     console.error("[FATAL] Server failed to start:", err.message);
     process.exit(1);

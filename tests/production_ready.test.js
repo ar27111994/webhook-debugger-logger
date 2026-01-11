@@ -1,4 +1,12 @@
-import { jest } from "@jest/globals";
+import {
+  jest,
+  describe,
+  test,
+  expect,
+  beforeEach,
+  beforeAll,
+  afterAll,
+} from "@jest/globals";
 
 jest.unstable_mockModule("apify", async () => {
   const { apifyMock } = await import("./helpers/shared-mocks.js");
@@ -14,12 +22,18 @@ const request = (await import("supertest")).default;
 const { app, webhookManager, sseHeartbeat, initialize, shutdown } =
   await import("../src/main.js");
 const { Actor } = await import("apify");
+const { createDatasetMock } = await import("./helpers/shared-mocks.js");
 
 describe("Production Readiness Tests (v2.6.0)", () => {
+  /** @type {string} */
   let webhookId;
 
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   beforeAll(async () => {
-    Actor.getInput.mockResolvedValue({
+    jest.mocked(Actor.getInput).mockResolvedValue({
       authKey: "top-secret",
       rateLimitPerMinute: 2,
       maskSensitiveData: true,
@@ -35,7 +49,10 @@ describe("Production Readiness Tests (v2.6.0)", () => {
     try {
       await shutdown("TEST_COMPLETE");
     } catch (e) {
-      console.warn("Cleanup shutdown failed:", e.message);
+      console.warn(
+        "Cleanup shutdown failed:",
+        /** @type {Error} */ (e).message,
+      );
     }
   });
 
@@ -76,20 +93,26 @@ describe("Production Readiness Tests (v2.6.0)", () => {
         .set("X-API-Key", "my-key")
         .send({ foo: "bar" });
 
-      const matchedCall = Actor.pushData.mock.calls.find(
-        (call) =>
-          call[0] &&
-          call[0].method === "POST" &&
-          call[0].webhookId === webhookId,
+      /** @type {Partial<import('../src/typedefs.js').WebhookEvent>} */
+      const matchedCall = /** @type {any} */ (
+        jest
+          .mocked(Actor.pushData)
+          .mock.calls.find(
+            (call) =>
+              call[0] &&
+              /** @type {any} */ (call[0]).method === "POST" &&
+              /** @type {any} */ (call[0]).webhookId === webhookId,
+          )?.[0]
       );
 
       expect(matchedCall).toBeDefined();
-      const lastPush = matchedCall[0];
-
-      expect(lastPush.headers["authorization"]).toBe("[MASKED]");
-      expect(lastPush.headers["cookie"]).toBe("[MASKED]");
-      expect(lastPush.headers["x-api-key"]).toBe("[MASKED]");
-      expect(lastPush.headers["host"]).toBeDefined(); // Non-sensitive header should remain
+      if (!matchedCall)
+        throw new Error("Test setup failed: no matching call found");
+      expect(matchedCall?.headers).toBeDefined();
+      expect(matchedCall?.headers?.authorization).toBe("[MASKED]");
+      expect(matchedCall?.headers?.cookie).toBe("[MASKED]");
+      expect(matchedCall?.headers?.["x-api-key"]).toBe("[MASKED]");
+      expect(matchedCall?.headers?.host).toBeDefined();
     });
   });
 
@@ -133,11 +156,9 @@ describe("Production Readiness Tests (v2.6.0)", () => {
         body: '{\n  "hello": "world"\n}', // 22 characters
       };
 
-      const mockDataset = {
-        getData: jest.fn().mockResolvedValue({ items: [mockEvent] }),
-        pushData: jest.fn(),
-      };
-      Actor.openDataset.mockResolvedValue(mockDataset);
+      jest
+        .mocked(Actor.openDataset)
+        .mockResolvedValue(/** @type {any} */ (createDatasetMock([mockEvent])));
 
       const res = await request(app)
         .post(`/replay/${webhookId}/${eventId}?url=${targetUrl}`)
@@ -145,10 +166,14 @@ describe("Production Readiness Tests (v2.6.0)", () => {
         .expect(200);
 
       const { default: axiosMock } = await import("axios");
-      const axiosCall = axiosMock.mock.calls.find(
-        (c) => c[0].url === targetUrl,
-      );
+      /** @type {Array<[{url: string; headers: Record<string, unknown>}]>} */
+      const axioCalls =
+        /** @type {import("./helpers/shared-mocks.js").AxiosMock} */ (axiosMock)
+          .mock.calls;
+      /** @type {any} */
+      const axiosCall = axioCalls.find((c) => c[0].url === targetUrl);
       expect(axiosCall).toBeDefined();
+      if (!axiosCall) throw new Error("Expected axios call not found");
 
       const sentHeaders = axiosCall[0].headers;
 

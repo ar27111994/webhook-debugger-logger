@@ -1,4 +1,11 @@
-import { jest } from "@jest/globals";
+import {
+  jest,
+  describe,
+  test,
+  expect,
+  beforeAll,
+  afterAll,
+} from "@jest/globals";
 
 // Mock Apify
 jest.unstable_mockModule("apify", async () => {
@@ -14,7 +21,7 @@ describe("Auth UI Hardening Tests", () => {
   const authKey = "secret-ui-key";
 
   beforeAll(async () => {
-    Actor.getInput.mockResolvedValue({
+    jest.mocked(Actor.getInput).mockResolvedValue({
       authKey,
       urlCount: 1,
     });

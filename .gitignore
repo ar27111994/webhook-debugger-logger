@@ -5,3 +5,5 @@ storage/
 *.log
 .env
 *.mp4
+coverage/
+.tsbuildinfo

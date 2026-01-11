@@ -1,9 +1,17 @@
 import { Actor } from "apify";
 import { nanoid } from "nanoid";
+import { MAX_BULK_CREATE } from "./consts.js";
+
+/**
+ * @typedef {import('apify').KeyValueStore | null} KeyValueStore
+ * @typedef {import('./typedefs.js').WebhookData} WebhookData
+ */
 
 export class WebhookManager {
   constructor() {
+    /** @type {Map<string, WebhookData>} */
     this.webhooks = new Map();
+    /** @type {KeyValueStore} */
     this.kvStore = null;
     this.STATE_KEY = "WEBHOOK_STATE";
   }
@@ -19,9 +27,13 @@ export class WebhookManager {
         );
       }
     } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : String(error ?? "Unknown error");
       console.error(
         "[CRITICAL] Failed to initialize WebhookManager state:",
-        error.message,
+        message,
       );
       // Fallback to empty map is already handled by constructor
     }
@@ -30,16 +42,50 @@ export class WebhookManager {
   async persist() {
     try {
       const state = Object.fromEntries(this.webhooks);
+      if (!this.kvStore) {
+        this.kvStore = await Actor.openKeyValueStore();
+      }
       await this.kvStore.setValue(this.STATE_KEY, state);
     } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : String(error ?? "Unknown error");
       console.error(
         "[STORAGE-ERROR] Failed to persist webhook state:",
-        error.message,
+        message,
       );
     }
   }
 
+  /**
+   * Generates new webhooks.
+   * @param {number} count Number of webhooks to generate
+   * @param {number} retentionHours Retention period in hours
+   * @returns {Promise<string[]>} List of generated IDs
+   */
   async generateWebhooks(count, retentionHours) {
+    if (!Number.isInteger(count) || count < 0) {
+      throw new Error(
+        `Invalid count: ${count}. Must be a non-negative integer.`,
+      );
+    }
+    // count check handled by MAX_BULK_CREATE usage below
+    if (count > MAX_BULK_CREATE) {
+      throw new Error(
+        `Invalid count: ${count}. Max allowed is ${MAX_BULK_CREATE}.`,
+      );
+    }
+
+    if (
+      typeof retentionHours !== "number" ||
+      retentionHours <= 0 ||
+      !Number.isFinite(retentionHours)
+    ) {
+      throw new Error(
+        `Invalid retentionHours: ${retentionHours}. Must be a positive number.`,
+      );
+    }
     const expiresAt = new Date(
       Date.now() + retentionHours * 60 * 60 * 1000,
     ).toISOString();
@@ -55,6 +101,11 @@ export class WebhookManager {
     return newIds;
   }
 
+  /**
+   * Checks if a webhook ID is valid and not expired.
+   * @param {string} id Webhook ID
+   * @returns {boolean} True if valid
+   */
   isValid(id) {
     const webhook = this.webhooks.get(id);
     if (!webhook) return false;
@@ -80,39 +131,60 @@ export class WebhookManager {
     }
   }
 
+  /**
+   * Retrieves data for a webhook.
+   * @param {string} id Webhook ID
+   * @returns {WebhookData | undefined} Webhook data
+   */
   getWebhookData(id) {
     return this.webhooks.get(id);
   }
 
   getAllActive() {
-    return Array.from(this.webhooks.entries()).map(([id, data]) => ({
-      id,
-      ...data,
-    }));
+    return Array.from(this.webhooks.entries())
+      .filter(([id]) => this.isValid(id))
+      .map(([id, data]) => ({
+        id,
+        ...data,
+      }));
   }
 
+  /**
+   * Updates retention for all active webhooks.
+   * @param {number} retentionHours New retention period in hours
+   */
   async updateRetention(retentionHours) {
+    if (
+      typeof retentionHours !== "number" ||
+      retentionHours <= 0 ||
+      !Number.isFinite(retentionHours)
+    ) {
+      throw new Error(
+        `Invalid retentionHours: ${retentionHours}. Must be a positive number.`,
+      );
+    }
     const now = Date.now();
-    const newExpiresAt = new Date(
-      now + retentionHours * 60 * 60 * 1000,
-    ).toISOString();
-    let changed = false;
+    const newExpiryMs = now + retentionHours * 60 * 60 * 1000;
+    const newExpiresAt = new Date(newExpiryMs).toISOString();
+    let updatedCount = 0;
 
     for (const [id, data] of this.webhooks.entries()) {
       const currentExpiry = new Date(data.expiresAt).getTime();
-      const newExpiry = new Date(newExpiresAt).getTime();
+
+      // Only extend retention for currently-active webhooks
+      if (!Number.isFinite(currentExpiry) || currentExpiry <= now) continue;
 
       // We only EXTEND retention. We don't shrink it to avoid premature deletion of data
       // that the user might have expected to stay longer based on previous settings.
-      if (newExpiry > currentExpiry) {
+      if (newExpiryMs > currentExpiry) {
         this.webhooks.set(id, { ...data, expiresAt: newExpiresAt });
-        changed = true;
+        updatedCount++;
       }
     }
 
-    if (changed) {
+    if (updatedCount > 0) {
       console.log(
-        `[STORAGE] Extended retention for ${this.webhooks.size} webhooks to ${retentionHours}h.`,
+        `[STORAGE] Extended retention for ${updatedCount} of ${this.webhooks.size} webhooks to ${retentionHours}h.`,
       );
       await this.persist();
     }

@@ -1,4 +1,7 @@
-import { jest } from "@jest/globals";
+import { jest, describe, test, expect, beforeEach } from "@jest/globals";
+
+/** @typedef {import('apify').KeyValueStore} KeyValueStore */
+/** @typedef {import('../src/webhook_manager.js').WebhookManager} WebhookManager */
 
 jest.unstable_mockModule("apify", () => ({
   Actor: {
@@ -10,21 +13,23 @@ const { Actor } = await import("apify");
 const { WebhookManager } = await import("../src/webhook_manager.js");
 
 describe("WebhookManager", () => {
+  /** @type {WebhookManager} */
   let webhookManager;
+  /** @type {KeyValueStore} */
   let mockKvStore;
 
   beforeEach(() => {
-    mockKvStore = {
-      getValue: jest.fn(),
-      setValue: jest.fn(),
-    };
-    Actor.openKeyValueStore.mockResolvedValue(mockKvStore);
+    mockKvStore = /** @type {KeyValueStore} */ ({
+      getValue: /** @type {KeyValueStore['getValue']} */ (jest.fn()),
+      setValue: /** @type {KeyValueStore['setValue']} */ (jest.fn()),
+    });
+    jest.mocked(Actor.openKeyValueStore).mockResolvedValue(mockKvStore);
     webhookManager = new WebhookManager();
   });
 
   test("init() should restore webhooks from state", async () => {
     const savedState = { wh_123: { expiresAt: "2099-01-01T00:00:00Z" } };
-    mockKvStore.getValue.mockResolvedValue(savedState);
+    jest.mocked(mockKvStore.getValue).mockResolvedValue(savedState);
 
     await webhookManager.init();
 
@@ -33,11 +38,13 @@ describe("WebhookManager", () => {
   });
 
   test("init() should handle corrupted or missing state gracefully", async () => {
-    mockKvStore.getValue.mockResolvedValue(null);
+    jest.mocked(mockKvStore.getValue).mockResolvedValue(null);
     await webhookManager.init();
     expect(webhookManager.webhooks.size).toBe(0);
 
-    mockKvStore.getValue.mockRejectedValue(new Error("Storage failure"));
+    jest
+      .mocked(mockKvStore.getValue)
+      .mockRejectedValue(new Error("Storage failure"));
     await webhookManager.init(); // Should not throw
     expect(webhookManager.webhooks.size).toBe(0);
   });
@@ -49,7 +56,7 @@ describe("WebhookManager", () => {
     expect(ids).toHaveLength(2);
     expect(ids[0]).toMatch(/^wh_/);
     expect(webhookManager.webhooks.size).toBe(2);
-    expect(mockKvStore.setValue).toHaveBeenCalled();
+    expect(jest.mocked(mockKvStore.setValue)).toHaveBeenCalled();
   });
 
   test("isValid() should verify expiry correctly", async () => {
@@ -65,6 +72,14 @@ describe("WebhookManager", () => {
     expect(webhookManager.isValid("non_existent")).toBe(false);
   });
 
+  test("persist() should initialize kvStore if missing", async () => {
+    webhookManager.kvStore = null;
+    await webhookManager.init();
+    await webhookManager.persist();
+    expect(jest.mocked(Actor.openKeyValueStore)).toHaveBeenCalled();
+    expect(jest.mocked(mockKvStore.setValue)).toHaveBeenCalled();
+  });
+
   test("cleanup() should remove expired hooks", async () => {
     const past = new Date(Date.now() - 10000).toISOString();
     webhookManager.webhooks.set("wh_past", { expiresAt: past });
@@ -77,5 +92,104 @@ describe("WebhookManager", () => {
 
     expect(webhookManager.webhooks.has("wh_past")).toBe(false);
     expect(webhookManager.webhooks.has("wh_active")).toBe(true);
+  });
+
+  test("generateWebhooks() should throw on invalid count (negative)", async () => {
+    await webhookManager.init();
+    await expect(webhookManager.generateWebhooks(-1, 24)).rejects.toThrow(
+      "Invalid count: -1. Must be a non-negative integer.",
+    );
+  });
+
+  test("generateWebhooks() should throw on invalid count (non-integer)", async () => {
+    await webhookManager.init();
+    await expect(webhookManager.generateWebhooks(1.5, 24)).rejects.toThrow(
+      "Invalid count: 1.5. Must be a non-negative integer.",
+    );
+  });
+
+  test("generateWebhooks() should throw on invalid retentionHours (zero)", async () => {
+    await webhookManager.init();
+    await expect(webhookManager.generateWebhooks(1, 0)).rejects.toThrow(
+      "Invalid retentionHours: 0. Must be a positive number.",
+    );
+  });
+
+  test("generateWebhooks() should throw on invalid retentionHours (negative)", async () => {
+    await webhookManager.init();
+    await expect(webhookManager.generateWebhooks(1, -5)).rejects.toThrow(
+      "Invalid retentionHours: -5. Must be a positive number.",
+    );
+  });
+
+  test("generateWebhooks() should throw on invalid retentionHours (Infinity)", async () => {
+    await webhookManager.init();
+    await expect(webhookManager.generateWebhooks(1, Infinity)).rejects.toThrow(
+      "Invalid retentionHours: Infinity. Must be a positive number.",
+    );
+  });
+
+  test("updateRetention() should throw on invalid retentionHours", async () => {
+    await webhookManager.init();
+    await expect(webhookManager.updateRetention(0)).rejects.toThrow(
+      "Invalid retentionHours: 0. Must be a positive number.",
+    );
+    await expect(webhookManager.updateRetention(-1)).rejects.toThrow(
+      "Invalid retentionHours: -1. Must be a positive number.",
+    );
+    await expect(webhookManager.updateRetention(NaN)).rejects.toThrow(
+      "Invalid retentionHours: NaN. Must be a positive number.",
+    );
+  });
+
+  test("persist() should handle setValue errors gracefully", async () => {
+    jest
+      .mocked(mockKvStore.setValue)
+      .mockRejectedValue(new Error("Write failure"));
+    await webhookManager.init();
+    webhookManager.webhooks.set("wh_test", {
+      expiresAt: new Date(Date.now() + 10000).toISOString(),
+    });
+    // Should not throw
+    await webhookManager.persist();
+    expect(jest.mocked(mockKvStore.setValue)).toHaveBeenCalled();
+  });
+
+  test("persist() should handle non-Error thrown values", async () => {
+    jest.mocked(mockKvStore.setValue).mockRejectedValue("String error");
+    await webhookManager.init();
+    webhookManager.webhooks.set("wh_test", {
+      expiresAt: new Date(Date.now() + 10000).toISOString(),
+    });
+    // Should not throw
+    await webhookManager.persist();
+  });
+
+  test("getWebhookData() should return undefined for non-existent ID", () => {
+    expect(webhookManager.getWebhookData("nonexistent")).toBeUndefined();
+  });
+
+  test("getAllActive() should return all webhooks with IDs", async () => {
+    const expiry = new Date(Date.now() + 10000).toISOString();
+    webhookManager.webhooks.set("wh_a", { expiresAt: expiry });
+    webhookManager.webhooks.set("wh_b", { expiresAt: expiry });
+
+    const active = webhookManager.getAllActive();
+    expect(active).toHaveLength(2);
+    expect(active[0]).toHaveProperty("id");
+    expect(active[0]).toHaveProperty("expiresAt");
+  });
+
+  test("getAllActive() should filter out invalid/expired webhooks", async () => {
+    const now = Date.now();
+    const future = new Date(now + 10000).toISOString();
+    const past = new Date(now - 10000).toISOString();
+
+    webhookManager.webhooks.set("wh_valid", { expiresAt: future });
+    webhookManager.webhooks.set("wh_expired", { expiresAt: past });
+
+    const active = webhookManager.getAllActive();
+    expect(active).toHaveLength(1);
+    expect(active[0].id).toBe("wh_valid");
   });
 });

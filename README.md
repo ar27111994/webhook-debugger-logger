@@ -1,10 +1,14 @@
-# 🚀 Webhook Debugger & Logger v2.7.0 (Enterprise Suite)
+# 🚀 Webhook Debugger & Logger v2.8.0 (Enterprise Suite)
 
-![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/ar27111994/webhook-debugger-logger?utm_source=oss&utm_medium=github&utm_campaign=ar27111994%2Fwebhook-debugger-logger&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
+[![Build Status](https://github.com/ar27111994/webhook-debugger-logger/actions/workflows/ci.yml/badge.svg)](https://github.com/ar27111994/webhook-debugger-logger/actions)
+[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
+[![Code Style: Prettier](https://img.shields.io/badge/code_style-prettier-ff69b4.svg)](https://github.com/prettier/prettier)
+[![GitHub issues](https://img.shields.io/github/issues/ar27111994/webhook-debugger-logger)](https://github.com/ar27111994/webhook-debugger-logger/issues)
+[![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/ar27111994/webhook-debugger-logger?utm_source=oss&utm_medium=github&utm_campaign=ar27111994%2Fwebhook-debugger-logger&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)](https://coderabbit.ai)
 
 ![Dashboard Mockup](https://raw.githubusercontent.com/ar27111994/webhook-debugger-logger/main/assets/dashboard.png)
 
-<a href="https://www.producthunt.com/products/webhook-debugger-logger-api-mocker?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-webhook-debugger-logger-api-mocker" target="_blank" rel="noopener noreferrer"><img alt="Webhook Debugger, Logger & API Mocker - Debug webhooks 90% faster without localhost tunneling | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1057655&theme=light&t=1767529788592"></a>
+[![Webhook Debugger, Logger & API Mocker - Debug webhooks 90% faster without localhost tunneling | Product Hunt](https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1057655&theme=light&t=1767529788592)](https://www.producthunt.com/products/webhook-debugger-logger-api-mocker?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-webhook-debugger-logger-api-mocker)
 
 A high-performance Apify Actor built for developers to test, inspect, and automate incoming webhooks in real-time. This Actor is optimized for **Apify Standby Mode**, providing sub-10ms logic execution and zero cold-start latency.
 
@@ -96,7 +100,8 @@ The Enterprise Update transforms this Actor into a professional API mocking and 
 - **IP Whitelisting**: Lock down your endpoints to specific IPs or CIDR ranges.
 - **Rate Limiting (v2.6)**: Protect your management endpoints (`/logs`, `/info`, `/replay`) with configurable per-IP rate limits.
 - **Sensitive Data Masking (v2.6)**: Automatically redact known sensitive headers like `Authorization` and `Cookie` from your logs.
-- **Zero-Downtime Hot-Reloading (v2.7)**: Update your `authKey`, `allowedIps`, or `rateLimits` while the Actor is running. Changes apply **instantly** via `Actor.on('input')` without dropping a single webhook.
+- **SSRF Protection (v2.8)**: Enterprise-grade Server-Side Request Forgery protection prevents your Actor from being used to scan internal networks (localhost, 10.x.x.x, etc.) during forwarding or replay.
+- **Zero-Downtime Hot-Reloading (v2.7)**: Update your `authKey`, `allowedIps`, or `rateLimits` while the Actor is running. Changes apply **automatically** via polling (approx. 5s) without dropping a single webhook.
 - **Dynamic Infrastructure Scaling (v2.7)**: Increase your `urlCount` without restarting. The Actor intelligently reconciles state, generating new IDs while preserving your existing ones.
 
 ### 🎭 API Mocking & Latency
@@ -108,7 +113,7 @@ The Enterprise Update transforms this Actor into a professional API mocking and 
 ### 🔄 Advanced Workflows
 
 - **Real-time Forwarding**: Automatically pipe captured webhooks to another destination (e.g., your local dev server).
-- **Request Replay**: Resend any captured event to a new URL using the `/replay` API.
+- **Request Replay (v2.8 Deep Search)**: Resend any captured event to a new URL using the `/replay` API. Includes robust paginated lookup to find events even in massive 1M+ item datasets without memory issues.
 
 ### ⚡ Technical Excellence & Platform Quality (v2.5)
 

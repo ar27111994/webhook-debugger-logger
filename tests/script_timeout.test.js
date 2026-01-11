@@ -1,5 +1,7 @@
-import { jest } from "@jest/globals";
+import { jest, describe, test, expect, beforeEach } from "@jest/globals";
 import httpMocks from "node-mocks-http";
+
+/** @typedef {import('../src/webhook_manager.js').WebhookManager} WebhookManager */
 
 // Mock axios
 jest.unstable_mockModule("axios", async () => {
@@ -17,13 +19,18 @@ const { createLoggerMiddleware } = await import("../src/logger_middleware.js");
 
 describe("Custom Script Timeout", () => {
   let webhookId = "wh_test_123";
+  /** @type {WebhookManager} */
   let webhookManager;
 
   beforeEach(() => {
-    webhookManager = {
-      isValid: jest.fn().mockReturnValue(true),
-      getWebhookData: jest.fn().mockReturnValue({}),
-    };
+    webhookManager = /** @type {WebhookManager} */ ({
+      isValid: /** @type {WebhookManager['isValid']} */ (
+        jest.fn().mockReturnValue(true)
+      ),
+      getWebhookData: /** @type {WebhookManager['getWebhookData']} */ (
+        jest.fn().mockReturnValue({})
+      ),
+    });
   });
 
   test("Should terminate infinite loop script within 1s", async () => {

@@ -1,8 +1,23 @@
-import { jest } from "@jest/globals";
+import {
+  jest,
+  describe,
+  test,
+  expect,
+  beforeEach,
+  afterEach,
+} from "@jest/globals";
+import { waitForCondition } from "./helpers/test-utils.js";
+
+/** @typedef {import("../src/typedefs.js").CommonError} CommonError */
 
 jest.unstable_mockModule("axios", async () => {
   const { axiosMock } = await import("./helpers/shared-mocks.js");
   return { default: axiosMock };
+});
+
+jest.unstable_mockModule("dns/promises", async () => {
+  const { dnsPromisesMock } = await import("./helpers/shared-mocks.js");
+  return { default: dnsPromisesMock };
 });
 
 jest.unstable_mockModule("apify", async () => {
@@ -13,17 +28,22 @@ jest.unstable_mockModule("apify", async () => {
 const { createLoggerMiddleware } = await import("../src/logger_middleware.js");
 const httpMocks = (await import("node-mocks-http")).default;
 const axios = (await import("axios")).default;
+const { Actor } = await import("apify");
+const { SSRF_ERRORS } = await import("../src/utils/ssrf.js");
 
 describe("Forwarding Security", () => {
+  /** @type {import('../src/webhook_manager.js').WebhookManager} */
   let webhookManager;
+  /** @type {import('../src/typedefs.js').LoggerOptions} */
   let options;
+  /** @type {jest.Mock} */
   let onEvent;
 
   beforeEach(() => {
-    webhookManager = {
+    webhookManager = /** @type {any} */ ({
       isValid: jest.fn().mockReturnValue(true),
       getWebhookData: jest.fn().mockReturnValue({}),
-    };
+    });
     onEvent = jest.fn();
     options = {
       forwardUrl: "http://target.com/ingest",
@@ -50,9 +70,11 @@ describe("Forwarding Security", () => {
 
     await middleware(req, res);
 
-    const axiosCall = axios.post.mock.calls[0];
+    /** @type {any} */
+    const axiosCall = jest.mocked(axios.post).mock.calls[0];
     expect(axiosCall).toBeDefined();
 
+    /** @type {Object.<string, string>} */
     const sentHeaders = axiosCall[2].headers;
     expect(sentHeaders["authorization"]).toBeUndefined();
     expect(sentHeaders["cookie"]).toBeUndefined();
@@ -79,11 +101,14 @@ describe("Forwarding Security", () => {
 
     await middleware(req, res);
 
-    const axiosCall = axios.post.mock.calls[0];
+    /** @type {any} */
+    const axiosCall = jest.mocked(axios.post).mock.calls[0];
+    /** @type {Object.<string, string>} */
     const sentHeaders = axiosCall[2].headers;
 
     expect(sentHeaders["content-type"]).toBe("application/json");
-    expect(sentHeaders["content-length"]).toBe("15");
+    // content-length is NOT forwarded - axios auto-calculates it per HTTP spec
+    expect(sentHeaders["content-length"]).toBeUndefined();
     expect(sentHeaders["user-agent"]).toBeUndefined();
     expect(sentHeaders["x-custom"]).toBeUndefined();
     expect(sentHeaders["X-Forwarded-By"]).toBe("Apify-Webhook-Debugger");
@@ -91,7 +116,6 @@ describe("Forwarding Security", () => {
 
   test("should mask sensitive headers in captured event if maskSensitiveData is true", async () => {
     options.maskSensitiveData = true;
-    const { Actor } = await import("apify");
     const middleware = createLoggerMiddleware(webhookManager, options, onEvent);
     const req = httpMocks.createRequest({
       params: { id: "wh_123" },
@@ -111,10 +135,16 @@ describe("Forwarding Security", () => {
     // Explicitly assert that pushData was invoked before accessing mock.calls
     expect(Actor.pushData).toHaveBeenCalled();
 
-    const pushedData = Actor.pushData.mock.calls[0][0];
+    const pushedData = /** @type {any} */ (
+      jest.mocked(Actor.pushData).mock.calls[0][0]
+    );
+
     expect(pushedData.headers["authorization"]).toBe("[MASKED]");
+
     expect(pushedData.headers["cookie"]).toBe("[MASKED]");
+
     expect(pushedData.headers["x-api-key"]).toBe("[MASKED]");
+
     expect(pushedData.headers["user-agent"]).toBe("test-agent");
   });
 
@@ -130,5 +160,149 @@ describe("Forwarding Security", () => {
     await middleware(req, res);
 
     expect(axios.post).not.toHaveBeenCalled();
+  });
+
+  test("should block forwarding to internal IP (SSRF)", async () => {
+    options.forwardUrl = "http://127.0.0.1/admin";
+
+    // We need to spy on console.error to verify the log
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    const middleware = createLoggerMiddleware(webhookManager, options, onEvent);
+    const req = httpMocks.createRequest({
+      params: { id: "wh_ssrf" },
+      headers: { authorization: "Bearer secret" },
+      body: { data: "test" },
+    });
+    const res = httpMocks.createResponse();
+
+    const next = jest.fn();
+    await middleware(req, res, next);
+
+    // Trigger background tasks by simulating response finish
+    res.emit("finish");
+
+    // Wait for the error to be logged
+    await waitForCondition(
+      () => consoleErrorSpy.mock.calls.length > 0,
+      1000,
+      10,
+    );
+
+    expect(axios.post).not.toHaveBeenCalled();
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining(
+        `[FORWARD-ERROR] SSRF blocked: ${SSRF_ERRORS.INTERNAL_IP}`,
+      ),
+    );
+    consoleErrorSpy.mockRestore();
+  });
+
+  describe("Forwarding Retries & Error Handling", () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    test("should retry transient errors (ECONNABORTED) and log failure", async () => {
+      // Mock failure
+      const error = new Error("Timeout");
+
+      /** @type {CommonError} */ (error).code = "ECONNABORTED";
+      jest.mocked(axios.post).mockRejectedValue(error);
+
+      const middleware = createLoggerMiddleware(
+        webhookManager,
+        options,
+        onEvent,
+      );
+      const req = httpMocks.createRequest({
+        params: { id: "wh_retry" },
+        body: { data: "test" },
+        headers: { authorization: "Bearer secret" },
+      });
+      const res = httpMocks.createResponse();
+
+      const p = middleware(req, res);
+
+      // Advance timers to trigger retries
+      // We expect 3 attempts (initial + 2 retries) with delays 1s, 2s
+      await jest.runAllTimersAsync();
+      await p;
+
+      // 3 calls total (1 initial + 2 retries)
+      expect(axios.post).toHaveBeenCalledTimes(3);
+
+      // Verify error log push
+      const calls = jest.mocked(Actor.pushData).mock.calls;
+      const errorLog = calls.find(
+        (c) =>
+          /** @type {any} */ (c[0]).type === "forward_error" &&
+          /** @type {any} */ (c[0]).statusCode === 500,
+      );
+      expect(errorLog).toBeDefined();
+    });
+
+    test("should NOT retry non-transient errors", async () => {
+      const error = new Error("Bad Request");
+
+      /** @type {CommonError} */ (error).response = { status: 400 };
+      jest.mocked(axios.post).mockRejectedValue(error);
+
+      const middleware = createLoggerMiddleware(
+        webhookManager,
+        options,
+        onEvent,
+      );
+      const req = httpMocks.createRequest({
+        params: { id: "wh_fail_fast" },
+        body: {},
+        headers: { authorization: "Bearer secret" },
+      });
+      const res = httpMocks.createResponse();
+
+      await middleware(req, res);
+
+      expect(axios.post).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("Platform Limits Handling", () => {
+    test("should catch and log platform limit errors", async () => {
+      const consoleErrorSpy = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
+
+      // Logic that triggers Actor.pushData failure
+      jest
+        .mocked(Actor.pushData)
+        .mockRejectedValue(new Error("Dataset quota exceeded"));
+
+      const middleware = createLoggerMiddleware(
+        webhookManager,
+        options,
+        onEvent,
+      );
+      const req = httpMocks.createRequest({
+        params: { id: "wh_limit" },
+        body: {},
+        headers: { authorization: "Bearer secret" },
+      });
+      const res = httpMocks.createResponse();
+
+      // Should not throw
+      await middleware(req, res);
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining("PLATFORM-LIMIT"),
+        expect.stringContaining("Dataset quota exceeded"),
+      );
+      consoleErrorSpy.mockRestore();
+    });
   });
 });

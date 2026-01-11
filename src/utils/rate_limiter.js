@@ -1,6 +1,9 @@
 /**
  * Simple in-memory rate limiter with background pruning and eviction.
  */
+import net from "node:net";
+import { DEFAULT_RATE_LIMIT_WINDOW_MS } from "../consts.js";
+
 export class RateLimiter {
   /**
    * @param {number} limit - Max requests per window
@@ -37,7 +40,7 @@ export class RateLimiter {
     this.windowMs = windowMs;
     this.maxEntries = maxEntries;
     this.trustProxy = trustProxy;
-    this.hits = new Map();
+    this.hits = /** @type {Map<string, number[]>} */ (new Map());
 
     // Background pruning to avoid blocking the request path
     this.cleanupInterval = setInterval(() => {
@@ -60,12 +63,14 @@ export class RateLimiter {
           `[SYSTEM] RateLimiter pruned ${prunedCount} expired entries.`,
         );
       }
-    }, 60000);
+    }, DEFAULT_RATE_LIMIT_WINDOW_MS);
     if (this.cleanupInterval.unref) this.cleanupInterval.unref();
   }
 
   /**
    * Obfuscates an IP address for logging.
+   * @param {string | undefined | null} ip
+   * @returns {string}
    */
   maskIp(ip) {
     if (!ip) return "unknown";
@@ -80,21 +85,30 @@ export class RateLimiter {
 
   /**
    * Validates if a string is a valid IPv4 or IPv6 address.
+   * @param {any} ip
+   * @returns {boolean}
    */
   isValidIp(ip) {
     if (typeof ip !== "string") return false;
-    // IPv4 check
-    if (
-      /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/.test(
-        ip,
-      )
-    ) {
-      return true;
-    }
-    // IPv6 check (simplified but effective for standard notation)
-    return (
-      /^(?:[A-F0-9]{1,4}:){7}[A-F0-9]{1,4}$/i.test(ip) || ip.includes("::")
-    );
+    return net.isIP(ip) !== 0;
+  }
+
+  /**
+   * Extracts and validates the first IP from a header value (string or array).
+   * @param {string | string[] | undefined} headerValue
+   * @returns {string | undefined}
+   */
+  extractFirstValidIp(headerValue) {
+    if (!headerValue) return undefined;
+
+    const firstValue = Array.isArray(headerValue)
+      ? headerValue[0]
+      : headerValue;
+
+    if (!firstValue) return undefined;
+
+    const ip = String(firstValue).split(",")[0].trim();
+    return this.isValidIp(ip) ? ip : undefined;
   }
 
   destroy() {
@@ -107,27 +121,24 @@ export class RateLimiter {
    * @security trustProxy allows spoofing if the Actor is exposed directly to the internet.
    * Only enable trustProxy if the Actor is behind a trusted reverse proxy (e.g., Apify API).
    * Headers are strictly validated to prevent malformed or malicious IP data propagation.
+   * @returns {import('express').RequestHandler}
    */
   middleware() {
     return (req, res, next) => {
+      /** @type {string | undefined} */
       let ip = req.ip || req.socket?.remoteAddress;
 
       if (this.trustProxy) {
-        const xForwardedFor = req.headers?.["x-forwarded-for"]
-          ?.split(",")[0]
-          .trim();
-        const xRealIp = req.headers?.["x-real-ip"];
-
-        if (xForwardedFor && this.isValidIp(xForwardedFor)) {
-          ip = xForwardedFor;
-        } else if (xRealIp && this.isValidIp(xRealIp)) {
-          ip = xRealIp;
-        }
+        const forwardedIp = this.extractFirstValidIp(
+          req.headers?.["x-forwarded-for"],
+        );
+        const realIp = this.extractFirstValidIp(req.headers?.["x-real-ip"]);
+        ip = forwardedIp || realIp || ip;
       }
 
       // Test hook to simulate missing IP metadata
       if (process.env.NODE_ENV === "test" && req.headers["x-simulate-no-ip"]) {
-        ip = null;
+        ip = undefined;
       }
 
       if (!ip) {
@@ -157,8 +168,11 @@ export class RateLimiter {
         // Enforce maxEntries cap for new clients
         if (this.hits.size >= this.maxEntries) {
           const oldestKey = this.hits.keys().next().value;
-          this.hits.delete(oldestKey);
-          if (process.env.NODE_ENV !== "test") {
+          if (typeof oldestKey === "string") this.hits.delete(oldestKey);
+          if (
+            process.env.NODE_ENV !== "test" &&
+            typeof oldestKey === "string"
+          ) {
             console.log(
               `[SYSTEM] RateLimiter evicted entry for ${this.maskIp(
                 oldestKey,
