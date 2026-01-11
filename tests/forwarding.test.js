@@ -28,6 +28,7 @@ const { createLoggerMiddleware } = await import("../src/logger_middleware.js");
 const httpMocks = (await import("node-mocks-http")).default;
 const axios = (await import("axios")).default;
 const { Actor } = await import("apify");
+const { SSRF_ERRORS } = await import("../src/utils/ssrf.js");
 
 describe("Forwarding Security", () => {
   /** @type {import('../src/webhook_manager.js').WebhookManager} */
@@ -158,6 +159,39 @@ describe("Forwarding Security", () => {
     await middleware(req, res);
 
     expect(axios.post).not.toHaveBeenCalled();
+  });
+
+  test("should block forwarding to internal IP (SSRF)", async () => {
+    options.forwardUrl = "http://127.0.0.1/admin";
+
+    // We need to spy on console.error to verify the log
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    const middleware = createLoggerMiddleware(webhookManager, options, onEvent);
+    const req = httpMocks.createRequest({
+      params: { id: "wh_ssrf" },
+      headers: { authorization: "Bearer secret" },
+      body: { data: "test" },
+    });
+    const res = httpMocks.createResponse();
+
+    const next = jest.fn();
+    await middleware(req, res, next);
+
+    // Trigger background tasks by simulating response finish
+    res.emit("finish");
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(axios.post).not.toHaveBeenCalled();
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining(
+        `[FORWARD-ERROR] SSRF blocked: ${SSRF_ERRORS.INTERNAL_IP}`,
+      ),
+    );
+    consoleErrorSpy.mockRestore();
   });
 
   describe("Forwarding Retries & Error Handling", () => {

@@ -3,6 +3,7 @@ import {
   describe,
   test,
   expect,
+  beforeEach,
   beforeAll,
   afterAll,
 } from "@jest/globals";
@@ -21,10 +22,15 @@ const request = (await import("supertest")).default;
 const { app, webhookManager, sseHeartbeat, initialize, shutdown } =
   await import("../src/main.js");
 const { Actor } = await import("apify");
+const { createDatasetMock } = await import("./helpers/shared-mocks.js");
 
 describe("Production Readiness Tests (v2.6.0)", () => {
   /** @type {string} */
   let webhookId;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
 
   beforeAll(async () => {
     jest.mocked(Actor.getInput).mockResolvedValue({
@@ -100,6 +106,8 @@ describe("Production Readiness Tests (v2.6.0)", () => {
       );
 
       expect(matchedCall).toBeDefined();
+      if (!matchedCall)
+        throw new Error("Test setup failed: no matching call found");
       expect(matchedCall?.headers).toBeDefined();
       expect(matchedCall?.headers?.authorization).toBe("[MASKED]");
       expect(matchedCall?.headers?.cookie).toBe("[MASKED]");
@@ -148,12 +156,9 @@ describe("Production Readiness Tests (v2.6.0)", () => {
         body: '{\n  "hello": "world"\n}', // 22 characters
       };
 
-      jest.mocked(Actor.openDataset).mockResolvedValue(
-        /** @type {any} */ ({
-          getData: jest.fn(async () => ({ items: [mockEvent] })),
-          pushData: jest.fn(),
-        }),
-      );
+      jest
+        .mocked(Actor.openDataset)
+        .mockResolvedValue(/** @type {any} */ (createDatasetMock([mockEvent])));
 
       const res = await request(app)
         .post(`/replay/${webhookId}/${eventId}?url=${targetUrl}`)
@@ -168,6 +173,7 @@ describe("Production Readiness Tests (v2.6.0)", () => {
       /** @type {any} */
       const axiosCall = axioCalls.find((c) => c[0].url === targetUrl);
       expect(axiosCall).toBeDefined();
+      if (!axiosCall) throw new Error("Expected axios call not found");
 
       const sentHeaders = axiosCall[0].headers;
 

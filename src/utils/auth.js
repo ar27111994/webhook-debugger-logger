@@ -48,20 +48,15 @@ export function validateAuth(req, authKey) {
   // 3. Timing-safe comparison
   const expectedBuffer = Buffer.from(authKey);
   const providedBuffer = Buffer.from(providedKey);
+  const safeBuffer =
+    expectedBuffer.length === providedBuffer.length
+      ? providedBuffer
+      : Buffer.alloc(expectedBuffer.length);
 
-  // timingSafeEqual requires buffers of the same length
-  if (expectedBuffer.length !== providedBuffer.length) {
-    // Perform a dummy comparison to avoid a simple timing shortcut
-    timingSafeEqual(expectedBuffer, expectedBuffer);
-    return {
-      isValid: false,
-      error: "Unauthorized: Invalid API key",
-    };
-  }
-
-  const isValid = timingSafeEqual(expectedBuffer, providedBuffer);
-
-  if (!isValid) {
+  if (
+    !timingSafeEqual(expectedBuffer, safeBuffer) ||
+    expectedBuffer.length !== providedBuffer.length
+  ) {
     return {
       isValid: false,
       error: "Unauthorized: Invalid API key",

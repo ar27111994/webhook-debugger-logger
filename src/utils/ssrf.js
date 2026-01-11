@@ -1,12 +1,13 @@
 import dns from "dns/promises";
-import net from "node:net";
-import ipRangeCheck from "ip-range-check";
+import ipaddr from "ipaddr.js";
+
+/** @typedef {import('ipaddr.js').IPv6} IP */
 
 /**
  * IP ranges to block for SSRF prevention.
  * Includes loopback, private, link-local, and cloud metadata IPs.
  */
-export const SSRF_BLOCKED_RANGES = [
+export const SSRF_BLOCKED_RANGES = Object.freeze([
   // IPv4 private/reserved ranges
   "0.0.0.0/8", // Current network
   "10.0.0.0/8", // Private Class A
@@ -28,7 +29,74 @@ export const SSRF_BLOCKED_RANGES = [
   "fc00::/7", // Unique local
   "fe80::/10", // Link-local
   "ff00::/8", // Multicast
-];
+]);
+
+/**
+ * Error messages for SSRF validation.
+ */
+export const SSRF_ERRORS = Object.freeze({
+  INVALID_URL: "Invalid URL format",
+  PROTOCOL_NOT_ALLOWED: "Only http/https URLs are allowed",
+  CREDENTIALS_NOT_ALLOWED: "Credentials in URL are not allowed",
+  HOSTNAME_RESOLUTION_FAILED: "Unable to resolve hostname",
+  INVALID_IP: "URL resolves to invalid IP address",
+  INTERNAL_IP: "URL resolves to internal/reserved IP range",
+  VALIDATION_FAILED: "URL validation failed",
+});
+
+/**
+ * Checks if an IP address falls within any of the specified CIDR ranges.
+ * Checks if an IP address falls within any of the specified CIDR ranges or single IP addresses.
+ * Uses ipaddr.js for robust parsing and matching.
+ *
+ * @param {string} ipStr - The IP address string to check
+ * @param {readonly string[]} ranges - List of CIDR ranges or single IP addresses
+ * @returns {boolean} - True if IP is in one of the ranges
+ */
+export function checkIpInRanges(ipStr, ranges) {
+  if (!ipStr) return false;
+
+  let clientIp;
+  try {
+    clientIp = ipaddr.parse(ipStr);
+    // Map IPv4-mapped IPv6 addresses to IPv4 for proper comparison
+    if (
+      clientIp.kind() === "ipv6" &&
+      /** @type {IP} */ (clientIp).isIPv4MappedAddress()
+    ) {
+      clientIp = /** @type {IP} */ (clientIp).toIPv4Address();
+    }
+  } catch {
+    return false;
+  }
+
+  for (const rangeStr of ranges) {
+    try {
+      let rangeIp;
+      let prefix;
+
+      // Check if the range string implies a CIDR subnet
+      if (rangeStr.includes("/")) {
+        [rangeIp, prefix] = ipaddr.parseCIDR(rangeStr);
+      } else {
+        // Treat as a single IP address
+        rangeIp = ipaddr.parse(rangeStr);
+        prefix = rangeIp.kind() === "ipv4" ? 32 : 128;
+      }
+
+      // Ensure IP families match before comparing
+      if (clientIp.kind() === rangeIp.kind()) {
+        if (clientIp.match([rangeIp, prefix])) {
+          return true;
+        }
+      }
+    } catch {
+      // Ignore invalid config entries to maintain stability
+      continue;
+    }
+  }
+  return false;
+}
 
 /**
  * Validates a URL for SSRF safety.
@@ -44,17 +112,17 @@ export async function validateUrlForSsrf(urlString) {
   try {
     target = new URL(urlString);
   } catch {
-    return { safe: false, error: "Invalid URL format" };
+    return { safe: false, error: SSRF_ERRORS.INVALID_URL };
   }
 
   // Validate protocol
   if (!["http:", "https:"].includes(target.protocol)) {
-    return { safe: false, error: "Only http/https URLs are allowed" };
+    return { safe: false, error: SSRF_ERRORS.PROTOCOL_NOT_ALLOWED };
   }
 
   // Disallow credentials in URL (userinfo)
   if (target.username || target.password) {
-    return { safe: false, error: "Credentials in URL are not allowed" };
+    return { safe: false, error: SSRF_ERRORS.CREDENTIALS_NOT_ALLOWED };
   }
 
   // Resolve hostname and check IPs
@@ -62,7 +130,9 @@ export async function validateUrlForSsrf(urlString) {
     const hostname = target.hostname;
     // Remove brackets from IPv6 literals for validation
     const hostnameUnbracketed = hostname.replace(/^\[|\]$/g, "");
-    const isIpLiteral = net.isIP(hostnameUnbracketed) !== 0;
+
+    // Check if it's already an IP literal
+    const isIpLiteral = ipaddr.isValid(hostnameUnbracketed);
 
     /** @type {string[]} */
     let ipsToCheck;
@@ -80,34 +150,28 @@ export async function validateUrlForSsrf(urlString) {
         ...(ipv6Results.status === "fulfilled" ? ipv6Results.value : []),
       ];
       if (ipsToCheck.length === 0) {
-        return { safe: false, error: "Unable to resolve hostname" };
+        return { safe: false, error: SSRF_ERRORS.HOSTNAME_RESOLUTION_FAILED };
       }
     }
 
     // Check all resolved IPs against blocked ranges
-    for (const ip of ipsToCheck) {
-      const ipStr = String(ip || "").trim();
-      if (!ipStr || net.isIP(ipStr) === 0) {
-        return { safe: false, error: "URL resolves to invalid IP address" };
-      }
-
-      let isBlocked = false;
-      try {
-        isBlocked = ipRangeCheck(ipStr, SSRF_BLOCKED_RANGES);
-      } catch {
-        return { safe: false, error: "URL resolves to invalid IP address" };
-      }
-
-      if (isBlocked) {
+    for (const ipStr of ipsToCheck) {
+      if (checkIpInRanges(ipStr, SSRF_BLOCKED_RANGES)) {
         return {
           safe: false,
-          error: "URL resolves to internal/reserved IP range",
+          error: SSRF_ERRORS.INTERNAL_IP,
         };
+      }
+
+      // Also validate basic validity
+      if (!ipaddr.isValid(ipStr)) {
+        return { safe: false, error: SSRF_ERRORS.INVALID_IP };
       }
     }
 
     return { safe: true, href: target.href, host: target.host };
-  } catch {
-    return { safe: false, error: "URL validation failed" };
+  } catch (e) {
+    console.error("[SSRF] Validation error:", e);
+    return { safe: false, error: SSRF_ERRORS.VALIDATION_FAILED };
   }
 }

@@ -177,6 +177,20 @@ describe("WebhookManager", () => {
     const active = webhookManager.getAllActive();
     expect(active).toHaveLength(2);
     expect(active[0]).toHaveProperty("id");
+    expect(active[0]).toHaveProperty("id");
     expect(active[0]).toHaveProperty("expiresAt");
+  });
+
+  test("getAllActive() should filter out invalid/expired webhooks", async () => {
+    const now = Date.now();
+    const future = new Date(now + 10000).toISOString();
+    const past = new Date(now - 10000).toISOString();
+
+    webhookManager.webhooks.set("wh_valid", { expiresAt: future });
+    webhookManager.webhooks.set("wh_expired", { expiresAt: past });
+
+    const active = webhookManager.getAllActive();
+    expect(active).toHaveLength(1);
+    expect(active[0].id).toBe("wh_valid");
   });
 });

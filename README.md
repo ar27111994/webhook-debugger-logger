@@ -1,4 +1,4 @@
-# 🚀 Webhook Debugger & Logger v2.7.2 (Enterprise Suite)
+# 🚀 Webhook Debugger & Logger v2.8.0 (Enterprise Suite)
 
 [![Build Status](https://github.com/ar27111994/webhook-debugger-logger/actions/workflows/ci.yml/badge.svg)](https://github.com/ar27111994/webhook-debugger-logger/actions)
 [![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)

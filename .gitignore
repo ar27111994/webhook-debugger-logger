@@ -6,3 +6,4 @@ storage/
 .env
 *.mp4
 coverage/
+.tsbuildinfo

@@ -3,6 +3,7 @@ import {
   describe,
   test,
   expect,
+  beforeEach,
   beforeAll,
   afterAll,
 } from "@jest/globals";
@@ -16,10 +17,15 @@ const { app, webhookManager, initialize, shutdown } =
   await import("../src/main.js");
 const { Actor } = await import("apify");
 const request = (await import("supertest")).default;
+const { createDatasetMock } = await import("./helpers/shared-mocks.js");
 const authKey = "TEST_KEY";
 const authHeader = `Bearer ${authKey}`;
 
 describe("Log Filtering Routes", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   beforeAll(async () => {
     // Enforce auth to test 401 scenarios
     jest.mocked(Actor.getInput).mockResolvedValue({ authKey });
@@ -95,11 +101,9 @@ describe("Log Filtering Routes", () => {
     ];
 
     jest.spyOn(webhookManager, "isValid").mockReturnValue(true);
-    /** @type {jest.Mock<any>} */ (Actor.openDataset).mockResolvedValue({
-      getData: /** @type {jest.Mock<any>} */ (jest.fn()).mockResolvedValue({
-        items,
-      }),
-    });
+    jest
+      .mocked(Actor.openDataset)
+      .mockResolvedValue(/** @type {any} */ (createDatasetMock(items)));
 
     // Filter by Method
     let res = await request(app)
@@ -140,12 +144,10 @@ describe("Log Filtering Routes", () => {
       timestamp: new Date().toISOString(),
     }));
 
-    const mockDataset = {
-      getData: jest.fn(async () => ({ items })),
-    };
-    /** @type {jest.Mock<any>} */ (Actor.openDataset).mockResolvedValue(
-      mockDataset,
-    );
+    const mockDataset = createDatasetMock(items);
+    jest
+      .mocked(Actor.openDataset)
+      .mockResolvedValue(/** @type {any} */ (mockDataset));
 
     const res = await request(app)
       .get("/logs")
@@ -153,5 +155,10 @@ describe("Log Filtering Routes", () => {
       .set("Authorization", authHeader);
     expect(res.body.items).toHaveLength(10);
     expect(res.body.count).toBe(10);
+
+    // Verify getData was called with the correct limit
+    expect(mockDataset.getData).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: 10 }),
+    );
   });
 });

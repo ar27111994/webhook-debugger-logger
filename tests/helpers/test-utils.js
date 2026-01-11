@@ -62,3 +62,19 @@ export const createMockResponse = (overrides = {}) =>
  * @returns {NextFunction}
  */
 export const createMockNextFunction = (fn = jest.fn()) => fn;
+
+/**
+ * Polls a condition function until it returns true or timeout is reached.
+ * @param {() => Promise<boolean> | boolean} fn
+ * @param {number} [timeout]
+ * @param {number} [interval]
+ * @returns {Promise<boolean>}
+ */
+export const waitForCondition = async (fn, timeout = 1000, interval = 50) => {
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    if (await fn()) return true;
+    await sleep(interval);
+  }
+  return false;
+};

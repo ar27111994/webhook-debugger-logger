@@ -93,6 +93,24 @@ export class RateLimiter {
     return net.isIP(ip) !== 0;
   }
 
+  /**
+   * Extracts and validates the first IP from a header value (string or array).
+   * @param {string | string[] | undefined} headerValue
+   * @returns {string | undefined}
+   */
+  extractFirstValidIp(headerValue) {
+    if (!headerValue) return undefined;
+
+    const firstValue = Array.isArray(headerValue)
+      ? headerValue[0]
+      : headerValue;
+
+    if (!firstValue) return undefined;
+
+    const ip = String(firstValue).split(",")[0].trim();
+    return this.isValidIp(ip) ? ip : undefined;
+  }
+
   destroy() {
     if (this.cleanupInterval) clearInterval(this.cleanupInterval);
   }
@@ -111,29 +129,11 @@ export class RateLimiter {
       let ip = req.ip || req.socket?.remoteAddress;
 
       if (this.trustProxy) {
-        const xForwardedFor = req.headers?.["x-forwarded-for"];
-        // Ensure xForwardedFor is treated as string for validation
-        const firstForwarded =
-          typeof xForwardedFor === "string"
-            ? xForwardedFor.split(",")[0].trim()
-            : Array.isArray(xForwardedFor)
-              ? String(xForwardedFor[0] || "")
-                  .split(",")[0]
-                  .trim()
-              : undefined;
-
-        const xRealIp = req.headers?.["x-real-ip"];
-        const realIpStr = Array.isArray(xRealIp) ? xRealIp[0] : xRealIp;
-
-        if (firstForwarded && this.isValidIp(firstForwarded)) {
-          ip = firstForwarded;
-        } else if (
-          realIpStr &&
-          typeof realIpStr === "string" &&
-          this.isValidIp(realIpStr)
-        ) {
-          ip = realIpStr;
-        }
+        const forwardedIp = this.extractFirstValidIp(
+          req.headers?.["x-forwarded-for"],
+        );
+        const realIp = this.extractFirstValidIp(req.headers?.["x-real-ip"]);
+        ip = forwardedIp || realIp || ip;
       }
 
       // Test hook to simulate missing IP metadata

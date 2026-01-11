@@ -6,6 +6,7 @@ import {
   beforeAll,
   afterAll,
 } from "@jest/globals";
+import { apifyMock } from "./helpers/shared-mocks.js";
 
 jest.unstable_mockModule("apify", async () => {
   const { apifyMock } = await import("./helpers/shared-mocks.js");
@@ -40,12 +41,9 @@ describe("Stress Tests", () => {
         .send({ data: `payload-${i}`, timestamp: Date.now() })
         .expect(200);
 
-      // Clear mocks periodically
+      // Clear mocks periodically to avoid memory leaks from accumulated calls
       if (i % 100 === 0) {
-        // Since pushData is a jest function, we can clear it
-        // However, accessing the mock instance from the import might be tricky if it's not exposed
-        // But since we are mocking "apify", we can get it from the instance if we had reference.
-        // In this simplified test, we just rely on the garbage collector and higher threshold.
+        jest.mocked(apifyMock.pushData).mockClear();
       }
     }
 

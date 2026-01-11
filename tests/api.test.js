@@ -41,6 +41,16 @@ jest.unstable_mockModule("../src/utils/ssrf.js", () => {
       href: "http://example.com",
       host: "example.com",
     }),
+    SSRF_ERRORS: {
+      INVALID_URL: "Invalid URL format",
+      PROTOCOL_NOT_ALLOWED: "Only http/https URLs are allowed",
+      CREDENTIALS_NOT_ALLOWED: "Credentials in URL are not allowed",
+      HOSTNAME_RESOLUTION_FAILED: "Unable to resolve hostname",
+      INVALID_IP: "URL resolves to invalid IP address",
+      INTERNAL_IP: "URL resolves to internal/reserved IP range",
+      VALIDATION_FAILED: "URL validation failed",
+    },
+    checkIpInRanges: jest.fn(() => false),
   };
 });
 
@@ -208,6 +218,8 @@ describe("API E2E Tests", () => {
     let testServer;
     let finished = false;
 
+    // Cleanup helper: Ensures we only call done() once, clear timeout, and properly close the server.
+    // This prevents "JEST: done() called multiple times" errors and dangling handles.
     const finalize = (/** @type {Error|null} */ err) => {
       if (finished) return;
       finished = true;
@@ -378,10 +390,16 @@ describe("API E2E Tests", () => {
 
   test("POST /replay should handle DNS resolution failure in SSRF check", async () => {
     // Import the mocked module to manipulate it
-    const { validateUrlForSsrf } = await import("../src/utils/ssrf.js");
-    jest
-      .mocked(validateUrlForSsrf)
-      .mockResolvedValue({ safe: false, error: "DNS resolution failed" });
+    const { validateUrlForSsrf, SSRF_ERRORS } =
+      await import("../src/utils/ssrf.js");
+
+    // Import constants for expected message
+    const { ERROR_MESSAGES } = await import("../src/consts.js");
+
+    jest.mocked(validateUrlForSsrf).mockResolvedValue({
+      safe: false,
+      error: SSRF_ERRORS.HOSTNAME_RESOLUTION_FAILED,
+    });
 
     const res = await request(app)
       .post("/replay/wh_replay/replay-id-1")
@@ -389,9 +407,7 @@ describe("API E2E Tests", () => {
       .set("Authorization", "Bearer TEST_KEY");
 
     expect(res.statusCode).toBe(400);
-    expect(res.body.error).toBe(
-      "Unable to validate 'url' parameter (DNS failure)",
-    );
+    expect(res.body.error).toBe(ERROR_MESSAGES.HOSTNAME_RESOLUTION_FAILED);
   });
 
   test("GET / should return text response for non-browser authenticated client", async () => {

@@ -115,7 +115,7 @@ describe("RateLimiter Unit Tests", () => {
     expect(rateLimiter.hits.size).toBe(1);
 
     // Advancing past the 60s hardcoded interval
-    jest.advanceTimersByTime(DEFAULT_RATE_LIMIT_WINDOW_MS + 1);
+    jest.advanceTimersByTime(DEFAULT_RATE_LIMIT_WINDOW_MS + 1); // 60s + 1ms
 
     expect(rateLimiter.hits.size).toBe(0);
   });
@@ -231,7 +231,8 @@ describe("RateLimiter Unit Tests", () => {
 
   test("should handle long windowMs", () => {
     // Long: 10 minutes
-    rateLimiter = new RateLimiter(1, DEFAULT_RATE_LIMIT_WINDOW_MS * 10);
+    const windowMs = DEFAULT_RATE_LIMIT_WINDOW_MS * 10;
+    rateLimiter = new RateLimiter(1, windowMs);
     const mw = rateLimiter.middleware();
     const req = createMockRequest({ ip: "userL", headers: {} });
     const res = createMockResponse();
@@ -240,11 +241,13 @@ describe("RateLimiter Unit Tests", () => {
     mw(req, res, next);
     expect(next).toHaveBeenCalledTimes(1);
 
-    jest.advanceTimersByTime(590000); // Almost there
+    // Almost there
+    const almostThere = 10000;
+    jest.advanceTimersByTime(windowMs - almostThere);
     mw(req, res, next);
     expect(res.status).toHaveBeenCalledWith(429);
 
-    jest.advanceTimersByTime(10001); // Expired
+    jest.advanceTimersByTime(almostThere + 1); // Expired
     mw(req, res, next);
     expect(next).toHaveBeenCalledTimes(2);
   });

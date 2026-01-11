@@ -1,12 +1,11 @@
 import { Actor } from "apify";
 import axios from "axios";
 import Ajv from "ajv";
-import ipRangeCheck from "ip-range-check";
 import { nanoid } from "nanoid";
 import vm from "vm";
 import { validateAuth } from "./utils/auth.js";
 import { parseWebhookOptions } from "./utils/config.js";
-import { validateUrlForSsrf } from "./utils/ssrf.js";
+import { validateUrlForSsrf, checkIpInRanges } from "./utils/ssrf.js";
 import {
   BACKGROUND_TASK_TIMEOUT_PROD_MS,
   BACKGROUND_TASK_TIMEOUT_TEST_MS,
@@ -29,6 +28,7 @@ import {
  * @typedef {import('./typedefs.js').CommonError} CommonError
  */
 
+/** @type {import("ajv").default} */
 // @ts-expect-error - Ajv's default export is a class constructor but TypeScript infers namespace type; explicit cast required
 const ajv = new Ajv();
 
@@ -71,7 +71,7 @@ function validateWebhookRequest(req, webhookId, options, webhookManager) {
   // 2. IP Whitelisting
   const remoteIp = req.ip || req.socket.remoteAddress;
   if (allowedIps.length > 0) {
-    const isAllowed = ipRangeCheck(remoteIp || "", allowedIps);
+    const isAllowed = checkIpInRanges(remoteIp || "", allowedIps);
     if (!isAllowed) {
       return {
         isValid: false,
@@ -320,6 +320,7 @@ async function executeBackgroundTasks(event, req, options, onEvent) {
                 host: hostHeader,
               },
               timeout: FORWARD_TIMEOUT_MS,
+              maxRedirects: 0,
             });
             success = true;
           } catch (err) {
@@ -488,7 +489,7 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
    */
   const middleware = async (req, res, _next) => {
     const startTime = Date.now();
-    const webhookId = req.params.id;
+    const webhookId = String(req.params.id);
 
     // 1. Validate & Load Per-Webhook Options
     const webhookData = webhookManager.getWebhookData(webhookId) || {};

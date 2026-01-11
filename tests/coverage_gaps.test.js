@@ -13,6 +13,16 @@ jest.unstable_mockModule("../src/utils/ssrf.js", async () => {
       safe: false,
       error: "Simulated SSRF Block",
     })),
+    SSRF_ERRORS: {
+      INVALID_URL: "Invalid URL format",
+      PROTOCOL_NOT_ALLOWED: "Only http/https URLs are allowed",
+      CREDENTIALS_NOT_ALLOWED: "Credentials in URL are not allowed",
+      HOSTNAME_RESOLUTION_FAILED: "Unable to resolve hostname",
+      INVALID_IP: "URL resolves to invalid IP address",
+      INTERNAL_IP: "URL resolves to internal/reserved IP range",
+      VALIDATION_FAILED: "URL validation failed",
+    },
+    checkIpInRanges: jest.fn(() => false),
   };
 });
 
@@ -51,6 +61,13 @@ describe("Coverage Improvement Tests", () => {
 
     // It should treat it as raw text if parsing fails
     expect(res.statusCode).toBe(200);
+
+    // Optional: Assert that the raw body was captured
+    const { Actor } = await import("apify");
+    const lastCall = /** @type {any} */ (Actor.pushData).mock.calls[
+      /** @type {any} */ (Actor.pushData).mock.calls.length - 1
+    ][0];
+    expect(lastCall.body).toBe("{ invalid json }");
   });
 
   test("should log error when SSRF blocks validation during forwarding", async () => {
@@ -121,6 +138,8 @@ describe("Coverage Improvement Tests", () => {
     expect(validateUrlForSsrf).toHaveBeenCalledWith(
       "http://169.254.169.254/meta-data",
     );
+
+    expect(consoleErrorSpy).toHaveBeenCalled();
 
     consoleErrorSpy.mockRestore();
   });

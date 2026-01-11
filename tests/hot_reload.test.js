@@ -6,7 +6,7 @@ import {
   beforeAll,
   afterAll,
 } from "@jest/globals";
-import { sleep } from "./helpers/test-utils.js";
+import { sleep, waitForCondition } from "./helpers/test-utils.js";
 
 /** @typedef {import('./helpers/apify-mock.js').ApifyMock} Actor */
 /** @typedef {import('express').Express} Express */
@@ -22,8 +22,6 @@ const request = (await import("supertest")).default;
 /** @type {Actor} */
 const Actor = /** @type {any} */ ((await import("apify")).Actor);
 const { initialize, shutdown, webhookManager } = await import("../src/main.js");
-
-const reloadSleepMs = 150;
 
 describe("Hot-Reloading Configuration Tests", () => {
   /** @type {Express} */
@@ -57,7 +55,14 @@ describe("Hot-Reloading Configuration Tests", () => {
       urlCount: 1,
       retentionHours: 1,
     });
-    await sleep(reloadSleepMs);
+
+    // Wait for the new key to be accepted
+    await waitForCondition(async () => {
+      const res = await request(app)
+        .get("/info")
+        .set("Authorization", "Bearer new-secret-key");
+      return res.statusCode === 200;
+    });
 
     // Verify old key fails
     const res2 = await request(app)
@@ -80,7 +85,9 @@ describe("Hot-Reloading Configuration Tests", () => {
       urlCount: 1,
       retentionHours: 1,
     });
-    await sleep(reloadSleepMs);
+
+    // Wait for initial state
+    await waitForCondition(() => webhookManager.getAllActive().length === 1);
 
     const initialActive = webhookManager.getAllActive().length;
     expect(initialActive).toBe(1);
@@ -91,7 +98,9 @@ describe("Hot-Reloading Configuration Tests", () => {
       urlCount: 3,
       retentionHours: 1,
     });
-    await sleep(reloadSleepMs);
+
+    // Wait for scale up
+    await waitForCondition(() => webhookManager.getAllActive().length === 3);
 
     const newActive = webhookManager.getAllActive().length;
     expect(newActive).toBe(3);
@@ -102,7 +111,9 @@ describe("Hot-Reloading Configuration Tests", () => {
       urlCount: 0,
       retentionHours: 1,
     });
-    await sleep(reloadSleepMs);
+
+    // Wait briefly to ensure no change happens (since it's not supported)
+    await sleep(200);
 
     const zeroActive = webhookManager.getAllActive().length;
     // Scale down is not currently implemented/supported, so it should remain 3
@@ -128,7 +139,15 @@ describe("Hot-Reloading Configuration Tests", () => {
       customScript:
         "event.statusCode = 201; event.responseBody = 'Transformed!';",
     });
-    await sleep(reloadSleepMs);
+
+    // Wait for script to take effect
+    await waitForCondition(async () => {
+      const res = await request(app)
+        .post(`/webhook/${whId}`)
+        .set("Authorization", "Bearer new-super-secret")
+        .send({ data: "test" });
+      return res.statusCode === 201 && res.text === "Transformed!";
+    });
 
     // 3. Verify transformation applies immediately
     const res2 = await request(app)
@@ -148,7 +167,8 @@ describe("Hot-Reloading Configuration Tests", () => {
       jsonSchema: "{ invalid json: }", // Malformed
       authKey: "new-super-secret",
     });
-    await sleep(reloadSleepMs);
+    // Wait for error to be logged
+    await waitForCondition(() => consoleSpy.mock.calls.length > 0);
 
     // Verify error was logged
     expect(consoleSpy).toHaveBeenCalledWith(
@@ -164,5 +184,59 @@ describe("Hot-Reloading Configuration Tests", () => {
 
     // Ensure we got a response (not a connection refused/crash)
     expect(res.statusCode).toBe(200);
+  });
+
+  test("should update maxPayloadSize in real-time", async () => {
+    const ids = webhookManager.getAllActive();
+    const whId = ids[0].id;
+    const largePayload = "x".repeat(1024 * 1024 * 5); // 5MB
+
+    // 1. Set limit to 10MB (allow 5MB)
+    await Actor.emitInput({
+      authKey: "new-super-secret",
+      maxPayloadSize: 1024 * 1024 * 10,
+    });
+
+    // Wait until large payload is accepted (should be almost immediate if default is already > 5MB)
+    await waitForCondition(async () => {
+      const res = await request(app)
+        .post(`/webhook/${whId}`)
+        .set("Authorization", "Bearer new-super-secret")
+        .set("Content-Type", "text/plain")
+        .send(largePayload);
+      return res.statusCode === 200;
+    });
+
+    const res1 = await request(app)
+      .post(`/webhook/${whId}`)
+      .set("Authorization", "Bearer new-super-secret")
+      .set("Content-Type", "text/plain")
+      .send(largePayload);
+    expect(res1.statusCode).toBe(200);
+
+    // 2. Set limit to 1MB (block 5MB)
+    await Actor.emitInput({
+      authKey: "new-super-secret",
+      maxPayloadSize: 1024 * 1024 * 1,
+    });
+
+    // Wait until large payload is rejected
+    await waitForCondition(async () => {
+      const res = await request(app)
+        .post(`/webhook/${whId}`)
+        .set("Authorization", "Bearer new-super-secret")
+        .set("Content-Type", "text/plain")
+        .send(largePayload);
+      return res.statusCode === 413;
+    });
+
+    const res2 = await request(app)
+      .post(`/webhook/${whId}`)
+      .set("Authorization", "Bearer new-super-secret")
+      .set("Content-Type", "text/plain")
+      .send(largePayload);
+
+    // Should be blocked by middleware (413) or bodyParser (413)
+    expect(res2.statusCode).toBe(413);
   });
 });

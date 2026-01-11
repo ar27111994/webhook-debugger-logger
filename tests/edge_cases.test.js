@@ -87,7 +87,7 @@ describe("Edge Case Tests", () => {
     /** @type {import('../src/webhook_manager.js').WebhookData} */
     const modifiedData = {
       ...data,
-      expiresAt: data?.expiresAt || "", // Ensure string
+      expiresAt: data?.expiresAt || new Date().toISOString(), // Ensure valid ISO string
       responseDelayMs: 15000,
     };
     webhookManager.webhooks.set(slowWebhookId, modifiedData);

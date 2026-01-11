@@ -3,7 +3,7 @@ import express from "express";
 import bodyParser from "body-parser";
 import compression from "compression";
 import axios from "axios";
-import { validateUrlForSsrf } from "./utils/ssrf.js";
+import { validateUrlForSsrf, SSRF_ERRORS } from "./utils/ssrf.js";
 import { WebhookManager } from "./webhook_manager.js";
 import { createLoggerMiddleware } from "./logger_middleware.js";
 import { parseWebhookOptions, coerceRuntimeOptions } from "./utils/config.js";
@@ -24,6 +24,7 @@ import {
   DEFAULT_RETENTION_HOURS,
   DEFAULT_RATE_LIMIT_PER_MINUTE,
   DEFAULT_RATE_LIMIT_WINDOW_MS,
+  ERROR_MESSAGES,
 } from "./consts.js";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
@@ -278,12 +279,17 @@ async function initialize() {
 
   app.use(cors());
 
-  app.use(
+  let currentMaxPayloadSize = maxPayloadSize;
+  let currentAuthKey = authKey;
+  let currentRetentionHours = retentionHours;
+  let currentUrlCount = urlCount;
+
+  app.use((req, res, next) => {
     bodyParser.raw({
-      limit: maxPayloadSize ?? DEFAULT_PAYLOAD_LIMIT,
+      limit: currentMaxPayloadSize ?? DEFAULT_PAYLOAD_LIMIT,
       type: "*/*",
-    }),
-  );
+    })(req, res, next);
+  });
 
   if (enableJSONParsing) {
     app.use((req, _res, next) => {
@@ -300,10 +306,6 @@ async function initialize() {
       next();
     });
   }
-
-  let currentAuthKey = authKey;
-  let currentRetentionHours = retentionHours;
-  let currentUrlCount = urlCount;
 
   webhookRateLimiter = new RateLimiter(
     rateLimitPerMinute,
@@ -340,9 +342,13 @@ async function initialize() {
 
         const newConfig = parseWebhookOptions(newInput);
         const newRateLimit = validated.rateLimitPerMinute;
+        currentMaxPayloadSize = validated.maxPayloadSize;
 
         // 1. Update Middleware
-        loggerMiddleware.updateOptions({ ...newConfig, maxPayloadSize });
+        loggerMiddleware.updateOptions({
+          ...newConfig,
+          maxPayloadSize: currentMaxPayloadSize,
+        });
 
         // 2. Update Rate Limiter
         if (webhookRateLimiter) webhookRateLimiter.limit = newRateLimit;
@@ -439,18 +445,15 @@ async function initialize() {
         // Use normalized targetUrl for validation
         const ssrfResult = await validateUrlForSsrf(String(targetUrl));
         if (!ssrfResult.safe) {
-          if (ssrfResult.error === "Unable to resolve hostname") {
+          if (ssrfResult.error === SSRF_ERRORS.HOSTNAME_RESOLUTION_FAILED) {
             res
               .status(400)
-              .json({ error: "Unable to resolve hostname for 'url'" });
+              .json({ error: ERROR_MESSAGES.HOSTNAME_RESOLUTION_FAILED });
             return;
           }
-          if (ssrfResult.error === "DNS resolution failed") {
-            res.status(400).json({
-              error: "Unable to validate 'url' parameter (DNS failure)",
-            });
-            return;
-          }
+          // "DNS resolution failed" was previously checked here but was never emitted.
+          // HOSTNAME_RESOLUTION_FAILED covers the case where DNS resolves to empty list.
+          // Other DNS errors (throw) result in VALIDATION_FAILED or similar.
           res.status(400).json({ error: ssrfResult.error });
           return;
         }
@@ -680,9 +683,11 @@ async function initialize() {
       system: {
         authActive: !!currentAuthKey,
         retentionHours: currentRetentionHours,
-        maxPayloadLimit: `${((maxPayloadSize || 0) / 1024 / 1024).toFixed(
-          1,
-        )}MB`,
+        maxPayloadLimit: `${(
+          (currentMaxPayloadSize || 0) /
+          1024 /
+          1024
+        ).toFixed(1)}MB`,
         webhookCount: activeWebhooks.length,
         activeWebhooks,
       },
@@ -746,10 +751,11 @@ async function initialize() {
     server = app.listen(port, () =>
       console.log(`Server listening on port ${port}`),
     );
-    cleanupInterval = setInterval(
-      () => webhookManager.cleanup(),
-      CLEANUP_INTERVAL_MS,
-    );
+    cleanupInterval = setInterval(() => {
+      webhookManager.cleanup().catch((e) => {
+        console.error("[CLEANUP-ERROR]", e?.message || e);
+      });
+    }, CLEANUP_INTERVAL_MS);
     Actor.on("migrating", () => shutdown("MIGRATING"));
     Actor.on("aborting", () => shutdown("ABORTING"));
     process.on("SIGTERM", () => shutdown("SIGTERM"));

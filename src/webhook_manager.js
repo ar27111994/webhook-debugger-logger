@@ -141,10 +141,12 @@ export class WebhookManager {
   }
 
   getAllActive() {
-    return Array.from(this.webhooks.entries()).map(([id, data]) => ({
-      id,
-      ...data,
-    }));
+    return Array.from(this.webhooks.entries())
+      .filter(([id]) => this.isValid(id))
+      .map(([id, data]) => ({
+        id,
+        ...data,
+      }));
   }
 
   /**
@@ -169,9 +171,12 @@ export class WebhookManager {
     for (const [id, data] of this.webhooks.entries()) {
       const currentExpiry = new Date(data.expiresAt).getTime();
 
+      // Only extend retention for currently-active webhooks
+      if (!Number.isFinite(currentExpiry) || currentExpiry <= now) continue;
+
       // We only EXTEND retention. We don't shrink it to avoid premature deletion of data
       // that the user might have expected to stay longer based on previous settings.
-      if (!Number.isFinite(currentExpiry) || newExpiryMs > currentExpiry) {
+      if (newExpiryMs > currentExpiry) {
         this.webhooks.set(id, { ...data, expiresAt: newExpiresAt });
         updatedCount++;
       }
