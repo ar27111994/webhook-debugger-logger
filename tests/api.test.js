@@ -55,9 +55,8 @@ jest.unstable_mockModule("../src/utils/ssrf.js", () => {
 });
 
 const request = (await import("supertest")).default;
-const { app, webhookManager, initialize, shutdown } = await import(
-  "../src/main.js"
-);
+const { app, webhookManager, initialize, shutdown } =
+  await import("../src/main.js");
 const { Actor } = await import("apify");
 
 describe("API E2E Tests", () => {
@@ -264,7 +263,7 @@ describe("API E2E Tests", () => {
             req.destroy();
             finalize(/** @type {Error} */ (e));
           }
-        }
+        },
       );
       req.on("error", () => {
         finalize(null); // Abort handled gracefully
@@ -398,9 +397,8 @@ describe("API E2E Tests", () => {
 
   test("POST /replay should handle DNS resolution failure in SSRF check", async () => {
     // Import the mocked module to manipulate it
-    const { validateUrlForSsrf, SSRF_ERRORS } = await import(
-      "../src/utils/ssrf.js"
-    );
+    const { validateUrlForSsrf, SSRF_ERRORS } =
+      await import("../src/utils/ssrf.js");
 
     // Import constants for expected message
     const { ERROR_MESSAGES } = await import("../src/consts.js");
