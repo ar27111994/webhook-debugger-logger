@@ -10,7 +10,7 @@ All notable changes to this project will be documented in this file.
 
 ### Improved
 
-- **UX**: The `/log-stream` SSE endpoint now sends an immediate `: connected` comment upon connection, preventing browsers from showing a "loading" state indefinetely while waiting for the first log event.
+- **UX**: The `/log-stream` SSE endpoint now sends an immediate `: connected` comment upon connection, preventing browsers from showing a "loading" state indefinitely while waiting for the first log event.
 
 ## [2.8.0] - 2026-01-11
 
