@@ -59,7 +59,8 @@ jobs:
       - name: Verify SSE Headers (Anti-Regression)
         run: |
           # Check for 200 OK and NO compression
-          HEADERS=$(curl -s -D - -o /dev/null -H "Accept: text/event-stream" http://localhost:8080/log-stream)
+          # Use timeout because SSE is an infinite stream
+          HEADERS=$(timeout 5s curl -s -D - -o /dev/null -H "Accept: text/event-stream" http://localhost:8080/log-stream || true)
 
           if echo "$HEADERS" | grep -q "200 OK"; then
             echo "✅ Status 200 OK"
