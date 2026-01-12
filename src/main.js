@@ -91,7 +91,16 @@ const broadcast = (data) => {
   clients.forEach((client) => {
     try {
       client.write(message);
-    } catch {
+    } catch (err) {
+      const safeError = {
+        message: /** @type {Error} */ (err).message,
+        code: /** @type {CommonError} */ (err).code || "UNKNOWN",
+        name: /** @type {Error} */ (err).name,
+      };
+      console.error(
+        "[SSE-ERROR] Failed to broadcast message to client:",
+        JSON.stringify(safeError),
+      );
       clients.delete(client);
     }
   });
@@ -249,7 +258,20 @@ async function initialize() {
 
   // --- Express Middleware ---
   app.set("trust proxy", true);
-  app.use(compression());
+  app.use(
+    compression({
+      filter: (req, res) => {
+        if (
+          req.path === "/log-stream" ||
+          (req.headers.accept &&
+            req.headers.accept.includes("text/event-stream"))
+        ) {
+          return false;
+        }
+        return compression.filter(req, res);
+      },
+    }),
+  );
 
   app.use("/fonts", express.static(join(__dirname, "..", "public", "fonts")));
 

@@ -12,6 +12,10 @@ All notable changes to this project will be documented in this file.
 
 - **UX**: The `/log-stream` SSE endpoint now sends an immediate `: connected` comment upon connection, preventing browsers from showing a "loading" state indefinitely while waiting for the first log event.
 
+### DevOps
+
+- **Docker Verification**: Added a comprehensive `local_docker_testing.md` guide and a new `verify-docker` CI/CD job. This ensures production-only bugs (like SSE compression issues) are caught in the container environment before deployment.
+
 ## [2.8.0] - 2026-01-11
 
 ### Added (2.8.0)

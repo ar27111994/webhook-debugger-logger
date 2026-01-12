@@ -1,6 +1,13 @@
 // Mock Apify before imports
 import { jest } from "@jest/globals";
 
+/** @typedef {import("http").ServerResponse} ServerResponse */
+/** @typedef {import("express").Request} Request */
+/** @typedef {import("express").Response} Response */
+/** @typedef {import("express").NextFunction} NextFunction */
+/** @typedef {import("net").Socket} Socket */
+/** @typedef {import("../src/webhook_manager.js").WebhookManager & { get: jest.Mock<any>, shouldProcess: jest.Mock<any>, updateLastActive: jest.Mock<any> }} WebhookManagerMock */
+
 jest.unstable_mockModule("apify", async () => {
   const { apifyMock } = await import("./helpers/shared-mocks.js");
   return { Actor: apifyMock };
@@ -26,16 +33,24 @@ jest.unstable_mockModule("../src/utils/ssrf.js", async () => {
   };
 });
 
+// Mock compression to ensure res.write spy works
+jest.unstable_mockModule("compression", () => ({
+  default:
+    () =>
+    (
+      /** @type {Request} */ _req,
+      /** @type {ServerResponse} */ _res,
+      /** @type {NextFunction} */ next,
+    ) =>
+      next(),
+}));
+
 import {
   createMockRequest,
   createMockResponse,
   createMockNextFunction,
   waitForCondition,
 } from "./helpers/test-utils.js";
-
-/** @typedef {import("express").Response} Response */
-/** @typedef {import("net").Socket} Socket */
-/** @typedef {import("../src/webhook_manager.js").WebhookManager & { get: jest.Mock<any>, shouldProcess: jest.Mock<any>, updateLastActive: jest.Mock<any> }} WebhookManagerMock */
 
 const request = (await import("supertest")).default;
 const { app, initialize, shutdown } = await import("../src/main.js");
@@ -147,5 +162,170 @@ describe("Coverage Improvement Tests", () => {
     expect(consoleErrorSpy).toHaveBeenCalled();
 
     consoleErrorSpy.mockRestore();
+  });
+
+  test("should handle SSE initial write failure", async () => {
+    const http = await import("http");
+    const originalWrite = http.ServerResponse.prototype.write;
+
+    // Spy on write to throw when connection message is sent
+    const writeSpy = jest
+      .spyOn(http.ServerResponse.prototype, "write")
+      .mockImplementation(
+        /** @this {ServerResponse} */ function (chunk, ...args) {
+          if (typeof chunk === "string" && chunk.includes(": connected")) {
+            throw new Error("Simulated Write Error");
+          }
+          return originalWrite.apply(/** @type {ServerResponse} */ (this), [
+            chunk,
+            ...args,
+          ]);
+        },
+      );
+
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    // Trigger the SSE endpoint
+    // It will hang because it's an open stream, so we race it with a timeout
+    try {
+      await request(app)
+        .get("/log-stream")
+        .set("Authorization", "Bearer test-secret")
+        .timeout(500);
+    } catch (_e) {
+      // Expected timeout or connection close
+    }
+
+    try {
+      // Wait a bit for async logs
+      await waitForCondition(
+        () => consoleErrorSpy.mock.calls.length > 0,
+        500,
+        10,
+      );
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining("[SSE-ERROR]"),
+        expect.stringContaining("Simulated Write Error"),
+      );
+    } finally {
+      writeSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  test("should log 500 errors in global error handler", async () => {
+    const { webhookManager } = await import("../src/main.js");
+
+    // Generate a valid ID first (pass retention hours)
+    const [id] = await webhookManager.generateWebhooks(1, 24);
+
+    // Mock webhookManager.isValid to throw a generic error
+    const isValidSpy = jest
+      .spyOn(webhookManager, "isValid")
+      .mockImplementation(() => {
+        throw new Error("Simulated Server Crash");
+      });
+
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    const res = await request(app).post(`/webhook/${id}`);
+
+    expect(res.statusCode).toBe(500);
+    expect(res.body.error).toBe("Internal Server Error");
+    expect(res.body.message).toBe("Internal Server Error");
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "[SERVER-ERROR]",
+      expect.stringContaining("Simulated Server Crash"),
+    );
+
+    isValidSpy.mockRestore();
+    consoleErrorSpy.mockRestore();
+  });
+
+  test("should handle SSE broadcast write failure", async () => {
+    const http = await import("http");
+    const originalWrite = http.ServerResponse.prototype.write;
+    const { webhookManager } = await import("../src/main.js");
+
+    // Spy on write to throw ONLY when broadcasting data
+    const writeSpy = jest
+      .spyOn(http.ServerResponse.prototype, "write")
+      .mockImplementation(
+        /** @this {ServerResponse} */ function (chunk, ...args) {
+          const str = Buffer.isBuffer(chunk) ? chunk.toString() : chunk;
+          if (typeof str === "string" && str.startsWith("data:")) {
+            throw new Error("Simulated Broadcast Error");
+          }
+          return originalWrite.apply(/** @type {ServerResponse} */ (this), [
+            chunk,
+            ...args,
+          ]);
+        },
+      );
+
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    // 1. Establish SSE Connection
+    const sseReq = request(app)
+      .get("/log-stream")
+      .set("Authorization", "Bearer test-secret")
+      .timeout(2000); // Keep alive long enough to receive broadcast
+
+    // Start the request but don't await it yet (it hangs)
+    const ssePromise = sseReq.catch((_e) => {
+      /* ignore timeout */
+    });
+
+    try {
+      // Wait for connection to be established (polling instead of hard wait)
+      await waitForCondition(
+        () =>
+          writeSpy.mock.calls.some((call) => {
+            const chunk = call[0];
+            const str = Buffer.isBuffer(chunk) ? chunk.toString() : chunk;
+            return typeof str === "string" && str.includes(": connected");
+          }),
+        1000,
+        50,
+      );
+
+      // 2. Trigger a Webhook Event (which should broadcast)
+      const [id] = await webhookManager.generateWebhooks(1, 24);
+      await request(app)
+        .post(`/webhook/${id}`)
+        .send({ test: "data" })
+        .expect(200);
+
+      // 3. Verify Error Log
+      await waitForCondition(
+        () =>
+          consoleErrorSpy.mock.calls.some((call) =>
+            call[0].includes(
+              "[SSE-ERROR] Failed to broadcast message to client:",
+            ),
+          ),
+        1500,
+      );
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        "[SSE-ERROR] Failed to broadcast message to client:",
+        expect.stringContaining('"message":"Simulated Broadcast Error"'),
+      );
+    } finally {
+      // Ensure SSE request is cleaned up
+      sseReq.abort();
+      await ssePromise;
+
+      writeSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
+    }
   });
 });
