@@ -1,0 +1,41 @@
+# Source Control
+.git
+.gitignore
+
+# Environment & Config
+.env
+.tsbuildinfo
+tsconfig.json
+eslint.config.js
+Dockerfile
+
+# CI/CD & GitHub
+.github
+.agent
+
+# Apify Platform Specifics
+.actor
+storage
+storage_v2
+apify_storage
+
+# Documentation & Assets
+docs
+assets
+MANUAL_DEMO_GUIDE.md
+PUBLICATION_GUIDE.md
+QUALITY_AUDIT_REPORT.md
+
+# Tests & Coverage
+tests
+coverage
+
+# Dependencies
+node_modules
+package-lock.json
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

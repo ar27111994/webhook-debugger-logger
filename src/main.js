@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { Actor } from "apify";
 import express from "express";
 import bodyParser from "body-parser";

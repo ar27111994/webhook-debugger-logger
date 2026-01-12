@@ -41,8 +41,6 @@
  * @property {string | undefined} [userAgent]
  */
 
-export {};
-
 /**
  * @typedef {Object} ValidationResult
  * @property {boolean} isValid
@@ -73,3 +71,5 @@ export {};
  * @property {unknown} [details]
  * @property {Object} [response]
  */
+
+export {};
