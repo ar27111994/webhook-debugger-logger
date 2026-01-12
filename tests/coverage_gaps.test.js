@@ -1,6 +1,13 @@
 // Mock Apify before imports
 import { jest } from "@jest/globals";
 
+/** @typedef {import("http").ServerResponse} ServerResponse */
+/** @typedef {import("express").Request} Request */
+/** @typedef {import("express").Response} Response */
+/** @typedef {import("express").NextFunction} NextFunction */
+/** @typedef {import("net").Socket} Socket */
+/** @typedef {import("../src/webhook_manager.js").WebhookManager & { get: jest.Mock<any>, shouldProcess: jest.Mock<any>, updateLastActive: jest.Mock<any> }} WebhookManagerMock */
+
 jest.unstable_mockModule("apify", async () => {
   const { apifyMock } = await import("./helpers/shared-mocks.js");
   return { Actor: apifyMock };
@@ -30,7 +37,11 @@ jest.unstable_mockModule("../src/utils/ssrf.js", async () => {
 jest.unstable_mockModule("compression", () => ({
   default:
     () =>
-    (/** @type {any} */ req, /** @type {any} */ res, /** @type {any} */ next) =>
+    (
+      /** @type {Request} */ _req,
+      /** @type {ServerResponse} */ _res,
+      /** @type {NextFunction} */ next
+    ) =>
       next(),
 }));
 
@@ -40,10 +51,6 @@ import {
   createMockNextFunction,
   waitForCondition,
 } from "./helpers/test-utils.js";
-
-/** @typedef {import("express").Response} Response */
-/** @typedef {import("net").Socket} Socket */
-/** @typedef {import("../src/webhook_manager.js").WebhookManager & { get: jest.Mock<any>, shouldProcess: jest.Mock<any>, updateLastActive: jest.Mock<any> }} WebhookManagerMock */
 
 const request = (await import("supertest")).default;
 const { app, initialize, shutdown } = await import("../src/main.js");
@@ -169,10 +176,10 @@ describe("Coverage Improvement Tests", () => {
         if (typeof chunk === "string" && chunk.includes(": connected")) {
           throw new Error("Simulated Write Error");
         }
-        return originalWrite.apply(
-          /** @type {import('http').ServerResponse} */ (this),
-          [chunk, ...args]
-        );
+        return originalWrite.apply(/** @type {ServerResponse} */ (this), [
+          chunk,
+          ...args,
+        ]);
       });
 
     const consoleErrorSpy = jest
@@ -232,5 +239,65 @@ describe("Coverage Improvement Tests", () => {
 
     isValidSpy.mockRestore();
     consoleErrorSpy.mockRestore();
+  });
+
+  test("should handle SSE broadcast write failure", async () => {
+    const http = await import("http");
+    const originalWrite = http.ServerResponse.prototype.write;
+    const { webhookManager } = await import("../src/main.js");
+
+    // Spy on write to throw ONLY when broadcasting data
+    const writeSpy = jest
+      .spyOn(http.ServerResponse.prototype, "write")
+      .mockImplementation(function (chunk, ...args) {
+        const str = Buffer.isBuffer(chunk) ? chunk.toString() : chunk;
+        if (typeof str === "string" && str.startsWith("data:")) {
+          throw new Error("Simulated Broadcast Error");
+        }
+        return originalWrite.apply(/** @type {ServerResponse} */ (this), [
+          chunk,
+          ...args,
+        ]);
+      });
+
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    // 1. Establish SSE Connection
+    const sseReq = request(app)
+      .get("/log-stream")
+      .set("Authorization", "Bearer test-secret")
+      .timeout(2000); // Keep alive long enough to receive broadcast
+
+    // Start the request but don't await it yet (it hangs)
+    const ssePromise = sseReq.catch((_e) => {
+      /* ignore timeout */
+    });
+
+    // Wait for connection to be established
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    // 2. Trigger a Webhook Event (which should broadcast)
+    const [id] = await webhookManager.generateWebhooks(1, 24);
+    await request(app)
+      .post(`/webhook/${id}`)
+      .send({ test: "data" })
+      .expect(200);
+
+    // Wait for async broadcast (increased timeout)
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    // 3. Verify Error Log
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "[SSE-ERROR] Failed to broadcast message to client:",
+      expect.objectContaining({ message: "Simulated Broadcast Error" })
+    );
+
+    writeSpy.mockRestore();
+    consoleErrorSpy.mockRestore();
+    // Ensure SSE request is cleaned up
+    sseReq.abort();
+    await ssePromise;
   });
 });
