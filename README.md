@@ -30,7 +30,7 @@ node demo_cli.js
 
 Test and inspect webhooks instantly without running localhost or complex tunneling tools.
 
-> **Tip for Contributors**: Want to test the Docker image locally? Check out our [Local Docker Testing Guide](docs/local_docker_testing.md).
+> **Tip for Contributors**: Want to test the Docker image locally? Check out our **[Local Docker Testing Guide](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/local_docker_testing.md)**.
 
 **[Watch the 2-min Narrated Walkthrough](https://youtu.be/uefialldYYw)**
 
