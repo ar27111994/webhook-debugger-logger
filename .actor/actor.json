@@ -3,7 +3,7 @@
   "name": "webhook-debugger-logger",
   "title": "Webhook Debugger, Logger & API Mocking Suite",
   "description": "Enterprise-grade tool to test, debug, and mock webhooks. Features real-time SSE streaming, request replay, HTTP forwarding, and JSON schema validation. Perfect for Stripe, GitHub, and Shopify integrations.",
-  "version": "2.8.1",
+  "version": "2.8.2",
   "output": "./output_schema.json",
   "input": "./input_schema.json",
   "usesStandbyMode": true,

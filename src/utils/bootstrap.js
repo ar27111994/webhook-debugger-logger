@@ -16,7 +16,7 @@ export async function ensureLocalInputExists(defaultInput) {
     storageDir,
     "key_value_stores",
     "default",
-    "INPUT.json"
+    "INPUT.json",
   );
 
   try {
@@ -39,18 +39,18 @@ export async function ensureLocalInputExists(defaultInput) {
         await fs.writeFile(
           inputPath,
           JSON.stringify(fullConfig, null, 2),
-          "utf-8"
+          "utf-8",
         );
         console.log(
-          `[SYSTEM] 📦 Local configuration initialized at: ${inputPath}`
+          `[SYSTEM] 📦 Local configuration initialized at: ${inputPath}`,
         );
         console.log(
-          `[SYSTEM] 💡 Tip: Edit this file to hot-reload settings while running!`
+          `[SYSTEM] 💡 Tip: Edit this file to hot-reload settings while running!`,
         );
       } catch (writeErr) {
         console.warn(
           "[SYSTEM] Failed to write default input file:",
-          /** @type {Error} */ (writeErr).message
+          /** @type {Error} */ (writeErr).message,
         );
       }
     }
