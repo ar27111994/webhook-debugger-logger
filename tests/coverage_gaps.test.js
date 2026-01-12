@@ -40,7 +40,7 @@ jest.unstable_mockModule("compression", () => ({
     (
       /** @type {Request} */ _req,
       /** @type {ServerResponse} */ _res,
-      /** @type {NextFunction} */ next
+      /** @type {NextFunction} */ next,
     ) =>
       next(),
 }));
@@ -88,9 +88,8 @@ describe("Coverage Improvement Tests", () => {
 
   test("should log error when SSRF blocks validation during forwarding", async () => {
     // We need to import the middleware creator to test it in isolation or integration
-    const { createLoggerMiddleware } = await import(
-      "../src/logger_middleware.js"
-    );
+    const { createLoggerMiddleware } =
+      await import("../src/logger_middleware.js");
     const { validateUrlForSsrf } = await import("../src/utils/ssrf.js");
 
     // Mock WebhookManager properly
@@ -122,7 +121,7 @@ describe("Coverage Improvement Tests", () => {
       {
         forwardUrl: "http://169.254.169.254/meta-data",
       },
-      () => {} // broadcast mock
+      () => {}, // broadcast mock
     );
 
     const req = createMockRequest({
@@ -142,7 +141,7 @@ describe("Coverage Improvement Tests", () => {
         send: jest.fn(),
         on: jest.fn(),
         emit: jest.fn(),
-      })
+      }),
     );
     const next = createMockNextFunction();
 
@@ -152,12 +151,12 @@ describe("Coverage Improvement Tests", () => {
     await waitForCondition(
       () => consoleErrorSpy.mock.calls.length > 0,
       1000,
-      10
+      10,
     );
 
     // Verify SSRF validation was called with the blocked URL
     expect(validateUrlForSsrf).toHaveBeenCalledWith(
-      "http://169.254.169.254/meta-data"
+      "http://169.254.169.254/meta-data",
     );
 
     expect(consoleErrorSpy).toHaveBeenCalled();
@@ -173,7 +172,7 @@ describe("Coverage Improvement Tests", () => {
     const writeSpy = jest
       .spyOn(http.ServerResponse.prototype, "write")
       .mockImplementation(
-        /** @this {import("http").ServerResponse} */ function (chunk, ...args) {
+        /** @this {ServerResponse} */ function (chunk, ...args) {
           if (typeof chunk === "string" && chunk.includes(": connected")) {
             throw new Error("Simulated Write Error");
           }
@@ -181,7 +180,7 @@ describe("Coverage Improvement Tests", () => {
             chunk,
             ...args,
           ]);
-        }
+        },
       );
 
     const consoleErrorSpy = jest
@@ -204,7 +203,7 @@ describe("Coverage Improvement Tests", () => {
 
     expect(consoleErrorSpy).toHaveBeenCalledWith(
       expect.stringContaining("[SSE-ERROR]"),
-      expect.stringContaining("Simulated Write Error")
+      expect.stringContaining("Simulated Write Error"),
     );
 
     writeSpy.mockRestore();
@@ -236,7 +235,7 @@ describe("Coverage Improvement Tests", () => {
 
     expect(consoleErrorSpy).toHaveBeenCalledWith(
       "[SERVER-ERROR]",
-      expect.stringContaining("Simulated Server Crash")
+      expect.stringContaining("Simulated Server Crash"),
     );
 
     isValidSpy.mockRestore();
@@ -252,7 +251,7 @@ describe("Coverage Improvement Tests", () => {
     const writeSpy = jest
       .spyOn(http.ServerResponse.prototype, "write")
       .mockImplementation(
-        /** @this {import("http").ServerResponse} */ function (chunk, ...args) {
+        /** @this {ServerResponse} */ function (chunk, ...args) {
           const str = Buffer.isBuffer(chunk) ? chunk.toString() : chunk;
           if (typeof str === "string" && str.startsWith("data:")) {
             throw new Error("Simulated Broadcast Error");
@@ -261,7 +260,7 @@ describe("Coverage Improvement Tests", () => {
             chunk,
             ...args,
           ]);
-        }
+        },
       );
 
     const consoleErrorSpy = jest
@@ -295,7 +294,7 @@ describe("Coverage Improvement Tests", () => {
     // 3. Verify Error Log
     expect(consoleErrorSpy).toHaveBeenCalledWith(
       "[SSE-ERROR] Failed to broadcast message to client:",
-      expect.objectContaining({ message: "Simulated Broadcast Error" })
+      expect.objectContaining({ message: "Simulated Broadcast Error" }),
     );
 
     writeSpy.mockRestore();
