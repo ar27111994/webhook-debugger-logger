@@ -438,6 +438,26 @@ We are committed to providing first-class support for our "Enterprise Suite" use
 
 **Developer Support Guarantee**: I am an active maintainer and respond to all comments, bug reports, and feature requests on the [Apify Store Console](https://apify.com/ar27111994/webhook-debugger-logger/comments?utm_campaign=readme_support) within **24 hours**.
 
+## ☁️ Self-Hosting (Standalone)
+
+You can run this Actor anywhere—on your local machine, VPS, or internal cloud—without an Apify account. It works as a standard Node.js application.
+
+```bash
+# 1. Clone & Install
+git clone https://github.com/ar27111994/webhook-debugger-logger.git
+cd webhook-debugger-logger
+npm install
+
+# 2. Run (Default settings: 10MB limit, 60s cleanup)
+npm start
+
+# 3. Configure via Environment (Optional)
+# Example: 5 URLs, 72h retention, 100MB payload limit
+INPUT='{"urlCount": 5, "retentionHours": 72, "maxPayloadSize": 104857600}' npm start
+```
+
+**Storage**: In standalone mode, data is saved locally to `./apify_storage` (JSON files) instead of the cloud.
+
 ## 🛡️ Security & Permissions
 
 - **Permissions**: This Actor runs with **Limited Permissions** (the safest level).
