@@ -60,10 +60,12 @@ jobs:
             # Check route /info (lightweight JSON endpoint)
             if curl -s -o /dev/null -w '' http://localhost:8080/info 2>/dev/null; then
               echo "Container ready after ${i}s"
-              break
+              exit 0
             fi
             sleep 1
           done
+          echo "❌ Container failed to start within 30s"
+          exit 1
 
       - name: Verify SSE Headers (Anti-Regression)
         run: |
