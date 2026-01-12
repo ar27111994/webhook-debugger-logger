@@ -458,6 +458,8 @@ INPUT='{"urlCount": 5, "retentionHours": 72, "maxPayloadSize": 104857600}' npm s
 
 **Storage**: In standalone mode, data is saved locally to `./apify_storage` (JSON files) instead of the cloud.
 
+**Hot-Reload**: To change settings while running (e.g., enable debug logging), simply edit `apify_storage/key_value_stores/default/INPUT.json`. The Actor polls for changes every **5 seconds** and applies them automatically.
+
 ## 🛡️ Security & Permissions
 
 - **Permissions**: This Actor runs with **Limited Permissions** (the safest level).
