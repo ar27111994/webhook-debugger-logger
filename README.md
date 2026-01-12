@@ -34,6 +34,23 @@ Test and inspect webhooks instantly without running localhost or complex tunneli
 
 **[Watch the 2-min Narrated Walkthrough](https://youtu.be/uefialldYYw)**
 
+## ☁️ Self-Hosting (Standalone)
+
+You can run this Actor anywhere—on your local machine, VPS, or internal cloud—without an Apify account. It works as a standard Node.js application.
+
+```bash
+# Option A: Run via npx (Zero Install)
+npx webhook-debugger-logger
+
+# Option B: Clone & Install
+git clone https://github.com/ar27111994/webhook-debugger-logger.git
+cd webhook-debugger-logger
+npm install
+npm start
+```
+
+For advanced configuration (Docker, environment variables), see the [Full Self-Hosting Guide](#-self-hosting-standalone-advanced) below.
+
 ## What does it do?
 
 Webhook Debugger generates temporary webhook URLs and logs every incoming request with full details (headers, body, query params). Perfect for testing webhook integrations from Stripe, GitHub, Shopify, or any service.
@@ -438,27 +455,19 @@ We are committed to providing first-class support for our "Enterprise Suite" use
 
 **Developer Support Guarantee**: I am an active maintainer and respond to all comments, bug reports, and feature requests on the [Apify Store Console](https://apify.com/ar27111994/webhook-debugger-logger/comments?utm_campaign=readme_support) within **24 hours**.
 
-## ☁️ Self-Hosting (Standalone)
+## ☁️ Self-Hosting (Standalone: Advanced)
 
-You can run this Actor anywhere—on your local machine, VPS, or internal cloud—without an Apify account. It works as a standard Node.js application.
+For production deployments or custom tweaks:
 
 ```bash
-# 1. Clone & Install
-git clone https://github.com/ar27111994/webhook-debugger-logger.git
-cd webhook-debugger-logger
-npm install
-
-# 2. Run (Default settings: 10MB limit, 60s cleanup)
-npm start
-
-# 3. Configure via Environment (Optional)
+# Configure via Environment
 # Example: 5 URLs, 72h retention, 100MB payload limit
 INPUT='{"urlCount": 5, "retentionHours": 72, "maxPayloadSize": 104857600}' npm start
 ```
 
-**Storage**: In standalone mode, data is saved locally to `./apify_storage` (JSON files) instead of the cloud.
+**Storage**: In standalone mode, data is saved locally to `./storage` (JSON files) instead of the cloud.
 
-**Hot-Reload**: To change settings while running (e.g., enable debug logging), simply edit `apify_storage/key_value_stores/default/INPUT.json`. The Actor polls for changes every **5 seconds** and applies them automatically.
+**Hot-Reload**: To change settings while running (e.g., enable debug logging), simply edit `storage/key_value_stores/default/INPUT.json`. The Actor polls for changes every **5 seconds** and applies them automatically.
 
 ## 🛡️ Security & Permissions
 
