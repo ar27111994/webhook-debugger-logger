@@ -94,7 +94,7 @@ const broadcast = (data) => {
     } catch (err) {
       const safeError = {
         message: /** @type {Error} */ (err).message,
-        code: /** @type {any} */ (err).code || "UNKNOWN",
+        code: /** @type {CommonError} */ (err).code || "UNKNOWN",
         name: /** @type {Error} */ (err).name,
       };
       console.error(
