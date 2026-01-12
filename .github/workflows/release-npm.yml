@@ -27,6 +27,6 @@ jobs:
         run: npm test
 
       - name: Publish to NPM
-        run: npm publish
+        run: npm publish --provenance
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }} # Fallback if OIDC fails, but primarily relies on id-token permission
