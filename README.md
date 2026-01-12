@@ -49,7 +49,7 @@ npm install
 npm start
 ```
 
-For advanced configuration (Docker, environment variables), see the [Full Self-Hosting Guide](#-self-hosting-standalone-advanced) below.
+For advanced configuration (Docker, environment variables), see the [Full Self-Hosting Guide](#standalone-advanced) below.
 
 ## What does it do?
 
@@ -455,7 +455,7 @@ We are committed to providing first-class support for our "Enterprise Suite" use
 
 **Developer Support Guarantee**: I am an active maintainer and respond to all comments, bug reports, and feature requests on the [Apify Store Console](https://apify.com/ar27111994/webhook-debugger-logger/comments?utm_campaign=readme_support) within **24 hours**.
 
-## ☁️ Self-Hosting (Standalone: Advanced)
+## <a id="standalone-advanced"></a>☁️ Self-Hosting (Standalone: Advanced)
 
 For production deployments or custom tweaks:
 
