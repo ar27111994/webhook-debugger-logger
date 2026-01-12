@@ -198,20 +198,22 @@ describe("Coverage Improvement Tests", () => {
       // Expected timeout or connection close
     }
 
-    // Wait a bit for async logs
-    await waitForCondition(
-      () => consoleErrorSpy.mock.calls.length > 0,
-      500,
-      10,
-    );
+    try {
+      // Wait a bit for async logs
+      await waitForCondition(
+        () => consoleErrorSpy.mock.calls.length > 0,
+        500,
+        10,
+      );
 
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining("[SSE-ERROR]"),
-      expect.stringContaining("Simulated Write Error"),
-    );
-
-    writeSpy.mockRestore();
-    consoleErrorSpy.mockRestore();
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining("[SSE-ERROR]"),
+        expect.stringContaining("Simulated Write Error"),
+      );
+    } finally {
+      writeSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
+    }
   });
 
   test("should log 500 errors in global error handler", async () => {

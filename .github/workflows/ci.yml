@@ -40,6 +40,7 @@ jobs:
         run: npm run test:coverage
 
   verify-docker:
+    needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -53,8 +54,16 @@ jobs:
           docker run -d --name debugger -p 8080:8080 \
             -e ACTOR_WEB_SERVER_PORT=8080 \
             webhook-debugger
-          # Wait for startup
-          sleep 10
+
+          # Poll for startup (max 30 attempts, 1s apart)
+          for i in $(seq 1 30); do
+            # Check route /info (lightweight JSON endpoint)
+            if curl -s -o /dev/null -w '' http://localhost:8080/info 2>/dev/null; then
+              echo "Container ready after ${i}s"
+              break
+            fi
+            sleep 1
+          done
 
       - name: Verify SSE Headers (Anti-Regression)
         run: |
