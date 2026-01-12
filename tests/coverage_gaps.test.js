@@ -172,15 +172,17 @@ describe("Coverage Improvement Tests", () => {
     // Spy on write to throw when connection message is sent
     const writeSpy = jest
       .spyOn(http.ServerResponse.prototype, "write")
-      .mockImplementation(function (chunk, ...args) {
-        if (typeof chunk === "string" && chunk.includes(": connected")) {
-          throw new Error("Simulated Write Error");
+      .mockImplementation(
+        /** @this {import("http").ServerResponse} */ function (chunk, ...args) {
+          if (typeof chunk === "string" && chunk.includes(": connected")) {
+            throw new Error("Simulated Write Error");
+          }
+          return originalWrite.apply(/** @type {ServerResponse} */ (this), [
+            chunk,
+            ...args,
+          ]);
         }
-        return originalWrite.apply(/** @type {ServerResponse} */ (this), [
-          chunk,
-          ...args,
-        ]);
-      });
+      );
 
     const consoleErrorSpy = jest
       .spyOn(console, "error")
@@ -249,16 +251,18 @@ describe("Coverage Improvement Tests", () => {
     // Spy on write to throw ONLY when broadcasting data
     const writeSpy = jest
       .spyOn(http.ServerResponse.prototype, "write")
-      .mockImplementation(function (chunk, ...args) {
-        const str = Buffer.isBuffer(chunk) ? chunk.toString() : chunk;
-        if (typeof str === "string" && str.startsWith("data:")) {
-          throw new Error("Simulated Broadcast Error");
+      .mockImplementation(
+        /** @this {import("http").ServerResponse} */ function (chunk, ...args) {
+          const str = Buffer.isBuffer(chunk) ? chunk.toString() : chunk;
+          if (typeof str === "string" && str.startsWith("data:")) {
+            throw new Error("Simulated Broadcast Error");
+          }
+          return originalWrite.apply(/** @type {ServerResponse} */ (this), [
+            chunk,
+            ...args,
+          ]);
         }
-        return originalWrite.apply(/** @type {ServerResponse} */ (this), [
-          chunk,
-          ...args,
-        ]);
-      });
+      );
 
     const consoleErrorSpy = jest
       .spyOn(console, "error")
