@@ -38,3 +38,43 @@ jobs:
 
       - name: Test with Coverage
         run: npm run test:coverage
+
+  verify-docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker Image
+        run: docker build -t webhook-debugger .
+
+      - name: Run Container
+        run: |
+          docker run -d --name debugger -p 8080:8080 \
+            -e ACTOR_WEB_SERVER_PORT=8080 \
+            webhook-debugger
+          # Wait for startup
+          sleep 10
+
+      - name: Verify SSE Headers (Anti-Regression)
+        run: |
+          # Check for 200 OK and NO compression
+          HEADERS=$(curl -s -D - -o /dev/null -H "Accept: text/event-stream" http://localhost:8080/log-stream)
+
+          if echo "$HEADERS" | grep -q "200 OK"; then
+            echo "✅ Status 200 OK"
+          else
+            echo "❌ Failed to connect"
+            exit 1
+          fi
+
+          if echo "$HEADERS" | grep -i "content-encoding:" | grep -v "identity"; then
+            echo "❌ Error: Content-Encoding detected (likely compression enabled)"
+            exit 1
+          else
+            echo "✅ No harmful Content-Encoding detected"
+          fi
+
+      - name: Docker Logs (on failure)
+        if: failure()
+        run: docker logs debugger
