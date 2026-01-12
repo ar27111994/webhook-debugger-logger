@@ -830,8 +830,9 @@ if (process.env.NODE_ENV !== "test") {
     .then(async () => {
       // Ensure local config exists for hot-reload convenience if running locally
       if (!process.env.APIFY_IS_AT_HOME) {
-        const input = (await Actor.getInput()) || {};
-        // @ts-ignore
+        const input = /** @type {Record<string, any>} */ (
+          (await Actor.getInput()) || {}
+        );
         await ensureLocalInputExists(input);
       }
     })
