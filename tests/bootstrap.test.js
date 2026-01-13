@@ -208,6 +208,9 @@ describe("bootstrap.js", () => {
   test("should use fallback path resolution when APIFY_ACTOR_DIR is unset", async () => {
     delete process.env.APIFY_ACTOR_DIR;
 
+    // Spy on CWD to ensure we aren't relying on it (proving fileURLToPath usage)
+    const cwdSpy = jest.spyOn(process, "cwd").mockReturnValue("/tmp/trap-cwd");
+
     // We need to spy on readFile to see what path was requested
     /** @type {string[]} */
     const pathsAccessed = [];
@@ -220,16 +223,24 @@ describe("bootstrap.js", () => {
     });
     mockAccess.mockResolvedValue(undefined); // INPUT.json exists
 
-    await ensureLocalInputExists({});
+    try {
+      await ensureLocalInputExists({});
 
-    // Verify that we tried to read the schema from the fallback location
-    // The fallback path involves resolving "..", "..", ".actor", "input_schema.json" relative to bootstrap.js
-    const schemaAccess = pathsAccessed.find((p) =>
-      p.includes("input_schema.json"),
-    );
-    expect(schemaAccess).toBeDefined();
-    // It should be an absolute path (result of path.join/resolve)
-    expect(schemaAccess).toMatch(/^\//);
-    // It should NOT depend on process.cwd() if we are doing it right (though hard to test exact cwd independence without mocking path.join, checking for absolute path is a good proxy for fileURLToPath behavior)
+      // Verify that we tried to read the schema from the fallback location
+      const schemaAccess = pathsAccessed.find((p) =>
+        p.includes("input_schema.json"),
+      );
+
+      expect(schemaAccess).toBeDefined();
+
+      // Crucial: The resolved path should NOT start with our trap CWD
+      // This proves we used the module's own path (import.meta.url) as the base, not process.cwd()
+      expect(schemaAccess).not.toContain("/tmp/trap-cwd");
+
+      // It should be an absolute path ending in the correct file
+      expect(schemaAccess).toMatch(/\.actor\/input_schema\.json$/);
+    } finally {
+      cwdSpy.mockRestore();
+    }
   });
 });
