@@ -97,49 +97,83 @@ describe("WebhookManager", () => {
   test("generateWebhooks() should throw on invalid count (negative)", async () => {
     await webhookManager.init();
     await expect(webhookManager.generateWebhooks(-1, 24)).rejects.toThrow(
-      "Invalid count: -1. Must be a non-negative integer.",
+      "Invalid count: -1. Must be a non-negative integer."
     );
   });
 
   test("generateWebhooks() should throw on invalid count (non-integer)", async () => {
     await webhookManager.init();
     await expect(webhookManager.generateWebhooks(1.5, 24)).rejects.toThrow(
-      "Invalid count: 1.5. Must be a non-negative integer.",
+      "Invalid count: 1.5. Must be a non-negative integer."
     );
   });
 
   test("generateWebhooks() should throw on invalid retentionHours (zero)", async () => {
     await webhookManager.init();
     await expect(webhookManager.generateWebhooks(1, 0)).rejects.toThrow(
-      "Invalid retentionHours: 0. Must be a positive number.",
+      "Invalid retentionHours: 0. Must be a positive number."
     );
   });
 
   test("generateWebhooks() should throw on invalid retentionHours (negative)", async () => {
     await webhookManager.init();
     await expect(webhookManager.generateWebhooks(1, -5)).rejects.toThrow(
-      "Invalid retentionHours: -5. Must be a positive number.",
+      "Invalid retentionHours: -5. Must be a positive number."
     );
   });
 
   test("generateWebhooks() should throw on invalid retentionHours (Infinity)", async () => {
     await webhookManager.init();
     await expect(webhookManager.generateWebhooks(1, Infinity)).rejects.toThrow(
-      "Invalid retentionHours: Infinity. Must be a positive number.",
+      "Invalid retentionHours: Infinity. Must be a positive number."
     );
   });
 
   test("updateRetention() should throw on invalid retentionHours", async () => {
     await webhookManager.init();
     await expect(webhookManager.updateRetention(0)).rejects.toThrow(
-      "Invalid retentionHours: 0. Must be a positive number.",
+      "Invalid retentionHours: 0. Must be a positive number."
     );
     await expect(webhookManager.updateRetention(-1)).rejects.toThrow(
-      "Invalid retentionHours: -1. Must be a positive number.",
+      "Invalid retentionHours: -1. Must be a positive number."
     );
     await expect(webhookManager.updateRetention(NaN)).rejects.toThrow(
-      "Invalid retentionHours: NaN. Must be a positive number.",
+      "Invalid retentionHours: NaN. Must be a positive number."
     );
+  });
+
+  test("updateRetention() should extend expiry and persist changes", async () => {
+    await webhookManager.init();
+    const now = Date.now();
+    // Expiry in 1 hour
+    const expiry1 = new Date(now + 3600 * 1000).toISOString();
+    // Expiry in 2 hours
+    const expiry2 = new Date(now + 7200 * 1000).toISOString();
+
+    webhookManager.webhooks.set("wh_short", { expiresAt: expiry1 });
+    webhookManager.webhooks.set("wh_long", { expiresAt: expiry2 });
+
+    // Update to 24 hours
+    await webhookManager.updateRetention(24);
+
+    const newExpiry1 = new Date(
+      webhookManager.getWebhookData("wh_short").expiresAt
+    ).getTime();
+    const newExpiry2 = new Date(
+      webhookManager.getWebhookData("wh_long").expiresAt
+    ).getTime();
+
+    // Both should be approx 24 hours from now
+    // Allow substantial delta because newExpiry calculation relies on re-checking Date.now() inside the method
+    const target = now + 24 * 3600 * 1000;
+    expect(newExpiry1).toBeGreaterThan(target - 5000);
+    expect(newExpiry1).toBeLessThan(target + 5000);
+
+    expect(newExpiry2).toBeGreaterThan(target - 5000);
+    expect(newExpiry2).toBeLessThan(target + 5000);
+
+    // Should persist
+    expect(jest.mocked(mockKvStore.setValue)).toHaveBeenCalled();
   });
 
   test("persist() should handle setValue errors gracefully", async () => {
