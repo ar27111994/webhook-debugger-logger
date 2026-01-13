@@ -49,7 +49,7 @@ describe("bootstrap.js", () => {
     await ensureLocalInputExists({ urlCount: 1 });
 
     expect(mockAccess).toHaveBeenCalledWith(
-      expect.stringContaining("INPUT.json"),
+      expect.stringContaining("INPUT.json")
     );
     // Should NOT write
     expect(mockWriteFile).not.toHaveBeenCalled();
@@ -88,39 +88,39 @@ describe("bootstrap.js", () => {
     expect(mockWriteFile).toHaveBeenCalledWith(
       expect.stringContaining("INPUT.json"),
       expect.stringContaining('"urlCount": 3'),
-      "utf-8",
+      "utf-8"
     );
     expect(mockWriteFile).toHaveBeenCalledWith(
       expect.stringContaining("INPUT.json"),
       expect.stringContaining('"retentionHours": 48'),
-      "utf-8",
+      "utf-8"
     );
 
     // Override should still be present
     expect(mockWriteFile).toHaveBeenCalledWith(
       expect.stringContaining("INPUT.json"),
       expect.stringContaining('"someOverride": 999'),
-      "utf-8",
+      "utf-8"
     );
 
     // Verify success logs
     expect(consoleLogSpy).toHaveBeenCalledWith(
-      expect.stringContaining("Local configuration initialized at:"),
+      expect.stringContaining("Local configuration initialized at:")
     );
     expect(consoleLogSpy).toHaveBeenCalledWith(
-      expect.stringContaining("Tip: Edit this file"),
+      expect.stringContaining("Tip: Edit this file")
     );
 
     // Hidden fields should be absent
     expect(mockWriteFile).toHaveBeenCalledWith(
       expect.stringContaining("INPUT.json"),
       expect.not.stringContaining("section_debug"),
-      "utf-8",
+      "utf-8"
     );
     expect(mockWriteFile).toHaveBeenCalledWith(
       expect.stringContaining("INPUT.json"),
       expect.not.stringContaining("internalFlag"),
-      "utf-8",
+      "utf-8"
     );
   });
 
@@ -143,7 +143,7 @@ describe("bootstrap.js", () => {
 
     expect(consoleWarnSpy).toHaveBeenCalledWith(
       expect.stringContaining("Failed to write default input file"),
-      expect.any(String),
+      expect.any(String)
     );
   });
 
@@ -169,21 +169,21 @@ describe("bootstrap.js", () => {
     // Should read file
     expect(mockReadFile).toHaveBeenCalledWith(
       expect.stringContaining("INPUT.json"),
-      "utf-8",
+      "utf-8"
     );
 
     // Should rewrite with defaults from schema
     expect(mockWriteFile).toHaveBeenCalledWith(
       expect.stringContaining("INPUT.json"),
       expect.stringContaining('"urlCount": 10'),
-      "utf-8",
+      "utf-8"
     );
 
     expect(consoleWarnSpy).toHaveBeenCalledWith(
       expect.stringContaining(
-        "INPUT.json was invalid; rewritten with defaults",
+        "INPUT.json was invalid; rewritten with defaults"
       ),
-      expect.any(String),
+      expect.any(String)
     );
   });
 
@@ -201,7 +201,35 @@ describe("bootstrap.js", () => {
     expect(mockWriteFile).not.toHaveBeenCalled();
     expect(consoleWarnSpy).toHaveBeenCalledWith(
       expect.stringContaining("Failed to read INPUT.json"),
-      expect.any(String),
+      expect.any(String)
     );
+  });
+
+  test("should use fallback path resolution when APIFY_ACTOR_DIR is unset", async () => {
+    delete process.env.APIFY_ACTOR_DIR;
+
+    // We need to spy on readFile to see what path was requested
+    /** @type {string[]} */
+    const pathsAccessed = [];
+    mockReadFile.mockImplementation(async (/** @type {any} */ filePath) => {
+      pathsAccessed.push(filePath.toString());
+      if (filePath.toString().includes("input_schema.json")) {
+        return JSON.stringify({ properties: {} });
+      }
+      return "{ invalid json"; // INPUT.json is corrupt, forcing schema fallback lookup
+    });
+    mockAccess.mockResolvedValue(undefined); // INPUT.json exists
+
+    await ensureLocalInputExists({});
+
+    // Verify that we tried to read the schema from the fallback location
+    // The fallback path involves resolving "..", "..", ".actor", "input_schema.json" relative to bootstrap.js
+    const schemaAccess = pathsAccessed.find((p) =>
+      p.includes("input_schema.json")
+    );
+    expect(schemaAccess).toBeDefined();
+    // It should be an absolute path (result of path.join/resolve)
+    expect(schemaAccess).toMatch(/^\//);
+    // It should NOT depend on process.cwd() if we are doing it right (though hard to test exact cwd independence without mocking path.join, checking for absolute path is a good proxy for fileURLToPath behavior)
   });
 });
