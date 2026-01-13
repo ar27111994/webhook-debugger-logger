@@ -105,5 +105,5 @@ export function normalizeInput(value, fallback = {}) {
       return fallback;
     }
   }
-  return value || fallback;
+  return value ?? fallback;
 }

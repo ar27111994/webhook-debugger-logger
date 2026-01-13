@@ -43,6 +43,11 @@ describe("Config Utils", () => {
       expect(normalizeInput(null)).toEqual({});
       expect(normalizeInput(undefined, { f: 1 })).toEqual({ f: 1 });
     });
+
+    test("should handle falsy but valid values (0, false)", () => {
+      expect(normalizeInput(0)).toEqual(0);
+      expect(normalizeInput(false)).toEqual(false);
+    });
   });
 
   test("parseWebhookOptions should clamp maxPayloadSize to default maximum", () => {
