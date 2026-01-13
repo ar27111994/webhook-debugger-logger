@@ -828,21 +828,36 @@ async function initialize() {
 }
 
 if (process.env.NODE_ENV !== "test") {
-  /* istanbul ignore next */
-  initialize()
-    .then(async () => {
-      // Ensure local config exists for hot-reload convenience if running locally
-      if (!process.env.APIFY_IS_AT_HOME) {
-        const input = /** @type {Record<string, any>} */ (
-          (await Actor.getInput()) || {}
-        );
+  (async () => {
+    // Bootstrap local config if needed (before Actor.init reads it)
+    if (!process.env.APIFY_IS_AT_HOME) {
+      try {
+        let input = {};
+        try {
+          if (process.env.INPUT) {
+            input = JSON.parse(process.env.INPUT);
+          }
+        } catch (e) {
+          console.warn(
+            "[BOOTSTRAP] Failed to parse INPUT env var:",
+            /** @type {Error} */ (e).message
+          );
+        }
         await ensureLocalInputExists(input);
+      } catch (error) {
+        console.warn(
+          "[BOOTSTRAP] Failed to initialize local config:",
+          /** @type {Error} */ (error).message
+        );
       }
-    })
-    .catch((err) => {
-      console.error("[FATAL] Server failed to start:", err.message);
-      process.exit(1);
-    });
+    }
+
+    // Initialize App
+    await initialize();
+  })().catch((err) => {
+    console.error("[FATAL] Server failed to start:", err.message);
+    process.exit(1);
+  });
 }
 
 export { app, webhookManager, server, sseHeartbeat, initialize, shutdown };

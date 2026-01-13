@@ -30,8 +30,11 @@ describe("bootstrap.js", () => {
     process.env.APIFY_LOCAL_STORAGE_DIR = "/tmp/test-storage";
   });
 
-  afterAll(() => {
+  afterEach(() => {
     delete process.env.APIFY_LOCAL_STORAGE_DIR;
+  });
+
+  afterAll(() => {
     jest.restoreAllMocks();
   });
 
@@ -42,13 +45,13 @@ describe("bootstrap.js", () => {
     await ensureLocalInputExists({ urlCount: 1 });
 
     expect(mockAccess).toHaveBeenCalledWith(
-      expect.stringContaining("INPUT.json"),
+      expect.stringContaining("INPUT.json")
     );
     // Should NOT write
     expect(mockWriteFile).not.toHaveBeenCalled();
   });
 
-  test("should create file if it does missing (ENOENT)", async () => {
+  test("should create file if it is missing (ENOENT)", async () => {
     // Setup: access throws ENOENT
     const enoent = /** @type {NodeJS.ErrnoException} */ (
       new Error("File not found")
@@ -74,18 +77,18 @@ describe("bootstrap.js", () => {
     expect(mockWriteFile).toHaveBeenCalledWith(
       expect.stringContaining("INPUT.json"),
       expect.stringContaining('"urlCount": 5'), // Coerced
-      "utf-8",
+      "utf-8"
     );
 
     // Should pass through arbitrary input keys
     expect(mockWriteFile).toHaveBeenCalledWith(
       expect.stringContaining("INPUT.json"),
       expect.stringContaining('"someOtherKey": "value"'),
-      "utf-8",
+      "utf-8"
     );
 
     expect(consoleLogSpy).toHaveBeenCalledWith(
-      expect.stringContaining("Local configuration initialized"),
+      expect.stringContaining("Local configuration initialized")
     );
   });
 
@@ -104,7 +107,7 @@ describe("bootstrap.js", () => {
 
     expect(consoleWarnSpy).toHaveBeenCalledWith(
       expect.stringContaining("Failed to write default input file"),
-      expect.any(String),
+      expect.any(String)
     );
   });
 });

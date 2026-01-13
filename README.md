@@ -49,7 +49,7 @@ npm install
 npm start
 ```
 
-**Note**: When running via `npx` or `npm start` for the first time, the Actor will automatically generate a configuration file at `storage/key_value_stores/default/INPUT.json`. You can edit this file to change settings (like `urlCount`) in real-time!
+**Note**: When running via `npx` or `npm start` for the first time, the Actor will automatically generate a configuration file at `storage/key_value_stores/default/INPUT.json`. You can edit this file to change settings (like `urlCount`) in real-time! (The location respects `APIFY_LOCAL_STORAGE_DIR` if set).
 
 For advanced configuration (Docker, environment variables), see the [Full Self-Hosting Guide](#standalone-advanced) below.
 
