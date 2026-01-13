@@ -3,16 +3,19 @@ import { jest } from "@jest/globals";
 const mockAccess = /** @type {jest.Mock<any>} */ (jest.fn());
 const mockMkdir = /** @type {jest.Mock<any>} */ (jest.fn());
 const mockWriteFile = /** @type {jest.Mock<any>} */ (jest.fn());
+const mockReadFile = /** @type {jest.Mock<any>} */ (jest.fn());
 
 // Must be called before importing the module under test
 jest.unstable_mockModule("fs/promises", () => ({
   access: mockAccess,
   mkdir: mockMkdir,
   writeFile: mockWriteFile,
+  readFile: mockReadFile,
   default: {
     access: mockAccess,
     mkdir: mockMkdir,
     writeFile: mockWriteFile,
+    readFile: mockReadFile,
   },
 }));
 
@@ -41,6 +44,7 @@ describe("bootstrap.js", () => {
   test("should check if INPUT.json exists", async () => {
     // Setup: file exists
     mockAccess.mockResolvedValue(undefined);
+    mockReadFile.mockResolvedValue('{"valid": true}');
 
     await ensureLocalInputExists({ urlCount: 1 });
 
@@ -99,6 +103,7 @@ describe("bootstrap.js", () => {
     );
     enoent.code = "ENOENT";
     mockAccess.mockRejectedValue(enoent);
+    mockMkdir.mockResolvedValue(undefined);
 
     const writeError = new Error("Permission denied");
     mockWriteFile.mockRejectedValue(writeError);
@@ -107,6 +112,35 @@ describe("bootstrap.js", () => {
 
     expect(consoleWarnSpy).toHaveBeenCalledWith(
       expect.stringContaining("Failed to write default input file"),
+      expect.any(String)
+    );
+  });
+
+  test("should recover from invalid INPUT.json (corrupt file)", async () => {
+    // Setup: file exists but has invalid JSON
+    mockAccess.mockResolvedValue(undefined);
+    mockReadFile.mockResolvedValue("{ invalid json ");
+    mockWriteFile.mockResolvedValue(undefined);
+
+    await ensureLocalInputExists({ urlCount: 5 });
+
+    // Should read file
+    expect(mockReadFile).toHaveBeenCalledWith(
+      expect.stringContaining("INPUT.json"),
+      "utf-8"
+    );
+
+    // Should rewrite with defaults
+    expect(mockWriteFile).toHaveBeenCalledWith(
+      expect.stringContaining("INPUT.json"),
+      expect.stringContaining('"urlCount": 5'),
+      "utf-8"
+    );
+
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "INPUT.json was invalid; rewritten with defaults"
+      ),
       expect.any(String)
     );
   });

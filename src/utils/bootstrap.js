@@ -16,12 +16,34 @@ export async function ensureLocalInputExists(defaultInput) {
     storageDir,
     "key_value_stores",
     "default",
-    "INPUT.json",
+    "INPUT.json"
   );
 
   try {
     // Check if file exists
     await fs.access(inputPath);
+
+    // Validate content (handles empty/corrupt JSON after manual edits)
+    try {
+      const raw = await fs.readFile(inputPath, "utf-8");
+      JSON.parse(raw);
+    } catch (parseErr) {
+      const defaults = coerceRuntimeOptions(defaultInput);
+      const fullConfig = {
+        ...defaultInput,
+        ...defaults,
+      };
+
+      await fs.writeFile(
+        inputPath,
+        JSON.stringify(fullConfig, null, 2),
+        "utf-8"
+      );
+      console.warn(
+        "[SYSTEM] INPUT.json was invalid; rewritten with defaults:",
+        /** @type {Error} */ (parseErr).message
+      );
+    }
   } catch (err) {
     if (/** @type {NodeJS.ErrnoException} */ (err).code === "ENOENT") {
       try {
@@ -32,25 +54,25 @@ export async function ensureLocalInputExists(defaultInput) {
         const defaults = coerceRuntimeOptions(defaultInput);
         // Add other useful keys that might be missing from coercion
         const fullConfig = {
-          ...defaults,
           ...defaultInput,
+          ...defaults,
         };
 
         await fs.writeFile(
           inputPath,
           JSON.stringify(fullConfig, null, 2),
-          "utf-8",
+          "utf-8"
         );
         console.log(
-          `[SYSTEM] 📦 Local configuration initialized at: ${inputPath}`,
+          `[SYSTEM] 📦 Local configuration initialized at: ${inputPath}`
         );
         console.log(
-          `[SYSTEM] 💡 Tip: Edit this file to hot-reload settings while running!`,
+          `[SYSTEM] 💡 Tip: Edit this file to hot-reload settings while running!`
         );
       } catch (writeErr) {
         console.warn(
           "[SYSTEM] Failed to write default input file:",
-          /** @type {Error} */ (writeErr).message,
+          /** @type {Error} */ (writeErr).message
         );
       }
     }

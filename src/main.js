@@ -450,8 +450,9 @@ async function initialize() {
       /** @type {Response} */ _res,
       /** @type {NextFunction} */ next
     ) => {
-      const statusOverride = parseInt(
-        /** @type {string} */ (req.query.__status)
+      const statusOverride = Number.parseInt(
+        /** @type {string} */ (req.query.__status),
+        10
       );
       if (statusOverride >= 100 && statusOverride < 600) {
         /** @type {any} */ (req).forcedStatus = statusOverride;
