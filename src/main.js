@@ -372,14 +372,26 @@ async function initialize() {
         );
         if (!newInput) return;
 
-        const newInputStr = JSON.stringify(newInput);
+        // Normalize input if it's a string (fixes hot-reload from raw KV updates)
+        const normalizedInput =
+          typeof newInput === "string"
+            ? (() => {
+                try {
+                  return JSON.parse(newInput);
+                } catch {
+                  return newInput;
+                }
+              })()
+            : newInput;
+
+        const newInputStr = JSON.stringify(normalizedInput);
         if (newInputStr === lastInputStr) return;
 
         lastInputStr = newInputStr;
         console.log("[SYSTEM] Detected input update! Applying new settings...");
 
         // Use shared coercion logic
-        const validated = coerceRuntimeOptions(newInput);
+        const validated = coerceRuntimeOptions(normalizedInput);
 
         const newConfig = parseWebhookOptions(newInput);
         const newRateLimit = validated.rateLimitPerMinute;
