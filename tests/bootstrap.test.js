@@ -103,6 +103,14 @@ describe("bootstrap.js", () => {
       "utf-8"
     );
 
+    // Verify success logs
+    expect(consoleLogSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Local configuration initialized at:")
+    );
+    expect(consoleLogSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Tip: Edit this file")
+    );
+
     // Hidden fields should be absent
     expect(mockWriteFile).toHaveBeenCalledWith(
       expect.stringContaining("INPUT.json"),
