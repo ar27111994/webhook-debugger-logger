@@ -350,7 +350,17 @@ async function initialize() {
   // Sync initial state with storage (which might have been normalized by bootstrap)
   // to prevent immediate "fake" hot-reload triggers due to type coercion (e.g. "5" vs 5).
   const initialStoreValue = await store.getValue("INPUT");
-  let lastInputStr = JSON.stringify(initialStoreValue || input);
+  const normalizedInitialInput =
+    typeof initialStoreValue === "string"
+      ? (() => {
+          try {
+            return JSON.parse(initialStoreValue);
+          } catch {
+            return input;
+          }
+        })()
+      : initialStoreValue || input;
+  let lastInputStr = JSON.stringify(normalizedInitialInput);
 
   inputPollInterval = setInterval(() => {
     if (activePollPromise) return;

@@ -26,6 +26,7 @@ describe("bootstrap.js", () => {
   const consoleWarnSpy = jest
     .spyOn(console, "warn")
     .mockImplementation(() => {});
+  const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => {});
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -126,6 +127,9 @@ describe("bootstrap.js", () => {
 
     const writeError = new Error("Permission denied");
     mockWriteFile.mockRejectedValue(writeError);
+
+    // Mock schema read to isolate the write error test
+    mockReadFile.mockResolvedValue(JSON.stringify({ properties: {} }));
 
     await ensureLocalInputExists({});
 
