@@ -1,16 +1,17 @@
 {
   "urlCount": 3,
   "retentionHours": 24,
-  "authKey": "enterprise-secret-123",
-  "allowedIps": ["127.0.0.1", "::1"],
-  "defaultResponseCode": 201,
-  "defaultResponseBody": "{\"status\":\"accepted\",\"message\":\"Enterprise Webhook Captured\"}",
-  "defaultResponseHeaders": {
-    "X-Enterprise-Ready": "true",
-    "Content-Type": "application/json"
-  },
-  "responseDelayMs": 500,
-  "forwardUrl": "http://localhost:9999/callback",
-  "jsonSchema": "{\"type\":\"object\",\"required\":[\"event\"]}",
-  "customScript": "event.body = { ...event.body, scriptProcessed: true }; event.headers['x-script'] = 'active';"
+  "maxPayloadSize": 10485760,
+  "enableJSONParsing": true,
+  "maskSensitiveData": true,
+  "rateLimitPerMinute": 60,
+  "authKey": "my-secret-key-123",
+  "defaultResponseCode": 200,
+  "defaultResponseBody": "{\"status\": \"received\", \"success\": true}",
+  "responseDelayMs": 0,
+  "forwardUrl": "https://your-server.com/ingest",
+  "forwardHeaders": true,
+  "jsonSchema": "{\n  \"type\": \"object\",\n  \"required\": [\"userId\"],\n  \"properties\": {\n    \"userId\": { \"type\": \"string\" }\n  }\n}",
+  "customScript": "event.body = JSON.parse(event.body);\nevent.headers['x-custom'] = 'modified';",
+  "testAndExit": false
 }
