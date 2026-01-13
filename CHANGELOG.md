@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.8.2] - 2026-01-13
+
+### Added (2.8.2)
+
+- **UX**: Automatic `INPUT.json` creation for `npx` users (Zero-Conf Hot-Reload).
+
+### Security (2.8.2)
+
+- **NPM**: Switched to OIDC Trusted Publishing for verified package provenance.
+
+### Improved (2.8.2)
+
+- **Type Safety**: Removed all `@ts-ignore` directives in favor of proper JSDoc casting.
+- **Documentation**: Clarified `npx` usage and fixed broken anchor links.
+
 ## [2.8.1] - 2026-01-11
 
 ### Fixed

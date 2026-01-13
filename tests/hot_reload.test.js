@@ -290,4 +290,31 @@ describe("Hot-Reloading Configuration Tests", () => {
 
     expect(res.statusCode).toBe(200);
   });
+
+  test("should handle stringified input from KV store", async () => {
+    // 1. Emit stringified input (simulating raw KV update)
+    const stringifiedInput = JSON.stringify({
+      authKey: "stringified-secret",
+      urlCount: 1,
+      retentionHours: 1,
+    });
+
+    await Actor.emitInput(stringifiedInput);
+
+    // 2. Wait for it to apply
+    await waitForCondition(async () => {
+      const res = await request(app)
+        .get("/info")
+        .set("Authorization", "Bearer stringified-secret");
+      return res.statusCode === 200;
+    });
+
+    // 3. Verify it works
+    const res = await request(app)
+      .get("/info")
+      .set("Authorization", "Bearer stringified-secret");
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.system.authActive).toBe(true);
+  });
 });

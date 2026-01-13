@@ -8,8 +8,13 @@ import axios from "axios";
 import { validateUrlForSsrf, SSRF_ERRORS } from "./utils/ssrf.js";
 import { WebhookManager } from "./webhook_manager.js";
 import { createLoggerMiddleware } from "./logger_middleware.js";
-import { parseWebhookOptions, coerceRuntimeOptions } from "./utils/config.js";
+import {
+  parseWebhookOptions,
+  coerceRuntimeOptions,
+  normalizeInput,
+} from "./utils/config.js";
 import { validateAuth } from "./utils/auth.js";
+import { ensureLocalInputExists } from "./utils/bootstrap.js";
 import { RateLimiter } from "./utils/rate_limiter.js";
 import {
   CLEANUP_INTERVAL_MS,
@@ -346,7 +351,11 @@ async function initialize() {
   // --- Hot Reloading Logic ---
   // Use KV Store directly to bypass local cache and enable platform hot-reload
   const store = await Actor.openKeyValueStore();
-  let lastInputStr = JSON.stringify(input);
+  // Sync initial state with storage (which might have been normalized by bootstrap)
+  // to prevent immediate "fake" hot-reload triggers due to type coercion (e.g. "5" vs 5).
+  const initialStoreValue = await store.getValue("INPUT");
+  const normalizedInitialInput = normalizeInput(initialStoreValue, input);
+  let lastInputStr = JSON.stringify(normalizedInitialInput);
 
   inputPollInterval = setInterval(() => {
     if (activePollPromise) return;
@@ -358,16 +367,19 @@ async function initialize() {
         );
         if (!newInput) return;
 
-        const newInputStr = JSON.stringify(newInput);
+        // Normalize input if it's a string (fixes hot-reload from raw KV updates)
+        const normalizedInput = normalizeInput(newInput);
+
+        const newInputStr = JSON.stringify(normalizedInput);
         if (newInputStr === lastInputStr) return;
 
         lastInputStr = newInputStr;
         console.log("[SYSTEM] Detected input update! Applying new settings...");
 
         // Use shared coercion logic
-        const validated = coerceRuntimeOptions(newInput);
+        const validated = coerceRuntimeOptions(normalizedInput);
 
-        const newConfig = parseWebhookOptions(newInput);
+        const newConfig = parseWebhookOptions(normalizedInput);
         const newRateLimit = validated.rateLimitPerMinute;
         // 1. Update Middleware
         if (validated.maxPayloadSize !== currentMaxPayloadSize) {
@@ -446,8 +458,9 @@ async function initialize() {
       /** @type {Response} */ _res,
       /** @type {NextFunction} */ next,
     ) => {
-      const statusOverride = parseInt(
+      const statusOverride = Number.parseInt(
         /** @type {string} */ (req.query.__status),
+        10,
       );
       if (statusOverride >= 100 && statusOverride < 600) {
         /** @type {any} */ (req).forcedStatus = statusOverride;
@@ -824,8 +837,33 @@ async function initialize() {
 }
 
 if (process.env.NODE_ENV !== "test") {
-  /* istanbul ignore next */
-  initialize().catch((err) => {
+  (async () => {
+    // Bootstrap local config if needed (before Actor.init reads it)
+    if (!process.env.APIFY_IS_AT_HOME) {
+      try {
+        let input = {};
+        try {
+          if (process.env.INPUT) {
+            input = JSON.parse(process.env.INPUT);
+          }
+        } catch (e) {
+          console.warn(
+            "[BOOTSTRAP] Failed to parse INPUT env var:",
+            /** @type {Error} */ (e).message,
+          );
+        }
+        await ensureLocalInputExists(input);
+      } catch (error) {
+        console.warn(
+          "[BOOTSTRAP] Failed to initialize local config:",
+          /** @type {Error} */ (error).message,
+        );
+      }
+    }
+
+    // Initialize App
+    await initialize();
+  })().catch((err) => {
     console.error("[FATAL] Server failed to start:", err.message);
     process.exit(1);
   });
