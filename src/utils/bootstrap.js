@@ -42,14 +42,27 @@ export async function ensureLocalInputExists(defaultInput) {
       JSON.parse(raw);
     } catch (parseErr) {
       // Only rewrite if it's a JSON parse error, not a file read error
-      if (/** @type {NodeJS.ErrnoException} */ (parseErr).code) {
-        // This is likely a filesystem error (has error code), not a SyntaxError
+      if (parseErr instanceof SyntaxError) {
+        const fullConfig = await buildFullConfig(defaultInput);
+
+        await fs.writeFile(
+          inputPath,
+          JSON.stringify(fullConfig, null, 2),
+          "utf-8",
+        );
+        console.warn(
+          "[SYSTEM] INPUT.json was invalid; rewritten with defaults:",
+          /** @type {Error} */ (parseErr).message,
+        );
+      } else {
+        // This is likely a filesystem error (e.g. permissions)
         console.warn(
           "[SYSTEM] Failed to read INPUT.json:",
           /** @type {Error} */ (parseErr).message,
         );
-        return;
       }
+      return; 
+    }
 
       const fullConfig = await buildFullConfig(defaultInput);
 
