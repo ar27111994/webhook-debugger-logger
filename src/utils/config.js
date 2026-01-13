@@ -89,3 +89,21 @@ export function coerceRuntimeOptions(input) {
     maxPayloadSize,
   };
 }
+
+/**
+ * Normalizes input value from Key-Value store.
+ * Handles stringified JSON and safe fallback.
+ * @param {any} value - The raw value from KV store (string or object)
+ * @param {any} [fallback] - Value to return if parsing fails or valid is null/undefined
+ * @returns {any} Normalized object or fallback
+ */
+export function normalizeInput(value, fallback) {
+  if (typeof value === "string") {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return fallback;
+    }
+  }
+  return value || fallback;
+}

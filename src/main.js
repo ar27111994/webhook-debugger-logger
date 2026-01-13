@@ -8,7 +8,11 @@ import axios from "axios";
 import { validateUrlForSsrf, SSRF_ERRORS } from "./utils/ssrf.js";
 import { WebhookManager } from "./webhook_manager.js";
 import { createLoggerMiddleware } from "./logger_middleware.js";
-import { parseWebhookOptions, coerceRuntimeOptions } from "./utils/config.js";
+import {
+  parseWebhookOptions,
+  coerceRuntimeOptions,
+  normalizeInput,
+} from "./utils/config.js";
 import { validateAuth } from "./utils/auth.js";
 import { ensureLocalInputExists } from "./utils/bootstrap.js";
 import { RateLimiter } from "./utils/rate_limiter.js";
@@ -350,16 +354,7 @@ async function initialize() {
   // Sync initial state with storage (which might have been normalized by bootstrap)
   // to prevent immediate "fake" hot-reload triggers due to type coercion (e.g. "5" vs 5).
   const initialStoreValue = await store.getValue("INPUT");
-  const normalizedInitialInput =
-    typeof initialStoreValue === "string"
-      ? (() => {
-          try {
-            return JSON.parse(initialStoreValue);
-          } catch {
-            return input;
-          }
-        })()
-      : initialStoreValue || input;
+  const normalizedInitialInput = normalizeInput(initialStoreValue, input);
   let lastInputStr = JSON.stringify(normalizedInitialInput);
 
   inputPollInterval = setInterval(() => {
@@ -373,16 +368,7 @@ async function initialize() {
         if (!newInput) return;
 
         // Normalize input if it's a string (fixes hot-reload from raw KV updates)
-        const normalizedInput =
-          typeof newInput === "string"
-            ? (() => {
-                try {
-                  return JSON.parse(newInput);
-                } catch {
-                  return newInput;
-                }
-              })()
-            : newInput;
+        const normalizedInput = normalizeInput(newInput, newInput);
 
         const newInputStr = JSON.stringify(normalizedInput);
         if (newInputStr === lastInputStr) return;
