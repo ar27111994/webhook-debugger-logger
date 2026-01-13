@@ -166,7 +166,23 @@ async function initialize() {
     console.warn("Failed to preload index.html:", err);
   }
 
-  const input = /** @type {any} */ ((await Actor.getInput()) || {});
+  // Ensure local INPUT.json exists for better DX (when running locally/npx)
+  await ensureLocalInputExists((await Actor.getInput()) || {});
+
+  let input = /** @type {any} */ ((await Actor.getInput()) || {});
+
+  // FORCE override from process.env.INPUT if present (CLI usage)
+  // Apify SDK prioritizes local storage file over Env Var if the file exists.
+  // We want the reverse for CLI usage (npx webhook-debugger-logger).
+  if (process.env.INPUT) {
+    try {
+      const envInput = JSON.parse(process.env.INPUT);
+      input = { ...input, ...envInput };
+      console.log("[SYSTEM] Using override from INPUT environment variable.");
+    } catch (e) {
+      console.warn("[SYSTEM] Failed to parse INPUT env var:", e.message);
+    }
+  }
   const config = parseWebhookOptions(input);
   const {
     urlCount = DEFAULT_URL_COUNT,
