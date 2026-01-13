@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.8.3] - 2026-01-13
+
+### Fixed (2.8.3)
+
+- **CLI Compatibility**: The Actor now correctly respects the `INPUT` environment variable when running via `npx`, overriding any local `INPUT.json` artifacts. This restores full stateless CLI functionality (e.g., `INPUT='{...}' npx ...`).
+- **NPM Publishing**: Fixed an authentication issue in the CI/CD pipeline by correctly balancing OIDC provenance with legacy `setup-node` requirements.
+
+### Improved (2.8.3)
+
+- **Startup UX**: Clarified startup logs to distinguish between "Initializing" (0 -> N webhooks) and "Scaling Up" (N -> M webhooks).
+- **Log Noise**: Silenced the "Refreshed retention" log for insignificant updates (< 5 mins), preventing console spam during quick restarts.
+
 ## [2.8.2] - 2026-01-13
 
 ### Added (2.8.2)

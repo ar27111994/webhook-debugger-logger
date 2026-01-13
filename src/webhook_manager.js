@@ -23,7 +23,7 @@ export class WebhookManager {
       if (savedState && typeof savedState === "object") {
         this.webhooks = new Map(Object.entries(savedState));
         console.log(
-          `[STORAGE] Restored ${this.webhooks.size} webhooks from state.`
+          `[STORAGE] Restored ${this.webhooks.size} webhooks from state.`,
         );
       }
     } catch (error) {
@@ -33,7 +33,7 @@ export class WebhookManager {
           : String(error ?? "Unknown error");
       console.error(
         "[CRITICAL] Failed to initialize WebhookManager state:",
-        message
+        message,
       );
       // Fallback to empty map is already handled by constructor
     }
@@ -53,7 +53,7 @@ export class WebhookManager {
           : String(error ?? "Unknown error");
       console.error(
         "[STORAGE-ERROR] Failed to persist webhook state:",
-        message
+        message,
       );
     }
   }
@@ -67,13 +67,13 @@ export class WebhookManager {
   async generateWebhooks(count, retentionHours) {
     if (!Number.isInteger(count) || count < 0) {
       throw new Error(
-        `Invalid count: ${count}. Must be a non-negative integer.`
+        `Invalid count: ${count}. Must be a non-negative integer.`,
       );
     }
     // count check handled by MAX_BULK_CREATE usage below
     if (count > MAX_BULK_CREATE) {
       throw new Error(
-        `Invalid count: ${count}. Max allowed is ${MAX_BULK_CREATE}.`
+        `Invalid count: ${count}. Max allowed is ${MAX_BULK_CREATE}.`,
       );
     }
 
@@ -83,11 +83,11 @@ export class WebhookManager {
       !Number.isFinite(retentionHours)
     ) {
       throw new Error(
-        `Invalid retentionHours: ${retentionHours}. Must be a positive number.`
+        `Invalid retentionHours: ${retentionHours}. Must be a positive number.`,
       );
     }
     const expiresAt = new Date(
-      Date.now() + retentionHours * 60 * 60 * 1000
+      Date.now() + retentionHours * 60 * 60 * 1000,
     ).toISOString();
     const newIds = [];
 
@@ -160,7 +160,7 @@ export class WebhookManager {
       !Number.isFinite(retentionHours)
     ) {
       throw new Error(
-        `Invalid retentionHours: ${retentionHours}. Must be a positive number.`
+        `Invalid retentionHours: ${retentionHours}. Must be a positive number.`,
       );
     }
     const now = Date.now();
@@ -186,18 +186,8 @@ export class WebhookManager {
     }
 
     if (updatedCount > 0) {
-      // If the user just restarted, the jump is equal to downtime.
-      // We'll log it if it's significant (> 5 minutes).
-
-      // Since we didn't capture the diff sum, let's just log it as "Refreshed"
-      // avoiding the word "Extended" which implies config change,
-      // UNLESS we pass a flag.
-      // Actually, let's keep it simple: Just change "Extended" to "Refreshed" if it's maintenance.
-      // But calculating diff is better.
-      // Let's rely on the previous loop to track max diff.
-
       console.log(
-        `[STORAGE] Refreshed retention for ${updatedCount} of ${this.webhooks.size} webhooks to ${retentionHours}h.`
+        `[STORAGE] Refreshed retention for ${updatedCount} of ${this.webhooks.size} webhooks to ${retentionHours}h.`,
       );
       await this.persist();
     }
