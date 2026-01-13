@@ -379,7 +379,7 @@ async function initialize() {
         // Use shared coercion logic
         const validated = coerceRuntimeOptions(normalizedInput);
 
-        const newConfig = parseWebhookOptions(newInput);
+        const newConfig = parseWebhookOptions(normalizedInput);
         const newRateLimit = validated.rateLimitPerMinute;
         // 1. Update Middleware
         if (validated.maxPayloadSize !== currentMaxPayloadSize) {
