@@ -23,7 +23,6 @@ jest.unstable_mockModule("fs/promises", () => ({
 const { ensureLocalInputExists } = await import("../src/utils/bootstrap.js");
 
 describe("bootstrap.js", () => {
-  const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => {});
   const consoleWarnSpy = jest
     .spyOn(console, "warn")
     .mockImplementation(() => {});
@@ -55,8 +54,8 @@ describe("bootstrap.js", () => {
     expect(mockWriteFile).not.toHaveBeenCalled();
   });
 
-  test("should create file if it is missing (ENOENT)", async () => {
-    // Setup: access throws ENOENT
+  test("should create file from schema defaults if missing (ENOENT)", async () => {
+    // Setup: INPUT.json missing
     const enoent = /** @type {NodeJS.ErrnoException} */ (
       new Error("File not found")
     );
@@ -65,34 +64,54 @@ describe("bootstrap.js", () => {
     mockMkdir.mockResolvedValue(undefined);
     mockWriteFile.mockResolvedValue(undefined);
 
-    const inputs = {
-      urlCount: 5,
-      someOtherKey: "value",
+    // Setup: Schema exists
+    const mockSchema = {
+      properties: {
+        urlCount: { default: 3 },
+        retentionHours: { prefill: 48 }, // Prefill wins
+        apiSecret: { type: "string" }, // No default
+        section_debug: { editor: "hidden", type: "string" },
+        internalFlag: { editor: "hidden", default: true },
+      },
     };
-
-    await ensureLocalInputExists(inputs);
-
-    // Should create dir
-    expect(mockMkdir).toHaveBeenCalledWith(expect.any(String), {
-      recursive: true,
+    mockReadFile.mockImplementation(async (/** @type {any} */ filePath) => {
+      const pathStr = filePath.toString();
+      if (pathStr.includes("input_schema.json")) {
+        return JSON.stringify(mockSchema);
+      }
+      throw enoent; // INPUT.json missing
     });
 
-    // Should write file
+    await ensureLocalInputExists({ someOverride: 999 });
+
     expect(mockWriteFile).toHaveBeenCalledWith(
       expect.stringContaining("INPUT.json"),
-      expect.stringContaining('"urlCount": 5'), // Coerced
+      expect.stringContaining('"urlCount": 3'),
+      "utf-8"
+    );
+    expect(mockWriteFile).toHaveBeenCalledWith(
+      expect.stringContaining("INPUT.json"),
+      expect.stringContaining('"retentionHours": 48'),
       "utf-8"
     );
 
-    // Should pass through arbitrary input keys
+    // Override should still be present
     expect(mockWriteFile).toHaveBeenCalledWith(
       expect.stringContaining("INPUT.json"),
-      expect.stringContaining('"someOtherKey": "value"'),
+      expect.stringContaining('"someOverride": 999'),
       "utf-8"
     );
 
-    expect(consoleLogSpy).toHaveBeenCalledWith(
-      expect.stringContaining("Local configuration initialized")
+    // Hidden fields should be absent
+    expect(mockWriteFile).toHaveBeenCalledWith(
+      expect.stringContaining("INPUT.json"),
+      expect.not.stringContaining("section_debug"),
+      "utf-8"
+    );
+    expect(mockWriteFile).toHaveBeenCalledWith(
+      expect.stringContaining("INPUT.json"),
+      expect.not.stringContaining("internalFlag"),
+      "utf-8"
     );
   });
 
@@ -119,10 +138,21 @@ describe("bootstrap.js", () => {
   test("should recover from invalid INPUT.json (corrupt file)", async () => {
     // Setup: file exists but has invalid JSON
     mockAccess.mockResolvedValue(undefined);
-    mockReadFile.mockResolvedValue("{ invalid json ");
     mockWriteFile.mockResolvedValue(undefined);
 
-    await ensureLocalInputExists({ urlCount: 5 });
+    // Initial read returns bad JSON
+    mockReadFile.mockImplementation(async (/** @type {any} */ filePath) => {
+      const pathStr = filePath.toString();
+      if (pathStr.includes("input_schema.json")) {
+        return JSON.stringify({ properties: { urlCount: { default: 10 } } });
+      }
+      if (pathStr.includes("INPUT.json")) {
+        return "{ invalid json ";
+      }
+      return "";
+    });
+
+    await ensureLocalInputExists({ extra: 1 });
 
     // Should read file
     expect(mockReadFile).toHaveBeenCalledWith(
@@ -130,10 +160,10 @@ describe("bootstrap.js", () => {
       "utf-8"
     );
 
-    // Should rewrite with defaults
+    // Should rewrite with defaults from schema
     expect(mockWriteFile).toHaveBeenCalledWith(
       expect.stringContaining("INPUT.json"),
-      expect.stringContaining('"urlCount": 5'),
+      expect.stringContaining('"urlCount": 10'),
       "utf-8"
     );
 

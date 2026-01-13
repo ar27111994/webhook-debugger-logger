@@ -1,6 +1,5 @@
 import fs from "fs/promises";
 import path from "path";
-import { coerceRuntimeOptions } from "./config.js";
 
 /**
  * Ensures the local storage input file exists for hot-reloading.
@@ -38,10 +37,10 @@ export async function ensureLocalInputExists(defaultInput) {
         return;
       }
 
-      const defaults = coerceRuntimeOptions(defaultInput);
+      const defaults = await getDefaultsFromSchema();
       const fullConfig = {
-        ...defaultInput,
         ...defaults,
+        ...defaultInput,
       };
 
       await fs.writeFile(
@@ -61,11 +60,10 @@ export async function ensureLocalInputExists(defaultInput) {
         await fs.mkdir(path.dirname(inputPath), { recursive: true });
 
         // Write defaults
-        const defaults = coerceRuntimeOptions(defaultInput);
-        // Add other useful keys that might be missing from coercion
+        const defaults = await getDefaultsFromSchema();
         const fullConfig = {
-          ...defaultInput,
           ...defaults,
+          ...defaultInput,
         };
 
         await fs.writeFile(
@@ -91,5 +89,44 @@ export async function ensureLocalInputExists(defaultInput) {
         /** @type {Error} */ (err).message
       );
     }
+  }
+}
+
+/**
+ * Reads .actor/input_schema.json and extracts default/prefill values.
+ * @returns {Promise<Record<string, any>>}
+ */
+async function getDefaultsFromSchema() {
+  try {
+    const schemaPath = path.join(process.cwd(), ".actor", "input_schema.json");
+    const raw = await fs.readFile(schemaPath, "utf-8");
+    const schema = JSON.parse(raw);
+
+    /** @type {Record<string, any>} */
+    const defaults = {};
+
+    if (schema.properties) {
+      for (const [key, config] of Object.entries(schema.properties)) {
+        // Skip hidden sections or non-input fields
+        if (config.editor === "hidden" || key.startsWith("section_")) {
+          continue;
+        }
+
+        // Priority: prefill > default
+        if (config.prefill !== undefined) {
+          defaults[key] = config.prefill;
+        } else if (config.default !== undefined) {
+          defaults[key] = config.default;
+        }
+      }
+    }
+    return defaults;
+  } catch (e) {
+    console.warn(
+      "[BOOTSTRAP] Failed to load input_schema.json, using minimal defaults.",
+      /** @type {Error} */ (e).message
+    );
+    // Fallback if schema is missing (should verify with coerce in caller, but caller merges)
+    return {};
   }
 }
