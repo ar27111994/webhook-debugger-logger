@@ -381,6 +381,24 @@ Use this to trigger actions based on lifecycle events or safely after data is st
 3. **Flow**: `Source` -> `Debugger` -> `Apify Storage` -> `Zapier`.
 4. **Benefit**: Guaranteed delivery even if your external tool is temporarily down (via Apify's retry logic).
 
+## 🤖 AI & MCP Integration (New)
+
+This Actor is fully compatible with the **Model Context Protocol (MCP)**, allowing you to connect it directly to AI agents like **Claude Desktop**, **Cursor**, or **Windsurf**.
+
+### Why connect to AI?
+
+- **Real-time Debugging**: Ask Claude to "Watch for the next Stripe webhook and tell me if the signature is valid."
+- **Automated Verification**: Have an agent listen to webhooks while it triggers actions in another system, ensuring the expected side-effects occur.
+
+### How to Connect (Apify MCP Server)
+
+1.  Go to the Actor page in Apify Console.
+2.  Click the **"AI"** button in the top-right corner.
+3.  Select **"Open MCP configuration"**.
+4.  Copy the configuration snippet and add it to your `claude_desktop_config.json` or MCP client settings.
+
+![MCP Configuration](https://raw.githubusercontent.com/ar27111994/webhook-debugger-logger/main/assets/mcp_config.png)
+
 ## 💰 Pricing & Economics
 
 This Actor uses a transparent **Pay-per-Event (PPE)** pricing model. This means you only pay for the resources you actually consume during active debugging, with no monthly subscription overhead.
