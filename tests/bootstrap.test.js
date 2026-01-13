@@ -144,4 +144,22 @@ describe("bootstrap.js", () => {
       expect.any(String)
     );
   });
+
+  test("should not overwrite file on read error", async () => {
+    mockAccess.mockResolvedValue(undefined);
+    const readError = /** @type {NodeJS.ErrnoException} */ (
+      new Error("Permission denied")
+    );
+    readError.code = "EACCES";
+    mockReadFile.mockRejectedValue(readError);
+
+    await ensureLocalInputExists({ urlCount: 5 });
+
+    // Should NOT attempt to rewrite on read errors
+    expect(mockWriteFile).not.toHaveBeenCalled();
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Failed to read INPUT.json"),
+      expect.any(String)
+    );
+  });
 });

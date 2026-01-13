@@ -28,6 +28,16 @@ export async function ensureLocalInputExists(defaultInput) {
       const raw = await fs.readFile(inputPath, "utf-8");
       JSON.parse(raw);
     } catch (parseErr) {
+      // Only rewrite if it's a JSON parse error, not a file read error
+      if (/** @type {NodeJS.ErrnoException} */ (parseErr).code) {
+        // This is likely a filesystem error (has error code), not a SyntaxError
+        console.warn(
+          "[SYSTEM] Failed to read INPUT.json:",
+          /** @type {Error} */ (parseErr).message
+        );
+        return;
+      }
+
       const defaults = coerceRuntimeOptions(defaultInput);
       const fullConfig = {
         ...defaultInput,
@@ -75,6 +85,11 @@ export async function ensureLocalInputExists(defaultInput) {
           /** @type {Error} */ (writeErr).message
         );
       }
+    } else {
+      console.warn(
+        "[SYSTEM] Unexpected error accessing INPUT.json:",
+        /** @type {Error} */ (err).message
+      );
     }
   }
 }
