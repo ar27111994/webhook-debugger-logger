@@ -392,10 +392,10 @@ This Actor is fully compatible with the **Model Context Protocol (MCP)**, allowi
 
 ### How to Connect (Apify MCP Server)
 
-1.  Go to the Actor page in Apify Console.
-2.  Click the **"AI"** button in the top-right corner.
-3.  Select **"Open MCP configuration"**.
-4.  Copy the configuration snippet and add it to your `claude_desktop_config.json` or MCP client settings.
+1. Go to the Actor page in Apify Console.
+2. Click the **"AI"** button in the top-right corner.
+3. Select **"Open MCP configuration"**.
+4. Copy the configuration snippet and add it to your `claude_desktop_config.json` or MCP client settings.
 
 ![MCP Configuration](https://raw.githubusercontent.com/ar27111994/webhook-debugger-logger/main/assets/mcp_config.png)
 
