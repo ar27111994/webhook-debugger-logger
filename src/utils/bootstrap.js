@@ -1,5 +1,6 @@
 import * as fs from "fs/promises";
 import path from "path";
+import { fileURLToPath } from "url";
 
 /**
  * Helper to build the full configuration object by merging defaults.
@@ -106,7 +107,7 @@ async function getDefaultsFromSchema() {
     const schemaPath = process.env.APIFY_ACTOR_DIR
       ? path.join(process.env.APIFY_ACTOR_DIR, ".actor", "input_schema.json")
       : path.join(
-          path.dirname(new URL(import.meta.url).pathname),
+          path.dirname(fileURLToPath(import.meta.url)), // Ensure valid cross-platform absolute path
           "..",
           "..",
           ".actor",
