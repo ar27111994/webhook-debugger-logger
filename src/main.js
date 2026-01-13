@@ -167,8 +167,12 @@ async function initialize() {
   }
 
   // Ensure local INPUT.json exists for better DX (when running locally/npx)
+  // Only create artifact if NOT running on the Apify Platform (Stateless vs Stateful)
+  // We want to preserve local artifacts for hot-reload dev workflows.
   const rawInput = /** @type {any} */ ((await Actor.getInput()) || {});
-  await ensureLocalInputExists(rawInput);
+  if (!Actor.isAtHome()) {
+    await ensureLocalInputExists(rawInput);
+  }
 
   let input = rawInput;
 
@@ -178,8 +182,18 @@ async function initialize() {
   if (process.env.INPUT) {
     try {
       const envInput = JSON.parse(process.env.INPUT);
-      input = { ...input, ...envInput };
-      console.log("[SYSTEM] Using override from INPUT environment variable.");
+
+      if (
+        envInput &&
+        typeof envInput === "object" &&
+        !Array.isArray(envInput)
+      ) {
+        // Override local artifacts completely for stateless CLI usage
+        input = envInput;
+        console.log("[SYSTEM] Using override from INPUT environment variable.");
+      } else {
+        throw new Error("INPUT env var must be a non-array JSON object");
+      }
     } catch (e) {
       console.warn(
         "[SYSTEM] Failed to parse INPUT env var:",
@@ -187,6 +201,7 @@ async function initialize() {
       );
     }
   }
+
   const config = parseWebhookOptions(input);
   const {
     urlCount = DEFAULT_URL_COUNT,

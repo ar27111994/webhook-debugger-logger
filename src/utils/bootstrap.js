@@ -45,11 +45,14 @@ export async function ensureLocalInputExists(defaultInput) {
       if (parseErr instanceof SyntaxError) {
         const fullConfig = await buildFullConfig(defaultInput);
 
+        const tmpPath = `${inputPath}.tmp`;
+
         await fs.writeFile(
-          inputPath,
+          tmpPath,
           JSON.stringify(fullConfig, null, 2),
           "utf-8",
         );
+        await fs.rename(tmpPath, inputPath);
         console.warn(
           "[SYSTEM] INPUT.json was invalid; rewritten with defaults:",
           /** @type {Error} */ (parseErr).message,
@@ -72,11 +75,14 @@ export async function ensureLocalInputExists(defaultInput) {
         // Write defaults
         const fullConfig = await buildFullConfig(defaultInput);
 
+        const tmpPath = `${inputPath}.tmp`;
+
         await fs.writeFile(
-          inputPath,
+          tmpPath,
           JSON.stringify(fullConfig, null, 2),
           "utf-8",
         );
+        await fs.rename(tmpPath, inputPath);
         console.log(
           `[SYSTEM] 📦 Local configuration initialized at: ${inputPath}`,
         );
