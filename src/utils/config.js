@@ -36,7 +36,9 @@ export function parseWebhookOptions(options = {}) {
   return {
     allowedIps: options.allowedIps ?? [],
     defaultResponseCode: options.defaultResponseCode ?? 200,
-    defaultResponseBody: options.defaultResponseBody ?? "OK",
+    defaultResponseBody:
+      options.defaultResponseBody ??
+      '{"status": "success", "message": "Webhook captured!"}',
     defaultResponseHeaders: options.defaultResponseHeaders ?? {},
     responseDelayMs: options.responseDelayMs ?? 0,
     forwardUrl: options.forwardUrl,
