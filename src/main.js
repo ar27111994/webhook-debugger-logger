@@ -863,27 +863,7 @@ async function initialize() {
 if (process.env.NODE_ENV !== "test") {
   (async () => {
     // Bootstrap local config if needed (before Actor.init reads it)
-    if (!process.env.APIFY_IS_AT_HOME) {
-      try {
-        let input = {};
-        try {
-          if (process.env.INPUT) {
-            input = JSON.parse(process.env.INPUT);
-          }
-        } catch (e) {
-          console.warn(
-            "[BOOTSTRAP] Failed to parse INPUT env var:",
-            /** @type {Error} */ (e).message
-          );
-        }
-        // Redundant call removed here (handled in initialize)
-      } catch (error) {
-        console.warn(
-          "[BOOTSTRAP] Failed to initialize local config:",
-          /** @type {Error} */ (error).message
-        );
-      }
-    }
+    // Environment checks handled inside initialize()
 
     // Initialize App
     await initialize();

@@ -29,7 +29,7 @@ export async function ensureLocalInputExists(defaultInput) {
     storageDir,
     "key_value_stores",
     "default",
-    "INPUT.json",
+    "INPUT.json"
   );
 
   try {
@@ -48,33 +48,20 @@ export async function ensureLocalInputExists(defaultInput) {
         await fs.writeFile(
           inputPath,
           JSON.stringify(fullConfig, null, 2),
-          "utf-8",
+          "utf-8"
         );
         console.warn(
           "[SYSTEM] INPUT.json was invalid; rewritten with defaults:",
-          /** @type {Error} */ (parseErr).message,
+          /** @type {Error} */ (parseErr).message
         );
       } else {
         // This is likely a filesystem error (e.g. permissions)
         console.warn(
           "[SYSTEM] Failed to read INPUT.json:",
-          /** @type {Error} */ (parseErr).message,
+          /** @type {Error} */ (parseErr).message
         );
       }
-      return; 
-    }
-
-      const fullConfig = await buildFullConfig(defaultInput);
-
-      await fs.writeFile(
-        inputPath,
-        JSON.stringify(fullConfig, null, 2),
-        "utf-8",
-      );
-      console.warn(
-        "[SYSTEM] INPUT.json was invalid; rewritten with defaults:",
-        /** @type {Error} */ (parseErr).message,
-      );
+      return;
     }
   } catch (err) {
     if (/** @type {NodeJS.ErrnoException} */ (err).code === "ENOENT") {
@@ -88,24 +75,24 @@ export async function ensureLocalInputExists(defaultInput) {
         await fs.writeFile(
           inputPath,
           JSON.stringify(fullConfig, null, 2),
-          "utf-8",
+          "utf-8"
         );
         console.log(
-          `[SYSTEM] 📦 Local configuration initialized at: ${inputPath}`,
+          `[SYSTEM] 📦 Local configuration initialized at: ${inputPath}`
         );
         console.log(
-          `[SYSTEM] 💡 Tip: Edit this file to hot-reload settings while running!`,
+          `[SYSTEM] 💡 Tip: Edit this file to hot-reload settings while running!`
         );
       } catch (writeErr) {
         console.warn(
           "[SYSTEM] Failed to write default input file:",
-          /** @type {Error} */ (writeErr).message,
+          /** @type {Error} */ (writeErr).message
         );
       }
     } else {
       console.warn(
         "[SYSTEM] Unexpected error accessing INPUT.json:",
-        /** @type {Error} */ (err).message,
+        /** @type {Error} */ (err).message
       );
     }
   }
@@ -124,7 +111,7 @@ async function getDefaultsFromSchema() {
           "..",
           "..",
           ".actor",
-          "input_schema.json",
+          "input_schema.json"
         );
     const raw = await fs.readFile(schemaPath, "utf-8");
     const schema = JSON.parse(raw);
@@ -156,7 +143,7 @@ async function getDefaultsFromSchema() {
   } catch (e) {
     console.warn(
       "[BOOTSTRAP] Failed to load input_schema.json, using minimal defaults.",
-      /** @type {Error} */ (e).message,
+      /** @type {Error} */ (e).message
     );
     // Fallback if schema is missing (should verify with coerce in caller, but caller merges)
     return {};
