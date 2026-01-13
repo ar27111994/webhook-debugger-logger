@@ -5,7 +5,7 @@
   "description": "Generate temporary webhook URLs and log all incoming requests with full details.",
   "main": "src/main.js",
   "bin": {
-    "webhook-debugger-logger": "./src/main.js"
+    "webhook-debugger-logger": "src/main.js"
   },
   "scripts": {
     "start": "node src/main.js",
@@ -58,5 +58,9 @@
         "statements": 90
       }
     }
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   }
 }
