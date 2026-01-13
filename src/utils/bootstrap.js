@@ -1,5 +1,18 @@
-import fs from "fs/promises";
+import * as fs from "fs/promises";
 import path from "path";
+
+/**
+ * Helper to build the full configuration object by merging defaults.
+ * @param {Record<string, any>} defaultInput
+ * @returns {Promise<Record<string, any>>}
+ */
+async function buildFullConfig(defaultInput) {
+  const defaults = await getDefaultsFromSchema();
+  return {
+    ...defaults,
+    ...defaultInput,
+  };
+}
 
 /**
  * Ensures the local storage input file exists for hot-reloading.
@@ -37,11 +50,7 @@ export async function ensureLocalInputExists(defaultInput) {
         return;
       }
 
-      const defaults = await getDefaultsFromSchema();
-      const fullConfig = {
-        ...defaults,
-        ...defaultInput,
-      };
+      const fullConfig = await buildFullConfig(defaultInput);
 
       await fs.writeFile(
         inputPath,
@@ -60,11 +69,7 @@ export async function ensureLocalInputExists(defaultInput) {
         await fs.mkdir(path.dirname(inputPath), { recursive: true });
 
         // Write defaults
-        const defaults = await getDefaultsFromSchema();
-        const fullConfig = {
-          ...defaults,
-          ...defaultInput,
-        };
+        const fullConfig = await buildFullConfig(defaultInput);
 
         await fs.writeFile(
           inputPath,
@@ -98,7 +103,15 @@ export async function ensureLocalInputExists(defaultInput) {
  */
 async function getDefaultsFromSchema() {
   try {
-    const schemaPath = path.join(process.cwd(), ".actor", "input_schema.json");
+    const schemaPath = process.env.APIFY_ACTOR_DIR
+      ? path.join(process.env.APIFY_ACTOR_DIR, ".actor", "input_schema.json")
+      : path.join(
+          path.dirname(new URL(import.meta.url).pathname),
+          "..",
+          "..",
+          ".actor",
+          "input_schema.json"
+        );
     const raw = await fs.readFile(schemaPath, "utf-8");
     const schema = JSON.parse(raw);
 
@@ -106,7 +119,12 @@ async function getDefaultsFromSchema() {
     const defaults = {};
 
     if (schema.properties) {
-      for (const [key, config] of Object.entries(schema.properties)) {
+      for (const [
+        key,
+        config,
+      ] of /** @type {[string, {editor?: string, prefill?: any, default?: any}][]} */ (
+        Object.entries(schema.properties)
+      )) {
         // Skip hidden sections or non-input fields
         if (config.editor === "hidden" || key.startsWith("section_")) {
           continue;
