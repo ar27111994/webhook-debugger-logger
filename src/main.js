@@ -368,7 +368,7 @@ async function initialize() {
         if (!newInput) return;
 
         // Normalize input if it's a string (fixes hot-reload from raw KV updates)
-        const normalizedInput = normalizeInput(newInput, newInput);
+        const normalizedInput = normalizeInput(newInput);
 
         const newInputStr = JSON.stringify(normalizedInput);
         if (newInputStr === lastInputStr) return;

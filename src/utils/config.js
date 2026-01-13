@@ -97,7 +97,7 @@ export function coerceRuntimeOptions(input) {
  * @param {any} [fallback] - Value to return if parsing fails or valid is null/undefined
  * @returns {any} Normalized object or fallback
  */
-export function normalizeInput(value, fallback) {
+export function normalizeInput(value, fallback = {}) {
   if (typeof value === "string") {
     try {
       return JSON.parse(value);
