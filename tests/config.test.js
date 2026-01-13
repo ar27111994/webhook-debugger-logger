@@ -2,6 +2,7 @@ import { describe, test, expect } from "@jest/globals";
 import {
   parseWebhookOptions,
   coerceRuntimeOptions,
+  normalizeInput,
 } from "../src/utils/config.js";
 import {
   DEFAULT_PAYLOAD_LIMIT,
@@ -12,6 +13,38 @@ import {
 } from "../src/consts.js";
 
 describe("Config Utils", () => {
+  describe("normalizeInput", () => {
+    test("should parse valid JSON string", () => {
+      const input = '{"a": 1}';
+      const result = normalizeInput(input);
+      expect(result).toEqual({ a: 1 });
+    });
+
+    test("should handle invalid JSON string by returning fallback (default {})", () => {
+      const input = "{ invalid";
+      const result = normalizeInput(input);
+      expect(result).toEqual({});
+    });
+
+    test("should return provided fallback for invalid JSON", () => {
+      const input = "bad";
+      const fallback = { safe: true };
+      const result = normalizeInput(input, fallback);
+      expect(result).toEqual(fallback);
+    });
+
+    test("should return non-string value as-is", () => {
+      const input = { b: 2 };
+      const result = normalizeInput(input);
+      expect(result).toEqual(input);
+    });
+
+    test("should return fallback for null/undefined input", () => {
+      expect(normalizeInput(null)).toEqual({});
+      expect(normalizeInput(undefined, { f: 1 })).toEqual({ f: 1 });
+    });
+  });
+
   test("parseWebhookOptions should clamp maxPayloadSize to default maximum", () => {
     // Test capping at default
     const huge = MAX_ALLOWED_PAYLOAD_SIZE + 10000;
