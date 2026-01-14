@@ -496,8 +496,8 @@ We are committed to providing first-class support for our "Enterprise Suite" use
 
 - 💬 **Apify Discord**: Join the [Apify Discord Community](https://discord.gg/jyEM2PRvMU?utm_campaign=readme_support) to chat with other developers.
 - 📚 **Learning**: Explore the [Apify Academy](https://docs.apify.com/academy?utm_campaign=readme_support) for best practices on building resilient Actors.
-- � **Documentation**: Read the [Apify SDK Documentation](https://sdk.apify.com/?utm_campaign=readme_support) for technical deep dives.
-- �🔗 **Console**: Manage your active runs in the [Apify Console](https://console.apify.com?utm_campaign=readme_support).
+- 📖 **Documentation**: Read the [Apify SDK Documentation](https://sdk.apify.com/?utm_campaign=readme_support) for technical deep dives.
+- 🔗 **Console**: Manage your active runs in the [Apify Console](https://console.apify.com?utm_campaign=readme_support).
 - 🛠️ **Alternative**: Compare with [Webhook.site](https://webhook.site) if you need a desktop-only alternative.
 - 📝 **Issues**: Found a bug? Open an issue on our [GitHub Repository](https://github.com/ar27111994/webhook-debugger-logger?utm_campaign=readme_support).
 
