@@ -12,12 +12,12 @@ jobs:
       id-token: write # Required for provenance (optional but good practice)
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: "24"
           registry-url: "https://registry.npmjs.org"
 
       - name: Install Dependencies
@@ -26,5 +26,11 @@ jobs:
       - name: Verify Builds/Tests
         run: npm test
 
+      # node@v24.0.0+
+      # https://github.com/orgs/community/discussions/176761
+      # https://github.com/actions/setup-node/issues/1440#issuecomment-3705123143
+      - name: Unset NODE_AUTH_TOKEN
+        run: unset NODE_AUTH_TOKEN
+
       - name: Publish to NPM
-        run: npm publish --provenance
+        run: npm publish
