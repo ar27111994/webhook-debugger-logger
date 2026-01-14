@@ -1,4 +1,4 @@
-# 🚀 Webhook Debugger & Logger v2.8.0 (Enterprise Suite)
+# 🚀 Webhook Debugger & Logger v2.8.x (Enterprise Suite)
 
 [![Build Status](https://github.com/ar27111994/webhook-debugger-logger/actions/workflows/ci.yml/badge.svg)](https://github.com/ar27111994/webhook-debugger-logger/actions)
 [![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
@@ -75,8 +75,7 @@ When running locally or self-hosted, you are **not bound** by the UI constraints
 
 **Hot-Reload**: To change settings while running (e.g., enable debug logging), simply edit `storage/key_value_stores/default/INPUT.json`. The Actor polls for changes every **5 seconds** and applies them automatically.
 
-> [!IMPORTANT]
-> **Retention is Activity-Based**: The expiration timer resets whenever the Actor is active (restarts/hot-reloads). This ensures your webhooks don't expire mid-debugging session. They only expire if you abandon the Actor for the full duration.
+> [!IMPORTANT] > **Retention is Activity-Based**: The expiration timer resets whenever the Actor is active (restarts/hot-reloads). This ensures your webhooks don't expire mid-debugging session. They only expire if you abandon the Actor for the full duration.
 
 ## What does it do?
 

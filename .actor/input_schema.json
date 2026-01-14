@@ -25,7 +25,7 @@
     "retentionHours": {
       "type": "integer",
       "title": "Retention Window (Hours)",
-      "description": "How long to keep your webhook URLs active. Note: Logs for expired webhooks are filtered out from the '/logs' endpoint.",
+      "description": "How long to keep your webhook URLs active (1-72 hours). Note: Logs for expired webhooks are filtered out from the '/logs' endpoint.",
       "minimum": 1,
       "maximum": 72,
       "default": 24,
