@@ -453,7 +453,7 @@ Standard tools like ngrok or dedicated SaaS webhooks charge fixed monthly fees. 
 A: By default, 24 hours. You can set 1-72 hours in the input (or **Unlimited** for self-hosted).
 
 **Q: Will you store my data?**
-A: No. Data is stored only in your Apify dataset (you own this). After the retention period expires, the webhook URL is deactivated and its logs are filtered out from the API (though raw data remains in your dataset).
+A: No. Data is stored only in your Apify dataset (you own this). After the retention period expires, the webhook URL is deactivated and its logs are filtered out from the API (`/logs` endpoint), though historical data remains accessible in your dataset for your own analysis.
 
 **Q: What's the payload size limit?**
 A: 10MB by default to ensure stability. Configurable in input up to 100MB.
