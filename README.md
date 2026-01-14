@@ -374,7 +374,7 @@ curl "https://<ACTOR-RUN-URL>/logs?method=POST&statusCode=200"
 
 Apify Datasets support basic filtering via API parameters.
 
-- **Newest first**: Add `?desc=1`
+- **Newest first**: Add `?desc=true`
 - **JSON Clean**: Add `?clean=true` (omits Apify metadata)
 - **Specific fields**: Add `?fields=timestamp,method,body`
 
