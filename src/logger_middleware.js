@@ -15,6 +15,7 @@ import {
   SCRIPT_EXECUTION_TIMEOUT_MS,
   SENSITIVE_HEADERS,
   DEFAULT_PAYLOAD_LIMIT,
+  MAX_RESPONSE_DELAY_MS,
 } from "./consts.js";
 
 /**
@@ -564,8 +565,13 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
       // 4. Orchestration: Respond synchronous-ish, then race background tasks
       const delayMs = mergedOptions.responseDelayMs || 0;
       if (delayMs > 0) {
+        if (delayMs > MAX_RESPONSE_DELAY_MS) {
+          console.warn(
+            `[WARNING] Requested response delay ${delayMs}ms capped at ${MAX_RESPONSE_DELAY_MS}ms for stability.`,
+          );
+        }
         await new Promise((resolve) =>
-          setTimeout(resolve, Math.min(delayMs, 10000)),
+          setTimeout(resolve, Math.min(delayMs, MAX_RESPONSE_DELAY_MS)),
         );
       }
 
