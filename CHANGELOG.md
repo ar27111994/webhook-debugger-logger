@@ -2,7 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
-## [2.8.4] - 2026-01-14
+## 2.8.5 (2026-01-14)
+
+- Fixed bugs in `output_schema.json` views (parameter types and path formatting).
+- Updated download links to use `clean=true`.
+
+## 2.8.4 (2026-01-14)
 
 ### Improved (2.8.4)
 

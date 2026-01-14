@@ -10,17 +10,17 @@
     "dataset_csv": {
       "type": "string",
       "title": "Download logs (CSV)",
-      "template": "{{links.apiDefaultDatasetUrl}}/items?format=csv&clean=1"
+      "template": "{{links.apiDefaultDatasetUrl}}/items?format=csv&clean=true"
     },
     "dataset_json": {
       "type": "string",
       "title": "Download logs (JSON)",
-      "template": "{{links.apiDefaultDatasetUrl}}/items?format=json&clean=1"
+      "template": "{{links.apiDefaultDatasetUrl}}/items?format=json&clean=true"
     },
     "info": {
       "type": "string",
       "title": "Active Webhooks Info",
-      "template": "{{links.containerRunUrl}}info"
+      "template": "{{links.containerRunUrl}}/info"
     },
     "webhooks": {
       "type": "string",
