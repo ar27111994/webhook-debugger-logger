@@ -51,7 +51,7 @@ npm start
 
 **Note**: When running via `npx` or `npm start` for the first time, the Actor will automatically generate a configuration file at `storage/key_value_stores/default/INPUT.json`. You can edit this file to change settings (like `urlCount`) in real-time! (The location respects `APIFY_LOCAL_STORAGE_DIR` if set).
 
-For advanced configuration (Docker, environment variables), see the [Full Self-Hosting Guide](#standalone-advanced) below.
+For advanced configuration (Docker, environment variables), see the [Full Self-Hosting Guide](#self-hosting-standalone-advanced) below.
 
 ## What does it do?
 
@@ -478,7 +478,7 @@ We are committed to providing first-class support for our "Enterprise Suite" use
 
 **Developer Support Guarantee**: I am an active maintainer and respond to all comments, bug reports, and feature requests on the [Apify Store Console](https://apify.com/ar27111994/webhook-debugger-logger/comments?utm_campaign=readme_support) within **24 hours**.
 
-## <a id="standalone-advanced"></a>☁️ Self-Hosting (Standalone: Advanced)
+## ☁️ Self-Hosting (Standalone: Advanced)
 
 For production deployments or custom tweaks:
 
