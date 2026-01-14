@@ -166,7 +166,44 @@ async function initialize() {
     console.warn("Failed to preload index.html:", err);
   }
 
-  const input = /** @type {any} */ ((await Actor.getInput()) || {});
+  // Ensure local INPUT.json exists for better DX (when running locally/npx)
+  // Only create artifact if NOT running on the Apify Platform (Stateless vs Stateful)
+  // We want to preserve local artifacts for hot-reload dev workflows.
+  const rawInput = /** @type {any} */ ((await Actor.getInput()) || {});
+  let input = rawInput;
+
+  if (!Actor.isAtHome()) {
+    await ensureLocalInputExists(rawInput);
+
+    // FORCE override from process.env.INPUT if present (CLI usage)
+    // Apify SDK prioritizes local storage file over Env Var if the file exists.
+    // We want the reverse for CLI usage (npx webhook-debugger-logger).
+    if (process.env.INPUT) {
+      try {
+        const envInput = JSON.parse(process.env.INPUT);
+
+        if (
+          envInput &&
+          typeof envInput === "object" &&
+          !Array.isArray(envInput)
+        ) {
+          // Override local artifacts completely for stateless CLI usage
+          input = envInput;
+          console.log(
+            "[SYSTEM] Using override from INPUT environment variable.",
+          );
+        } else {
+          throw new Error("INPUT env var must be a non-array JSON object");
+        }
+      } catch (e) {
+        console.warn(
+          "[SYSTEM] Failed to parse INPUT env var:",
+          /** @type {Error} */ (e).message,
+        );
+      }
+    }
+  }
+
   const config = parseWebhookOptions(input);
   const {
     urlCount = DEFAULT_URL_COUNT,
@@ -207,9 +244,13 @@ async function initialize() {
   // 1. Reconcile URL Count (Dynamic Scaling)
   if (active.length < urlCount) {
     const diff = urlCount - active.length;
-    console.log(
-      `[SYSTEM] Scaling up: Generating ${diff} additional webhook(s).`,
-    );
+    if (active.length === 0) {
+      console.log(`[SYSTEM] Initializing ${diff} webhook(s)...`);
+    } else {
+      console.log(
+        `[SYSTEM] Scaling up: Generating ${diff} additional webhook(s).`,
+      );
+    }
     await webhookManager.generateWebhooks(diff, retentionHours);
   } else if (active.length > urlCount) {
     console.log(
@@ -837,33 +878,7 @@ async function initialize() {
 }
 
 if (process.env.NODE_ENV !== "test") {
-  (async () => {
-    // Bootstrap local config if needed (before Actor.init reads it)
-    if (!process.env.APIFY_IS_AT_HOME) {
-      try {
-        let input = {};
-        try {
-          if (process.env.INPUT) {
-            input = JSON.parse(process.env.INPUT);
-          }
-        } catch (e) {
-          console.warn(
-            "[BOOTSTRAP] Failed to parse INPUT env var:",
-            /** @type {Error} */ (e).message,
-          );
-        }
-        await ensureLocalInputExists(input);
-      } catch (error) {
-        console.warn(
-          "[BOOTSTRAP] Failed to initialize local config:",
-          /** @type {Error} */ (error).message,
-        );
-      }
-    }
-
-    // Initialize App
-    await initialize();
-  })().catch((err) => {
+  initialize().catch((err) => {
     console.error("[FATAL] Server failed to start:", err.message);
     process.exit(1);
   });

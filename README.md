@@ -101,15 +101,15 @@ No setup required. No localhost tunneling. Takes 30 seconds.
 
 ## What can this Actor do?
 
-| Feature             | Description                                                   |
-| ------------------- | ------------------------------------------------------------- |
-| **URL Generation**  | Generate 1-10 temporary webhook URLs                          |
-| **Request Logging** | Capture ALL incoming requests (GET, POST, etc.)               |
-| **Full Details**    | Headers, body, query params, IP, timing                       |
-| **Multi-Format**    | Handles JSON, Text, XML, and Form Data                        |
-| **Auto-Cleanup**    | URLs and data expire automatically (configurable 1-72h)       |
-| **Hot-Reloading**   | Configuration changes apply instantly without restarts (v2.7) |
-| **Export**          | Download logs as JSON or CSV from dataset                     |
+| Feature             | Description                                                                       |
+| ------------------- | --------------------------------------------------------------------------------- |
+| **URL Generation**  | Generate 1-10 temporary webhook URLs (Unlimited for self-hosted)                  |
+| **Request Logging** | Capture ALL incoming requests (GET, POST, etc.)                                   |
+| **Full Details**    | Headers, body, query params, IP, timing                                           |
+| **Multi-Format**    | Handles JSON, Text, XML, and Form Data                                            |
+| **Auto-Cleanup**    | URLs and data expire automatically (configurable 1-72h, or unlimited self-hosted) |
+| **Hot-Reloading**   | Configuration changes apply instantly without restarts (v2.7)                     |
+| **Export**          | Download logs as JSON or CSV from dataset                                         |
 
 ## 🚀 v2.0 Enterprise Features
 
@@ -131,6 +131,9 @@ Updates to the following settings are applied immediately without restarting the
 - `maxPayloadSize`
 - `customScript`
 - `rateLimitPerMinute`
+- `retentionHours`
+- `urlCount`
+- `responseDelayMs`
 
 > **Note for Platform Users**: The Apify Console "Input" tab only applies changes to _future_ runs. To hot-reload a **running** Actor, you must update the "INPUT" key in the running Actor's **Default Key-Value Store** directly (e.g., via Apify API or Client), as the Console UI does not support editing Key-Value entries for running actors.
 
@@ -141,7 +144,7 @@ Updates to the following settings are applied immediately without restarting the
 ### 🎭 API Mocking & Latency
 
 - **Custom Responses**: Define the exact Body, Headers, and Status Code to return to the sender.
-- **Latency Simulation**: Simulate slow network conditions by delaying responses (up to 10s).
+- **Latency Simulation**: Simulate slow network conditions by delaying responses (up to 10s, configurable).
 - **JSON Schema Validation**: Reject invalid payloads automatically and log the errors.
 
 ### 🔄 Advanced Workflows
@@ -412,18 +415,18 @@ Standard tools like ngrok or dedicated SaaS webhooks charge fixed monthly fees. 
 
 ## 📈 Performance & Limits
 
-| Parameter         | Default   | Buffer             | Note                      |
-| ----------------- | --------- | ------------------ | ------------------------- |
-| **Max Payload**   | 10MB      | Up to 100MB        | Configurable in input     |
-| **Concurrency**   | Unlimited | Platform-dependent | Limited by memory         |
-| **Latency**       | <10ms     | Sub-5ms in Standby | Internal processing time  |
-| **SSE Heartbeat** | 30s       | -                  | Global efficient interval |
-| **History (TTL)** | 24h       | 1-72h              | Auto-cleanup active       |
+| Parameter         | Default   | Buffer                      | Note                      |
+| ----------------- | --------- | --------------------------- | ------------------------- |
+| **Max Payload**   | 10MB      | Up to 100MB                 | Configurable in input     |
+| **Concurrency**   | Unlimited | Platform-dependent          | Limited by memory         |
+| **Latency**       | <10ms     | Sub-5ms in Standby          | Internal processing time  |
+| **SSE Heartbeat** | 30s       | -                           | Global efficient interval |
+| **History (TTL)** | 24h       | 1-72h (Unlimited Self-Host) | Auto-cleanup active       |
 
 ## FAQ
 
 **Q: How long are webhook URLs valid?**
-A: By default, 24 hours. You can set 1-72 hours in the input.
+A: By default, 24 hours. You can set 1-72 hours in the input (or unlimited for self-hosted).
 
 **Q: Will you store my data?**
 A: No. Data is stored only in your Apify dataset (you own this). After the retention period expires, URLs and old requests are cleaned up.
@@ -458,7 +461,7 @@ A: Yes! Use the **Custom Scripting (v2.7)** feature to write JavaScript that mod
 A: The Actor is built on a high-performance Express server. For heavy traffic, ensure you have enough memory (1024MB+ recommended) and consider using **HTTP Forwarding** to offload processing to your own infrastructure.
 
 **Q: Is there a limit on the number of webhooks?**
-A: You can generate up to 10 unique endpoints per Actor run. If you need more, you can start multiple runs or use different IDs with the same endpoint by routing logic in your `customScript`.
+A: You can generate up to 10 unique endpoints per Actor run (Platform Limit). For self-hosted instances, this is unlimited. If you need more on the platform, you can start multiple runs or use different IDs with the same endpoint by routing logic in your `customScript`.
 
 ---
 
@@ -485,6 +488,17 @@ For production deployments or custom tweaks:
 INPUT='{"urlCount": 5, "retentionHours": 72, "maxPayloadSize": 104857600}' npm start
 ```
 
+### Unrestricted Limits 🔓
+
+When running locally or self-hosted, you are **not bound** by the UI constraints of the Apify Platform:
+
+- **URL Count**: Create 100+ webhooks if your machine handles it (vs Platform UI limits).
+- **Retention**: Keep data for 365 days (`"retentionHours": 8760`) if you have disk space.
+- **Payloads**: Parse up to 100MB payloads (default 10MB) by setting `maxPayloadSize`.
+- **Rate Limit**: Fully configurable. Set `rateLimitPerMinute` to 10,000+ for load testing.
+
+**Response Delay**: Capped at **10s** (10,000ms) even in self-hosted mode to ensure connection stability. (Reason: Prevents the server from freezing if thousands of requests are held open simultaneously).
+
 **Storage**: In standalone mode, data is saved locally to `./storage` (JSON files) instead of the cloud.
 
 **Hot-Reload**: To change settings while running (e.g., enable debug logging), simply edit `storage/key_value_stores/default/INPUT.json`. The Actor polls for changes every **5 seconds** and applies them automatically.
@@ -497,6 +511,10 @@ INPUT='{"urlCount": 5, "retentionHours": 72, "maxPayloadSize": 104857600}' npm s
 
 ## Privacy
 
-We do **not** store any personal data beyond the raw request payloads you send. All data is kept only for the retention period you configure (default 24 h) and is automatically deleted afterwards. No data is shared with third parties.
+We do **not** store any personal data beyond the raw request payloads you send. All data is kept only for the retention period you configure (default 24 h) and is automatically deleted afterwards.
+
+**Retention is Activity-Based**: The expiration timer resets whenever the Actor is active (restarts/hot-reloads). This ensures your webhooks don't expire mid-debugging session. They only expire if you abandon the Actor for the full duration.
+
+No data is shared with third parties.
 
 For more details, see the [Apify Privacy Policy](https://apify.com/privacy).

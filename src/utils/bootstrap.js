@@ -42,26 +42,29 @@ export async function ensureLocalInputExists(defaultInput) {
       JSON.parse(raw);
     } catch (parseErr) {
       // Only rewrite if it's a JSON parse error, not a file read error
-      if (/** @type {NodeJS.ErrnoException} */ (parseErr).code) {
-        // This is likely a filesystem error (has error code), not a SyntaxError
+      if (parseErr instanceof SyntaxError) {
+        const fullConfig = await buildFullConfig(defaultInput);
+
+        const tmpPath = `${inputPath}.tmp`;
+
+        await fs.writeFile(
+          tmpPath,
+          JSON.stringify(fullConfig, null, 2),
+          "utf-8",
+        );
+        await fs.rename(tmpPath, inputPath);
+        console.warn(
+          "[SYSTEM] INPUT.json was invalid; rewritten with defaults:",
+          /** @type {Error} */ (parseErr).message,
+        );
+      } else {
+        // This is likely a filesystem error (e.g. permissions)
         console.warn(
           "[SYSTEM] Failed to read INPUT.json:",
           /** @type {Error} */ (parseErr).message,
         );
-        return;
       }
-
-      const fullConfig = await buildFullConfig(defaultInput);
-
-      await fs.writeFile(
-        inputPath,
-        JSON.stringify(fullConfig, null, 2),
-        "utf-8",
-      );
-      console.warn(
-        "[SYSTEM] INPUT.json was invalid; rewritten with defaults:",
-        /** @type {Error} */ (parseErr).message,
-      );
+      return;
     }
   } catch (err) {
     if (/** @type {NodeJS.ErrnoException} */ (err).code === "ENOENT") {
@@ -72,11 +75,24 @@ export async function ensureLocalInputExists(defaultInput) {
         // Write defaults
         const fullConfig = await buildFullConfig(defaultInput);
 
+        const tmpPath = `${inputPath}.tmp`;
+
         await fs.writeFile(
-          inputPath,
+          tmpPath,
           JSON.stringify(fullConfig, null, 2),
           "utf-8",
         );
+
+        try {
+          // On some platforms rename() won't overwrite an existing file
+          await fs.rm(inputPath, { force: true });
+          await fs.rename(tmpPath, inputPath);
+        } catch (e) {
+          // Best-effort cleanup of tmp artifact
+          await fs.rm(tmpPath, { force: true });
+          throw e;
+        }
+
         console.log(
           `[SYSTEM] 📦 Local configuration initialized at: ${inputPath}`,
         );

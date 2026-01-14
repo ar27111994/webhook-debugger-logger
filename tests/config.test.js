@@ -1,8 +1,9 @@
-import { describe, test, expect } from "@jest/globals";
+import { describe, test, expect, jest, beforeEach } from "@jest/globals";
 import {
   parseWebhookOptions,
   coerceRuntimeOptions,
   normalizeInput,
+  getSafeResponseDelay,
 } from "../src/utils/config.js";
 import {
   DEFAULT_PAYLOAD_LIMIT,
@@ -10,6 +11,7 @@ import {
   DEFAULT_URL_COUNT,
   DEFAULT_RETENTION_HOURS,
   DEFAULT_RATE_LIMIT_PER_MINUTE,
+  MAX_RESPONSE_DELAY_MS,
 } from "../src/consts.js";
 
 describe("Config Utils", () => {
@@ -108,5 +110,43 @@ describe("coerceRuntimeOptions", () => {
   test("should cap maxPayloadSize correctly", () => {
     const result = coerceRuntimeOptions({ maxPayloadSize: 999999999 });
     expect(result.maxPayloadSize).toBe(MAX_ALLOWED_PAYLOAD_SIZE);
+  });
+
+  test("should clamp responseDelayMs", () => {
+    const huge = MAX_RESPONSE_DELAY_MS + 5000;
+    const result = coerceRuntimeOptions({ responseDelayMs: huge });
+    expect(result.responseDelayMs).toBe(MAX_RESPONSE_DELAY_MS);
+  });
+});
+
+describe("getSafeResponseDelay", () => {
+  const consoleWarnSpy = jest
+    .spyOn(console, "warn")
+    .mockImplementation(() => {});
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test("should return 0 for invalid or negative inputs", () => {
+    expect(getSafeResponseDelay(-1)).toBe(0);
+    expect(getSafeResponseDelay(NaN)).toBe(0);
+    expect(getSafeResponseDelay(undefined)).toBe(0);
+  });
+
+  test("should return valid delay unchanged", () => {
+    expect(getSafeResponseDelay(100)).toBe(100);
+    expect(getSafeResponseDelay(MAX_RESPONSE_DELAY_MS)).toBe(
+      MAX_RESPONSE_DELAY_MS,
+    );
+    expect(consoleWarnSpy).not.toHaveBeenCalled();
+  });
+
+  test("should cap huge delay and warn", () => {
+    const huge = MAX_RESPONSE_DELAY_MS + 1;
+    expect(getSafeResponseDelay(huge)).toBe(MAX_RESPONSE_DELAY_MS);
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("capped at"),
+    );
   });
 });

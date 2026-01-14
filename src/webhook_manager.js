@@ -168,6 +168,8 @@ export class WebhookManager {
     const newExpiresAt = new Date(newExpiryMs).toISOString();
     let updatedCount = 0;
 
+    let maxExtensionMs = 0;
+
     for (const [id, data] of this.webhooks.entries()) {
       const currentExpiry = new Date(data.expiresAt).getTime();
 
@@ -177,15 +179,19 @@ export class WebhookManager {
       // We only EXTEND retention. We don't shrink it to avoid premature deletion of data
       // that the user might have expected to stay longer based on previous settings.
       if (newExpiryMs > currentExpiry) {
+        maxExtensionMs = Math.max(maxExtensionMs, newExpiryMs - currentExpiry);
         this.webhooks.set(id, { ...data, expiresAt: newExpiresAt });
         updatedCount++;
       }
     }
 
     if (updatedCount > 0) {
-      console.log(
-        `[STORAGE] Extended retention for ${updatedCount} of ${this.webhooks.size} webhooks to ${retentionHours}h.`,
-      );
+      // Suppress log for insignificant updates (< 5 minutes)
+      if (maxExtensionMs > 5 * 60 * 1000) {
+        console.log(
+          `[STORAGE] Refreshed retention for ${updatedCount} of ${this.webhooks.size} webhooks to ${retentionHours}h.`,
+        );
+      }
       await this.persist();
     }
   }

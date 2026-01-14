@@ -142,6 +142,44 @@ describe("WebhookManager", () => {
     );
   });
 
+  test("updateRetention() should extend expiry and persist changes", async () => {
+    jest.useFakeTimers();
+    const now = Date.now();
+    jest.setSystemTime(now);
+
+    await webhookManager.init();
+    // Expiry in 1 hour
+    const expiry1 = new Date(now + 3600 * 1000).toISOString();
+    // Expiry in 2 hours
+    const expiry2 = new Date(now + 7200 * 1000).toISOString();
+
+    webhookManager.webhooks.set("wh_short", { expiresAt: expiry1 });
+    webhookManager.webhooks.set("wh_long", { expiresAt: expiry2 });
+
+    // Update to 24 hours
+    await webhookManager.updateRetention(24);
+
+    const short = webhookManager.getWebhookData("wh_short");
+    const long = webhookManager.getWebhookData("wh_long");
+
+    expect(short).toBeDefined();
+    expect(long).toBeDefined();
+
+    const newExpiry1 = new Date(short?.expiresAt || 0).getTime();
+    const newExpiry2 = new Date(long?.expiresAt || 0).getTime();
+
+    // Both should be approx 24 hours from now
+    // Exact match expected due to fake timers
+    const target = now + 24 * 3600 * 1000;
+    expect(newExpiry1).toBeGreaterThanOrEqual(target);
+    expect(newExpiry2).toBeGreaterThanOrEqual(target);
+
+    // Should persist
+    expect(jest.mocked(mockKvStore.setValue)).toHaveBeenCalled();
+
+    jest.useRealTimers();
+  });
+
   test("persist() should handle setValue errors gracefully", async () => {
     jest
       .mocked(mockKvStore.setValue)

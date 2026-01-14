@@ -4,7 +4,7 @@ import Ajv from "ajv";
 import { nanoid } from "nanoid";
 import vm from "vm";
 import { validateAuth } from "./utils/auth.js";
-import { parseWebhookOptions } from "./utils/config.js";
+import { getSafeResponseDelay, parseWebhookOptions } from "./utils/config.js";
 import { validateUrlForSsrf, checkIpInRanges } from "./utils/ssrf.js";
 import {
   BACKGROUND_TASK_TIMEOUT_PROD_MS,
@@ -562,11 +562,10 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
       transformRequestData(event, req, compiledScript);
 
       // 4. Orchestration: Respond synchronous-ish, then race background tasks
-      const delayMs = mergedOptions.responseDelayMs || 0;
+      const delayMs = getSafeResponseDelay(mergedOptions.responseDelayMs);
+
       if (delayMs > 0) {
-        await new Promise((resolve) =>
-          setTimeout(resolve, Math.min(delayMs, 10000)),
-        );
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
       }
 
       event.processingTime = Date.now() - startTime;

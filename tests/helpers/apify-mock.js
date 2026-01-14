@@ -22,6 +22,7 @@ import { jest } from "@jest/globals";
  * @property {jest.Mock<(event: string, handler: Function) => void>} on
  * @property {function(any): Promise<void>} emitInput
  * @property {jest.Mock<(code?: number) => Promise<void>>} exit
+ * @property {jest.Mock<() => boolean>} isAtHome
  */
 
 /**
@@ -94,6 +95,9 @@ export function createApifyMock(inputOverrides = {}) {
     exit: /** @type {jest.Mock<(code?: number) => Promise<void>>} */ (
       jest.fn()
     ).mockResolvedValue(undefined),
+    isAtHome: /** @type {jest.Mock<() => boolean>} */ (
+      jest.fn()
+    ).mockReturnValue(false),
   };
 
   return actorInstance;

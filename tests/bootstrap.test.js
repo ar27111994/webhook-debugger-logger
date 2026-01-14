@@ -4,6 +4,8 @@ const mockAccess = /** @type {jest.Mock<any>} */ (jest.fn());
 const mockMkdir = /** @type {jest.Mock<any>} */ (jest.fn());
 const mockWriteFile = /** @type {jest.Mock<any>} */ (jest.fn());
 const mockReadFile = /** @type {jest.Mock<any>} */ (jest.fn());
+const mockRename = /** @type {jest.Mock<any>} */ (jest.fn());
+const mockRm = /** @type {jest.Mock<any>} */ (jest.fn());
 
 // Must be called before importing the module under test
 jest.unstable_mockModule("fs/promises", () => ({
@@ -11,11 +13,15 @@ jest.unstable_mockModule("fs/promises", () => ({
   mkdir: mockMkdir,
   writeFile: mockWriteFile,
   readFile: mockReadFile,
+  rename: mockRename,
+  rm: mockRm,
   default: {
     access: mockAccess,
     mkdir: mockMkdir,
     writeFile: mockWriteFile,
     readFile: mockReadFile,
+    rename: mockRename,
+    rm: mockRm,
   },
 }));
 
@@ -86,19 +92,29 @@ describe("bootstrap.js", () => {
     await ensureLocalInputExists({ someOverride: 999 });
 
     expect(mockWriteFile).toHaveBeenCalledWith(
-      expect.stringContaining("INPUT.json"),
+      expect.stringContaining("INPUT.json.tmp"),
       expect.stringContaining('"urlCount": 3'),
       "utf-8",
     );
-    expect(mockWriteFile).toHaveBeenCalledWith(
+
+    // Check that rm was called before rename
+    expect(mockRm).toHaveBeenCalledWith(expect.stringContaining("INPUT.json"), {
+      force: true,
+    });
+
+    expect(mockRename).toHaveBeenCalledWith(
+      expect.stringContaining("INPUT.json.tmp"),
       expect.stringContaining("INPUT.json"),
+    );
+    expect(mockWriteFile).toHaveBeenCalledWith(
+      expect.stringContaining("INPUT.json.tmp"),
       expect.stringContaining('"retentionHours": 48'),
       "utf-8",
     );
 
     // Override should still be present
     expect(mockWriteFile).toHaveBeenCalledWith(
-      expect.stringContaining("INPUT.json"),
+      expect.stringContaining("INPUT.json.tmp"),
       expect.stringContaining('"someOverride": 999'),
       "utf-8",
     );
@@ -174,9 +190,13 @@ describe("bootstrap.js", () => {
 
     // Should rewrite with defaults from schema
     expect(mockWriteFile).toHaveBeenCalledWith(
-      expect.stringContaining("INPUT.json"),
+      expect.stringContaining("INPUT.json.tmp"),
       expect.stringContaining('"urlCount": 10'),
       "utf-8",
+    );
+    expect(mockRename).toHaveBeenCalledWith(
+      expect.stringContaining("INPUT.json.tmp"),
+      expect.stringContaining("INPUT.json"),
     );
 
     expect(consoleWarnSpy).toHaveBeenCalledWith(
