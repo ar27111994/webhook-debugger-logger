@@ -75,7 +75,8 @@ When running locally or self-hosted, you are **not bound** by the UI constraints
 
 **Hot-Reload**: To change settings while running (e.g., enable debug logging), simply edit `storage/key_value_stores/default/INPUT.json`. The Actor polls for changes every **5 seconds** and applies them automatically.
 
-> [!IMPORTANT] > **Retention is Activity-Based**: The expiration timer resets whenever the Actor is active (restarts/hot-reloads). This ensures your webhooks don't expire mid-debugging session. They only expire if you abandon the Actor for the full duration.
+> [!IMPORTANT]
+> **Retention is Activity-Based**: The expiration timer resets whenever the Actor is active (restarts/hot-reloads). This ensures your webhooks don't expire mid-debugging session. They only expire if you abandon the Actor for the full duration.
 
 ## What does it do?
 
@@ -374,8 +375,8 @@ curl "https://<ACTOR-RUN-URL>/logs?method=POST&statusCode=200"
 
 Apify Datasets support basic filtering via API parameters.
 
-- **Newest first**: Add `?desc=1`
-- **JSON Clean**: Add `?clean=1` (omits Apify metadata)
+- **Newest first**: Add `?desc=true`
+- **JSON Clean**: Add `?clean=true` (omits Apify metadata)
 - **Specific fields**: Add `?fields=timestamp,method,body`
 
 ## Integrations (Zapier / Make)
@@ -453,7 +454,11 @@ Standard tools like ngrok or dedicated SaaS webhooks charge fixed monthly fees. 
 A: By default, 24 hours. You can set 1-72 hours in the input (or **Unlimited** for self-hosted).
 
 **Q: Will you store my data?**
-A: No. Data is stored only in your Apify dataset (you own this). After the retention period expires, the webhook URL is deactivated and its logs are filtered out from the API (`/logs` endpoint), though historical data remains accessible in your dataset for your own analysis.
+A: No. Data is stored only in your Apify dataset (you own this). After the retention period expires:
+
+- The webhook URL is deactivated
+- Logs are filtered out from the `/logs` API endpoint
+- Historical data remains accessible in your dataset for your own analysis
 
 **Q: What's the payload size limit?**
 A: 10MB by default to ensure stability. Configurable in input up to 100MB.
@@ -504,7 +509,7 @@ We are committed to providing first-class support for our "Enterprise Suite" use
 
 ## Privacy
 
-We do **not** store any personal data beyond the raw request payloads you send. All data is kept only for the retention period you configure (default 24 h) and is automatically deleted afterwards.
+We do **not** store any personal data. All captured request data is stored directly in your own Apify Dataset, which you control. After the configured retention period (default 24h), the webhook URL is deactivated, and its logs are filtered from the Actor's `/logs` API endpoint. However, the historical data remains in your dataset for your own records and analysis until you manually clear or delete the dataset.
 
 No data is shared with third parties.
 
