@@ -82,7 +82,17 @@ export async function ensureLocalInputExists(defaultInput) {
           JSON.stringify(fullConfig, null, 2),
           "utf-8",
         );
-        await fs.rename(tmpPath, inputPath);
+
+        try {
+          // On some platforms rename() won't overwrite an existing file
+          await fs.rm(inputPath, { force: true });
+          await fs.rename(tmpPath, inputPath);
+        } catch (e) {
+          // Best-effort cleanup of tmp artifact
+          await fs.rm(tmpPath, { force: true });
+          throw e;
+        }
+
         console.log(
           `[SYSTEM] 📦 Local configuration initialized at: ${inputPath}`,
         );

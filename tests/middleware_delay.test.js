@@ -36,7 +36,11 @@ describe("Logger Middleware - Response Delay", () => {
         jest.fn().mockReturnValue(true)
       ),
       getWebhookData: /** @type {WebhookManager['getWebhookData']} */ (
-        jest.fn().mockReturnValue({})
+        jest.fn().mockImplementation((id) => {
+          if (id === "wh_override")
+            return { responseDelayMs: MAX_RESPONSE_DELAY_MS + 5000 };
+          return {};
+        })
       ),
     });
     onEvent = jest.fn();
@@ -59,7 +63,7 @@ describe("Logger Middleware - Response Delay", () => {
     const middlewarePromise = middleware(req, res);
 
     // Fast-forward time
-    jest.advanceTimersByTime(delayMs);
+    await jest.advanceTimersByTimeAsync(delayMs);
 
     await middlewarePromise;
 
@@ -67,22 +71,25 @@ describe("Logger Middleware - Response Delay", () => {
     expect(console.warn).not.toHaveBeenCalled();
   });
 
-  test("should cap delay and warn if requested amount exceeds limit", async () => {
-    const requestedDelay = MAX_RESPONSE_DELAY_MS + 5000; // 15s if limit is 10s
-    const options = { responseDelayMs: requestedDelay };
+  test("should cap delay and warn if requested amount exceeds limit (via override)", async () => {
+    const options = { responseDelayMs: 0 }; // Global is 0
+    // We use a specific ID to trigger the mock override defined in beforeEach
     const middleware = createLoggerMiddleware(webhookManager, options, onEvent);
 
-    const req = httpMocks.createRequest({ params: { id: "wh_123" } });
+    const req = httpMocks.createRequest({ params: { id: "wh_override" } });
     const res = httpMocks.createResponse();
 
     const middlewarePromise = middleware(req, res);
 
     // Advance by the CAP (10s), which should resolve the delay
-    jest.advanceTimersByTime(MAX_RESPONSE_DELAY_MS);
+    await jest.advanceTimersByTimeAsync(MAX_RESPONSE_DELAY_MS);
 
     await middlewarePromise;
 
     expect(res.statusCode).toBe(200);
+
+    // With run-to-completion semantics for promises + fake timers,
+    // ensure all microtasks are flushed.
     expect(console.warn).toHaveBeenCalledWith(
       expect.stringContaining(`capped at ${MAX_RESPONSE_DELAY_MS}ms`),
     );

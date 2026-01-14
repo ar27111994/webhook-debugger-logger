@@ -5,6 +5,7 @@ const mockMkdir = /** @type {jest.Mock<any>} */ (jest.fn());
 const mockWriteFile = /** @type {jest.Mock<any>} */ (jest.fn());
 const mockReadFile = /** @type {jest.Mock<any>} */ (jest.fn());
 const mockRename = /** @type {jest.Mock<any>} */ (jest.fn());
+const mockRm = /** @type {jest.Mock<any>} */ (jest.fn());
 
 // Must be called before importing the module under test
 jest.unstable_mockModule("fs/promises", () => ({
@@ -13,12 +14,14 @@ jest.unstable_mockModule("fs/promises", () => ({
   writeFile: mockWriteFile,
   readFile: mockReadFile,
   rename: mockRename,
+  rm: mockRm,
   default: {
     access: mockAccess,
     mkdir: mockMkdir,
     writeFile: mockWriteFile,
     readFile: mockReadFile,
     rename: mockRename,
+    rm: mockRm,
   },
 }));
 
@@ -93,6 +96,12 @@ describe("bootstrap.js", () => {
       expect.stringContaining('"urlCount": 3'),
       "utf-8",
     );
+
+    // Check that rm was called before rename
+    expect(mockRm).toHaveBeenCalledWith(expect.stringContaining("INPUT.json"), {
+      force: true,
+    });
+
     expect(mockRename).toHaveBeenCalledWith(
       expect.stringContaining("INPUT.json.tmp"),
       expect.stringContaining("INPUT.json"),

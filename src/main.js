@@ -170,35 +170,37 @@ async function initialize() {
   // Only create artifact if NOT running on the Apify Platform (Stateless vs Stateful)
   // We want to preserve local artifacts for hot-reload dev workflows.
   const rawInput = /** @type {any} */ ((await Actor.getInput()) || {});
-  if (!Actor.isAtHome()) {
-    await ensureLocalInputExists(rawInput);
-  }
-
   let input = rawInput;
 
-  // FORCE override from process.env.INPUT if present (CLI usage)
-  // Apify SDK prioritizes local storage file over Env Var if the file exists.
-  // We want the reverse for CLI usage (npx webhook-debugger-logger).
-  if (process.env.INPUT) {
-    try {
-      const envInput = JSON.parse(process.env.INPUT);
+  if (!Actor.isAtHome()) {
+    await ensureLocalInputExists(rawInput);
 
-      if (
-        envInput &&
-        typeof envInput === "object" &&
-        !Array.isArray(envInput)
-      ) {
-        // Override local artifacts completely for stateless CLI usage
-        input = envInput;
-        console.log("[SYSTEM] Using override from INPUT environment variable.");
-      } else {
-        throw new Error("INPUT env var must be a non-array JSON object");
+    // FORCE override from process.env.INPUT if present (CLI usage)
+    // Apify SDK prioritizes local storage file over Env Var if the file exists.
+    // We want the reverse for CLI usage (npx webhook-debugger-logger).
+    if (process.env.INPUT) {
+      try {
+        const envInput = JSON.parse(process.env.INPUT);
+
+        if (
+          envInput &&
+          typeof envInput === "object" &&
+          !Array.isArray(envInput)
+        ) {
+          // Override local artifacts completely for stateless CLI usage
+          input = envInput;
+          console.log(
+            "[SYSTEM] Using override from INPUT environment variable.",
+          );
+        } else {
+          throw new Error("INPUT env var must be a non-array JSON object");
+        }
+      } catch (e) {
+        console.warn(
+          "[SYSTEM] Failed to parse INPUT env var:",
+          /** @type {Error} */ (e).message,
+        );
       }
-    } catch (e) {
-      console.warn(
-        "[SYSTEM] Failed to parse INPUT env var:",
-        /** @type {Error} */ (e).message,
-      );
     }
   }
 
@@ -876,33 +878,7 @@ async function initialize() {
 }
 
 if (process.env.NODE_ENV !== "test") {
-  (async () => {
-    // Bootstrap local config if needed (before Actor.init reads it)
-    if (!process.env.APIFY_IS_AT_HOME) {
-      try {
-        let input = {};
-        try {
-          if (process.env.INPUT) {
-            input = JSON.parse(process.env.INPUT);
-          }
-        } catch (e) {
-          console.warn(
-            "[BOOTSTRAP] Failed to parse INPUT env var:",
-            /** @type {Error} */ (e).message,
-          );
-        }
-        await ensureLocalInputExists(input);
-      } catch (error) {
-        console.warn(
-          "[BOOTSTRAP] Failed to initialize local config:",
-          /** @type {Error} */ (error).message,
-        );
-      }
-    }
-
-    // Initialize App
-    await initialize();
-  })().catch((err) => {
+  initialize().catch((err) => {
     console.error("[FATAL] Server failed to start:", err.message);
     process.exit(1);
   });

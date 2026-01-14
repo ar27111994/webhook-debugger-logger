@@ -4,6 +4,7 @@ import {
   DEFAULT_RATE_LIMIT_PER_MINUTE,
   DEFAULT_PAYLOAD_LIMIT,
   MAX_ALLOWED_PAYLOAD_SIZE,
+  MAX_RESPONSE_DELAY_MS,
 } from "../consts.js";
 
 /**
@@ -38,7 +39,6 @@ export function parseWebhookOptions(options = {}) {
     defaultResponseCode: options.defaultResponseCode ?? 200,
     defaultResponseBody: options.defaultResponseBody ?? "OK",
     defaultResponseHeaders: options.defaultResponseHeaders ?? {},
-    responseDelayMs: options.responseDelayMs ?? 0,
     forwardUrl: options.forwardUrl,
     forwardHeaders: options.forwardHeaders ?? true,
     jsonSchema: options.jsonSchema,
@@ -52,7 +52,7 @@ export function parseWebhookOptions(options = {}) {
 /**
  * Coerces and validates runtime options for hot-reloading.
  * @param {Record<string, any>} input
- * @returns {{ urlCount: number, retentionHours: number, rateLimitPerMinute: number, authKey: string, maxPayloadSize: number }}
+ * @returns {{ urlCount: number, retentionHours: number, rateLimitPerMinute: number, authKey: string, maxPayloadSize: number, responseDelayMs: number }}
  */
 export function coerceRuntimeOptions(input) {
   const urlCountRaw = Number(input.urlCount);
@@ -81,12 +81,16 @@ export function coerceRuntimeOptions(input) {
       ? Math.min(maxPayloadSizeRaw, MAX_ALLOWED_PAYLOAD_SIZE)
       : DEFAULT_PAYLOAD_LIMIT;
 
+  const responseDelayMsRaw = Number(input.responseDelayMs);
+  const responseDelayMs = getSafeResponseDelay(responseDelayMsRaw);
+
   return {
     urlCount,
     retentionHours,
     rateLimitPerMinute,
     authKey,
     maxPayloadSize,
+    responseDelayMs,
   };
 }
 
@@ -106,4 +110,23 @@ export function normalizeInput(value, fallback = {}) {
     }
   }
   return value ?? fallback;
+}
+
+/**
+ * Returns a safe response delay, clamped to the maximum allowed value.
+ * Logs a warning if the requested delay exceeds the limit.
+ * @param {number} delayMs
+ * @returns {number}
+ */
+export function getSafeResponseDelay(delayMs = 0) {
+  if (!Number.isFinite(delayMs) || delayMs <= 0) return 0;
+
+  if (delayMs > MAX_RESPONSE_DELAY_MS) {
+    console.warn(
+      `[WARNING] Requested response delay ${delayMs}ms capped at ${MAX_RESPONSE_DELAY_MS}ms for stability.`,
+    );
+    return MAX_RESPONSE_DELAY_MS;
+  }
+
+  return delayMs;
 }
