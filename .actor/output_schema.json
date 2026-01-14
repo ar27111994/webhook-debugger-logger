@@ -10,12 +10,12 @@
     "dataset_csv": {
       "type": "string",
       "title": "Download logs (CSV)",
-      "template": "{{links.apiDefaultDatasetUrl}}/items?format=csv&clean=true"
+      "template": "{{links.apiDefaultDatasetUrl}}/items?format=csv"
     },
     "dataset_json": {
       "type": "string",
       "title": "Download logs (JSON)",
-      "template": "{{links.apiDefaultDatasetUrl}}/items?format=json&clean=true"
+      "template": "{{links.apiDefaultDatasetUrl}}/items?format=json"
     },
     "info": {
       "type": "string",
