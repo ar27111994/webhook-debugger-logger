@@ -101,15 +101,15 @@ No setup required. No localhost tunneling. Takes 30 seconds.
 
 ## What can this Actor do?
 
-| Feature             | Description                                                      |
-| ------------------- | ---------------------------------------------------------------- |
-| **URL Generation**  | Generate 1-10 temporary webhook URLs (Unlimited for self-hosted) |
-| **Request Logging** | Capture ALL incoming requests (GET, POST, etc.)                  |
-| **Full Details**    | Headers, body, query params, IP, timing                          |
-| **Multi-Format**    | Handles JSON, Text, XML, and Form Data                           |
-| **Auto-Cleanup**    | URLs and data expire automatically (configurable 1-72h)          |
-| **Hot-Reloading**   | Configuration changes apply instantly without restarts (v2.7)    |
-| **Export**          | Download logs as JSON or CSV from dataset                        |
+| Feature             | Description                                                                       |
+| ------------------- | --------------------------------------------------------------------------------- |
+| **URL Generation**  | Generate 1-10 temporary webhook URLs (Unlimited for self-hosted)                  |
+| **Request Logging** | Capture ALL incoming requests (GET, POST, etc.)                                   |
+| **Full Details**    | Headers, body, query params, IP, timing                                           |
+| **Multi-Format**    | Handles JSON, Text, XML, and Form Data                                            |
+| **Auto-Cleanup**    | URLs and data expire automatically (configurable 1-72h, or unlimited self-hosted) |
+| **Hot-Reloading**   | Configuration changes apply instantly without restarts (v2.7)                     |
+| **Export**          | Download logs as JSON or CSV from dataset                                         |
 
 ## 🚀 v2.0 Enterprise Features
 
