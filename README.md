@@ -509,7 +509,11 @@ We are committed to providing first-class support for our "Enterprise Suite" use
 
 ## Privacy
 
-We do **not** store any personal data. All captured request data is stored directly in your own Apify Dataset, which you control. After the configured retention period (default 24h), the webhook URL is deactivated, and its logs are filtered from the Actor's `/logs` API endpoint. However, the historical data remains in your dataset for your own records and analysis until you manually clear or delete the dataset.
+We do **not** store any personal data. All captured request data is stored directly in your own **Apify Dataset** (you own this). After the configured retention period expires (default 24h):
+
+- The webhook URL is deactivated.
+- It's logs start getting filtered out from the `/logs` API endpoint from the next request.
+- Historical data remains accessible in your **Apify Dataset** for your own your own record and analysis until you manually clear or delete the dataset.
 
 No data is shared with third parties.
 

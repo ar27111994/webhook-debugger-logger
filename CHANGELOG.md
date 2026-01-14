@@ -4,12 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## 2.8.6 (2026-01-15)
 
-### Fixed
+### Fixed (2.8.6)
+
 - Removed `clean` parameter from output schema views to resolve Apify Console type validation error.
 
 ## 2.8.5 (2026-01-14)
 
-### Fixed
+### Fixed (2.8.5)
 
 - **Documentation**: Fixed bugs in `output_schema.json` views (parameter types and path formatting).
 - **Documentation**: Updated download links to use `clean=true`.
