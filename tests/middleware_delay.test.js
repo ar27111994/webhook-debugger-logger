@@ -32,8 +32,12 @@ describe("Logger Middleware - Response Delay", () => {
   beforeEach(() => {
     jest.useFakeTimers();
     webhookManager = /** @type {WebhookManager} */ ({
-      isValid: jest.fn().mockReturnValue(true),
-      getWebhookData: jest.fn().mockReturnValue({}),
+      isValid: /** @type {WebhookManager['isValid']} */ (
+        jest.fn().mockReturnValue(true)
+      ),
+      getWebhookData: /** @type {WebhookManager['getWebhookData']} */ (
+        jest.fn().mockReturnValue({})
+      ),
     });
     onEvent = jest.fn();
     jest.spyOn(console, "warn").mockImplementation(() => {});
@@ -80,7 +84,7 @@ describe("Logger Middleware - Response Delay", () => {
 
     expect(res.statusCode).toBe(200);
     expect(console.warn).toHaveBeenCalledWith(
-      expect.stringContaining(`capped at ${MAX_RESPONSE_DELAY_MS}ms`)
+      expect.stringContaining(`capped at ${MAX_RESPONSE_DELAY_MS}ms`),
     );
   });
 });
