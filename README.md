@@ -455,6 +455,7 @@ A: By default, 24 hours. You can set 1-72 hours in the input (or **Unlimited** f
 
 **Q: Will you store my data?**
 A: No. Data is stored only in your Apify dataset (you own this). After the retention period expires:
+
 - The webhook URL is deactivated
 - Logs are filtered out from the `/logs` API endpoint
 - Historical data remains accessible in your dataset for your own analysis
