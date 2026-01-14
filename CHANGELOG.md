@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.8.4] - 2026-01-14
+
+### Improved (2.8.4)
+
+- **Documentation**: Consolidated "Self-Hosting" sections in `README.md` into a single, comprehensive guide.
+- **Documentation**: Highlighted the "Activity-Based Retention" policy with a prominent alert block for better user visibility.
+
 ## [2.8.3] - 2026-01-13
 
 ### Fixed (2.8.3)
