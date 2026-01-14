@@ -38,6 +38,8 @@ Test and inspect webhooks instantly without running localhost or complex tunneli
 
 You can run this Actor anywhere—on your local machine, VPS, or internal cloud—without an Apify account. It works as a standard Node.js application.
 
+### Basic Usage
+
 ```bash
 # Option A: Run via npx (Zero Install)
 npx webhook-debugger-logger
@@ -51,7 +53,29 @@ npm start
 
 **Note**: When running via `npx` or `npm start` for the first time, the Actor will automatically generate a configuration file at `storage/key_value_stores/default/INPUT.json`. You can edit this file to change settings (like `urlCount`) in real-time! (The location respects `APIFY_LOCAL_STORAGE_DIR` if set).
 
-For advanced configuration (Docker, environment variables), see the [Full Self-Hosting Guide](#self-hosting-standalone-advanced) below.
+### Advanced Configuration (Production)
+
+For custom deployments, you can configure the Actor via environment variables or JSON input:
+
+```bash
+# Example: 5 URLs, 72h retention, 100MB payload limit
+INPUT='{"urlCount": 5, "retentionHours": 72, "maxPayloadSize": 104857600}' npm start
+```
+
+#### Unrestricted Limits 🔓
+
+When running locally or self-hosted, you are **not bound** by the UI constraints of the Apify Platform:
+
+- **URL Count**: Create 100+ webhooks (vs Platform UI limits) if your self-hosted instance has enough resources.
+- **Retention**: Keep data for 365 days (`"retentionHours": 8760`). Fully configurable.
+- **Payloads**: Parse up to 100MB payloads (default 10MB) by setting `maxPayloadSize`.
+- **Rate Limit**: Fully configurable (e.g., 10,000+ per min) for management endpoints (/logs, /info, /replay). Applied per client IP.
+
+**Response Delay**: Capped at **10s** (10,000ms) even in self-hosted mode to ensure connection stability. (Reason: Prevents the server from freezing if thousands of requests are held open simultaneously).
+
+**Hot-Reload**: To change settings while running (e.g., enable debug logging), simply edit `storage/key_value_stores/default/INPUT.json`. The Actor polls for changes every **5 seconds** and applies them automatically.
+
+> [!IMPORTANT] > **Retention is Activity-Based**: The expiration timer resets whenever the Actor is active (restarts/hot-reloads). This ensures your webhooks don't expire mid-debugging session. They only expire if you abandon the Actor for the full duration.
 
 ## What does it do?
 
@@ -101,15 +125,15 @@ No setup required. No localhost tunneling. Takes 30 seconds.
 
 ## What can this Actor do?
 
-| Feature             | Description                                                                       |
-| ------------------- | --------------------------------------------------------------------------------- |
-| **URL Generation**  | Generate 1-10 temporary webhook URLs (Unlimited for self-hosted)                  |
-| **Request Logging** | Capture ALL incoming requests (GET, POST, etc.)                                   |
-| **Full Details**    | Headers, body, query params, IP, timing                                           |
-| **Multi-Format**    | Handles JSON, Text, XML, and Form Data                                            |
-| **Auto-Cleanup**    | URLs and data expire automatically (configurable 1-72h, or unlimited self-hosted) |
-| **Hot-Reloading**   | Configuration changes apply instantly without restarts (v2.7)                     |
-| **Export**          | Download logs as JSON or CSV from dataset                                         |
+| Feature             | Description                                                                          |
+| ------------------- | ------------------------------------------------------------------------------------ |
+| **URL Generation**  | Generate 1-10 temporary webhook URLs (**Unlimited** for self-hosted)                 |
+| **Request Logging** | Capture ALL incoming requests (GET, POST, etc.)                                      |
+| **Full Details**    | Headers, body, query params, IP, timing                                              |
+| **Multi-Format**    | Handles JSON, Text, XML, and Form Data                                               |
+| **URL Expiry**      | Webhook URLs expire automatically (configurable 1-72h, or **Unlimited** self-hosted) |
+| **Hot-Reloading**   | Configuration changes apply instantly without restarts (v2.7)                        |
+| **Export**          | Download logs as JSON or CSV from dataset                                            |
 
 ## 🚀 v2.0 Enterprise Features
 
@@ -415,21 +439,21 @@ Standard tools like ngrok or dedicated SaaS webhooks charge fixed monthly fees. 
 
 ## 📈 Performance & Limits
 
-| Parameter         | Default   | Buffer                      | Note                      |
-| ----------------- | --------- | --------------------------- | ------------------------- |
-| **Max Payload**   | 10MB      | Up to 100MB                 | Configurable in input     |
-| **Concurrency**   | Unlimited | Platform-dependent          | Limited by memory         |
-| **Latency**       | <10ms     | Sub-5ms in Standby          | Internal processing time  |
-| **SSE Heartbeat** | 30s       | -                           | Global efficient interval |
-| **History (TTL)** | 24h       | 1-72h (Unlimited Self-Host) | Auto-cleanup active       |
+| Parameter         | Default   | Buffer                          | Note                      |
+| ----------------- | --------- | ------------------------------- | ------------------------- |
+| **Max Payload**   | 10MB      | Up to 100MB                     | Configurable in input     |
+| **Concurrency**   | Unlimited | Platform-dependent              | Limited by memory         |
+| **Latency**       | <10ms     | Sub-5ms in Standby              | Internal processing time  |
+| **SSE Heartbeat** | 30s       | -                               | Global efficient interval |
+| **URL Validity**  | 24h       | 1-72h (**Unlimited** Self-Host) | Auto-expiry active        |
 
 ## FAQ
 
 **Q: How long are webhook URLs valid?**
-A: By default, 24 hours. You can set 1-72 hours in the input (or unlimited for self-hosted).
+A: By default, 24 hours. You can set 1-72 hours in the input (or **Unlimited** for self-hosted).
 
 **Q: Will you store my data?**
-A: No. Data is stored only in your Apify dataset (you own this). After the retention period expires, URLs and old requests are cleaned up.
+A: No. Data is stored only in your Apify dataset (you own this). After the retention period expires, the webhook URL is deactivated and its logs are filtered out from the API (though raw data remains in your dataset).
 
 **Q: What's the payload size limit?**
 A: 10MB by default to ensure stability. Configurable in input up to 100MB.
@@ -461,7 +485,7 @@ A: Yes! Use the **Custom Scripting (v2.7)** feature to write JavaScript that mod
 A: The Actor is built on a high-performance Express server. For heavy traffic, ensure you have enough memory (1024MB+ recommended) and consider using **HTTP Forwarding** to offload processing to your own infrastructure.
 
 **Q: Is there a limit on the number of webhooks?**
-A: You can generate up to 10 unique endpoints per Actor run (Platform Limit). For self-hosted instances, this is unlimited. If you need more on the platform, you can start multiple runs or use different IDs with the same endpoint by routing logic in your `customScript`.
+A: You can generate up to 10 unique endpoints per Actor run (Platform Limit). For self-hosted instances, this is **Unlimited**. If you need more on the platform, you can start multiple runs or use different IDs with the same endpoint by routing logic in your `customScript`.
 
 ---
 
@@ -471,49 +495,16 @@ We are committed to providing first-class support for our "Enterprise Suite" use
 
 - 💬 **Apify Discord**: Join the [Apify Discord Community](https://discord.gg/jyEM2PRvMU?utm_campaign=readme_support) to chat with other developers.
 - 📚 **Learning**: Explore the [Apify Academy](https://docs.apify.com/academy?utm_campaign=readme_support) for best practices on building resilient Actors.
-- 📖 **Documentation**: Read the [Apify SDK Documentation](https://sdk.apify.com/?utm_campaign=readme_support) for technical deep dives.
-- 🔗 **Console**: Manage your active runs in the [Apify Console](https://console.apify.com?utm_campaign=readme_support).
+- � **Documentation**: Read the [Apify SDK Documentation](https://sdk.apify.com/?utm_campaign=readme_support) for technical deep dives.
+- �🔗 **Console**: Manage your active runs in the [Apify Console](https://console.apify.com?utm_campaign=readme_support).
 - 🛠️ **Alternative**: Compare with [Webhook.site](https://webhook.site) if you need a desktop-only alternative.
 - 📝 **Issues**: Found a bug? Open an issue on our [GitHub Repository](https://github.com/ar27111994/webhook-debugger-logger?utm_campaign=readme_support).
 
 **Developer Support Guarantee**: I am an active maintainer and respond to all comments, bug reports, and feature requests on the [Apify Store Console](https://apify.com/ar27111994/webhook-debugger-logger/comments?utm_campaign=readme_support) within **24 hours**.
 
-## ☁️ Self-Hosting (Standalone: Advanced)
-
-For production deployments or custom tweaks:
-
-```bash
-# Configure via Environment
-# Example: 5 URLs, 72h retention, 100MB payload limit
-INPUT='{"urlCount": 5, "retentionHours": 72, "maxPayloadSize": 104857600}' npm start
-```
-
-### Unrestricted Limits 🔓
-
-When running locally or self-hosted, you are **not bound** by the UI constraints of the Apify Platform:
-
-- **URL Count**: Create 100+ webhooks if your machine handles it (vs Platform UI limits).
-- **Retention**: Keep data for 365 days (`"retentionHours": 8760`) if you have disk space.
-- **Payloads**: Parse up to 100MB payloads (default 10MB) by setting `maxPayloadSize`.
-- **Rate Limit**: Fully configurable. Set `rateLimitPerMinute` to 10,000+ for load testing.
-
-**Response Delay**: Capped at **10s** (10,000ms) even in self-hosted mode to ensure connection stability. (Reason: Prevents the server from freezing if thousands of requests are held open simultaneously).
-
-**Storage**: In standalone mode, data is saved locally to `./storage` (JSON files) instead of the cloud.
-
-**Hot-Reload**: To change settings while running (e.g., enable debug logging), simply edit `storage/key_value_stores/default/INPUT.json`. The Actor polls for changes every **5 seconds** and applies them automatically.
-
-## 🛡️ Security & Permissions
-
-- **Permissions**: This Actor runs with **Limited Permissions** (the safest level).
-- **Scope**: It only accesses its own default dataset (to log webhooks) and key-value store (to manage state).
-- **Privacy**: It cannot access your other Actors, tasks, or datasets. Your data remains completely isolated.
-
 ## Privacy
 
 We do **not** store any personal data beyond the raw request payloads you send. All data is kept only for the retention period you configure (default 24 h) and is automatically deleted afterwards.
-
-**Retention is Activity-Based**: The expiration timer resets whenever the Actor is active (restarts/hot-reloads). This ensures your webhooks don't expire mid-debugging session. They only expire if you abandon the Actor for the full duration.
 
 No data is shared with third parties.
 
