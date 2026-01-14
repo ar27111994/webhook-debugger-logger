@@ -496,7 +496,8 @@ When running locally or self-hosted, you are **not bound** by the UI constraints
 - **Retention**: Keep data for 365 days (`"retentionHours": 8760`) if you have disk space.
 - **Payloads**: Parse up to 100MB payloads (default 10MB) by setting `maxPayloadSize`.
 - **Rate Limit**: Fully configurable. Set `rateLimitPerMinute` to 10,000+ for load testing.
-- **Response Delay**: Capped at **10s** (10,000ms) even in self-hosted mode to ensure connection stability.
+
+- **Response Delay**: Capped at **10s** (10,000ms) even in self-hosted mode to ensure connection stability. (Reason: Prevents the server from freezing if thousands of requests are held open simultaneously).
 
 **Storage**: In standalone mode, data is saved locally to `./storage` (JSON files) instead of the cloud.
 
