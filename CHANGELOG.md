@@ -51,15 +51,15 @@ All notable changes to this project will be documented in this file.
 
 ## [2.8.1] - 2026-01-11
 
-### Fixed
+### Fixed (2.8.1)
 
 - **UI**: Fixed a regression where `{{VERSION}}` placeholders in `index.html` were not being fully replaced, causing raw template strings to be visible.
 
-### Improved
+### Improved (2.8.1)
 
 - **UX**: The `/log-stream` SSE endpoint now sends an immediate `: connected` comment upon connection, preventing browsers from showing a "loading" state indefinitely while waiting for the first log event.
 
-### DevOps
+### DevOps (2.8.1)
 
 - **Docker Verification**: Added a comprehensive `local_docker_testing.md` guide and a new `verify-docker` CI/CD job. This ensures production-only bugs (like SSE compression issues) are caught in the container environment before deployment.
 
