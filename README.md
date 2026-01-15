@@ -78,8 +78,7 @@ When running locally or self-hosted, you are **not bound** by the UI constraints
 
 **Hot-Reload**: To change settings while running (e.g., enable debug logging), simply edit `storage/key_value_stores/default/INPUT.json`. The Actor polls for changes every **5 seconds** and applies them automatically.
 
-> [!IMPORTANT]
-> **Retention is Activity-Based**: The expiration timer resets whenever the Actor is active (restarts/hot-reloads). This ensures your webhooks don't expire mid-debugging session. They only expire if you abandon the Actor for the full duration.
+> [!IMPORTANT] > **Retention is Activity-Based**: The expiration timer resets whenever the Actor is active (restarts/hot-reloads). This ensures your webhooks don't expire mid-debugging session. They only expire if you abandon the Actor for the full duration.
 
 ## What does it do?
 
@@ -379,7 +378,7 @@ curl "https://<ACTOR-RUN-URL>/logs?method=POST&statusCode=200"
 Apify Datasets support basic filtering via API parameters.
 
 - **Newest first**: Add `?desc=true`
-- **JSON Clean**: Add `?clean=true` (omits Apify metadata)
+- **JSON Clean**: Add `?clean=true` (omits Apify Metadata). _Note: This option is currently disabled in the Console UI due to a platform bug, but works perfectly via API._
 - **Specific fields**: Add `?fields=timestamp,method,body`
 
 ## Integrations (Zapier / Make)
