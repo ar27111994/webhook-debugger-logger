@@ -23,6 +23,9 @@ A high-performance Apify Actor built for developers to test, inspect, and automa
 Run the following command while the Actor is active to see real-time streaming:
 
 ```bash
+# Make sure the Actor is running locally on port 8080
+npm start
+
 # If authKey is configured, run with:
 # AUTH_KEY=your-secret node demo_cli.js
 node demo_cli.js
@@ -376,7 +379,7 @@ curl "https://<ACTOR-RUN-URL>/logs?method=POST&statusCode=200"
 Apify Datasets support basic filtering via API parameters.
 
 - **Newest first**: Add `?desc=true`
-- **JSON Clean**: Add `?clean=true` (omits Apify metadata)
+- **JSON Clean**: Add `?clean=true` (omits Apify Metadata). _Note: This option is currently disabled in the Console UI due to a platform bug, but works perfectly via API._
 - **Specific fields**: Add `?fields=timestamp,method,body`
 
 ## Integrations (Zapier / Make)
@@ -509,7 +512,11 @@ We are committed to providing first-class support for our "Enterprise Suite" use
 
 ## Privacy
 
-We do **not** store any personal data. All captured request data is stored directly in your own Apify Dataset, which you control. After the configured retention period (default 24h), the webhook URL is deactivated, and its logs are filtered from the Actor's `/logs` API endpoint. However, the historical data remains in your dataset for your own records and analysis until you manually clear or delete the dataset.
+We do **not** store any personal data. All captured request data is stored directly in your own **Apify Dataset** (you own this). After the configured retention period expires (default 24h):
+
+- The webhook URL is deactivated.
+- Its logs start getting filtered out from the `/logs` API endpoint from the next request.
+- Historical data remains accessible in your **Apify Dataset** for your own record and analysis until you manually clear or delete the dataset.
 
 No data is shared with third parties.
 
