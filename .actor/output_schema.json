@@ -7,18 +7,6 @@
       "title": "Captured Events (Live)",
       "template": "{{links.apiDefaultDatasetUrl}}/items"
     },
-    "dataset_csv": {
-      "type": "string",
-      "title": "Download logs (CSV)",
-      "template": "{{links.apiDefaultDatasetUrl}}/items?format=csv",
-      "description": "Download logs in CSV format. Note: The `clean=true` parameter is currently disabled in this UI due to a platform bug, but can be used via API."
-    },
-    "dataset_json": {
-      "type": "string",
-      "title": "Download logs (JSON)",
-      "template": "{{links.apiDefaultDatasetUrl}}/items?format=json",
-      "description": "Download logs in JSON format. Note: The `clean=true` parameter is currently disabled in this UI due to a platform bug, but can be used via API."
-    },
     "info": {
       "type": "string",
       "title": "Active Webhooks Info",
