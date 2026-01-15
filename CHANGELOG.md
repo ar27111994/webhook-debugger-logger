@@ -2,27 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
-## 2.8.7 (2026-01-15)
+## [2.8.7] - 2026-01-15
 
 ### Fixed (2.8.7)
 
 - Removed redundant `dataset_csv` and `dataset_json` views from output schema (native "Storage" tab should be used for downloads).
 - **Documentation**: Updated Stripe Playbook with correct official IP range links.
 
-## 2.8.6 (2026-01-15)
+## [2.8.6] - 2026-01-15
 
 ### Fixed (2.8.6)
 
 - Removed `clean` parameter from output schema views to resolve Apify Console type validation error.
 
-## 2.8.5 (2026-01-14)
+## [2.8.5] - 2026-01-14
 
 ### Fixed (2.8.5)
 
 - **Documentation**: Fixed bugs in `output_schema.json` views (parameter types and path formatting).
 - **Documentation**: Updated download links to use `clean=true`.
 
-## 2.8.4 (2026-01-14)
+## [2.8.4] - 2026-01-14
 
 ### Improved (2.8.4)
 
