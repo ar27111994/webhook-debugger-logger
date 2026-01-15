@@ -4,7 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## 2.8.7 (2026-01-15)
 
-### Fixed
+### Fixed (2.8.7)
+
 - Removed redundant `dataset_csv` and `dataset_json` views from output schema (native "Storage" tab should be used for downloads).
 - **Documentation**: Updated Stripe Playbook with correct official IP range links.
 
