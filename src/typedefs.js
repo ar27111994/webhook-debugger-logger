@@ -42,6 +42,7 @@
  * @property {boolean} [signatureValid]
  * @property {string} [signatureProvider]
  * @property {string} [signatureError]
+ * @property {string} [requestId]
  */
 
 /**

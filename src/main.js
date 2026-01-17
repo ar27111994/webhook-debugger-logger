@@ -325,6 +325,41 @@ async function initialize() {
     }),
   );
 
+  // Request ID middleware for tracing
+  app.use((req, res, next) => {
+    const requestId =
+      req.headers["x-request-id"]?.toString() ||
+      `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    /** @type {any} */ (req).requestId = requestId;
+    res.setHeader("X-Request-ID", requestId);
+    next();
+  });
+
+  // CSP Headers for dashboard security
+  app.use((req, res, next) => {
+    // Only apply CSP to HTML responses (dashboard)
+    if (req.path === "/" || req.path.endsWith(".html")) {
+      res.setHeader(
+        "Content-Security-Policy",
+        [
+          "default-src 'self'",
+          "script-src 'self' 'unsafe-inline'", // Allow inline scripts for dashboard
+          "style-src 'self' 'unsafe-inline'", // Allow inline styles
+          "font-src 'self'",
+          "img-src 'self' data:",
+          "connect-src 'self'",
+          "frame-ancestors 'none'",
+          "form-action 'self'",
+          "base-uri 'self'",
+        ].join("; "),
+      );
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("X-Frame-Options", "DENY");
+      res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    }
+    next();
+  });
+
   app.use("/fonts", express.static(join(__dirname, "..", "public", "fonts")));
 
   app.get("/", authMiddleware, async (req, res) => {

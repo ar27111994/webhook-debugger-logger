@@ -559,6 +559,7 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
         processingTime: 0,
         remoteIp: validation.remoteIp,
         userAgent: req.headers["user-agent"]?.toString(),
+        requestId: /** @type {any} */ (req).requestId,
       };
 
       // 3a. Signature Verification (if configured)
