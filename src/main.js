@@ -4,8 +4,6 @@ import { Actor } from "apify";
 import express from "express";
 import bodyParser from "body-parser";
 import compression from "compression";
-import axios from "axios";
-import { validateUrlForSsrf, SSRF_ERRORS } from "./utils/ssrf.js";
 import { WebhookManager } from "./webhook_manager.js";
 import { createLoggerMiddleware } from "./logger_middleware.js";
 import {
@@ -21,9 +19,6 @@ import {
   INPUT_POLL_INTERVAL_PROD_MS,
   INPUT_POLL_INTERVAL_TEST_MS,
   DEFAULT_PAYLOAD_LIMIT,
-  MAX_REPLAY_RETRIES,
-  REPLAY_HEADERS_TO_IGNORE,
-  REPLAY_TIMEOUT_MS,
   SHUTDOWN_TIMEOUT_MS,
   SSE_HEARTBEAT_INTERVAL_MS,
   STARTUP_TEST_EXIT_DELAY_MS,
@@ -31,8 +26,14 @@ import {
   DEFAULT_RETENTION_HOURS,
   DEFAULT_RATE_LIMIT_PER_MINUTE,
   DEFAULT_RATE_LIMIT_WINDOW_MS,
-  ERROR_MESSAGES,
 } from "./consts.js";
+import {
+  escapeHtml,
+  createLogsHandler,
+  createInfoHandler,
+  createLogStreamHandler,
+  createReplayHandler,
+} from "./routes/index.js";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { readFile, watch as fsWatch } from "fs/promises";
@@ -76,21 +77,6 @@ const webhookManager = new WebhookManager();
 /** @type {Set<import("http").ServerResponse>} */
 const clients = new Set();
 const app = express(); // Exported for tests
-
-/**
- * Simple HTML escaping for security.
- * @param {string} unsafe
- * @returns {string}
- */
-const escapeHtml = (unsafe) => {
-  if (!unsafe) return "";
-  return unsafe
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-};
 
 /**
  * Broadcasts data to all connected SSE clients.
@@ -605,351 +591,36 @@ async function initialize() {
     "/replay/:webhookId/:itemId",
     mgmtRateLimiter,
     authMiddleware,
-    asyncHandler(async (req, res) => {
-      try {
-        const { webhookId, itemId } = req.params;
-        let targetUrl = req.query.url;
-        if (Array.isArray(targetUrl)) {
-          targetUrl = targetUrl[0];
-        }
-        if (!targetUrl) {
-          res.status(400).json({ error: "Missing 'url' parameter" });
-          return;
-        }
-
-        // Validate URL and check for SSRF
-        // Use normalized targetUrl for validation
-        const ssrfResult = await validateUrlForSsrf(String(targetUrl));
-        if (!ssrfResult.safe) {
-          if (ssrfResult.error === SSRF_ERRORS.HOSTNAME_RESOLUTION_FAILED) {
-            res
-              .status(400)
-              .json({ error: ERROR_MESSAGES.HOSTNAME_RESOLUTION_FAILED });
-            return;
-          }
-          // "DNS resolution failed" was previously checked here but was never emitted.
-          // HOSTNAME_RESOLUTION_FAILED covers the case where DNS resolves to empty list.
-          // Other DNS errors (throw) result in VALIDATION_FAILED or similar.
-          res.status(400).json({ error: ssrfResult.error });
-          return;
-        }
-
-        const target = {
-          href: ssrfResult.href,
-          host: ssrfResult.host,
-        };
-
-        const dataset = await Actor.openDataset();
-
-        let item;
-        let offset = 0;
-        const limit = 1000;
-
-        // Paginate through dataset (newest first) to find the event
-        // This ensures we find the event even if it's deep in the history, while prioritizing recent events.
-        while (true) {
-          const { items } = await dataset.getData({
-            desc: true,
-            limit,
-            offset,
-          });
-
-          if (items.length === 0) break;
-
-          // Prioritize exact ID match. Fallback to timestamp only if no ID matches.
-          item =
-            items.find((i) => i.webhookId === webhookId && i.id === itemId) ||
-            items.find(
-              (i) => i.webhookId === webhookId && i.timestamp === itemId,
-            );
-
-          if (item) break;
-
-          offset += limit;
-        }
-
-        if (!item) {
-          res.status(404).json({ error: "Event not found" });
-          return;
-        }
-
-        const headersToIgnore = REPLAY_HEADERS_TO_IGNORE;
-        /** @type {string[]} */
-        const strippedHeaders = [];
-        /** @type {Record<string, unknown>} */
-        const filteredHeaders = Object.entries(item.headers || {}).reduce(
-          (/** @type {Record<string, unknown>} */ acc, [key, value]) => {
-            const lowerKey = key.toLowerCase();
-            const isMasked =
-              typeof value === "string" && value.toUpperCase() === "[MASKED]";
-            if (isMasked || headersToIgnore.includes(lowerKey)) {
-              strippedHeaders.push(key);
-            } else {
-              acc[key] = value;
-            }
-            return acc;
-          },
-          {},
-        );
-
-        let attempt = 0;
-        /** @type {import("axios").AxiosResponse | undefined} */
-        let r;
-        while (attempt < MAX_REPLAY_RETRIES) {
-          try {
-            attempt++;
-            r = await axios({
-              method: item.method,
-              url: target.href,
-              data: item.body,
-              headers: {
-                ...filteredHeaders,
-                "X-Apify-Replay": "true",
-                "X-Original-Webhook-Id": webhookId,
-                host: target.host,
-              },
-              maxRedirects: 0,
-              validateStatus: () => true,
-              timeout: REPLAY_TIMEOUT_MS,
-            });
-            break; // Success
-          } catch (err) {
-            const axiosError = /** @type {CommonError} */ (err);
-            const retryableErrors = [
-              "ECONNABORTED",
-              "ECONNRESET",
-              "ETIMEDOUT",
-              "ENOTFOUND",
-              "EAI_AGAIN",
-            ];
-            if (
-              attempt >= MAX_REPLAY_RETRIES ||
-              !retryableErrors.includes(axiosError.code || "")
-            ) {
-              throw err;
-            }
-            const delay = 1000 * Math.pow(2, attempt - 1);
-            console.warn(
-              `[REPLAY-RETRY] Attempt ${attempt}/${MAX_REPLAY_RETRIES} failed for ${target.href}: ${axiosError.code}. Retrying in ${delay}ms...`,
-            );
-            await new Promise((resolve) => setTimeout(resolve, delay));
-          }
-        }
-
-        if (!r) {
-          res.status(504).json({
-            error: "Replay failed",
-            message: `All ${MAX_REPLAY_RETRIES} retry attempts exhausted`,
-          });
-          return;
-        }
-
-        if (strippedHeaders.length > 0) {
-          res.setHeader(
-            "X-Apify-Replay-Warning",
-            `Headers stripped (masked or transmission-related): ${strippedHeaders.join(
-              ", ",
-            )}`,
-          );
-        }
-        res.json({
-          status: "Replayed",
-          targetUrl,
-          targetResponseCode: r?.status,
-          targetResponseBody: r?.data,
-          strippedHeaders:
-            strippedHeaders.length > 0 ? strippedHeaders : undefined,
-        });
-      } catch (error) {
-        const axiosError = /** @type {CommonError} */ (error);
-        const isTimeout =
-          axiosError.code === "ECONNABORTED" || axiosError.code === "ETIMEDOUT";
-        res.status(isTimeout ? 504 : 500).json({
-          error: "Replay failed",
-          message: isTimeout
-            ? `Target destination timed out after ${MAX_REPLAY_RETRIES} attempts (${
-                REPLAY_TIMEOUT_MS / 1000
-              }s timeout per attempt)`
-            : axiosError.message,
-          code: axiosError.code,
-        });
-      }
-    }),
+    createReplayHandler(),
   );
 
-  app.get("/log-stream", mgmtRateLimiter, authMiddleware, (req, res) => {
-    // 1. Optimize headers
-    res.setHeader("Content-Encoding", "identity"); // Disable compression
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
-    res.setHeader("X-Accel-Buffering", "no"); // Nginx: Unbuffered
-
-    // 2. Register cleanup BEFORE writing to handle immediate close
-    req.on("close", () => clients.delete(res));
-
-    res.flushHeaders();
-
-    // 3. Robust write with padding to force flush through proxies
-    try {
-      res.write(": connected\n\n");
-      // Send 2KB of padding to bypass proxy buffers (standard is often 4KB, but 2KB usually helps trigger flush)
-      res.write(`: ${" ".repeat(2048)}\n\n`);
-      clients.add(res);
-    } catch (error) {
-      console.error(
-        "[SSE-ERROR] Failed to establish stream:",
-        /** @type {Error} */ (error).message,
-      );
-      // Cleanup handled by 'close' event
-    }
-  });
+  app.get(
+    "/log-stream",
+    mgmtRateLimiter,
+    authMiddleware,
+    createLogStreamHandler(clients),
+  );
 
   app.get(
     "/logs",
     mgmtRateLimiter,
     authMiddleware,
-    asyncHandler(async (req, res) => {
-      try {
-        let {
-          webhookId,
-          method,
-          statusCode,
-          contentType,
-          startTime,
-          endTime,
-          signatureValid,
-          requestId,
-          limit = 100,
-          offset = 0,
-        } = req.query;
-        limit = Math.min(Math.max(parseInt(String(limit), 10) || 100, 1), 1000);
-        offset = Math.max(parseInt(String(offset), 10) || 0, 0);
+    createLogsHandler(webhookManager),
+  );
 
-        // Parse timestamp filters
-        const startDate = startTime ? new Date(String(startTime)) : null;
-        const endDate = endTime ? new Date(String(endTime)) : null;
-        const sigValid =
-          signatureValid === "true"
-            ? true
-            : signatureValid === "false"
-              ? false
-              : undefined;
-
-        const hasFilters = !!(
-          webhookId ||
-          method ||
-          statusCode ||
-          contentType ||
-          startTime ||
-          endTime ||
-          signatureValid !== undefined ||
-          requestId
-        );
-        const dataset = await Actor.openDataset();
-        const result = await dataset.getData({
-          limit: hasFilters ? limit * 5 : limit,
-          offset,
-          desc: true,
-        });
-
-        const filtered = (result.items || [])
-          .filter((item) => {
-            if (webhookId && item.webhookId !== webhookId) return false;
-            if (
-              method &&
-              item.method?.toUpperCase() !== String(method).toUpperCase()
-            )
-              return false;
-            if (statusCode && String(item.statusCode) !== String(statusCode))
-              return false;
-            if (
-              contentType &&
-              !item.headers?.["content-type"]?.includes(String(contentType))
-            )
-              return false;
-            // Timestamp range filter
-            if (startDate && !isNaN(startDate.getTime())) {
-              const itemDate = new Date(item.timestamp);
-              if (itemDate < startDate) return false;
-            }
-            if (endDate && !isNaN(endDate.getTime())) {
-              const itemDate = new Date(item.timestamp);
-              if (itemDate > endDate) return false;
-            }
-            // Signature status filter
-            if (sigValid !== undefined && item.signatureValid !== sigValid)
-              return false;
-            // Request ID filter
-            if (requestId && item.requestId !== requestId) return false;
-            return webhookManager.isValid(item.webhookId);
-          })
-          .sort(
-            (a, b) =>
-              new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-          );
-
-        res.json({
-          filters: {
-            webhookId,
-            method,
-            statusCode,
-            contentType,
-            startTime,
-            endTime,
-            signatureValid,
-            requestId,
-          },
-          count: Math.min(filtered.length, limit),
-          total: filtered.length,
-          items: filtered.slice(0, limit),
-        });
-        return;
-      } catch (e) {
-        res.status(500).json({
-          error: "Logs failed",
-          message: /** @type {Error} */ (e).message,
-        });
-      }
+  app.get(
+    "/info",
+    mgmtRateLimiter,
+    authMiddleware,
+    createInfoHandler({
+      webhookManager,
+      getAuthKey: () => currentAuthKey,
+      getRetentionHours: () => currentRetentionHours,
+      getMaxPayloadSize: () => currentMaxPayloadSize,
+      version: APP_VERSION,
     }),
   );
 
-  app.get("/info", mgmtRateLimiter, authMiddleware, (req, res) => {
-    const baseUrl = `${req.protocol}://${req.get("host")}`;
-    const activeWebhooks = webhookManager.getAllActive();
-
-    res.json({
-      version: APP_VERSION,
-      status: "Enterprise Suite Online",
-      system: {
-        authActive: !!currentAuthKey,
-        retentionHours: currentRetentionHours,
-        maxPayloadLimit: `${(
-          (currentMaxPayloadSize || 0) /
-          1024 /
-          1024
-        ).toFixed(1)}MB`,
-        webhookCount: activeWebhooks.length,
-        activeWebhooks,
-      },
-      features: [
-        "Advanced Mocking & Latency Control",
-        "Enterprise Security (Auth/CIDR)",
-        "Smart Forwarding Workflows",
-        "Isomorphic Custom Scripting",
-        "Real-time SSE Log Streaming",
-        "High-Performance Logging",
-      ],
-      endpoints: {
-        logs: `${baseUrl}/logs?limit=100`,
-        stream: `${baseUrl}/log-stream`,
-        webhook: `${baseUrl}/webhook/:id`,
-        replay: `${baseUrl}/replay/:webhookId/:itemId?url=http://your-goal.com`,
-        info: `${baseUrl}/info`,
-      },
-      docs: "https://apify.com/ar27111994/webhook-debugger-logger",
-    });
-  });
 
   /**
    * Error handling middleware
