@@ -16,6 +16,8 @@ import {
   SENSITIVE_HEADERS,
   DEFAULT_PAYLOAD_LIMIT,
 } from "./consts.js";
+import { verifySignature } from "./utils/signature.js";
+import { triggerAlertIfNeeded } from "./utils/alerting.js";
 
 /**
  * @typedef {import('express').Request} Request
@@ -559,6 +561,31 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
         userAgent: req.headers["user-agent"]?.toString(),
       };
 
+      // 3a. Signature Verification (if configured)
+      if (
+        mergedOptions.signatureVerification?.provider &&
+        mergedOptions.signatureVerification?.secret
+      ) {
+        const rawBody =
+          typeof req.body === "string" ? req.body : JSON.stringify(req.body);
+        const lowercaseHeaders = Object.fromEntries(
+          Object.entries(req.headers).map(([k, v]) => [
+            k.toLowerCase(),
+            String(v),
+          ]),
+        );
+        const sigResult = verifySignature(
+          mergedOptions.signatureVerification,
+          rawBody,
+          lowercaseHeaders,
+        );
+        event.signatureValid = sigResult.valid;
+        event.signatureProvider = sigResult.provider;
+        if (!sigResult.valid) {
+          event.signatureError = sigResult.error;
+        }
+      }
+
       transformRequestData(event, req, compiledScript);
 
       // 4. Orchestration: Respond synchronous-ish, then race background tasks
@@ -571,10 +598,29 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
       event.processingTime = Date.now() - startTime;
       sendResponse(res, event, mergedOptions);
 
-      // Execute background tasks (storage, forwarding) after response
+      // Execute background tasks (storage, forwarding, alerting) after response
       const backgroundPromise = async () => {
         try {
           await executeBackgroundTasks(event, req, mergedOptions, onEvent);
+
+          // Trigger alerts if configured
+          if (mergedOptions.alerts) {
+            const alertConfig = {
+              slack: mergedOptions.alerts.slack,
+              discord: mergedOptions.alerts.discord,
+              alertOn: mergedOptions.alertOn || ["error", "5xx"],
+            };
+            const alertContext = {
+              webhookId: event.webhookId,
+              method: event.method,
+              statusCode: event.statusCode,
+              signatureValid: event.signatureValid,
+              signatureError: event.signatureError,
+              timestamp: event.timestamp,
+              sourceIp: event.remoteIp,
+            };
+            await triggerAlertIfNeeded(alertConfig, alertContext);
+          }
         } catch (err) {
           console.error(
             `[CRITICAL] Background tasks for ${event.id} failed:`,

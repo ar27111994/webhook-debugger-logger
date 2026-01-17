@@ -39,6 +39,9 @@
  * @property {number} processingTime
  * @property {string | undefined} remoteIp
  * @property {string | undefined} [userAgent]
+ * @property {boolean} [signatureValid]
+ * @property {string} [signatureProvider]
+ * @property {string} [signatureError]
  */
 
 /**
