@@ -816,13 +816,36 @@ async function initialize() {
           method,
           statusCode,
           contentType,
+          startTime,
+          endTime,
+          signatureValid,
+          requestId,
           limit = 100,
           offset = 0,
         } = req.query;
         limit = Math.min(Math.max(parseInt(String(limit), 10) || 100, 1), 1000);
         offset = Math.max(parseInt(String(offset), 10) || 0, 0);
 
-        const hasFilters = !!(webhookId || method || statusCode || contentType);
+        // Parse timestamp filters
+        const startDate = startTime ? new Date(String(startTime)) : null;
+        const endDate = endTime ? new Date(String(endTime)) : null;
+        const sigValid =
+          signatureValid === "true"
+            ? true
+            : signatureValid === "false"
+              ? false
+              : undefined;
+
+        const hasFilters = !!(
+          webhookId ||
+          method ||
+          statusCode ||
+          contentType ||
+          startTime ||
+          endTime ||
+          signatureValid !== undefined ||
+          requestId
+        );
         const dataset = await Actor.openDataset();
         const result = await dataset.getData({
           limit: hasFilters ? limit * 5 : limit,
@@ -845,6 +868,20 @@ async function initialize() {
               !item.headers?.["content-type"]?.includes(String(contentType))
             )
               return false;
+            // Timestamp range filter
+            if (startDate && !isNaN(startDate.getTime())) {
+              const itemDate = new Date(item.timestamp);
+              if (itemDate < startDate) return false;
+            }
+            if (endDate && !isNaN(endDate.getTime())) {
+              const itemDate = new Date(item.timestamp);
+              if (itemDate > endDate) return false;
+            }
+            // Signature status filter
+            if (sigValid !== undefined && item.signatureValid !== sigValid)
+              return false;
+            // Request ID filter
+            if (requestId && item.requestId !== requestId) return false;
             return webhookManager.isValid(item.webhookId);
           })
           .sort(
@@ -853,7 +890,16 @@ async function initialize() {
           );
 
         res.json({
-          filters: { webhookId, method, statusCode, contentType },
+          filters: {
+            webhookId,
+            method,
+            statusCode,
+            contentType,
+            startTime,
+            endTime,
+            signatureValid,
+            requestId,
+          },
           count: Math.min(filtered.length, limit),
           total: filtered.length,
           items: filtered.slice(0, limit),
