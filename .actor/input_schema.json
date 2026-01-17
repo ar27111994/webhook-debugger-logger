@@ -96,6 +96,99 @@
       "description": "Only accept traffic from these specific IPs or CIDR blocks. Leave blank for public access.",
       "editor": "stringList"
     },
+    "signatureVerification": {
+      "type": "object",
+      "title": "Webhook Signature Verification",
+      "description": "Verify incoming webhook signatures from providers like Stripe, Shopify, GitHub, or Slack.",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "title": "Provider",
+          "description": "Webhook provider for signature verification.",
+          "enum": ["stripe", "shopify", "github", "slack", "custom"],
+          "editor": "select"
+        },
+        "secret": {
+          "type": "string",
+          "title": "Signing Secret",
+          "description": "The webhook signing secret from your provider.",
+          "isSecret": true,
+          "editor": "textfield"
+        },
+        "headerName": {
+          "type": "string",
+          "title": "Custom Header Name",
+          "description": "For custom provider: the header containing the signature.",
+          "editor": "textfield"
+        },
+        "algorithm": {
+          "type": "string",
+          "title": "Hash Algorithm",
+          "description": "For custom provider: the HMAC algorithm (sha256 or sha1).",
+          "enum": ["sha256", "sha1"],
+          "default": "sha256",
+          "editor": "select"
+        },
+        "tolerance": {
+          "type": "integer",
+          "title": "Timestamp Tolerance (seconds)",
+          "description": "Maximum age of request timestamp for replay protection (default: 300).",
+          "minimum": 60,
+          "maximum": 3600,
+          "default": 300,
+          "editor": "number"
+        }
+      },
+      "editor": "json"
+    },
+    "section_alerting": {
+      "title": "🔔 Alerting & Notifications",
+      "type": "string",
+      "sectionCaption": "Real-time Alerts",
+      "sectionDescription": "Get notified when webhooks fail or require attention.",
+      "description": "Alerting configuration.",
+      "editor": "hidden"
+    },
+    "alerts": {
+      "type": "object",
+      "title": "Alert Configuration",
+      "description": "Configure Slack or Discord notifications for webhook events.",
+      "properties": {
+        "slack": {
+          "type": "object",
+          "title": "Slack",
+          "properties": {
+            "webhookUrl": {
+              "type": "string",
+              "title": "Slack Webhook URL",
+              "description": "Slack incoming webhook URL for notifications.",
+              "editor": "textfield"
+            }
+          }
+        },
+        "discord": {
+          "type": "object",
+          "title": "Discord",
+          "properties": {
+            "webhookUrl": {
+              "type": "string",
+              "title": "Discord Webhook URL",
+              "description": "Discord webhook URL for notifications.",
+              "editor": "textfield"
+            }
+          }
+        }
+      },
+      "editor": "json"
+    },
+    "alertOn": {
+      "type": "array",
+      "title": "Alert Triggers",
+      "description": "When to send alerts: error, 4xx, 5xx, timeout, signature_invalid",
+      "default": ["error", "5xx"],
+      "prefill": ["error", "5xx"],
+      "editor": "stringList"
+    },
     "section_v2_response": {
       "title": "🎭 API Mocking & Latency",
       "type": "string",
