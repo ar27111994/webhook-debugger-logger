@@ -5,11 +5,22 @@ import { verifySignature, SUPPORTED_PROVIDERS } from "../src/utils/signature.js"
 describe("Signature Verification", () => {
   describe("Stripe", () => {
     const secret = "whsec_test_secret_key";
-    const payload = JSON.stringify({ type: "payment_intent.succeeded", id: "pi_123" });
+    const payload = JSON.stringify({
+      type: "payment_intent.succeeded",
+      id: "pi_123",
+    });
 
+    /**
+     * @param {number} timestamp
+     * @param {string} payload
+     * @param {string} secret
+     */
     function createStripeSignature(timestamp, payload, secret) {
       const signedPayload = `${timestamp}.${payload}`;
-      const signature = crypto.createHmac("sha256", secret).update(signedPayload).digest("hex");
+      const signature = crypto
+        .createHmac("sha256", secret)
+        .update(signedPayload)
+        .digest("hex");
       return `t=${timestamp},v1=${signature}`;
     }
 
@@ -18,17 +29,29 @@ describe("Signature Verification", () => {
       const sigHeader = createStripeSignature(timestamp, payload, secret);
       const headers = { "stripe-signature": sigHeader };
 
-      const result = verifySignature({ provider: "stripe", secret }, payload, headers);
+      const result = verifySignature(
+        { provider: "stripe", secret },
+        payload,
+        headers,
+      );
       expect(result.valid).toBe(true);
       expect(result.provider).toBe("stripe");
     });
 
     test("should reject invalid Stripe signature", () => {
       const timestamp = Math.floor(Date.now() / 1000);
-      const sigHeader = createStripeSignature(timestamp, payload, "wrong_secret");
+      const sigHeader = createStripeSignature(
+        timestamp,
+        payload,
+        "wrong_secret",
+      );
       const headers = { "stripe-signature": sigHeader };
 
-      const result = verifySignature({ provider: "stripe", secret }, payload, headers);
+      const result = verifySignature(
+        { provider: "stripe", secret },
+        payload,
+        headers,
+      );
       expect(result.valid).toBe(false);
       expect(result.error).toContain("mismatch");
     });
@@ -38,13 +61,21 @@ describe("Signature Verification", () => {
       const sigHeader = createStripeSignature(timestamp, payload, secret);
       const headers = { "stripe-signature": sigHeader };
 
-      const result = verifySignature({ provider: "stripe", secret, tolerance: 300 }, payload, headers);
+      const result = verifySignature(
+        { provider: "stripe", secret, tolerance: 300 },
+        payload,
+        headers,
+      );
       expect(result.valid).toBe(false);
       expect(result.error).toContain("tolerance");
     });
 
     test("should reject missing Stripe-Signature header", () => {
-      const result = verifySignature({ provider: "stripe", secret }, payload, {});
+      const result = verifySignature(
+        { provider: "stripe", secret },
+        payload,
+        {},
+      );
       expect(result.valid).toBe(false);
       expect(result.error).toContain("Missing");
     });
@@ -54,15 +85,26 @@ describe("Signature Verification", () => {
     const secret = "shopify_secret_key";
     const payload = JSON.stringify({ topic: "orders/create", id: "123" });
 
+    /**
+     * @param {string} payload
+     * @param {string} secret
+     */
     function createShopifySignature(payload, secret) {
-      return crypto.createHmac("sha256", secret).update(payload, "utf8").digest("base64");
+      return crypto
+        .createHmac("sha256", secret)
+        .update(payload, "utf8")
+        .digest("base64");
     }
 
     test("should verify valid Shopify signature", () => {
       const signature = createShopifySignature(payload, secret);
       const headers = { "x-shopify-hmac-sha256": signature };
 
-      const result = verifySignature({ provider: "shopify", secret }, payload, headers);
+      const result = verifySignature(
+        { provider: "shopify", secret },
+        payload,
+        headers,
+      );
       expect(result.valid).toBe(true);
       expect(result.provider).toBe("shopify");
     });
@@ -70,12 +112,20 @@ describe("Signature Verification", () => {
     test("should reject invalid Shopify signature", () => {
       const headers = { "x-shopify-hmac-sha256": "invalid_signature" };
 
-      const result = verifySignature({ provider: "shopify", secret }, payload, headers);
+      const result = verifySignature(
+        { provider: "shopify", secret },
+        payload,
+        headers,
+      );
       expect(result.valid).toBe(false);
     });
 
     test("should reject missing Shopify header", () => {
-      const result = verifySignature({ provider: "shopify", secret }, payload, {});
+      const result = verifySignature(
+        { provider: "shopify", secret },
+        payload,
+        {},
+      );
       expect(result.valid).toBe(false);
       expect(result.error).toContain("Missing");
     });
@@ -85,8 +135,15 @@ describe("Signature Verification", () => {
     const secret = "github_webhook_secret";
     const payload = JSON.stringify({ action: "opened", pull_request: {} });
 
+    /**
+     * @param {string} payload
+     * @param {string} secret
+     */
     function createGitHubSignature(payload, secret) {
-      const signature = crypto.createHmac("sha256", secret).update(payload).digest("hex");
+      const signature = crypto
+        .createHmac("sha256", secret)
+        .update(payload)
+        .digest("hex");
       return `sha256=${signature}`;
     }
 
@@ -94,7 +151,11 @@ describe("Signature Verification", () => {
       const signature = createGitHubSignature(payload, secret);
       const headers = { "x-hub-signature-256": signature };
 
-      const result = verifySignature({ provider: "github", secret }, payload, headers);
+      const result = verifySignature(
+        { provider: "github", secret },
+        payload,
+        headers,
+      );
       expect(result.valid).toBe(true);
       expect(result.provider).toBe("github");
     });
@@ -102,12 +163,20 @@ describe("Signature Verification", () => {
     test("should reject invalid GitHub signature", () => {
       const headers = { "x-hub-signature-256": "sha256=invalid" };
 
-      const result = verifySignature({ provider: "github", secret }, payload, headers);
+      const result = verifySignature(
+        { provider: "github", secret },
+        payload,
+        headers,
+      );
       expect(result.valid).toBe(false);
     });
 
     test("should reject missing GitHub header", () => {
-      const result = verifySignature({ provider: "github", secret }, payload, {});
+      const result = verifySignature(
+        { provider: "github", secret },
+        payload,
+        {},
+      );
       expect(result.valid).toBe(false);
       expect(result.error).toContain("Missing");
     });
@@ -117,9 +186,17 @@ describe("Signature Verification", () => {
     const secret = "slack_signing_secret";
     const payload = "token=xyzz0WbapA4vBCDEFasx0q6G&team_id=T1DC2JH3J";
 
+    /**
+     * @param {number} timestamp
+     * @param {string} payload
+     * @param {string} secret
+     */
     function createSlackSignature(timestamp, payload, secret) {
       const sigBasestring = `v0:${timestamp}:${payload}`;
-      const signature = crypto.createHmac("sha256", secret).update(sigBasestring).digest("hex");
+      const signature = crypto
+        .createHmac("sha256", secret)
+        .update(sigBasestring)
+        .digest("hex");
       return `v0=${signature}`;
     }
 
@@ -131,7 +208,11 @@ describe("Signature Verification", () => {
         "x-slack-signature": signature,
       };
 
-      const result = verifySignature({ provider: "slack", secret }, payload, headers);
+      const result = verifySignature(
+        { provider: "slack", secret },
+        payload,
+        headers,
+      );
       expect(result.valid).toBe(true);
       expect(result.provider).toBe("slack");
     });
@@ -143,7 +224,11 @@ describe("Signature Verification", () => {
         "x-slack-signature": "v0=invalid",
       };
 
-      const result = verifySignature({ provider: "slack", secret }, payload, headers);
+      const result = verifySignature(
+        { provider: "slack", secret },
+        payload,
+        headers,
+      );
       expect(result.valid).toBe(false);
     });
 
@@ -155,7 +240,11 @@ describe("Signature Verification", () => {
         "x-slack-signature": signature,
       };
 
-      const result = verifySignature({ provider: "slack", secret, tolerance: 300 }, payload, headers);
+      const result = verifySignature(
+        { provider: "slack", secret, tolerance: 300 },
+        payload,
+        headers,
+      );
       expect(result.valid).toBe(false);
       expect(result.error).toContain("tolerance");
     });

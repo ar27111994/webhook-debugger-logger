@@ -118,7 +118,7 @@ async function sendSlackAlert(webhookUrl, context) {
       : `Status: ${context.statusCode}`;
 
   const payload = {
-    blocks: [
+    blocks: /** @type {any[]} */ ([
       {
         type: "header",
         text: {
@@ -136,7 +136,7 @@ async function sendSlackAlert(webhookUrl, context) {
           { type: "mrkdwn", text: `*Time:*\n${context.timestamp}` },
         ],
       },
-    ],
+    ]),
   };
 
   if (context.sourceIp) {

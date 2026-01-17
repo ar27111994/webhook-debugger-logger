@@ -1,6 +1,7 @@
 import { jest, describe, test, expect, beforeEach } from "@jest/globals";
 
 // Mock axios before importing the module
+/** @type {jest.Mock<(...args: any[]) => Promise<{ status: number }>>} */
 const mockPost = jest.fn();
 jest.unstable_mockModule("axios", () => ({
   default: { post: mockPost },

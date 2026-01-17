@@ -68,6 +68,7 @@
  * @typedef {Object} CommonError
  * @property {string} [code]
  * @property {string} [message]
+ * @property {string} [name]
  * @property {number} [statusCode]
  * @property {number} [status]
  * @property {string} [stack]

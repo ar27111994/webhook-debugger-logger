@@ -51,31 +51,62 @@ export function verifySignature(config, payload, headers) {
 /**
  * Verifies Stripe webhook signature.
  * @see https://stripe.com/docs/webhooks/signatures
+ * @param {string} secret
+ * @param {string} payload
+ * @param {Record<string, string>} headers
+ * @param {number} [tolerance]
+ * @returns {SignatureResult}
  */
-function verifyStripe(secret, payload, headers, tolerance = DEFAULT_TOLERANCE_SECONDS) {
+function verifyStripe(
+  secret,
+  payload,
+  headers,
+  tolerance = DEFAULT_TOLERANCE_SECONDS,
+) {
   const sigHeader = headers["stripe-signature"];
   if (!sigHeader) {
-    return { valid: false, error: "Missing Stripe-Signature header", provider: "stripe" };
+    return {
+      valid: false,
+      error: "Missing Stripe-Signature header",
+      provider: "stripe",
+    };
   }
 
   // Parse signature header: t=timestamp,v1=signature
-  const elements = sigHeader.split(",").reduce((acc, part) => {
-    const [key, value] = part.split("=");
-    acc[key] = value;
-    return acc;
-  }, /** @type {Record<string, string>} */ ({}));
+  /** @type {Record<string, string>} */
+  const elements = sigHeader
+    .split(",")
+    .reduce(
+      (
+        /** @type {Record<string, string>} */ acc,
+        /** @type {string} */ part,
+      ) => {
+        const [key, value] = part.split("=");
+        acc[key] = value;
+        return acc;
+      },
+      {},
+    );
 
   const timestamp = elements.t;
   const signature = elements.v1;
 
   if (!timestamp || !signature) {
-    return { valid: false, error: "Invalid Stripe-Signature format", provider: "stripe" };
+    return {
+      valid: false,
+      error: "Invalid Stripe-Signature format",
+      provider: "stripe",
+    };
   }
 
   // Check timestamp tolerance
   const timestampAge = Math.floor(Date.now() / 1000) - parseInt(timestamp, 10);
   if (Math.abs(timestampAge) > tolerance) {
-    return { valid: false, error: `Timestamp outside tolerance (${timestampAge}s)`, provider: "stripe" };
+    return {
+      valid: false,
+      error: `Timestamp outside tolerance (${timestampAge}s)`,
+      provider: "stripe",
+    };
   }
 
   // Compute expected signature
@@ -102,6 +133,10 @@ function verifyStripe(secret, payload, headers, tolerance = DEFAULT_TOLERANCE_SE
 /**
  * Verifies Shopify webhook signature.
  * @see https://shopify.dev/docs/apps/webhooks/configuration/https#step-5-verify-the-webhook
+ * @param {string} secret
+ * @param {string} payload
+ * @param {Record<string, string>} headers
+ * @returns {SignatureResult}
  */
 function verifyShopify(secret, payload, headers) {
   const sigHeader = headers["x-shopify-hmac-sha256"];
@@ -131,6 +166,10 @@ function verifyShopify(secret, payload, headers) {
 /**
  * Verifies GitHub webhook signature.
  * @see https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries
+ * @param {string} secret
+ * @param {string} payload
+ * @param {Record<string, string>} headers
+ * @returns {SignatureResult}
  */
 function verifyGitHub(secret, payload, headers) {
   const sigHeader = headers["x-hub-signature-256"];
@@ -165,6 +204,11 @@ function verifyGitHub(secret, payload, headers) {
 /**
  * Verifies Slack webhook signature.
  * @see https://api.slack.com/authentication/verifying-requests-from-slack
+ * @param {string} secret
+ * @param {string} payload
+ * @param {Record<string, string>} headers
+ * @param {number} [tolerance]
+ * @returns {SignatureResult}
  */
 function verifySlack(secret, payload, headers, tolerance = DEFAULT_TOLERANCE_SECONDS) {
   const timestamp = headers["x-slack-request-timestamp"];
@@ -207,6 +251,10 @@ function verifySlack(secret, payload, headers, tolerance = DEFAULT_TOLERANCE_SEC
 
 /**
  * Verifies webhook signature using custom configuration.
+ * @param {SignatureConfig} config
+ * @param {string} payload
+ * @param {Record<string, string>} headers
+ * @returns {SignatureResult}
  */
 function verifyCustom(config, payload, headers) {
   const { secret, headerName, algorithm = "sha256" } = config;

@@ -5,4 +5,5 @@
 
 export { createAuthMiddleware } from "./auth.js";
 export { createRequestIdMiddleware, createCspMiddleware } from "./security.js";
+export { createJsonParserMiddleware } from "./json_parser.js";
 export { createErrorHandler } from "./error.js";

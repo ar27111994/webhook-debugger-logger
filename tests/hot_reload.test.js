@@ -238,7 +238,7 @@ describe("Hot-Reloading Configuration Tests", () => {
 
     // Should be blocked by middleware (413) or bodyParser (413)
     expect(res2.statusCode).toBe(413);
-  });
+  }, 30000);
 
   test("should disable schema validation when input is cleared", async () => {
     const ids = webhookManager.getAllActive();

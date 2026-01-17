@@ -1,30 +1,22 @@
-#!/usr/bin/env node
-
 import { Actor } from "apify";
 import express from "express";
-import bodyParser from "body-parser";
 import compression from "compression";
 import { WebhookManager } from "./webhook_manager.js";
-import { createLoggerMiddleware } from "./logger_middleware.js";
-import {
-  parseWebhookOptions,
-  coerceRuntimeOptions,
-  normalizeInput,
-} from "./utils/config.js";
+import { LoggerMiddleware } from "./logger_middleware.js";
+import { parseWebhookOptions, normalizeInput } from "./utils/config.js";
 import { ensureLocalInputExists } from "./utils/bootstrap.js";
-import { RateLimiter } from "./utils/rate_limiter.js";
+import { HotReloadManager } from "./utils/hot_reload_manager.js";
+import { AppState } from "./utils/app_state.js";
 import {
   CLEANUP_INTERVAL_MS,
   INPUT_POLL_INTERVAL_PROD_MS,
   INPUT_POLL_INTERVAL_TEST_MS,
-  DEFAULT_PAYLOAD_LIMIT,
   SHUTDOWN_TIMEOUT_MS,
   SSE_HEARTBEAT_INTERVAL_MS,
   STARTUP_TEST_EXIT_DELAY_MS,
   DEFAULT_URL_COUNT,
   DEFAULT_RETENTION_HOURS,
-  DEFAULT_RATE_LIMIT_PER_MINUTE,
-  DEFAULT_RATE_LIMIT_WINDOW_MS,
+  DEFAULT_PAYLOAD_LIMIT,
 } from "./consts.js";
 import {
   createBroadcaster,
@@ -37,12 +29,11 @@ import {
 } from "./routes/index.js";
 import {
   createAuthMiddleware,
+  createJsonParserMiddleware,
   createRequestIdMiddleware,
   createCspMiddleware,
   createErrorHandler,
 } from "./middleware/index.js";
-import { watch as fsWatch } from "fs/promises";
-import { existsSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { createRequire } from "module";
@@ -54,8 +45,8 @@ const packageJson = require("../package.json");
 /** @typedef {import("express").Request} Request */
 /** @typedef {import("express").Response} Response */
 /** @typedef {import("express").NextFunction} NextFunction */
-/**@typedef {import("./typedefs.js").CommonError} CommonError */
-/**@typedef {ReturnType<typeof setInterval> | undefined} Interval */
+/** @typedef {import("./typedefs.js").CommonError} CommonError */
+/** @typedef {ReturnType<typeof setInterval> | undefined} Interval */
 
 const INPUT_POLL_INTERVAL_MS =
   process.env.NODE_ENV === "test"
@@ -70,15 +61,11 @@ let server;
 /** @type {Interval} */
 let sseHeartbeat;
 /** @type {Interval} */
-let inputPollInterval;
-/** @type {Promise<void> | null} */
-let activePollPromise = null;
-/** @type {Interval} */
 let cleanupInterval;
-/** @type {RateLimiter | undefined} */
-let webhookRateLimiter;
-/** @type {AbortController | undefined} */
-let fileWatcherAbortController;
+/** @type {AppState | undefined} */
+let appState;
+/** @type {HotReloadManager | undefined} */
+let hotReloadManager;
 
 const webhookManager = new WebhookManager();
 /** @type {Set<import("http").ServerResponse>} */
@@ -95,10 +82,8 @@ const broadcast = createBroadcaster(clients);
 const shutdown = async (signal) => {
   if (cleanupInterval) clearInterval(cleanupInterval);
   if (sseHeartbeat) clearInterval(sseHeartbeat);
-  if (inputPollInterval) clearInterval(inputPollInterval);
-  if (fileWatcherAbortController) fileWatcherAbortController.abort();
-  if (activePollPromise) await activePollPromise;
-  if (webhookRateLimiter) webhookRateLimiter.destroy();
+  if (hotReloadManager) await hotReloadManager.stop();
+  if (appState) appState.destroy();
 
   if (process.env.NODE_ENV === "test" && signal !== "TEST_COMPLETE") return;
 
@@ -124,9 +109,11 @@ const shutdown = async (signal) => {
 
 /**
  * Main initialization logic.
+ * @param {Object} testOptions - Options for testing purposes.
  * @returns {Promise<import("express").Application>}
  */
-async function initialize() {
+// Exported for tests to allow dependency injection
+export async function initialize(testOptions = {}) {
   await Actor.init();
 
   const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -138,7 +125,7 @@ async function initialize() {
   // Only create artifact if NOT running on the Apify Platform (Stateless vs Stateful)
   // We want to preserve local artifacts for hot-reload dev workflows.
   const rawInput = /** @type {any} */ ((await Actor.getInput()) || {});
-  let input = rawInput;
+  let input = { ...rawInput, ...testOptions };
 
   if (!Actor.isAtHome()) {
     await ensureLocalInputExists(rawInput);
@@ -177,14 +164,8 @@ async function initialize() {
     urlCount = DEFAULT_URL_COUNT,
     retentionHours = DEFAULT_RETENTION_HOURS,
   } = config; // Uses coerced defaults via config.js (which we updated)
-  const maxPayloadSize = config.maxPayloadSize || DEFAULT_PAYLOAD_LIMIT; // 10MB default limit for body parsing
   const enableJSONParsing =
     config.enableJSONParsing !== undefined ? config.enableJSONParsing : true;
-  const authKey = config.authKey || "";
-  const rateLimitPerMinute = Math.max(
-    1,
-    Math.floor(config.rateLimitPerMinute || DEFAULT_RATE_LIMIT_PER_MINUTE),
-  );
   const testAndExit = input.testAndExit || false;
 
   await webhookManager.init();
@@ -231,8 +212,18 @@ async function initialize() {
   // 2. Sync Retention (Global Extension)
   await webhookManager.updateRetention(retentionHours);
 
+  // Initialize LoggerMiddleware first as it's a dependency for AppState
+  const loggerMiddlewareInstance = new LoggerMiddleware(
+    webhookManager,
+    config,
+    broadcast,
+  );
+
+  // Initialize AppState (encapsulates authKey, rateLimiter, bodyParser, etc.)
+  appState = new AppState(config, webhookManager, loggerMiddlewareInstance);
+
   // 3. Auth Middleware (using modular factory)
-  const authMiddleware = createAuthMiddleware(() => currentAuthKey);
+  const authMiddleware = createAuthMiddleware(() => appState?.authKey || "");
 
   // --- Express Middleware ---
   app.set("trust proxy", true);
@@ -274,176 +265,26 @@ async function initialize() {
 
   app.use(cors());
 
-  let currentMaxPayloadSize = maxPayloadSize;
-  let currentAuthKey = authKey;
-  let currentRetentionHours = retentionHours;
-  let currentUrlCount = urlCount;
-
-  /** @type {import('express').Handler} */
-  let currentBodyParser = bodyParser.raw({
-    limit: currentMaxPayloadSize ?? DEFAULT_PAYLOAD_LIMIT,
-    type: "*/*",
-  });
-
-  app.use((req, res, next) => currentBodyParser(req, res, next));
+  // Dynamic Body Parser managed by AppState
+  app.use(appState.bodyParserMiddleware);
 
   if (enableJSONParsing) {
-    app.use((req, _res, next) => {
-      if (!req.body || Buffer.isBuffer(req.body) === false) return next();
-      if (req.headers["content-type"]?.includes("application/json")) {
-        try {
-          req.body = JSON.parse(req.body.toString());
-        } catch (_) {
-          req.body = req.body.toString();
-        }
-      } else {
-        req.body = req.body.toString();
-      }
-      next();
-    });
+    app.use(createJsonParserMiddleware());
   }
 
-  webhookRateLimiter = new RateLimiter(
-    rateLimitPerMinute,
-    DEFAULT_RATE_LIMIT_WINDOW_MS,
-  );
-  const mgmtRateLimiter = webhookRateLimiter.middleware();
-  const loggerMiddleware = createLoggerMiddleware(
-    webhookManager,
-    config,
-    broadcast,
-  );
+  // Rate Limiter managed by AppState
+  // RateLimiter is created in AppState constructor
+  const mgmtRateLimiter = appState.rateLimitMiddleware;
 
   // --- Hot Reloading Logic ---
-  // Use KV Store directly to bypass local cache and enable platform hot-reload
-  const store = await Actor.openKeyValueStore();
-  // Sync initial state with storage (which might have been normalized by bootstrap)
-  // to prevent immediate "fake" hot-reload triggers due to type coercion (e.g. "5" vs 5).
-  const initialStoreValue = await store.getValue("INPUT");
-  const normalizedInitialInput = normalizeInput(initialStoreValue, input);
-  let lastInputStr = JSON.stringify(normalizedInitialInput);
+  hotReloadManager = new HotReloadManager({
+    initialInput: normalizeInput(input),
+    pollIntervalMs: INPUT_POLL_INTERVAL_MS,
+    onConfigChange: appState.applyConfigUpdate.bind(appState),
+  });
 
-  /**
-   * Shared hot-reload handler for both fs.watch and polling
-   */
-  const handleHotReload = async () => {
-    if (activePollPromise) return;
-
-    activePollPromise = (async () => {
-      try {
-        const newInput = /** @type {Record<string, any> | null} */ (
-          await store.getValue("INPUT")
-        );
-        if (!newInput) return;
-
-        // Normalize input if it's a string (fixes hot-reload from raw KV updates)
-        const normalizedInput = normalizeInput(newInput);
-
-        const newInputStr = JSON.stringify(normalizedInput);
-        if (newInputStr === lastInputStr) return;
-
-        lastInputStr = newInputStr;
-        console.log("[SYSTEM] Detected input update! Applying new settings...");
-
-        // Use shared coercion logic
-        const validated = coerceRuntimeOptions(normalizedInput);
-
-        // 1. Update Middleware (response codes, delays, headers, forwarding)
-        loggerMiddleware.updateOptions(normalizedInput);
-        currentMaxPayloadSize = validated.maxPayloadSize;
-
-        // 2. Update Rate Limiter
-        const newRateLimit = validated.rateLimitPerMinute;
-        if (webhookRateLimiter) webhookRateLimiter.limit = newRateLimit;
-
-        // 3. Update Auth Key
-        currentAuthKey = validated.authKey;
-
-        // 4. Re-reconcile URL count
-        currentUrlCount = validated.urlCount;
-        const activeWebhooks = webhookManager.getAllActive();
-        if (activeWebhooks.length < currentUrlCount) {
-          const diff = currentUrlCount - activeWebhooks.length;
-          console.log(
-            `[SYSTEM] Dynamic Scale-up: Generating ${diff} additional webhook(s).`,
-          );
-          await webhookManager.generateWebhooks(diff, currentRetentionHours);
-        }
-
-        // 5. Update Retention
-        currentRetentionHours = validated.retentionHours;
-        await webhookManager.updateRetention(currentRetentionHours);
-
-        console.log("[SYSTEM] Hot-reload complete. New settings are active.");
-      } catch (err) {
-        console.error(
-          "[SYSTEM-ERROR] Failed to apply new settings:",
-          /** @type {Error} */ (err).message,
-        );
-      } finally {
-        activePollPromise = null;
-      }
-    })();
-
-    await activePollPromise;
-  };
-
-  // Use fs.watch for instant hot-reload in local development
-  if (!Actor.isAtHome()) {
-    const localInputPath = join(
-      process.cwd(),
-      "storage",
-      "key_value_stores",
-      "default",
-      "INPUT.json",
-    );
-
-    if (existsSync(localInputPath)) {
-      console.log(
-        "[SYSTEM] Local mode detected. Using fs.watch for instant hot-reload.",
-      );
-
-      fileWatcherAbortController = new AbortController();
-      let debounceTimer =
-        /** @type {ReturnType<typeof setTimeout> | undefined} */ (undefined);
-
-      // Start watching in background (non-blocking)
-      (async () => {
-        try {
-          const watcher = fsWatch(localInputPath, {
-            signal: fileWatcherAbortController.signal,
-          });
-          for await (const event of watcher) {
-            if (event.eventType === "change") {
-              // Debounce rapid file changes (editors often write multiple times)
-              if (debounceTimer) clearTimeout(debounceTimer);
-              debounceTimer = setTimeout(() => {
-                handleHotReload().catch((err) => {
-                  console.error(
-                    "[SYSTEM-ERROR] fs.watch hot-reload failed:",
-                    err.message,
-                  );
-                });
-              }, 100);
-            }
-          }
-        } catch (err) {
-          const error = /** @type {CommonError} */ (err);
-          if (error.name !== "AbortError") {
-            console.error("[SYSTEM-ERROR] fs.watch failed:", error.message);
-          }
-        }
-      })();
-    }
-  }
-
-  // Fallback to interval polling (works on platform and as backup for local)
-  inputPollInterval = setInterval(() => {
-    handleHotReload().catch((err) => {
-      console.error("[SYSTEM-ERROR] Polling hot-reload failed:", err.message);
-    });
-  }, INPUT_POLL_INTERVAL_MS);
-  if (inputPollInterval.unref) inputPollInterval.unref();
+  await hotReloadManager.init();
+  hotReloadManager.start();
 
   sseHeartbeat = setInterval(() => {
     clients.forEach((c) => {
@@ -473,8 +314,7 @@ async function initialize() {
       }
       next();
     },
-    // @ts-expect-error - LoggerMiddleware has updateOptions attached, Express overloads don't recognize intersection types
-    loggerMiddleware,
+    loggerMiddlewareInstance.middleware,
   );
 
   app.all(
@@ -504,9 +344,11 @@ async function initialize() {
     authMiddleware,
     createInfoHandler({
       webhookManager,
-      getAuthKey: () => currentAuthKey,
-      getRetentionHours: () => currentRetentionHours,
-      getMaxPayloadSize: () => currentMaxPayloadSize,
+      getAuthKey: () => appState?.authKey || "",
+      getRetentionHours: () =>
+        appState?.retentionHours || DEFAULT_RETENTION_HOURS,
+      getMaxPayloadSize: () =>
+        appState?.maxPayloadSize || DEFAULT_PAYLOAD_LIMIT,
       version: APP_VERSION,
     }),
   );
@@ -541,4 +383,4 @@ if (process.env.NODE_ENV !== "test") {
   });
 }
 
-export { app, webhookManager, server, sseHeartbeat, initialize, shutdown };
+export { app, webhookManager, server, sseHeartbeat, shutdown };

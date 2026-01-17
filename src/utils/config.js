@@ -8,6 +8,23 @@ import {
 } from "../consts.js";
 
 /**
+ * @typedef {Object} SignatureVerificationConfig
+ * @property {boolean} [enabled]
+ * @property {string} [provider]
+ * @property {string} [secret]
+ * @property {string} [headerName]
+ * @property {string} [algorithm]
+ * @property {string} [encoding]
+ * @property {string} [prefix]
+ */
+
+/**
+ * @typedef {Object} AlertsConfig
+ * @property {{ webhookUrl: string }} [slack]
+ * @property {{ webhookUrl: string }} [discord]
+ */
+
+/**
  * @typedef {Object} WebhookConfig
  * @property {string} [authKey]
  * @property {string[]} [allowedIps]
@@ -25,6 +42,9 @@ import {
  * @property {boolean} [enableJSONParsing]
  * @property {number} [urlCount]
  * @property {number} [retentionHours]
+ * @property {SignatureVerificationConfig} [signatureVerification]
+ * @property {AlertsConfig} [alerts]
+ * @property {string[]} [alertOn]
  */
 
 /**
@@ -50,9 +70,19 @@ export function parseWebhookOptions(options = {}) {
 }
 
 /**
+ * @typedef {Object} RuntimeOptions
+ * @property {number} urlCount
+ * @property {number} retentionHours
+ * @property {number} rateLimitPerMinute
+ * @property {string} authKey
+ * @property {number} maxPayloadSize
+ * @property {number} responseDelayMs
+ */
+
+/**
  * Coerces and validates runtime options for hot-reloading.
  * @param {Record<string, any>} input
- * @returns {{ urlCount: number, retentionHours: number, rateLimitPerMinute: number, authKey: string, maxPayloadSize: number, responseDelayMs: number }}
+ * @returns {RuntimeOptions}
  */
 export function coerceRuntimeOptions(input) {
   const urlCountRaw = Number(input.urlCount);

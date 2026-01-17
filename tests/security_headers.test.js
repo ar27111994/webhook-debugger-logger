@@ -1,18 +1,13 @@
 import { describe, test, expect, beforeAll, afterAll } from "@jest/globals";
 import request from "supertest";
 import { Actor } from "apify";
-import { initialize, shutdown, app } from "../src/main.js";
-
-/**
- * @type {import('supertest').Response}
- */
-let infoResponse;
+import { initialize, app } from "../src/main.js";
 
 describe("Security Headers", () => {
   beforeAll(async () => {
     await Actor.init();
     await initialize({ urlCount: 1, testAndExit: true });
-    infoResponse = await request(app).get("/info");
+    await request(app).get("/info");
   }, 30000);
 
   afterAll(async () => {

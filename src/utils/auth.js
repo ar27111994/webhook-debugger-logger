@@ -4,7 +4,7 @@ import { timingSafeEqual } from "crypto";
  * Validates the authentication key from query or headers.
  *
  * @param {import('express').Request} req - Express request object
- * @param {string} authKey - The configured authentication key
+ * @param {string | undefined} authKey - The configured authentication key
  * @returns {import('../typedefs.js').ValidationResult} Validation result
  */
 export function validateAuth(req, authKey) {
