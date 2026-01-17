@@ -11,7 +11,6 @@ import {
   coerceRuntimeOptions,
   normalizeInput,
 } from "./utils/config.js";
-import { validateAuth } from "./utils/auth.js";
 import { ensureLocalInputExists } from "./utils/bootstrap.js";
 import { RateLimiter } from "./utils/rate_limiter.js";
 import {
@@ -28,16 +27,24 @@ import {
   DEFAULT_RATE_LIMIT_WINDOW_MS,
 } from "./consts.js";
 import {
-  escapeHtml,
+  createBroadcaster,
   createLogsHandler,
   createInfoHandler,
   createLogStreamHandler,
   createReplayHandler,
+  createDashboardHandler,
+  preloadTemplate,
 } from "./routes/index.js";
+import {
+  createAuthMiddleware,
+  createRequestIdMiddleware,
+  createCspMiddleware,
+  createErrorHandler,
+} from "./middleware/index.js";
+import { watch as fsWatch } from "fs/promises";
+import { existsSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
-import { readFile, watch as fsWatch } from "fs/promises";
-import { existsSync } from "fs";
 import { createRequire } from "module";
 import cors from "cors";
 
@@ -78,29 +85,8 @@ const webhookManager = new WebhookManager();
 const clients = new Set();
 const app = express(); // Exported for tests
 
-/**
- * Broadcasts data to all connected SSE clients.
- * @param {any} data
- */
-const broadcast = (data) => {
-  const message = `data: ${JSON.stringify(data)}\n\n`;
-  clients.forEach((client) => {
-    try {
-      client.write(message);
-    } catch (err) {
-      const safeError = {
-        message: /** @type {Error} */ (err).message,
-        code: /** @type {CommonError} */ (err).code || "UNKNOWN",
-        name: /** @type {Error} */ (err).name,
-      };
-      console.error(
-        "[SSE-ERROR] Failed to broadcast message to client:",
-        JSON.stringify(safeError),
-      );
-      clients.delete(client);
-    }
-  });
-};
+// Use factory function from routes/utils.js
+const broadcast = createBroadcaster(clients);
 
 /**
  * Gracefully shuts down the server and persists state.
@@ -145,16 +131,8 @@ async function initialize() {
 
   const __dirname = dirname(fileURLToPath(import.meta.url));
 
-  // Cache the HTML template once at startup
-  let indexTemplate = "";
-  try {
-    indexTemplate = await readFile(
-      join(__dirname, "..", "public", "index.html"),
-      "utf-8",
-    );
-  } catch (err) {
-    console.warn("Failed to preload index.html:", err);
-  }
+  // Cache the HTML template once at startup (using modular preloader)
+  let indexTemplate = await preloadTemplate();
 
   // Ensure local INPUT.json exists for better DX (when running locally/npx)
   // Only create artifact if NOT running on the Apify Platform (Stateless vs Stateful)
@@ -253,46 +231,8 @@ async function initialize() {
   // 2. Sync Retention (Global Extension)
   await webhookManager.updateRetention(retentionHours);
 
-  // 3. Auth Middleware (Moved up for hoisting)
-  /**
-   * @param {Request} req
-   * @param {Response} res
-   * @param {NextFunction} next
-   */
-  const authMiddleware = (req, res, next) => {
-    // Bypass for readiness probe
-    if (req.headers["x-apify-container-server-readiness-probe"]) {
-      res.status(200).send("OK");
-      return;
-    }
-
-    const authResult = validateAuth(req, currentAuthKey);
-
-    if (!authResult.isValid) {
-      // Return HTML for browsers
-      if (req.headers["accept"]?.includes("text/html")) {
-        res.status(401).send(`
-          <!DOCTYPE html>
-          <html>
-            <head><title>Access Restricted</title></head>
-            <body>
-              <h1>Access Restricted</h1>
-              <p>Strict Mode enabled.</p>
-              <p>${escapeHtml(authResult.error || "Unauthorized")}</p>
-            </body>
-          </html>
-        `);
-        return;
-      }
-
-      return res.status(401).json({
-        status: 401,
-        error: "Unauthorized",
-        message: authResult.error,
-      });
-    }
-    next();
-  };
+  // 3. Auth Middleware (using modular factory)
+  const authMiddleware = createAuthMiddleware(() => currentAuthKey);
 
   // --- Express Middleware ---
   app.set("trust proxy", true);
@@ -311,66 +251,26 @@ async function initialize() {
     }),
   );
 
-  // Request ID middleware for tracing
-  app.use((req, res, next) => {
-    const requestId =
-      req.headers["x-request-id"]?.toString() ||
-      `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-    /** @type {any} */ (req).requestId = requestId;
-    res.setHeader("X-Request-ID", requestId);
-    next();
-  });
+  // Request ID middleware for tracing (using modular factory)
+  app.use(createRequestIdMiddleware());
 
-  // CSP Headers for dashboard security
-  app.use((req, res, next) => {
-    // Only apply CSP to HTML responses (dashboard)
-    if (req.path === "/" || req.path.endsWith(".html")) {
-      res.setHeader(
-        "Content-Security-Policy",
-        [
-          "default-src 'self'",
-          "script-src 'self' 'unsafe-inline'", // Allow inline scripts for dashboard
-          "style-src 'self' 'unsafe-inline'", // Allow inline styles
-          "font-src 'self'",
-          "img-src 'self' data:",
-          "connect-src 'self'",
-          "frame-ancestors 'none'",
-          "form-action 'self'",
-          "base-uri 'self'",
-        ].join("; "),
-      );
-      res.setHeader("X-Content-Type-Options", "nosniff");
-      res.setHeader("X-Frame-Options", "DENY");
-      res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
-    }
-    next();
-  });
+  // CSP Headers for dashboard security (using modular factory)
+  app.use(createCspMiddleware());
 
   app.use("/fonts", express.static(join(__dirname, "..", "public", "fonts")));
 
-  app.get("/", authMiddleware, async (req, res) => {
-    if (req.headers["accept"]?.includes("text/plain")) {
-      return res.send("Webhook Debugger & Logger - Enterprise Suite");
-    }
-
-    try {
-      if (!indexTemplate) {
-        indexTemplate = await readFile(
-          join(__dirname, "..", "public", "index.html"),
-          "utf-8",
-        );
-      }
-      const activeCount = webhookManager.getAllActive().length;
-      const html = indexTemplate
-        .replaceAll("{{VERSION}}", `v${APP_VERSION}`)
-        .replaceAll("{{ACTIVE_COUNT}}", String(activeCount));
-
-      res.send(html);
-    } catch (err) {
-      console.error("[SERVER-ERROR] Failed to load index.html:", err);
-      res.status(500).send("Internal Server Error");
-    }
-  });
+  app.get(
+    "/",
+    authMiddleware,
+    createDashboardHandler({
+      webhookManager,
+      version: APP_VERSION,
+      getTemplate: () => indexTemplate,
+      setTemplate: (template) => {
+        indexTemplate = template;
+      },
+    }),
+  );
 
   app.use(cors());
 
@@ -557,16 +457,6 @@ async function initialize() {
   if (sseHeartbeat.unref) sseHeartbeat.unref();
 
   // --- Routes ---
-
-  /**
-   * Wraps an async handler to be compatible with Express RequestHandler.
-   * @param {(req: Request, res: Response, next: NextFunction) => Promise<void>} fn
-   * @returns {import("express").RequestHandler}
-   */
-  const asyncHandler = (fn) => (req, res, next) => {
-    Promise.resolve(fn(req, res, next)).catch(next);
-  };
-
   app.all(
     "/webhook/:id",
     (
@@ -621,47 +511,8 @@ async function initialize() {
     }),
   );
 
-
-  /**
-   * Error handling middleware
-   * @param {CommonError} err
-   * @param {Request} req
-   * @param {Response} res
-   * @param {NextFunction} next
-   */
-  app.use(
-    /**
-     * @param {CommonError} err
-     * @param {Request} _req
-     * @param {Response} res
-     * @param {NextFunction} next
-     */
-    (err, _req, res, next) => {
-      if (res.headersSent) return next(err);
-      const status = err.statusCode || err.status || 500;
-      // Sanitize: don't leak internal error details for 500-level errors
-      const isServerError = status >= 500;
-      if (isServerError) {
-        console.error("[SERVER-ERROR]", err.stack || err.message || err);
-      }
-      res.status(status).json({
-        status,
-        error:
-          status >= 500
-            ? "Internal Server Error"
-            : status === 413
-              ? "Payload Too Large"
-              : status === 400
-                ? "Bad Request"
-                : status === 404
-                  ? "Not Found"
-                  : status >= 400
-                    ? "Client Error"
-                    : "Error",
-        message: isServerError ? "Internal Server Error" : err.message,
-      });
-    },
-  );
+  // Error handling middleware (using modular factory)
+  app.use(createErrorHandler());
 
   /* istanbul ignore next */
   if (process.env.NODE_ENV !== "test") {
