@@ -35,7 +35,8 @@ import {
 } from "./consts.js";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
-import { readFile } from "fs/promises";
+import { readFile, watch as fsWatch } from "fs/promises";
+import { existsSync } from "fs";
 import { createRequire } from "module";
 import cors from "cors";
 
@@ -68,6 +69,8 @@ let activePollPromise = null;
 let cleanupInterval;
 /** @type {RateLimiter | undefined} */
 let webhookRateLimiter;
+/** @type {AbortController | undefined} */
+let fileWatcherAbortController;
 
 const webhookManager = new WebhookManager();
 /** @type {Set<import("http").ServerResponse>} */
@@ -121,6 +124,7 @@ const shutdown = async (signal) => {
   if (cleanupInterval) clearInterval(cleanupInterval);
   if (sseHeartbeat) clearInterval(sseHeartbeat);
   if (inputPollInterval) clearInterval(inputPollInterval);
+  if (fileWatcherAbortController) fileWatcherAbortController.abort();
   if (activePollPromise) await activePollPromise;
   if (webhookRateLimiter) webhookRateLimiter.destroy();
 
@@ -398,7 +402,10 @@ async function initialize() {
   const normalizedInitialInput = normalizeInput(initialStoreValue, input);
   let lastInputStr = JSON.stringify(normalizedInitialInput);
 
-  inputPollInterval = setInterval(() => {
+  /**
+   * Shared hot-reload handler for both fs.watch and polling
+   */
+  const handleHotReload = async () => {
     if (activePollPromise) return;
 
     activePollPromise = (async () => {
@@ -420,23 +427,12 @@ async function initialize() {
         // Use shared coercion logic
         const validated = coerceRuntimeOptions(normalizedInput);
 
-        const newConfig = parseWebhookOptions(normalizedInput);
-        const newRateLimit = validated.rateLimitPerMinute;
-        // 1. Update Middleware
-        if (validated.maxPayloadSize !== currentMaxPayloadSize) {
-          currentMaxPayloadSize = validated.maxPayloadSize;
-          currentBodyParser = bodyParser.raw({
-            limit: currentMaxPayloadSize ?? DEFAULT_PAYLOAD_LIMIT,
-            type: "*/*",
-          });
-        }
-
-        loggerMiddleware.updateOptions({
-          ...newConfig,
-          maxPayloadSize: currentMaxPayloadSize,
-        });
+        // 1. Update Middleware (response codes, delays, headers, forwarding)
+        loggerMiddleware.updateOptions(normalizedInput);
+        currentMaxPayloadSize = validated.maxPayloadSize;
 
         // 2. Update Rate Limiter
+        const newRateLimit = validated.rateLimitPerMinute;
         if (webhookRateLimiter) webhookRateLimiter.limit = newRateLimit;
 
         // 3. Update Auth Key
@@ -467,6 +463,64 @@ async function initialize() {
         activePollPromise = null;
       }
     })();
+
+    await activePollPromise;
+  };
+
+  // Use fs.watch for instant hot-reload in local development
+  if (!Actor.isAtHome()) {
+    const localInputPath = join(
+      process.cwd(),
+      "storage",
+      "key_value_stores",
+      "default",
+      "INPUT.json",
+    );
+
+    if (existsSync(localInputPath)) {
+      console.log(
+        "[SYSTEM] Local mode detected. Using fs.watch for instant hot-reload.",
+      );
+
+      fileWatcherAbortController = new AbortController();
+      let debounceTimer =
+        /** @type {ReturnType<typeof setTimeout> | undefined} */ (undefined);
+
+      // Start watching in background (non-blocking)
+      (async () => {
+        try {
+          const watcher = fsWatch(localInputPath, {
+            signal: fileWatcherAbortController.signal,
+          });
+          for await (const event of watcher) {
+            if (event.eventType === "change") {
+              // Debounce rapid file changes (editors often write multiple times)
+              if (debounceTimer) clearTimeout(debounceTimer);
+              debounceTimer = setTimeout(() => {
+                handleHotReload().catch((err) => {
+                  console.error(
+                    "[SYSTEM-ERROR] fs.watch hot-reload failed:",
+                    err.message,
+                  );
+                });
+              }, 100);
+            }
+          }
+        } catch (err) {
+          const error = /** @type {CommonError} */ (err);
+          if (error.name !== "AbortError") {
+            console.error("[SYSTEM-ERROR] fs.watch failed:", error.message);
+          }
+        }
+      })();
+    }
+  }
+
+  // Fallback to interval polling (works on platform and as backup for local)
+  inputPollInterval = setInterval(() => {
+    handleHotReload().catch((err) => {
+      console.error("[SYSTEM-ERROR] Polling hot-reload failed:", err.message);
+    });
   }, INPUT_POLL_INTERVAL_MS);
   if (inputPollInterval.unref) inputPollInterval.unref();
 
