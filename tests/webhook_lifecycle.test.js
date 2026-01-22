@@ -1,20 +1,15 @@
-import {
-  jest,
-  describe,
-  test,
-  expect,
-  afterAll,
-  beforeEach,
-} from "@jest/globals";
+import { jest, describe, test, expect, afterAll } from "@jest/globals";
+import { useMockCleanup } from "./helpers/test-lifecycle.js";
 
-/** @typedef {import('apify').KeyValueStore} KeyValueStore */
-/** @typedef {import('../src/typedefs.js').WebhookData} WebhookData */
+/**
+ * @typedef {import('apify').KeyValueStore} KeyValueStore
+ * @typedef {import('../src/typedefs.js').WebhookData} WebhookData
+ */
 
 // 1. Define mocks before any imports
-jest.unstable_mockModule("apify", async () => {
-  const { apifyMock } = await import("./helpers/shared-mocks.js");
-  return { Actor: apifyMock };
-});
+// 1. Define mocks before any imports
+import { setupCommonMocks } from "./helpers/mock-setup.js";
+await setupCommonMocks({ apify: true });
 
 // 2. Dynamically import modules to ensure mocks are active
 const { Actor } = await import("apify");
@@ -24,8 +19,7 @@ describe("Webhook Lifecycle & Scaling Tests", () => {
   /** @type {KeyValueStore} */
   let mockKV;
 
-  beforeEach(() => {
-    jest.clearAllMocks();
+  useMockCleanup(() => {
     mockKV = /** @type {KeyValueStore} */ ({
       getValue: /** @type {KeyValueStore['getValue']} */ (jest.fn()),
       setValue: /** @type {KeyValueStore['setValue']} */ (
@@ -36,7 +30,7 @@ describe("Webhook Lifecycle & Scaling Tests", () => {
   });
 
   afterAll(async () => {
-    await shutdown("TEST");
+    await shutdown("TEST_COMPLETE");
   });
 
   test("should scale up when urlCount is increased", async () => {

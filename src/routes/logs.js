@@ -4,6 +4,7 @@
  */
 import { Actor } from "apify";
 import { asyncHandler } from "./utils.js";
+import { MAX_ITEMS_FOR_BATCH } from "../consts.js";
 
 /**
  * @typedef {import("express").Request} Request
@@ -19,8 +20,10 @@ import { asyncHandler } from "./utils.js";
  */
 export const createLogsHandler = (webhookManager) =>
   asyncHandler(
-    async (/** @param {Request} req @param {Response} res */ req, res) => {
+    /** @param {Request} req @param {Response} res */
+    async (req, res) => {
       try {
+        const CHUNK_SIZE = MAX_ITEMS_FOR_BATCH;
         let {
           webhookId,
           method,
@@ -33,7 +36,10 @@ export const createLogsHandler = (webhookManager) =>
           limit = 100,
           offset = 0,
         } = req.query;
-        limit = Math.min(Math.max(parseInt(String(limit), 10) || 100, 1), 1000);
+        limit = Math.min(
+          Math.max(parseInt(String(limit), 10) || 100, 1),
+          CHUNK_SIZE,
+        );
         offset = Math.max(parseInt(String(offset), 10) || 0, 0);
 
         // Parse timestamp filters
@@ -46,25 +52,51 @@ export const createLogsHandler = (webhookManager) =>
               ? false
               : undefined;
 
-        const hasFilters = !!(
-          webhookId ||
-          method ||
-          statusCode ||
-          contentType ||
-          startTime ||
-          endTime ||
-          signatureValid !== undefined ||
-          requestId
-        );
         const dataset = await Actor.openDataset();
-        const result = await dataset.getData({
-          limit: hasFilters ? limit * 5 : limit,
-          offset,
-          desc: true,
-        });
+        const datasetInfo = await dataset.getInfo();
+        const totalItems = datasetInfo?.itemCount || 0;
 
-        const filtered = (result.items || [])
-          .filter((item) => {
+        /** @type {any[]} */
+        let itemsBuffer = [];
+        let currentOffset = offset;
+        let hasMore = true;
+
+        // Fetch in chunks until we have enough items or exhaust the dataset
+        while (itemsBuffer.length < limit && hasMore) {
+          const { items } = await dataset.getData({
+            limit: CHUNK_SIZE,
+            offset: currentOffset,
+            desc: true,
+            // Optimization: Only fetch metadata fields
+            fields: [
+              "id",
+              "webhookId",
+              "timestamp",
+              "method",
+              "statusCode",
+              "headers",
+              "signatureValid",
+              "requestId",
+              "remoteIp",
+              "userAgent",
+              "contentType",
+            ],
+          });
+
+          if (items.length === 0) {
+            hasMore = false;
+            break;
+          }
+
+          // Add raw index tracking to items
+          /** @type {any[]} */
+          const itemsWithIndex = items.map((item, index) => ({
+            ...item,
+            _index: currentOffset + index,
+          }));
+
+          // Apply filters to current chunk
+          const batchMatches = itemsWithIndex.filter((item) => {
             if (webhookId && item.webhookId !== webhookId) return false;
             if (
               method &&
@@ -92,12 +124,70 @@ export const createLogsHandler = (webhookManager) =>
               return false;
             // Request ID filter
             if (requestId && item.requestId !== requestId) return false;
+
+            // Security Filters
+            if (
+              req.query.remoteIp &&
+              item.remoteIp !== String(req.query.remoteIp)
+            )
+              return false;
+            if (
+              req.query.userAgent &&
+              item.userAgent !== String(req.query.userAgent)
+            )
+              return false;
+
             return webhookManager.isValid(item.webhookId);
-          })
-          .sort(
-            (a, b) =>
-              new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+          });
+
+          itemsBuffer = itemsBuffer.concat(batchMatches);
+          currentOffset += CHUNK_SIZE; // Advance offset by strictly the chunk size (raw dataset positions)
+
+          // Optimization: If we fetched less than CHUNK_SIZE, we are at the end
+          if (items.length < CHUNK_SIZE) {
+            hasMore = false;
+          }
+        }
+
+        const filtered = itemsBuffer.sort(
+          (a, b) =>
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+        );
+
+        // Add detailUrl to items and remove internal _index
+        const baseUrl = `${req.protocol}://${req.get("host")}${req.baseUrl}`;
+        const enrichedItems = filtered.slice(0, limit).map((item) => {
+          const { _index, ...rest } = item;
+          return {
+            ...rest,
+            detailUrl: `${baseUrl}/${item.id}`,
+          };
+        });
+
+        // Calculate nextOffset based on the last item's raw index
+        let nextOffset = null;
+        if (enrichedItems.length > 0) {
+          const lastItem = filtered[enrichedItems.length - 1];
+          nextOffset = lastItem._index + 1;
+
+          // If we exhausted the dataset AND there are no more matches in memory,
+          // then there is effectively no next page.
+          if (!hasMore && filtered.length <= limit) {
+            nextOffset = null;
+          }
+        } else if (hasMore) {
+          // If we found no matches but dataset has more, continue from the next chunk.
+          nextOffset = currentOffset;
+        }
+
+        let nextPageUrl = null;
+        if (nextOffset !== null) {
+          const nextParams = new URLSearchParams(
+            /** @type {any} */ (req.query),
           );
+          nextParams.set("offset", String(nextOffset));
+          nextPageUrl = `${baseUrl}?${nextParams.toString()}`;
+        }
 
         res.json({
           filters: {
@@ -109,10 +199,14 @@ export const createLogsHandler = (webhookManager) =>
             endTime,
             signatureValid,
             requestId,
+            remoteIp: req.query.remoteIp,
+            userAgent: req.query.userAgent,
           },
-          count: Math.min(filtered.length, limit),
-          total: filtered.length,
-          items: filtered.slice(0, limit),
+          count: enrichedItems.length,
+          total: totalItems,
+          items: enrichedItems,
+          nextOffset,
+          nextPageUrl,
         });
         return;
       } catch (e) {
@@ -123,3 +217,60 @@ export const createLogsHandler = (webhookManager) =>
       }
     },
   );
+
+/**
+ * Creates the log detail route handler.
+ * @param {WebhookManager} webhookManager
+ * @returns {RequestHandler}
+ */
+export const createLogDetailHandler = (webhookManager) =>
+  asyncHandler(async (req, res) => {
+    try {
+      const { logId } = req.params;
+      const dataset = await Actor.openDataset();
+
+      // Scan for the item by ID.
+      // Since we don't know the offset, we have to scan.
+      // Optimization: We could take an optional 'timestamp' query param to narrow the search range if needed in future.
+      const CHUNK_SIZE = MAX_ITEMS_FOR_BATCH;
+      let offset = 0;
+      let foundItem = null;
+
+      // Simple linear scan (most recent first)
+      // Limitation: Slow for very deep history, but acceptable for detail view of recent items.
+      while (!foundItem) {
+        const { items } = await dataset.getData({
+          offset,
+          limit: CHUNK_SIZE,
+          desc: true,
+        });
+
+        if (items.length === 0) break;
+
+        foundItem = items.find((item) => item.id === logId);
+        if (foundItem) break;
+
+        if (items.length < CHUNK_SIZE) break;
+        offset += CHUNK_SIZE;
+      }
+
+      if (!foundItem) {
+        res.status(404).json({ error: "Log entry not found" });
+        return;
+      }
+
+      // Security Check: Ensure webhook ID is still valid for this user context
+      // (Though currently single-tenant, good practice)
+      if (!webhookManager.isValid(foundItem.webhookId)) {
+        res.status(404).json({ error: "Log entry belongs to invalid webhook" });
+        return;
+      }
+
+      res.json(foundItem);
+    } catch (e) {
+      res.status(500).json({
+        error: "Failed to fetch log detail",
+        message: /** @type {Error} */ (e).message,
+      });
+    }
+  });

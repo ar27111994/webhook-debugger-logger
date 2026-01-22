@@ -21,6 +21,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
  * @property {string} version
  * @property {() => string} getTemplate - Function to get cached template
  * @property {(template: string) => void} setTemplate - Function to cache template
+ * @property {() => string|null} getSignatureStatus - Function to get current signature provider
  */
 
 /**
@@ -32,10 +33,25 @@ export const createDashboardHandler =
   (deps) =>
   /** @param {Request} req @param {Response} res */
   async (req, res) => {
-    const { webhookManager, version, getTemplate, setTemplate } = deps;
+    const {
+      webhookManager,
+      version,
+      getTemplate,
+      setTemplate,
+      getSignatureStatus,
+    } = deps;
+
+    const activeCount = webhookManager.getAllActive().length;
+    const signatureProvider = getSignatureStatus ? getSignatureStatus() : null;
 
     if (req.headers["accept"]?.includes("text/plain")) {
-      return res.send("Webhook Debugger & Logger - Enterprise Suite");
+      return res
+        .type("text/plain")
+        .send(
+          `Webhook Debugger & Logger - Enterprise Suite (v${version})\n` +
+            `Active Webhooks: ${activeCount}\n` +
+            `Signature Verification: ${signatureProvider || "Disabled"}`,
+        );
     }
 
     try {
@@ -47,10 +63,15 @@ export const createDashboardHandler =
         );
         setTemplate(template);
       }
-      const activeCount = webhookManager.getAllActive().length;
+
+      const sigBadge = signatureProvider
+        ? `<div class="status-badge signature-active">🔒 Verified: ${signatureProvider}</div>`
+        : `<div class="status-badge signature-inactive">🔓 No Verification</div>`;
+
       const html = template
         .replaceAll("{{VERSION}}", `v${version}`)
-        .replaceAll("{{ACTIVE_COUNT}}", String(activeCount));
+        .replaceAll("{{ACTIVE_COUNT}}", String(activeCount))
+        .replaceAll("{{SIGNATURE_BADGE}}", sigBadge);
 
       res.send(html);
     } catch (err) {

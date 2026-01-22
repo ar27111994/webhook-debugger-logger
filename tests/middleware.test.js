@@ -1,234 +1,239 @@
-import { jest, describe, test, expect, beforeEach } from "@jest/globals";
+import { jest, describe, test, expect } from "@jest/globals";
+import { setupCommonMocks } from "./helpers/mock-setup.js";
+import { createMiddlewareTestContext } from "./helpers/middleware-test-utils.js";
+import { useMockCleanup } from "./helpers/test-lifecycle.js";
+import { assertType } from "./helpers/test-utils.js";
 
-/** @typedef {import('../src/webhook_manager.js').WebhookManager} WebhookManager */
+/**
+ * @typedef {import('../src/typedefs.js').WebhookEvent} WebhookEvent
+ */
 
-jest.unstable_mockModule("axios", async () => {
-  const { axiosMock } = await import("./helpers/shared-mocks.js");
-  return { default: axiosMock };
-});
-
-jest.unstable_mockModule("apify", async () => {
-  const { apifyMock } = await import("./helpers/shared-mocks.js");
-  return { Actor: apifyMock };
-});
-
-const { createLoggerMiddleware } = await import("../src/logger_middleware.js");
-const httpMocks = (await import("node-mocks-http")).default;
+await setupCommonMocks({ axios: true, apify: true });
 
 describe("Logger Middleware", () => {
-  /** @type {WebhookManager} */
-  let webhookManager;
-  /** @type {import('../src/typedefs.js').LoggerOptions} */
-  let options;
-  /** @type {jest.Mock} */
-  let onEvent;
-
-  beforeEach(() => {
-    webhookManager = /** @type {WebhookManager} */ ({
-      isValid: /** @type {WebhookManager['isValid']} */ (
-        jest.fn().mockReturnValue(true)
-      ),
-      getWebhookData: /** @type {WebhookManager['getWebhookData']} */ (
-        jest.fn().mockReturnValue({})
-      ),
-    });
-    onEvent = jest.fn();
-    options = {
-      maxPayloadSize: 1024,
-      authKey: "secret",
-      allowedIps: [],
-    };
-  });
+  useMockCleanup();
 
   test("should block invalid webhook ID", async () => {
-    /** @type {jest.Mock} */ (webhookManager.isValid).mockReturnValue(false);
-    const middleware = createLoggerMiddleware(webhookManager, options, onEvent);
-    const req = httpMocks.createRequest({ params: { id: "invalid" } });
-    const res = httpMocks.createResponse();
+    const ctx = await createMiddlewareTestContext({
+      webhookManager: { isValid: false },
+      request: { params: { id: "invalid" } },
+    });
 
-    await middleware(req, res);
+    await ctx.middleware(ctx.req, ctx.res, ctx.next);
 
-    expect(res.statusCode).toBe(404);
+    expect(ctx.res.statusCode).toBe(404);
   });
 
   test("should block unauthorized requests (Auth Key)", async () => {
-    const middleware = createLoggerMiddleware(webhookManager, options, onEvent);
-    const req = httpMocks.createRequest({
-      params: { id: "wh_123" },
-      query: { key: "wrong" },
+    const ctx = await createMiddlewareTestContext({
+      options: { authKey: "secret" },
+      request: {
+        params: { id: "wh_123" },
+        query: { key: "wrong" },
+      },
     });
-    const res = httpMocks.createResponse();
 
-    await middleware(req, res);
+    await ctx.middleware(ctx.req, ctx.res, ctx.next);
 
-    expect(res.statusCode).toBe(401);
+    expect(ctx.res.statusCode).toBe(401);
   });
 
   test("should block requests from non-whitelisted IPs", async () => {
-    options.allowedIps = ["1.1.1.1"];
-    const middleware = createLoggerMiddleware(webhookManager, options, onEvent);
-    const req = httpMocks.createRequest({
-      params: { id: "wh_123" },
-      ip: "2.2.2.2",
+    const ctx = await createMiddlewareTestContext({
+      options: {
+        authKey: "secret",
+        allowedIps: ["1.1.1.1"],
+      },
+      request: {
+        params: { id: "wh_123" },
+        ip: "2.2.2.2",
+      },
     });
-    const res = httpMocks.createResponse();
 
-    await middleware(req, res);
+    await ctx.middleware(ctx.req, ctx.res, ctx.next);
 
-    expect(res.statusCode).toBe(403);
+    expect(ctx.res.statusCode).toBe(403);
   });
 
   test("should block oversized payloads", async () => {
-    const middleware = createLoggerMiddleware(webhookManager, options, onEvent);
-    const req = httpMocks.createRequest({
-      params: { id: "wh_123" },
-      query: { key: "secret" }, // Bypass Auth
-      headers: { "content-length": "2048" },
+    const ctx = await createMiddlewareTestContext({
+      options: {
+        authKey: "secret",
+        maxPayloadSize: 1024,
+      },
+      request: {
+        params: { id: "wh_123" },
+        query: { key: "secret" },
+        headers: { "content-length": "2048" },
+      },
     });
-    const res = httpMocks.createResponse();
 
-    await middleware(req, res);
+    await ctx.middleware(ctx.req, ctx.res, ctx.next);
 
-    expect(res.statusCode).toBe(413);
+    expect(ctx.res.statusCode).toBe(413);
   });
 
   test("should validate JSON Schema", async () => {
-    options.jsonSchema = { type: "object", required: ["foo"] };
-    const middleware = createLoggerMiddleware(webhookManager, options, onEvent);
-    const req = httpMocks.createRequest({
-      params: { id: "wh_123" },
-      method: "POST",
-      query: { key: "secret" }, // Bypass Auth
-      headers: { "content-type": "application/json" },
-      body: { bar: 1 },
+    const ctx = await createMiddlewareTestContext({
+      options: {
+        authKey: "secret",
+        jsonSchema: { type: "object", required: ["foo"] },
+      },
+      request: {
+        params: { id: "wh_123" },
+        method: "POST",
+        query: { key: "secret" },
+        headers: { "content-type": "application/json" },
+        body: { bar: 1 },
+      },
     });
-    const res = httpMocks.createResponse();
 
-    await middleware(req, res);
+    await ctx.middleware(ctx.req, ctx.res, ctx.next);
 
-    expect(res.statusCode).toBe(400);
+    expect(ctx.res.statusCode).toBe(400);
   });
 
   test("should execute custom script", async () => {
-    options.customScript = "event.body = 'TRANSFORMED';";
-    const middleware = createLoggerMiddleware(webhookManager, options, onEvent);
-    const req = httpMocks.createRequest({
-      params: { id: "wh_123" },
-      query: { key: "secret" }, // Bypass Auth
-      body: /** @type {any} */ ("original"),
+    const ctx = await createMiddlewareTestContext({
+      options: {
+        authKey: "secret",
+        customScript: "event.body = 'TRANSFORMED'; event.responseBody = 'ok';",
+      },
+      request: {
+        params: { id: "wh_123" },
+        query: { key: "secret" },
+        body: "original",
+      },
     });
-    const res = httpMocks.createResponse();
 
-    // Mock sendResponse logic which triggers onEvent
-    await middleware(req, res);
+    await ctx.middleware(ctx.req, ctx.res, ctx.next);
 
-    // The middleware ends by calling res.send/json after onEvent
-    // We check the event passed to onEvent
-    const event = /** @type {any} */ (onEvent.mock.calls[0][0]);
+    const event = /** @type {WebhookEvent} */ (ctx.onEvent.mock.calls[0][0]);
     expect(event.body).toBe("TRANSFORMED");
   });
 
   test("should convert Buffer body to string for logging", async () => {
-    const middleware = createLoggerMiddleware(webhookManager, options, onEvent);
     const bufferContent = Buffer.from('{"key":"value"}');
-    const req = httpMocks.createRequest({
-      params: { id: "wh_123" },
-      query: { key: "secret" },
-      headers: { "content-type": "application/json" },
-      body: bufferContent,
+    const ctx = await createMiddlewareTestContext({
+      options: { authKey: "secret" },
+      request: {
+        params: { id: "wh_123" },
+        query: { key: "secret" },
+        headers: { "content-type": "application/json" },
+        body: bufferContent,
+      },
     });
-    const res = httpMocks.createResponse();
 
-    await middleware(req, res);
+    // Simulate downstream handler sending response
+    jest.mocked(ctx.next).mockImplementation(() => {
+      ctx.res.send("ok");
+    });
 
-    const event = /** @type {any} */ (onEvent.mock.calls[0][0]);
+    await ctx.middleware(ctx.req, ctx.res, ctx.next);
+
+    const event = /** @type {WebhookEvent} */ (ctx.onEvent.mock.calls[0][0]);
     expect(typeof event.body).toBe("string");
     expect(event.body).toContain("key");
   });
 
   test("should calculate size correctly for object bodies", async () => {
-    const middleware = createLoggerMiddleware(webhookManager, options, onEvent);
     const bodyObj = { foo: "bar", baz: 123 };
-    const req = httpMocks.createRequest({
-      params: { id: "wh_123" },
-      query: { key: "secret" },
-      headers: { "content-type": "application/json" },
-      body: bodyObj,
+    const ctx = await createMiddlewareTestContext({
+      options: { authKey: "secret" },
+      request: {
+        params: { id: "wh_123" },
+        query: { key: "secret" },
+        headers: { "content-type": "application/json" },
+        body: bodyObj,
+      },
     });
-    const res = httpMocks.createResponse();
 
-    await middleware(req, res);
+    // Simulate downstream handler sending response
+    jest.mocked(ctx.next).mockImplementation(() => {
+      ctx.res.send("ok");
+    });
 
-    const event = /** @type {any} */ (onEvent.mock.calls[0][0]);
-    // {"foo":"bar","baz":123} is 23 chars
+    await ctx.middleware(ctx.req, ctx.res, ctx.next);
+
+    const event = /** @type {WebhookEvent} */ (ctx.onEvent.mock.calls[0][0]);
     expect(event.size).toBe(Buffer.byteLength(JSON.stringify(bodyObj)));
   });
 
   test("should handle array auth key by taking first element", async () => {
-    const middleware = createLoggerMiddleware(webhookManager, options, onEvent);
-    const req = httpMocks.createRequest({
-      params: { id: "wh_123" },
-      query: { key: ["secret", "wrong"] },
+    const ctx = await createMiddlewareTestContext({
+      options: { authKey: "secret" },
+      request: {
+        params: { id: "wh_123" },
+        query: { key: ["secret", "wrong"] },
+      },
     });
-    const res = httpMocks.createResponse();
 
-    await middleware(req, res);
+    await ctx.middleware(ctx.req, ctx.res, ctx.next);
 
-    expect(res.statusCode).toBe(200);
+    expect(ctx.res.statusCode).toBe(200);
   });
 
   test("should return JSON response for 4xx error status codes", async () => {
-    options.defaultResponseCode = 400;
-    const middleware = createLoggerMiddleware(webhookManager, options, onEvent);
-    const req = httpMocks.createRequest({
-      params: { id: "wh_123" },
-      query: { key: "secret" },
-      body: { test: "data" },
+    const ctx = await createMiddlewareTestContext({
+      options: {
+        authKey: "secret",
+        defaultResponseCode: 400,
+      },
+      request: {
+        params: { id: "wh_123" },
+        query: { key: "secret" },
+        body: { test: "data" },
+      },
     });
-    const res = httpMocks.createResponse();
 
-    await middleware(req, res);
+    await ctx.middleware(ctx.req, ctx.res, ctx.next);
 
-    expect(res.statusCode).toBe(400);
+    expect(ctx.res.statusCode).toBe(400);
     // 4xx with no custom body should return a JSON object
-    const responseData = res._getJSONData();
+    const responseData = jest.mocked(ctx.res.json).mock.calls[0][0];
     expect(responseData).toHaveProperty("webhookId");
   });
 
   test("should return object responseBody as JSON", async () => {
-    options.defaultResponseCode = 200;
-    options.defaultResponseBody = /** @type {any} */ ({
-      status: "ok",
-      custom: "response",
+    const ctx = await createMiddlewareTestContext({
+      options: {
+        authKey: "secret",
+        defaultResponseCode: 200,
+        defaultResponseBody: assertType({
+          status: "ok",
+          custom: "response",
+        }),
+      },
+      request: {
+        params: { id: "wh_123" },
+        query: { key: "secret" },
+        body: { test: "data" },
+      },
     });
-    const middleware = createLoggerMiddleware(webhookManager, options, onEvent);
-    const req = httpMocks.createRequest({
-      params: { id: "wh_123" },
-      query: { key: "secret" },
-      body: { test: "data" },
-    });
-    const res = httpMocks.createResponse();
 
-    await middleware(req, res);
+    await ctx.middleware(ctx.req, ctx.res, ctx.next);
 
-    expect(res.statusCode).toBe(200);
-    const responseData = res._getJSONData();
+    expect(ctx.res.statusCode).toBe(200);
+    const responseData = jest.mocked(ctx.res.json).mock.calls[0][0];
     expect(responseData.status).toBe("ok");
     expect(responseData.custom).toBe("response");
   });
 
   test("should apply custom response headers from options", async () => {
-    options.defaultResponseHeaders = { "X-Custom-Header": "CustomValue" };
-    const middleware = createLoggerMiddleware(webhookManager, options, onEvent);
-    const req = httpMocks.createRequest({
-      params: { id: "wh_123" },
-      query: { key: "secret" },
-      body: { test: "data" },
+    const ctx = await createMiddlewareTestContext({
+      options: {
+        authKey: "secret",
+        defaultResponseHeaders: { "X-Custom-Header": "CustomValue" },
+      },
+      request: {
+        params: { id: "wh_123" },
+        query: { key: "secret" },
+        body: { test: "data" },
+      },
     });
-    const res = httpMocks.createResponse();
 
-    await middleware(req, res);
+    await ctx.middleware(ctx.req, ctx.res, ctx.next);
 
-    expect(res.getHeader("X-Custom-Header")).toBe("CustomValue");
+    expect(ctx.res.getHeader("X-Custom-Header")).toBe("CustomValue");
   });
 });

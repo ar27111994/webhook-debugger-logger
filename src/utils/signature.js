@@ -1,27 +1,16 @@
 import crypto from "crypto";
+import { DEFAULT_TOLERANCE_SECONDS } from "../consts.js";
 
 /**
- * @typedef {Object} SignatureConfig
- * @property {"stripe" | "shopify" | "github" | "slack" | "custom"} provider
- * @property {string} secret - The signing secret
- * @property {string} [headerName] - Custom header name (for custom provider)
- * @property {"sha256" | "sha1"} [algorithm] - Hash algorithm (for custom provider)
- * @property {number} [tolerance] - Timestamp tolerance in seconds (default: 300)
+ * @typedef {import("../typedefs.js").SignatureConfig} SignatureConfig
+ * @typedef {import("../typedefs.js").SignatureResult} SignatureResult
+ * @typedef {import("../typedefs.js").SignatureProvider} SignatureProvider
  */
-
-/**
- * @typedef {Object} SignatureResult
- * @property {boolean} valid
- * @property {string} [error]
- * @property {string} provider
- */
-
-const DEFAULT_TOLERANCE_SECONDS = 300; // 5 minutes
 
 /**
  * Verifies a webhook signature based on the provider configuration.
  * @param {SignatureConfig} config - Signature verification configuration
- * @param {string} payload - Raw request body as string
+ * @param {string|Buffer} payload - Raw request body as string or Buffer
  * @param {Record<string, string>} headers - Request headers (lowercase keys)
  * @returns {SignatureResult}
  */
@@ -29,14 +18,18 @@ export function verifySignature(config, payload, headers) {
   const { provider, secret } = config;
 
   if (!secret) {
-    return { valid: false, error: "No signing secret configured", provider };
+    return {
+      valid: false,
+      error: "No signing secret configured",
+      provider: String(provider),
+    };
   }
 
   switch (provider) {
     case "stripe":
       return verifyStripe(secret, payload, headers, config.tolerance);
     case "shopify":
-      return verifyShopify(secret, payload, headers);
+      return verifyShopify(secret, payload, headers, config.tolerance);
     case "github":
       return verifyGitHub(secret, payload, headers);
     case "slack":
@@ -44,15 +37,56 @@ export function verifySignature(config, payload, headers) {
     case "custom":
       return verifyCustom(config, payload, headers);
     default:
-      return { valid: false, error: `Unknown provider: ${provider}`, provider };
+      return {
+        valid: false,
+        error: `Unknown provider: ${provider}`,
+        provider: String(provider),
+      };
   }
 }
 
 /**
+ * Helper to check timestamp tolerance.
+ * @param {string} timestampStr - Timestamp string (seconds or ISO)
+ * @param {number} tolerance - Tolerance in seconds
+ * @returns {boolean} True if within tolerance
+ */
+function isTimestampWithinTolerance(timestampStr, tolerance) {
+  // Support ISO 8601 or Unix seconds
+  const timestampDate = !isNaN(Number(timestampStr))
+    ? new Date(parseInt(timestampStr, 10) * 1000)
+    : new Date(timestampStr);
+
+  if (isNaN(timestampDate.getTime())) return false;
+
+  const now = Date.now();
+  const timestampMs = timestampDate.getTime();
+  const toleranceMs = tolerance * 1000;
+
+  return Math.abs(now - timestampMs) <= toleranceMs;
+}
+
+/**
+ * Helper to return invalid signature result with age
+ * @param {string} timestamp
+ * @param {import("../typedefs.js").SignatureProvider} provider
+ * @returns {SignatureResult}
+ */
+function invalideSignatureWithAge(timestamp, provider) {
+  const timestampAge = Math.floor(Date.now() / 1000) - parseInt(timestamp, 10);
+
+  return {
+    valid: false,
+    error: `Timestamp outside tolerance (${timestampAge}s)`,
+    provider,
+  };
+}
+
+/**
  * Verifies Stripe webhook signature.
- * @see https://stripe.com/docs/webhooks/signatures
+ * @see https://docs.stripe.com/webhooks?lang=node#verify-events
  * @param {string} secret
- * @param {string} payload
+ * @param {string|Buffer} payload
  * @param {Record<string, string>} headers
  * @param {number} [tolerance]
  * @returns {SignatureResult}
@@ -100,13 +134,8 @@ function verifyStripe(
   }
 
   // Check timestamp tolerance
-  const timestampAge = Math.floor(Date.now() / 1000) - parseInt(timestamp, 10);
-  if (Math.abs(timestampAge) > tolerance) {
-    return {
-      valid: false,
-      error: `Timestamp outside tolerance (${timestampAge}s)`,
-      provider: "stripe",
-    };
+  if (!isTimestampWithinTolerance(timestamp, tolerance)) {
+    return invalideSignatureWithAge(timestamp, "stripe");
   }
 
   // Compute expected signature
@@ -132,26 +161,52 @@ function verifyStripe(
 
 /**
  * Verifies Shopify webhook signature.
- * @see https://shopify.dev/docs/apps/webhooks/configuration/https#step-5-verify-the-webhook
+ * @see https://shopify.dev/docs/apps/build/webhooks/subscribe/https#step-2-validate-the-origin-of-your-webhook-to-ensure-its-coming-from-shopify
  * @param {string} secret
- * @param {string} payload
+ * @param {string|Buffer} payload
  * @param {Record<string, string>} headers
+ * @param {number} [tolerance]
  * @returns {SignatureResult}
  */
-function verifyShopify(secret, payload, headers) {
-  const sigHeader = headers["x-shopify-hmac-sha256"];
+function verifyShopify(
+  secret,
+  payload,
+  headers,
+  tolerance = DEFAULT_TOLERANCE_SECONDS,
+) {
+  const sigHeader =
+    headers["x-shopify-hmac-sha256"] || headers["http_x_shopify_hmac_sha256"];
+
   if (!sigHeader) {
-    return { valid: false, error: "Missing X-Shopify-Hmac-SHA256 header", provider: "shopify" };
+    return {
+      valid: false,
+      error: "Missing X-Shopify-Hmac-SHA256 header",
+      provider: "shopify",
+    };
   }
 
-  const expectedSignature = crypto
-    .createHmac("sha256", secret)
-    .update(payload, "utf8")
-    .digest("base64");
+  // Replay Protection: Check X-Shopify-Triggered-At
+  const timestamp =
+    headers["x-shopify-triggered-at"] || headers["http_x_shopify_triggered_at"];
+  if (timestamp) {
+    // If header is present, enforce tolerance.
+    // Note: Documentation says "Verify that the timestamp ... is within a tolerance"
+    if (!isTimestampWithinTolerance(timestamp, tolerance)) {
+      return invalideSignatureWithAge(timestamp, "shopify");
+    }
+  }
+
+  const hmac = crypto.createHmac("sha256", secret);
+  if (Buffer.isBuffer(payload)) {
+    hmac.update(payload);
+  } else {
+    hmac.update(payload, "utf8");
+  }
+  const expectedSignature = hmac.digest("base64");
 
   // Timing-safe comparison
-  const expectedBuffer = Buffer.from(expectedSignature, "utf8");
-  const actualBuffer = Buffer.from(sigHeader, "utf8");
+  const expectedBuffer = Buffer.from(expectedSignature, "base64");
+  const actualBuffer = Buffer.from(sigHeader, "base64");
 
   if (expectedBuffer.length !== actualBuffer.length) {
     return { valid: false, error: "Signature mismatch", provider: "shopify" };
@@ -165,27 +220,38 @@ function verifyShopify(secret, payload, headers) {
 
 /**
  * Verifies GitHub webhook signature.
- * @see https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries
+ * @see https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries#validating-webhook-deliveries
  * @param {string} secret
- * @param {string} payload
+ * @param {string|Buffer} payload
  * @param {Record<string, string>} headers
  * @returns {SignatureResult}
  */
 function verifyGitHub(secret, payload, headers) {
   const sigHeader = headers["x-hub-signature-256"];
   if (!sigHeader) {
-    return { valid: false, error: "Missing X-Hub-Signature-256 header", provider: "github" };
+    return {
+      valid: false,
+      error: "Missing X-Hub-Signature-256 header",
+      provider: "github",
+    };
   }
 
   if (!sigHeader.startsWith("sha256=")) {
-    return { valid: false, error: "Invalid signature format", provider: "github" };
+    return {
+      valid: false,
+      error: "Invalid signature format",
+      provider: "github",
+    };
   }
 
   const signature = sigHeader.slice(7); // Remove "sha256=" prefix
-  const expectedSignature = crypto
-    .createHmac("sha256", secret)
-    .update(payload)
-    .digest("hex");
+  const hmac = crypto.createHmac("sha256", secret);
+  if (Buffer.isBuffer(payload)) {
+    hmac.update(payload);
+  } else {
+    hmac.update(payload, "utf8");
+  }
+  const expectedSignature = hmac.digest("hex");
 
   // Timing-safe comparison
   const expectedBuffer = Buffer.from(expectedSignature, "hex");
@@ -205,27 +271,39 @@ function verifyGitHub(secret, payload, headers) {
  * Verifies Slack webhook signature.
  * @see https://api.slack.com/authentication/verifying-requests-from-slack
  * @param {string} secret
- * @param {string} payload
+ * @param {string|Buffer} payload
  * @param {Record<string, string>} headers
  * @param {number} [tolerance]
  * @returns {SignatureResult}
  */
-function verifySlack(secret, payload, headers, tolerance = DEFAULT_TOLERANCE_SECONDS) {
+function verifySlack(
+  secret,
+  payload,
+  headers,
+  tolerance = DEFAULT_TOLERANCE_SECONDS,
+) {
   const timestamp = headers["x-slack-request-timestamp"];
   const sigHeader = headers["x-slack-signature"];
 
   if (!timestamp || !sigHeader) {
-    return { valid: false, error: "Missing Slack signature headers", provider: "slack" };
+    return {
+      valid: false,
+      error: "Missing Slack signature headers",
+      provider: "slack",
+    };
   }
 
   // Check timestamp tolerance
-  const timestampAge = Math.floor(Date.now() / 1000) - parseInt(timestamp, 10);
-  if (Math.abs(timestampAge) > tolerance) {
-    return { valid: false, error: `Timestamp outside tolerance (${timestampAge}s)`, provider: "slack" };
+  if (!isTimestampWithinTolerance(timestamp, tolerance)) {
+    return invalideSignatureWithAge(timestamp, "slack");
   }
 
   if (!sigHeader.startsWith("v0=")) {
-    return { valid: false, error: "Invalid signature format", provider: "slack" };
+    return {
+      valid: false,
+      error: "Invalid signature format",
+      provider: "slack",
+    };
   }
 
   const signature = sigHeader.slice(3); // Remove "v0=" prefix
@@ -252,30 +330,74 @@ function verifySlack(secret, payload, headers, tolerance = DEFAULT_TOLERANCE_SEC
 /**
  * Verifies webhook signature using custom configuration.
  * @param {SignatureConfig} config
- * @param {string} payload
+ * @param {string|Buffer} payload
  * @param {Record<string, string>} headers
  * @returns {SignatureResult}
  */
 function verifyCustom(config, payload, headers) {
-  const { secret, headerName, algorithm = "sha256" } = config;
+  const {
+    secret,
+    headerName,
+    algorithm = "sha256",
+    timestampKey,
+    encoding = "hex",
+    tolerance = DEFAULT_TOLERANCE_SECONDS,
+  } = config;
 
   if (!headerName) {
-    return { valid: false, error: "Custom provider requires headerName", provider: "custom" };
+    return {
+      valid: false,
+      error: "Custom provider requires headerName",
+      provider: "custom",
+    };
+  }
+
+  if (!secret) {
+    return {
+      valid: false,
+      error: "Missing signing secret",
+      provider: "custom",
+    };
   }
 
   const sigHeader = headers[headerName.toLowerCase()];
   if (!sigHeader) {
-    return { valid: false, error: `Missing ${headerName} header`, provider: "custom" };
+    return {
+      valid: false,
+      error: `Missing ${headerName} header`,
+      provider: "custom",
+    };
   }
 
-  const expectedSignature = crypto
-    .createHmac(algorithm, secret)
-    .update(payload)
-    .digest("hex");
+  // Custom Timestamp Check
+  if (timestampKey) {
+    const timestamp = headers[timestampKey.toLowerCase()];
+    if (!timestamp) {
+      return {
+        valid: false,
+        error: `Missing timestamp header: ${timestampKey}`,
+        provider: "custom",
+      };
+    }
+
+    if (!isTimestampWithinTolerance(timestamp, tolerance)) {
+      return invalideSignatureWithAge(timestamp, "custom");
+    }
+  }
+
+  const hmac = crypto.createHmac(algorithm, secret);
+  if (Buffer.isBuffer(payload)) {
+    hmac.update(payload);
+  } else {
+    hmac.update(payload, "utf8");
+  }
+
+  // Use 'hex' or 'base64' based on config
+  const expectedSignature = hmac.digest(encoding);
 
   // Timing-safe comparison
-  const expectedBuffer = Buffer.from(expectedSignature, "hex");
-  const actualBuffer = Buffer.from(sigHeader, "hex");
+  const expectedBuffer = Buffer.from(expectedSignature, encoding);
+  const actualBuffer = Buffer.from(sigHeader, encoding);
 
   if (expectedBuffer.length !== actualBuffer.length) {
     return { valid: false, error: "Signature mismatch", provider: "custom" };

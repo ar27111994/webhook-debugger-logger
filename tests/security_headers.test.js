@@ -1,19 +1,18 @@
-import { describe, test, expect, beforeAll, afterAll } from "@jest/globals";
-import request from "supertest";
-import { Actor } from "apify";
-import { initialize, app } from "../src/main.js";
+import { describe, test, expect, beforeAll } from "@jest/globals";
+import { setupCommonMocks } from "./helpers/mock-setup.js";
+await setupCommonMocks({ axios: true, apify: true });
+
+const request = (await import("supertest")).default;
+const { initialize, app } = await import("../src/main.js");
+
+const { Actor } = await import("apify");
 
 describe("Security Headers", () => {
   beforeAll(async () => {
+    // initialize logic calls Actor.init internally, but we mock it here too just in case
     await Actor.init();
     await initialize({ urlCount: 1, testAndExit: true });
-    await request(app).get("/info");
-  }, 30000);
-
-  afterAll(async () => {
-    // Don't call shutdown to avoid jest worker crash from Actor.exit()
-    // The test runner will clean up automatically
-  }, 5000);
+  });
 
   describe("Request ID", () => {
     test("should add X-Request-ID header to responses", async () => {

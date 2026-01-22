@@ -3,10 +3,15 @@ import {
   DEFAULT_PAYLOAD_LIMIT,
   DEFAULT_RATE_LIMIT_WINDOW_MS,
   DEFAULT_RATE_LIMIT_PER_MINUTE,
+  DEFAULT_REPLAY_RETRIES,
+  DEFAULT_REPLAY_TIMEOUT_MS,
 } from "../consts.js";
 import { RateLimiter } from "./rate_limiter.js";
 
 /**
+ * @typedef {import('express').RequestHandler} RequestHandler
+ * @typedef {import('../webhook_manager.js').WebhookManager} WebhookManager
+ * @typedef {import('../logger_middleware.js').LoggerMiddleware} LoggerMiddleware
  * @typedef {import('./config.js').WebhookConfig} WebhookConfig
  * @typedef {import('./config.js').RuntimeOptions} RuntimeOptions
  */
@@ -18,8 +23,8 @@ import { RateLimiter } from "./rate_limiter.js";
 export class AppState {
   /**
    * @param {WebhookConfig} config - Initial configuration object
-   * @param {import('../webhook_manager.js').WebhookManager} webhookManager
-   * @param {import('../logger_middleware.js').LoggerMiddleware} loggerMiddleware
+   * @param {WebhookManager} webhookManager
+   * @param {LoggerMiddleware} loggerMiddleware
    */
   constructor(config, webhookManager, loggerMiddleware) {
     this.webhookManager = webhookManager;
@@ -30,6 +35,8 @@ export class AppState {
     this.maxPayloadSize = config.maxPayloadSize || DEFAULT_PAYLOAD_LIMIT;
     this.retentionHours = config.retentionHours;
     this.urlCount = config.urlCount;
+    this.replayMaxRetries = config.replayMaxRetries || DEFAULT_REPLAY_RETRIES;
+    this.replayTimeoutMs = config.replayTimeoutMs || DEFAULT_REPLAY_TIMEOUT_MS;
 
     // Rate Limiter
     this.rateLimiter = new RateLimiter(
@@ -55,7 +62,7 @@ export class AppState {
   /**
    * Express middleware for request body parsing.
    * Dynamically uses the current parser instance.
-   * @returns {import('express').RequestHandler}
+   * @returns {RequestHandler}
    */
   get bodyParserMiddleware() {
     return (req, res, next) => this.bodyParser(req, res, next);
@@ -63,7 +70,7 @@ export class AppState {
 
   /**
    * Express middleware for rate limiting.
-   * @returns {import('express').RequestHandler}
+   * @returns {RequestHandler}
    */
   get rateLimitMiddleware() {
     return this.rateLimiter.middleware();
@@ -123,6 +130,20 @@ export class AppState {
       );
       this.retentionHours = validated.retentionHours;
       await this.webhookManager.updateRetention(this.retentionHours);
+    }
+
+    if (validated.replayMaxRetries !== this.replayMaxRetries) {
+      console.log(
+        `[SYSTEM] Updating Replay Max Retries to ${validated.replayMaxRetries}`,
+      );
+      this.replayMaxRetries = validated.replayMaxRetries;
+    }
+
+    if (validated.replayTimeoutMs !== this.replayTimeoutMs) {
+      console.log(
+        `[SYSTEM] Updating Replay Timeout to ${validated.replayTimeoutMs}ms`,
+      );
+      this.replayTimeoutMs = validated.replayTimeoutMs;
     }
   }
 

@@ -3,17 +3,20 @@ import {
   describe,
   test,
   expect,
-  beforeEach,
   beforeAll,
   afterAll,
 } from "@jest/globals";
+import { MAX_ITEMS_FOR_BATCH } from "../src/consts.js";
 
-/** @typedef {import('../src/typedefs.js').WebhookItem} WebhookItem */
+/**
+ * @typedef {import('../src/typedefs.js').WebhookItem} WebhookItem
+ */
 
-jest.unstable_mockModule("apify", async () => {
-  const { apifyMock } = await import("./helpers/shared-mocks.js");
-  return { Actor: apifyMock };
-});
+import { assertType } from "./helpers/test-utils.js";
+
+import { setupCommonMocks } from "./helpers/mock-setup.js";
+import { useMockCleanup } from "./helpers/test-lifecycle.js";
+await setupCommonMocks({ apify: true });
 
 const { app, webhookManager, initialize, shutdown } =
   await import("../src/main.js");
@@ -24,9 +27,7 @@ const authKey = "TEST_KEY";
 const authHeader = `Bearer ${authKey}`;
 
 describe("Log Filtering Routes", () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
+  useMockCleanup();
 
   beforeAll(async () => {
     // Enforce auth to test 401 scenarios
@@ -104,9 +105,7 @@ describe("Log Filtering Routes", () => {
     ];
 
     jest.spyOn(webhookManager, "isValid").mockReturnValue(true);
-    jest
-      .mocked(Actor.openDataset)
-      .mockResolvedValue(/** @type {any} */ (createDatasetMock(items)));
+    jest.mocked(Actor.openDataset).mockResolvedValue(createDatasetMock(items));
 
     // Filter by Method
     let res = await request(app)
@@ -177,9 +176,7 @@ describe("Log Filtering Routes", () => {
       webhookId: "wh_1",
       timestamp: new Date().toISOString(),
     }));
-    jest
-      .mocked(Actor.openDataset)
-      .mockResolvedValue(/** @type {any} */ (createDatasetMock(items)));
+    jest.mocked(Actor.openDataset).mockResolvedValue(createDatasetMock(items));
 
     // Case 1: Limit 0 (Should return default or handle gracefully, assuming default 100)
     let res = await request(app)
@@ -214,9 +211,7 @@ describe("Log Filtering Routes", () => {
     }));
 
     const mockDataset = createDatasetMock(items);
-    jest
-      .mocked(Actor.openDataset)
-      .mockResolvedValue(/** @type {any} */ (mockDataset));
+    jest.mocked(Actor.openDataset).mockResolvedValue(assertType(mockDataset));
 
     const res = await request(app)
       .get("/logs")
@@ -227,7 +222,7 @@ describe("Log Filtering Routes", () => {
 
     // Verify getData was called with the correct limit
     expect(mockDataset.getData).toHaveBeenCalledWith(
-      expect.objectContaining({ limit: 10 }),
+      expect.objectContaining({ limit: MAX_ITEMS_FOR_BATCH }),
     );
   });
 });

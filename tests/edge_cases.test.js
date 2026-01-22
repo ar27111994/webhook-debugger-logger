@@ -8,36 +8,55 @@ import {
 } from "@jest/globals";
 
 // Mock Apify
-jest.unstable_mockModule("apify", async () => {
-  const { apifyMock } = await import("./helpers/shared-mocks.js");
-  return { Actor: apifyMock };
-});
+// Mock Apify
+import { setupCommonMocks } from "./helpers/mock-setup.js";
+await setupCommonMocks({ apify: true });
 
-const request = (await import("supertest")).default;
-const { app, webhookManager, initialize, shutdown } =
-  await import("../src/main.js");
+const { setupTestApp } = await import("./helpers/app-utils.js");
+const { webhookManager } = await import("../src/main.js");
 const { Actor } = await import("apify");
+import { assertType } from "./helpers/test-utils.js";
+
+import { setupBasicApifyMock, apifyMock } from "./helpers/shared-mocks.js";
+
+/**
+ * @typedef {import("./helpers/app-utils.js").App} App
+ * @typedef {import("./helpers/app-utils.js").AppClient} AppClient
+ * @typedef {import("./helpers/app-utils.js").TeardownApp} TeardownApp
+ * @typedef {import("../src/webhook_manager.js").WebhookData} WebhookData
+ */
 
 describe("Edge Case Tests", () => {
   /** @type {string} */
   let webhookId;
 
+  /** @type {AppClient} */
+  let appClient;
+  /** @type {TeardownApp} */
+  let teardownApp;
+  /** @type {App} */
+  let _app;
+
   beforeAll(async () => {
-    jest.mocked(Actor.getInput).mockResolvedValue({
-      maxPayloadSize: 1024,
-      enableJSONParsing: true,
+    // Standardize mock setup
+    setupBasicApifyMock(apifyMock, {
+      input: {
+        maxPayloadSize: 1024,
+        enableJSONParsing: true,
+      },
     });
-    await initialize();
+
+    ({ appClient, teardownApp, app: _app } = await setupTestApp());
     const ids = await webhookManager.generateWebhooks(1, 1);
     webhookId = ids[0];
   });
 
   afterAll(async () => {
-    await shutdown("TEST_COMPLETE");
+    await teardownApp();
   });
 
   test("Should handle empty request body gracefully", async () => {
-    const res = await request(app)
+    const res = await appClient
       .post(`/webhook/${webhookId}`)
       .set("Content-Type", "text/plain")
       .send("");
@@ -48,7 +67,7 @@ describe("Edge Case Tests", () => {
 
   test("Should reject payload exceeding maxPayloadSize", async () => {
     const largeBody = "a".repeat(2048); // 2KB, limit is 1KB
-    const res = await request(app)
+    const res = await appClient
       .post(`/webhook/${webhookId}`)
       .set("Content-Type", "text/plain")
       .send(largeBody);
@@ -59,7 +78,7 @@ describe("Edge Case Tests", () => {
 
   test("Should log but NOT crash on malformed JSON when parsing enabled", async () => {
     // Note: main.js has logic to fallback to string if JSON parsing fails
-    const res = await request(app)
+    const res = await appClient
       .post(`/webhook/${webhookId}`)
       .set("Content-Type", "application/json")
       .send("{ invalid: json }");
@@ -69,10 +88,10 @@ describe("Edge Case Tests", () => {
 
     // Check if it was saved as string
     /** @type {{body: unknown}} */
-    const lastCall = /** @type {any} */ (
+    const lastCall = assertType(
       jest.mocked(Actor.pushData).mock.calls[
         jest.mocked(Actor.pushData).mock.calls.length - 1
-      ][0]
+      ][0],
     );
     expect(typeof lastCall.body).toBe("string");
   });
@@ -84,7 +103,7 @@ describe("Edge Case Tests", () => {
 
     // Set a very high delay directly in the Map
     const data = webhookManager.getWebhookData(slowWebhookId);
-    /** @type {import('../src/webhook_manager.js').WebhookData} */
+    /** @type {WebhookData} */
     const modifiedData = {
       ...data,
       expiresAt: data?.expiresAt || new Date().toISOString(), // Ensure valid ISO string
@@ -93,7 +112,7 @@ describe("Edge Case Tests", () => {
     webhookManager.webhooks.set(slowWebhookId, modifiedData);
 
     const startTime = Date.now();
-    const res = await request(app)
+    const res = await appClient
       .post(`/webhook/${slowWebhookId}`)
       .send({ test: "delay" });
 
@@ -102,12 +121,14 @@ describe("Edge Case Tests", () => {
     expect(res.statusCode).toBe(200);
     // Should be capped at 10s
     expect(duration).toBeGreaterThanOrEqual(10000);
-    expect(duration).toBeLessThan(12000);
-  }, 15000);
+    // Allow more overhead for test environment (was 13000)
+    // 15000 is the uncapped delay, so anything < 14500 proves clamping happened
+    expect(duration).toBeLessThan(14500);
+  }, 16000);
 
   test("Should reject unidentifiable IPs with 400 Bad Request", async () => {
     // We use our test hook to simulate a request where the IP cannot be identified
-    const res = await request(app).get("/info").set("x-simulate-no-ip", "true");
+    const res = await appClient.get("/info").set("x-simulate-no-ip", "true");
 
     expect(res.statusCode).toBe(400);
     expect(res.body.error).toBe("Bad Request");

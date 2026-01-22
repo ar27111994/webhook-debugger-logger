@@ -11,15 +11,18 @@ import {
   BACKGROUND_TASK_TIMEOUT_TEST_MS,
   FORWARD_HEADERS_TO_IGNORE,
   FORWARD_TIMEOUT_MS,
-  MAX_FORWARD_RETRIES,
   SCRIPT_EXECUTION_TIMEOUT_MS,
   SENSITIVE_HEADERS,
   DEFAULT_PAYLOAD_LIMIT,
+  DEFAULT_FORWARD_RETRIES,
+  TRANSIENT_ERROR_CODES,
 } from "./consts.js";
 import { verifySignature } from "./utils/signature.js";
 import { triggerAlertIfNeeded } from "./utils/alerting.js";
 
 /**
+ * @typedef {import('express').RequestHandler} RequestHandler
+ * @typedef {import("ajv").default} Ajv
  * @typedef {import('express').Request} Request
  * @typedef {import('express').Response} Response
  * @typedef {import('express').NextFunction} NextFunction
@@ -31,7 +34,7 @@ import { triggerAlertIfNeeded } from "./utils/alerting.js";
  * @typedef {import('./typedefs.js').MiddlewareValidationResult} MiddlewareValidationResult
  */
 
-/** @type {import("ajv").default} */
+/** @type {Ajv} */
 // @ts-expect-error - Ajv's default export is a class constructor but TypeScript infers namespace type; explicit cast required
 const ajv = new Ajv();
 
@@ -225,8 +228,11 @@ export class LoggerMiddleware {
         mergedOptions.signatureVerification?.provider &&
         mergedOptions.signatureVerification?.secret
       ) {
+        // Use preserved rawBody if available (critical for Shopify/Stripe signatures)
+        // Fallback to re-stringifying body if necessary (though less reliable)
         const rawBody =
-          typeof req.body === "string" ? req.body : JSON.stringify(req.body);
+          /** @type {any} */ (req).rawBody ||
+          (typeof req.body === "string" ? req.body : JSON.stringify(req.body));
         const lowercaseHeaders = Object.fromEntries(
           Object.entries(req.headers).map(([k, v]) => [
             k.toLowerCase(),
@@ -234,7 +240,7 @@ export class LoggerMiddleware {
           ]),
         );
         const sigResult = verifySignature(
-          /** @type {any} */ (mergedOptions.signatureVerification),
+          mergedOptions.signatureVerification,
           rawBody,
           lowercaseHeaders,
         );
@@ -604,7 +610,10 @@ export class LoggerMiddleware {
     const hostHeader = ssrfResult.host || "";
     validatedUrl = ssrfResult.href || validatedUrl;
 
-    while (attempt < MAX_FORWARD_RETRIES && !success) {
+    while (
+      attempt < (options.maxForwardRetries ?? DEFAULT_FORWARD_RETRIES) &&
+      !success
+    ) {
       try {
         attempt++;
 
@@ -633,23 +642,22 @@ export class LoggerMiddleware {
         success = true;
       } catch (err) {
         const axiosError = /** @type {CommonError} */ (err);
-        const transientErrors = [
-          "ECONNABORTED",
-          "ECONNRESET",
-          "ETIMEDOUT",
-          "ENETUNREACH",
-          "EHOSTUNREACH",
-          "EAI_AGAIN",
-        ];
-        const isTransient = transientErrors.includes(axiosError.code || "");
+        const isTransient = TRANSIENT_ERROR_CODES.includes(
+          axiosError.code || "",
+        );
         const delay = 1000 * Math.pow(2, attempt - 1);
 
         console.error(
-          `[FORWARD-ERROR] Attempt ${attempt}/${MAX_FORWARD_RETRIES} failed for ${validatedUrl}:`,
+          `[FORWARD-ERROR] Attempt ${attempt}/${
+            options.maxForwardRetries ?? DEFAULT_FORWARD_RETRIES
+          } failed for ${validatedUrl}:`,
           axiosError.code === "ECONNABORTED" ? "Timed out" : axiosError.message,
         );
 
-        if (attempt >= MAX_FORWARD_RETRIES || !isTransient) {
+        if (
+          attempt >= (options.maxForwardRetries ?? DEFAULT_FORWARD_RETRIES) ||
+          !isTransient
+        ) {
           try {
             await Actor.pushData({
               id: nanoid(10),
@@ -682,13 +690,17 @@ export class LoggerMiddleware {
 }
 
 /**
+ * @typedef {RequestHandler & { updateOptions: Function }} HotReloadableMiddleware
+ */
+
+/**
  * Creates the logger middleware instance with hot-reload support.
  * Wraps the class-based implementation for backward compatibility.
  *
  * @param {WebhookManager} webhookManager
  * @param {Object} rawOptions
  * @param {Function} onEvent
- * @returns {import("express").RequestHandler & { updateOptions: Function }}
+ * @returns {HotReloadableMiddleware}
  */
 export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
   const middlewareInstance = new LoggerMiddleware(
@@ -696,7 +708,5 @@ export const createLoggerMiddleware = (webhookManager, rawOptions, onEvent) => {
     rawOptions,
     onEvent,
   );
-  return /** @type {import("express").RequestHandler & { updateOptions: Function }} */ (
-    middlewareInstance.middleware
-  );
+  return /** @type {HotReloadableMiddleware} */ (middlewareInstance.middleware);
 };

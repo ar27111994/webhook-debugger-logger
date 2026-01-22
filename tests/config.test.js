@@ -1,4 +1,5 @@
-import { describe, test, expect, jest, beforeEach } from "@jest/globals";
+import { describe, test, expect, jest } from "@jest/globals";
+import { useMockCleanup } from "./helpers/test-lifecycle.js";
 import {
   parseWebhookOptions,
   coerceRuntimeOptions,
@@ -11,7 +12,7 @@ import {
   DEFAULT_URL_COUNT,
   DEFAULT_RETENTION_HOURS,
   DEFAULT_RATE_LIMIT_PER_MINUTE,
-  MAX_RESPONSE_DELAY_MS,
+  MAX_SAFE_RESPONSE_DELAY_MS,
 } from "../src/consts.js";
 
 describe("Config Utils", () => {
@@ -113,9 +114,9 @@ describe("coerceRuntimeOptions", () => {
   });
 
   test("should clamp responseDelayMs", () => {
-    const huge = MAX_RESPONSE_DELAY_MS + 5000;
+    const huge = MAX_SAFE_RESPONSE_DELAY_MS + 5000;
     const result = coerceRuntimeOptions({ responseDelayMs: huge });
-    expect(result.responseDelayMs).toBe(MAX_RESPONSE_DELAY_MS);
+    expect(result.responseDelayMs).toBe(MAX_SAFE_RESPONSE_DELAY_MS);
   });
 });
 
@@ -124,9 +125,7 @@ describe("getSafeResponseDelay", () => {
     .spyOn(console, "warn")
     .mockImplementation(() => {});
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
+  useMockCleanup();
 
   test("should return 0 for invalid or negative inputs", () => {
     expect(getSafeResponseDelay(-1)).toBe(0);
@@ -136,17 +135,17 @@ describe("getSafeResponseDelay", () => {
 
   test("should return valid delay unchanged", () => {
     expect(getSafeResponseDelay(100)).toBe(100);
-    expect(getSafeResponseDelay(MAX_RESPONSE_DELAY_MS)).toBe(
-      MAX_RESPONSE_DELAY_MS,
+    expect(getSafeResponseDelay(MAX_SAFE_RESPONSE_DELAY_MS)).toBe(
+      MAX_SAFE_RESPONSE_DELAY_MS,
     );
     expect(consoleWarnSpy).not.toHaveBeenCalled();
   });
 
   test("should cap huge delay and warn", () => {
-    const huge = MAX_RESPONSE_DELAY_MS + 1;
-    expect(getSafeResponseDelay(huge)).toBe(MAX_RESPONSE_DELAY_MS);
+    const huge = MAX_SAFE_RESPONSE_DELAY_MS + 1;
+    expect(getSafeResponseDelay(huge)).toBe(MAX_SAFE_RESPONSE_DELAY_MS);
     expect(consoleWarnSpy).toHaveBeenCalledWith(
-      expect.stringContaining("capped at"),
+      expect.stringContaining("exceeds safe max"),
     );
   });
 });

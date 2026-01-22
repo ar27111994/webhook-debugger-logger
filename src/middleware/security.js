@@ -1,3 +1,5 @@
+import { nanoid } from "nanoid";
+
 /**
  * Security middleware module (Request ID + CSP headers).
  * @module middleware/security
@@ -20,8 +22,7 @@ export const createRequestIdMiddleware =
   /** @param {Request} req @param {Response} res @param {NextFunction} next */
   (req, res, next) => {
     const requestId =
-      req.headers["x-request-id"]?.toString() ||
-      `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+      req.headers["x-request-id"]?.toString() || `req_${nanoid()}`;
     /** @type {any} */ (req).requestId = requestId;
     res.setHeader("X-Request-ID", requestId);
     next();

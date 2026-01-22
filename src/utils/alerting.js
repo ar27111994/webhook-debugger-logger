@@ -1,25 +1,17 @@
 import axios from "axios";
 
 /**
- * @typedef {Object} AlertConfig
- * @property {{webhookUrl: string}} [slack]
- * @property {{webhookUrl: string}} [discord]
- * @property {string[]} [alertOn] - Trigger conditions: "error", "4xx", "5xx", "timeout", "signature_invalid"
+ * @typedef {import("../typedefs.js").AlertTrigger} AlertTrigger
+ * @typedef {import("../typedefs.js").AlertChannel} AlertChannel
+ * @typedef {import("../typedefs.js").AlertChannelConfig} AlertChannelConfig
+ * @typedef {import("../typedefs.js").AlertConfig} AlertConfig
+ * @typedef {import("../typedefs.js").AlertContext} AlertContext
  */
 
 /**
- * @typedef {Object} AlertContext
- * @property {string} webhookId
- * @property {string} method
- * @property {number} [statusCode]
- * @property {string} [error]
- * @property {boolean} [signatureValid]
- * @property {string} [signatureError]
- * @property {string} timestamp
- * @property {string} [sourceIp]
+ * @type {Readonly<AlertTrigger[]>}
  */
-
-const DEFAULT_ALERT_ON = ["error", "5xx"];
+const DEFAULT_ALERT_ON = Object.freeze(["error", "5xx"]);
 const ALERT_TIMEOUT_MS = 5000;
 
 /**
@@ -63,10 +55,10 @@ export function shouldAlert(config, context) {
  * Sends an alert to configured channels.
  * @param {AlertConfig} config
  * @param {AlertContext} context
- * @returns {Promise<{slack?: boolean, discord?: boolean}>}
+ * @returns {Promise<Record<AlertChannel, boolean>>}
  */
 export async function sendAlert(config, context) {
-  const results = /** @type {{slack?: boolean, discord?: boolean}} */ ({});
+  const results = /** @type {Record<AlertChannel, boolean>} */ ({});
 
   const promises = [];
 

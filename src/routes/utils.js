@@ -8,6 +8,8 @@
  * @typedef {import("express").Response} Response
  * @typedef {import("express").NextFunction} NextFunction
  * @typedef {import("express").RequestHandler} RequestHandler
+ * @typedef {import("http").ServerResponse} ServerResponse
+ * @typedef {import("../typedefs.js").CommonError} CommonError
  */
 
 /**
@@ -31,13 +33,8 @@ export const escapeHtml = (unsafe) => {
  * @returns {RequestHandler}
  */
 export const asyncHandler = (fn) => (req, res, next) => {
-  Promise.resolve(fn(req, res, next)).catch(next);
+  return Promise.resolve(fn(req, res, next)).catch(next);
 };
-
-/**
- * @typedef {import("http").ServerResponse} ServerResponse
- * @typedef {import("../typedefs.js").CommonError} CommonError
- */
 
 /**
  * Creates a broadcast function for SSE clients.

@@ -6,15 +6,15 @@ export const CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
 export const INPUT_POLL_INTERVAL_PROD_MS = 5000;
 export const INPUT_POLL_INTERVAL_TEST_MS = 100;
 
-export const MAX_REPLAY_RETRIES = 3;
-export const REPLAY_TIMEOUT_MS = 10000;
+export const DEFAULT_REPLAY_RETRIES = 3;
+export const DEFAULT_REPLAY_TIMEOUT_MS = 10000;
+export const REPLAY_SCAN_MAX_DEPTH_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 export const FORWARD_TIMEOUT_MS = 10000;
 export const BACKGROUND_TASK_TIMEOUT_PROD_MS = 10000;
 export const BACKGROUND_TASK_TIMEOUT_TEST_MS = 100;
-export const MAX_FORWARD_RETRIES = 3;
+export const DEFAULT_FORWARD_RETRIES = 3;
 export const SCRIPT_EXECUTION_TIMEOUT_MS = 1000;
-export const MAX_RESPONSE_DELAY_MS = 10000;
 
 export const MAX_BULK_CREATE = 1000;
 export const DEFAULT_URL_COUNT = 3;
@@ -22,7 +22,19 @@ export const DEFAULT_RETENTION_HOURS = 24;
 export const DEFAULT_RATE_LIMIT_PER_MINUTE = 60;
 export const DEFAULT_RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute in ms
 export const DEFAULT_PAYLOAD_LIMIT = 10 * 1024 * 1024; // 10MB
+export const DEFAULT_TOLERANCE_SECONDS = 300; // 5 minutes
+
+// Safe Maximums for Self-Hosting/Validation
+export const MAX_SAFE_REPLAY_RETRIES = 10;
+export const MAX_SAFE_RATE_LIMIT_PER_MINUTE = 1000;
+export const MAX_SAFE_RETENTION_HOURS = 168; // 7 days
+export const MAX_SAFE_URL_COUNT = 50;
+export const MAX_SAFE_REPLAY_TIMEOUT_MS = 60000; // 60 seconds
+export const MAX_SAFE_RESPONSE_DELAY_MS = 10000;
 export const MAX_ALLOWED_PAYLOAD_SIZE = 100 * 1024 * 1024; // 100MB
+export const MAX_SAFE_FORWARD_RETRIES = 10;
+
+export const MAX_ITEMS_FOR_BATCH = 1000;
 
 export const REPLAY_HEADERS_TO_IGNORE = Object.freeze([
   "content-length",
@@ -69,3 +81,13 @@ export const SSRF_LOG_MESSAGES = Object.freeze({
   DNS_TIMEOUT: "DNS resolution timed out",
   RESOLUTION_FAILED: "Resolution failed",
 });
+
+export const TRANSIENT_ERROR_CODES = Object.freeze([
+  "ECONNABORTED",
+  "ECONNRESET",
+  "ETIMEDOUT",
+  "ENETUNREACH",
+  "EHOSTUNREACH",
+  "EAI_AGAIN",
+  "ENOTFOUND",
+]);

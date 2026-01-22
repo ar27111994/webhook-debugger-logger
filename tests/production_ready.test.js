@@ -3,20 +3,19 @@ import {
   describe,
   test,
   expect,
-  beforeEach,
   beforeAll,
   afterAll,
 } from "@jest/globals";
+import { getLastAxiosConfig, assertType } from "./helpers/test-utils.js";
+/**
+ * @typedef {import("./helpers/shared-mocks.js").AxiosMock} AxiosMock
+ * @typedef {import("../src/typedefs.js").WebhookEvent} WebhookEvent
+ */
 
-jest.unstable_mockModule("apify", async () => {
-  const { apifyMock } = await import("./helpers/shared-mocks.js");
-  return { Actor: apifyMock };
-});
-
-jest.unstable_mockModule("axios", async () => {
-  const { axiosMock } = await import("./helpers/shared-mocks.js");
-  return { default: axiosMock };
-});
+// Mock Apify and Axios
+import { setupCommonMocks } from "./helpers/mock-setup.js";
+import { useMockCleanup } from "./helpers/test-lifecycle.js";
+await setupCommonMocks({ axios: true, apify: true });
 
 const request = (await import("supertest")).default;
 const { app, webhookManager, sseHeartbeat, initialize, shutdown } =
@@ -28,9 +27,7 @@ describe("Production Readiness Tests (v2.6.0)", () => {
   /** @type {string} */
   let webhookId;
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
+  useMockCleanup();
 
   beforeAll(async () => {
     jest.mocked(Actor.getInput).mockResolvedValue({
@@ -93,16 +90,16 @@ describe("Production Readiness Tests (v2.6.0)", () => {
         .set("X-API-Key", "my-key")
         .send({ foo: "bar" });
 
-      /** @type {Partial<import('../src/typedefs.js').WebhookEvent>} */
-      const matchedCall = /** @type {any} */ (
-        jest
-          .mocked(Actor.pushData)
-          .mock.calls.find(
-            (call) =>
-              call[0] &&
-              /** @type {any} */ (call[0]).method === "POST" &&
-              /** @type {any} */ (call[0]).webhookId === webhookId,
-          )?.[0]
+      const matchedCallArgs = assertType(
+        jest.mocked(Actor.pushData).mock.calls,
+      ).find(
+        /** @param {any[]} call */
+        (call) =>
+          assertType(call[0]).method === "POST" &&
+          assertType(call[0]).webhookId === webhookId,
+      );
+      const matchedCall = /** @type {Partial<WebhookEvent> | undefined} */ (
+        matchedCallArgs?.[0]
       );
 
       expect(matchedCall).toBeDefined();
@@ -158,7 +155,7 @@ describe("Production Readiness Tests (v2.6.0)", () => {
 
       jest
         .mocked(Actor.openDataset)
-        .mockResolvedValue(/** @type {any} */ (createDatasetMock([mockEvent])));
+        .mockResolvedValue(createDatasetMock([mockEvent]));
 
       const res = await request(app)
         .post(`/replay/${webhookId}/${eventId}?url=${targetUrl}`)
@@ -166,27 +163,23 @@ describe("Production Readiness Tests (v2.6.0)", () => {
         .expect(200);
 
       const { default: axiosMock } = await import("axios");
-      /** @type {Array<[{url: string; headers: Record<string, unknown>}]>} */
-      const axioCalls =
-        /** @type {import("./helpers/shared-mocks.js").AxiosMock} */ (axiosMock)
-          .mock.calls;
-      /** @type {any} */
-      const axiosCall = axioCalls.find((c) => c[0].url === targetUrl);
-      expect(axiosCall).toBeDefined();
-      if (!axiosCall) throw new Error("Expected axios call not found");
+      const axiosConfig = getLastAxiosConfig(axiosMock, null);
 
-      const sentHeaders = axiosCall[0].headers;
+      expect(axiosConfig).toBeDefined();
+      expect(axiosConfig.url).toBe(targetUrl);
+
+      const matchedHeaders = axiosConfig.headers;
 
       // Transmission headers should be stripped
-      expect(sentHeaders["content-length"]).toBeUndefined();
-      expect(sentHeaders["content-encoding"]).toBeUndefined();
-      expect(sentHeaders["connection"]).toBeUndefined();
+      expect(matchedHeaders["content-length"]).toBeUndefined();
+      expect(matchedHeaders["content-encoding"]).toBeUndefined();
+      expect(matchedHeaders["connection"]).toBeUndefined();
 
       // Host should be overridden
-      expect(sentHeaders["host"]).toBe("example.com");
+      expect(matchedHeaders["host"]).toBe("example.com");
 
       // Masked headers should be stripped
-      expect(sentHeaders["authorization"]).toBeUndefined();
+      expect(matchedHeaders["authorization"]).toBeUndefined();
 
       // Response warning should be present
       expect(res.headers["x-apify-replay-warning"]).toMatch(/Headers stripped/);

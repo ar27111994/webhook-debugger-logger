@@ -8,6 +8,10 @@
  */
 export const jsonParserMiddleware = (req, _res, next) => {
   if (!req.body || Buffer.isBuffer(req.body) === false) return next();
+
+  // Preserve raw body for signature verification (Stripe/Shopify)
+  /** @type {any} */ (req).rawBody = req.body;
+
   if (req.headers["content-type"]?.includes("application/json")) {
     try {
       req.body = JSON.parse(req.body.toString());
@@ -25,5 +29,5 @@ export const jsonParserMiddleware = (req, _res, next) => {
  * @returns {import('express').RequestHandler}
  */
 export const createJsonParserMiddleware = () => {
-    return jsonParserMiddleware;
+  return jsonParserMiddleware;
 };

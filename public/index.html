@@ -83,6 +83,28 @@
         font-weight: 600;
         margin-bottom: 32px;
       }
+      .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        border-radius: 99px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        margin-bottom: 24px;
+        margin-left: 8px;
+        border: 1px solid transparent;
+      }
+      .signature-active {
+        background: rgba(46, 204, 113, 0.1);
+        color: var(--success);
+        border-color: rgba(46, 204, 113, 0.2);
+      }
+      .signature-inactive {
+        background: rgba(148, 163, 184, 0.1);
+        color: var(--text-dim);
+        border-color: rgba(148, 163, 184, 0.2);
+      }
       .dot {
         width: 8px;
         height: 8px;
@@ -130,9 +152,12 @@
     <div class="container">
       <h1>Webhook Debugger</h1>
       <span class="version">{{VERSION}} "Enterprise Suite"</span>
-      <div class="status">
-        <div class="dot"></div>
-        System Online & Optimized
+      <div>
+        <div class="status">
+          <div class="dot"></div>
+          System Online
+        </div>
+        {{SIGNATURE_BADGE}}
       </div>
       <div class="stat-item">
         <span class="stat-label">Active Webhooks (Live TTL)</span

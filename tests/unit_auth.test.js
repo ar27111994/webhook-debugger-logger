@@ -1,12 +1,15 @@
 import { test, expect, describe } from "@jest/globals";
 import { validateAuth } from "../src/utils/auth.js";
+import { assertType } from "./helpers/test-utils.js";
 
-/** @typedef {import('express').Request} Request */
+/**
+ * @typedef {import('express').Request} Request
+ */
 
 describe("Auth Unit Tests", () => {
   test("should reject multiple Authorization headers", () => {
     const req = /** @type {Request} */ ({
-      headers: /** @type {any} */ ({
+      headers: assertType({
         authorization: ["Bearer key1", "Bearer key2"],
       }),
       query: {},

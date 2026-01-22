@@ -77,4 +77,59 @@
  * @property {Object} [response]
  */
 
+/**
+ * @typedef {("error" | "4xx" | "5xx" | "timeout" | "signature_invalid")} AlertTrigger
+ * @typedef {("slack" | "discord")} AlertChannel
+ */
+
+/**
+ * @typedef {Object} AlertChannelConfig
+ * @property {string} webhookUrl
+ */
+
+/**
+ * @typedef {Object} AlertConfig
+ * @property {AlertChannelConfig} [slack]
+ * @property {AlertChannelConfig} [discord]
+ * @property {AlertTrigger[]} [alertOn] - Trigger conditions: "error", "4xx", "5xx", "timeout", "signature_invalid"
+ */
+
+/**
+ * @typedef {Object} AlertContext
+ * @property {string} webhookId
+ * @property {string} method
+ * @property {number} [statusCode]
+ * @property {string} [error]
+ * @property {boolean} [signatureValid]
+ * @property {string} [signatureError]
+ * @property {string} timestamp
+ * @property {string} [sourceIp]
+ */
+
+/**
+ * @typedef {"stripe" | "shopify" | "github" | "slack" | "custom"} SignatureProvider
+ * @typedef {"sha256" | "sha1"} HashAlgorithm
+ * @typedef {"hex" | "base64"} SignatureEncoding
+ */
+
+/**
+ * @typedef {Object} SignatureConfig
+ * @property {SignatureProvider} [provider]
+ * @property {boolean} [enabled]
+ * @property {string} [secret] - The signing secret
+ * @property {string} [headerName] - Custom header name (for custom provider)
+ * @property {HashAlgorithm} [algorithm] - Hash algorithm (for custom provider)
+ * @property {string} [timestampKey] - Header name for custom provider timestamp check
+ * @property {SignatureEncoding} [encoding] - Signature encoding (default: hex)
+ * @property {string} [prefix]
+ * @property {number} [tolerance] - Timestamp tolerance in seconds (default: 300)
+ */
+
+/**
+ * @typedef {Object} SignatureResult
+ * @property {boolean} valid
+ * @property {string} [error]
+ * @property {string} provider
+ */
+
 export {};

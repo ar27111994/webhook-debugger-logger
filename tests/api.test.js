@@ -2,97 +2,60 @@ import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const { version } = require("../package.json");
 
-import {
-  jest,
-  describe,
-  test,
-  expect,
-  beforeAll,
-  afterAll,
-  beforeEach,
-} from "@jest/globals";
+import { jest, describe, test, expect, afterAll } from "@jest/globals";
+import { useMockCleanup } from "./helpers/test-lifecycle.js";
 
-/** @typedef {import("http").Server} Server */
-/** @typedef {import("./helpers/shared-mocks.js").AxiosMock} AxiosMock */
-/** @typedef {typeof import("./helpers/shared-mocks.js").dnsPromisesMock} DnsPromisesMock */
+/**
+ * @typedef {import("http").Server} Server
+ * @typedef {import("./helpers/shared-mocks.js").AxiosMock} AxiosMock
+ * @typedef {typeof import("./helpers/shared-mocks.js").dnsPromisesMock} DnsPromisesMock
+ * @typedef {import("./helpers/app-utils.js").AppClient} AppClient
+ * @typedef {import("./helpers/app-utils.js").TeardownApp} TeardownApp
+ * @typedef {import("./helpers/app-utils.js").App} App
+ */
 
-jest.unstable_mockModule("apify", async () => {
-  const { apifyMock } = await import("./helpers/shared-mocks.js");
-  return { Actor: apifyMock };
-});
-const { createDatasetMock } = await import("./helpers/shared-mocks.js");
+import { setupCommonMocks } from "./helpers/mock-setup.js";
+await setupCommonMocks({ axios: true, apify: true, dns: true, ssrf: true });
+const { createDatasetMock, resetNetworkMocks } =
+  await import("./helpers/shared-mocks.js");
 
-jest.unstable_mockModule("axios", async () => {
-  const { axiosMock } = await import("./helpers/shared-mocks.js");
-  return { default: axiosMock };
-});
-
-jest.unstable_mockModule("dns/promises", async () => {
-  const { dnsPromisesMock } = await import("./helpers/shared-mocks.js");
-  return { default: dnsPromisesMock };
-});
-
-jest.unstable_mockModule("../src/utils/ssrf.js", () => {
-  return {
-    validateUrlForSsrf: /** @type {jest.Mock<any>} */ (
-      jest.fn()
-    ).mockResolvedValue({
-      safe: true,
-      href: "http://example.com",
-      host: "example.com",
-    }),
-    SSRF_ERRORS: {
-      INVALID_URL: "Invalid URL format",
-      PROTOCOL_NOT_ALLOWED: "Only http/https URLs are allowed",
-      CREDENTIALS_NOT_ALLOWED: "Credentials in URL are not allowed",
-      HOSTNAME_RESOLUTION_FAILED: "Unable to resolve hostname",
-      INVALID_IP: "URL resolves to invalid IP address",
-      INTERNAL_IP: "URL resolves to internal/reserved IP range",
-      VALIDATION_FAILED: "URL validation failed",
-    },
-    checkIpInRanges: jest.fn(() => false),
-  };
-});
-
-const request = (await import("supertest")).default;
-const { app, webhookManager, initialize, shutdown } =
-  await import("../src/main.js");
+const { setupTestApp } = await import("./helpers/app-utils.js");
+const { webhookManager } = await import("../src/main.js");
 const { Actor } = await import("apify");
 
 describe("API E2E Tests", () => {
-  beforeEach(async () => {
-    jest.clearAllMocks();
-    // Reset SSRF mock to default safe response
-    const { validateUrlForSsrf } = await import("../src/utils/ssrf.js");
-    jest.mocked(validateUrlForSsrf).mockResolvedValue({
-      safe: true,
-      href: "http://example.com",
-      host: "example.com",
-    });
+  useMockCleanup(async () => {
+    await resetNetworkMocks();
   });
 
   /** @type {string} */
   let webhookId;
+  /** @type {AppClient} */
+  let appClient;
+  /** @type {TeardownApp} */
+  let teardownApp;
+  /** @type {App} */
+  let app;
 
   beforeAll(async () => {
-    await initialize();
+    ({ appClient, teardownApp, app } = await setupTestApp());
     // Generate a test webhook
     const ids = await webhookManager.generateWebhooks(1, 1);
     webhookId = ids[0];
   });
 
   afterAll(async () => {
-    await shutdown("TEST_COMPLETE");
+    await teardownApp();
   });
 
   test("GET / should return version info", async () => {
-    const res = await request(app).get("/");
+    const res = await appClient.get("/");
     expect(res.statusCode).toBe(200);
     expect(res.text).toContain(`v${version}`);
   });
 
   test("GET /info should return status and webhooks", async () => {
-    const res = await request(app).get("/info");
+    const res = await appClient.get("/info");
     expect(res.statusCode).toBe(200);
     expect(res.body.version).toBeDefined();
     expect(res.body.system.activeWebhooks.length).toBeGreaterThanOrEqual(1);
@@ -100,7 +63,7 @@ describe("API E2E Tests", () => {
   });
 
   test("POST /webhook/:id should capture data", async () => {
-    const res = await request(app)
+    const res = await appClient
       .post(`/webhook/${webhookId}`)
       .send({ test: "data" });
 
@@ -109,7 +72,7 @@ describe("API E2E Tests", () => {
   });
 
   test("POST /webhook/:id should capture text/plain data", async () => {
-    const res = await request(app)
+    const res = await appClient
       .post(`/webhook/${webhookId}`)
       .set("Content-Type", "text/plain")
       .send("raw data string");
@@ -128,9 +91,9 @@ describe("API E2E Tests", () => {
     };
     jest
       .mocked(Actor.openDataset)
-      .mockResolvedValue(/** @type {any} */ (createDatasetMock([mockItem])));
+      .mockResolvedValue(createDatasetMock([mockItem]));
 
-    const res = await request(app).get("/logs").query({ webhookId });
+    const res = await appClient.get("/logs").query({ webhookId });
     expect(res.statusCode).toBe(200);
     expect(res.body.filters).toBeDefined();
     expect(res.body.items).toHaveLength(1);
@@ -152,9 +115,7 @@ describe("API E2E Tests", () => {
       .mockResolvedValueOnce({ items: Array(1000).fill({ id: "noise" }) }) // Page 1: Noise
       .mockResolvedValueOnce({ items: [mockItem] }); // Page 2: Target
 
-    jest
-      .mocked(Actor.openDataset)
-      .mockResolvedValue(/** @type {any} */ (datasetMock));
+    jest.mocked(Actor.openDataset).mockResolvedValue(datasetMock);
 
     // Mock axios to prevent real network calls
     const axios = (await import("axios")).default;
@@ -163,7 +124,7 @@ describe("API E2E Tests", () => {
       data: "OK",
     });
 
-    const res = await request(app)
+    const res = await appClient
       .get(`/replay/${webhookId}/evt_123`)
       .query({ url: "http://example.com/target" });
 
@@ -194,9 +155,9 @@ describe("API E2E Tests", () => {
     };
     jest
       .mocked(Actor.openDataset)
-      .mockResolvedValue(/** @type {any} */ (createDatasetMock([mockItem])));
+      .mockResolvedValue(createDatasetMock([mockItem]));
 
-    const res = await request(app)
+    const res = await appClient
       .post(`/replay/${webhookId}/evt_789`)
       .query({ url: "http://example.com/target" });
 
@@ -205,7 +166,7 @@ describe("API E2E Tests", () => {
   });
 
   test("GET / with readiness probe header", async () => {
-    const res = await request(app)
+    const res = await appClient
       .get("/")
       .set("x-apify-container-server-readiness-probe", "true");
     expect(res.statusCode).toBe(200);
@@ -273,7 +234,7 @@ describe("API E2E Tests", () => {
   });
 
   test("POST /webhook/:id with __status should set forcedStatus", async () => {
-    const res = await request(app)
+    const res = await appClient
       .post(`/webhook/${webhookId}`)
       .query({ __status: "201" })
       .send({ test: "data" });
@@ -283,7 +244,7 @@ describe("API E2E Tests", () => {
   });
 
   test("POST /webhook/:id with invalid __status should use default", async () => {
-    const res = await request(app)
+    const res = await appClient
       .post(`/webhook/${webhookId}`)
       .query({ __status: "invalid" })
       .send({ test: "data" });
@@ -293,25 +254,21 @@ describe("API E2E Tests", () => {
   });
 
   test("GET /replay/:webhookId/:itemId without url should return 400", async () => {
-    jest
-      .mocked(Actor.openDataset)
-      .mockResolvedValue(/** @type {any} */ (createDatasetMock([])));
+    jest.mocked(Actor.openDataset).mockResolvedValue(createDatasetMock([]));
 
-    const res = await request(app).get(`/replay/${webhookId}/evt_123`);
+    const res = await appClient.get(`/replay/${webhookId}/evt_123`);
 
     expect(res.statusCode).toBe(400);
     expect(res.body.error).toBe("Missing 'url' parameter");
   });
 
   test("GET /replay/:webhookId/:itemId with non-existent event should return 404", async () => {
-    jest
-      .mocked(Actor.openDataset)
-      .mockResolvedValue(/** @type {any} */ (createDatasetMock([])));
+    jest.mocked(Actor.openDataset).mockResolvedValue(createDatasetMock([]));
 
     const axios = (await import("axios")).default;
     /** @type {AxiosMock} */ (axios).mockResolvedValue({ status: 200 });
 
-    const res = await request(app)
+    const res = await appClient
       .get(`/replay/${webhookId}/evt_nonexistent`)
       .query({ url: "http://example.com" });
 
@@ -333,7 +290,7 @@ describe("API E2E Tests", () => {
     // Mock Dataset
     jest
       .mocked(Actor.openDataset)
-      .mockResolvedValue(/** @type {any} */ (createDatasetMock([mockItem])));
+      .mockResolvedValue(createDatasetMock([mockItem]));
 
     // Mock Axios (global shared mock)
     const axios = (await import("axios")).default;
@@ -348,7 +305,7 @@ describe("API E2E Tests", () => {
       "93.184.216.34",
     ]);
 
-    const res = await request(app)
+    const res = await appClient
       .post("/replay/wh_replay/replay-id-1")
       .query({ url: ["http://example.com/1", "http://example.com/2"] })
       .set("Authorization", "Bearer TEST_KEY");
@@ -372,7 +329,7 @@ describe("API E2E Tests", () => {
     // Mock Dataset
     jest
       .mocked(Actor.openDataset)
-      .mockResolvedValue(/** @type {any} */ (createDatasetMock([mockItem])));
+      .mockResolvedValue(createDatasetMock([mockItem]));
 
     // Mock Axios
     const axios = (await import("axios")).default;
@@ -387,7 +344,7 @@ describe("API E2E Tests", () => {
       "93.184.216.34",
     ]);
 
-    const res = await request(app)
+    const res = await appClient
       .post(`/replay/wh_replay/${timestamp}`)
       .query({ url: "http://example.com" })
       .set("Authorization", "Bearer TEST_KEY");
@@ -409,7 +366,7 @@ describe("API E2E Tests", () => {
       error: SSRF_ERRORS.HOSTNAME_RESOLUTION_FAILED,
     });
 
-    const res = await request(app)
+    const res = await appClient
       .post("/replay/wh_replay/replay-id-1")
       .query({ url: "http://dangerous.com" })
       .set("Authorization", "Bearer TEST_KEY");
@@ -419,7 +376,7 @@ describe("API E2E Tests", () => {
   });
 
   test("GET / should return text response for non-browser authenticated client", async () => {
-    const res = await request(app)
+    const res = await appClient
       .get("/")
       .set("Accept", "text/plain")
       .set("Authorization", "Bearer TEST_KEY");

@@ -8,30 +8,14 @@ import {
   beforeEach,
 } from "@jest/globals";
 
-/** @typedef {typeof import("./helpers/shared-mocks.js").dnsPromisesMock} DnsPromisesMock */
+import { setupCommonMocks } from "./helpers/mock-setup.js";
+await setupCommonMocks({ axios: true, apify: true, dns: true });
 
-const mockDns = /** @type {DnsPromisesMock} */ ({
-  resolve4: jest.fn(),
-  resolve6: jest.fn(),
-});
-
-// Mock DNS to control IP resolution
-jest.unstable_mockModule("dns/promises", () => ({
-  default: mockDns,
-}));
-
-// Mock Apify and axios
-jest.unstable_mockModule("apify", async () => {
-  const { apifyMock } = await import("./helpers/shared-mocks.js");
-  return { Actor: apifyMock };
-});
-
-jest.unstable_mockModule("axios", async () => {
-  const { axiosMock } = await import("./helpers/shared-mocks.js");
-  return { default: axiosMock };
-});
-
-const { createDatasetMock } = await import("./helpers/shared-mocks.js");
+import {
+  dnsPromisesMock as mockDns,
+  createDatasetMock,
+} from "./helpers/shared-mocks.js";
+const { sleep } = await import("./helpers/test-utils.js");
 const request = (await import("supertest")).default;
 const { SSRF_ERRORS } = await import("../src/utils/ssrf.js");
 const { ERROR_MESSAGES } = await import("../src/consts.js");
@@ -71,7 +55,7 @@ describe("SSRF Protection Tests", () => {
     };
     jest
       .mocked(Actor.openDataset)
-      .mockResolvedValue(/** @type {any} */ (createDatasetMock([mockItem])));
+      .mockResolvedValue(createDatasetMock([mockItem]));
   });
 
   describe("/replay SSRF Protection", () => {
@@ -176,11 +160,11 @@ describe("SSRF Protection Tests", () => {
     test("should reject when DNS resolution times out", async () => {
       // Mock slow DNS resolution
       mockDns.resolve4.mockImplementation(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 6000)); // > 5000ms
+        await sleep(6000); // > 5000ms
         return ["1.2.3.4"];
       });
       mockDns.resolve6.mockImplementation(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 6000));
+        await sleep(6000);
         return ["2001:db8::1"];
       });
 

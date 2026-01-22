@@ -6,21 +6,21 @@ import {
   beforeAll,
   afterAll,
 } from "@jest/globals";
-import { sleep, waitForCondition } from "./helpers/test-utils.js";
+import { sleep, waitForCondition, assertType } from "./helpers/test-utils.js";
 
-/** @typedef {import('./helpers/apify-mock.js').ApifyMock} Actor */
-/** @typedef {import('express').Express} Express */
+/**
+ * @typedef {import('./helpers/apify-mock.js').ApifyMock} Actor
+ * @typedef {import('express').Express} Express
+ */
 
 // 1. Setup mocks
-jest.unstable_mockModule("apify", async () => {
-  const { apifyMock } = await import("./helpers/shared-mocks.js");
-  return { Actor: apifyMock };
-});
+import { setupCommonMocks } from "./helpers/mock-setup.js";
+await setupCommonMocks({ apify: true });
 
 // 2. Import modules
 const request = (await import("supertest")).default;
 /** @type {Actor} */
-const Actor = /** @type {any} */ ((await import("apify")).Actor);
+const Actor = assertType((await import("apify")).Actor);
 const { initialize, shutdown, webhookManager } = await import("../src/main.js");
 
 describe("Hot-Reloading Configuration Tests", () => {

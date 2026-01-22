@@ -1,12 +1,13 @@
 import { jest, describe, test, expect, beforeEach } from "@jest/globals";
 
-/** @typedef {import('apify').KeyValueStore} KeyValueStore */
-/** @typedef {import('../src/webhook_manager.js').WebhookManager} WebhookManager */
+/**
+ * @typedef {import('apify').KeyValueStore} KeyValueStore
+ * @typedef {import('../src/webhook_manager.js').WebhookManager} WebhookManager
+ */
 
+import { apifyMock } from "./helpers/shared-mocks.js";
 jest.unstable_mockModule("apify", () => ({
-  Actor: {
-    openKeyValueStore: jest.fn(),
-  },
+  Actor: apifyMock,
 }));
 
 const { Actor } = await import("apify");

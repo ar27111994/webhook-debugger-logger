@@ -11,23 +11,28 @@ import {
   createMockRequest,
   createMockResponse,
   createMockNextFunction,
+  assertType,
 } from "./helpers/test-utils.js";
+import { useFakeTimers } from "./helpers/test-lifecycle.js";
 import { DEFAULT_RATE_LIMIT_WINDOW_MS } from "../src/consts.js";
 
-/** @typedef {import("net").Socket} Socket */
+/**
+ * @typedef {import("net").Socket} Socket
+ */
 
 describe("RateLimiter Unit Tests", () => {
   /** @type {RateLimiter | null} */
   let rateLimiter = null;
 
+  useFakeTimers();
+
   beforeEach(() => {
-    jest.useFakeTimers();
+    // Other setup if needed, currently empty but keeping structure if preferred
   });
 
   afterEach(() => {
     if (rateLimiter) rateLimiter.destroy();
     jest.restoreAllMocks();
-    jest.useRealTimers();
   });
 
   test("should enforce limit within windowMs", () => {
@@ -336,7 +341,7 @@ describe("RateLimiter Unit Tests", () => {
     expect(() => new RateLimiter(-1, 1000)).toThrow(
       "RateLimiter: limit must be a finite integer >= 0",
     );
-    expect(() => new RateLimiter(/** @type {any} */ ("10"), 1000)).toThrow(
+    expect(() => new RateLimiter(assertType("10"), 1000)).toThrow(
       "RateLimiter: limit must be a finite integer >= 0",
     );
     expect(() => new RateLimiter(10, 0)).toThrow(
@@ -354,7 +359,7 @@ describe("RateLimiter Unit Tests", () => {
     expect(() => new RateLimiter(10, 1000, -5)).toThrow(
       "RateLimiter: maxEntries must be a finite integer > 0",
     );
-    expect(() => new RateLimiter(10, 1000, /** @type {any} */ ("100"))).toThrow(
+    expect(() => new RateLimiter(10, 1000, assertType("100"))).toThrow(
       "RateLimiter: maxEntries must be a finite integer > 0",
     );
   });

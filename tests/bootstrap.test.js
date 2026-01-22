@@ -1,11 +1,17 @@
 import { jest } from "@jest/globals";
+import { useMockCleanup, useConsoleSpy } from "./helpers/test-lifecycle.js";
+import { assertType } from "./helpers/test-utils.js";
 
-const mockAccess = /** @type {jest.Mock<any>} */ (jest.fn());
-const mockMkdir = /** @type {jest.Mock<any>} */ (jest.fn());
-const mockWriteFile = /** @type {jest.Mock<any>} */ (jest.fn());
-const mockReadFile = /** @type {jest.Mock<any>} */ (jest.fn());
-const mockRename = /** @type {jest.Mock<any>} */ (jest.fn());
-const mockRm = /** @type {jest.Mock<any>} */ (jest.fn());
+/**
+ * @typedef {import('fs').PathLike} PathLike
+ */
+
+const mockAccess = assertType(jest.fn());
+const mockMkdir = assertType(jest.fn());
+const mockWriteFile = assertType(jest.fn());
+const mockReadFile = assertType(jest.fn());
+const mockRename = assertType(jest.fn());
+const mockRm = assertType(jest.fn());
 
 // Must be called before importing the module under test
 jest.unstable_mockModule("fs/promises", () => ({
@@ -29,22 +35,14 @@ jest.unstable_mockModule("fs/promises", () => ({
 const { ensureLocalInputExists } = await import("../src/utils/bootstrap.js");
 
 describe("bootstrap.js", () => {
-  const consoleWarnSpy = jest
-    .spyOn(console, "warn")
-    .mockImplementation(() => {});
-  const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => {});
+  const spies = useConsoleSpy("warn", "log");
 
-  beforeEach(() => {
-    jest.clearAllMocks();
+  useMockCleanup(() => {
     process.env.APIFY_LOCAL_STORAGE_DIR = "/tmp/test-storage";
   });
 
   afterEach(() => {
     delete process.env.APIFY_LOCAL_STORAGE_DIR;
-  });
-
-  afterAll(() => {
-    jest.restoreAllMocks();
   });
 
   test("should check if INPUT.json exists", async () => {
@@ -81,13 +79,15 @@ describe("bootstrap.js", () => {
         internalFlag: { editor: "hidden", default: true },
       },
     };
-    mockReadFile.mockImplementation(async (/** @type {any} */ filePath) => {
-      const pathStr = filePath.toString();
-      if (pathStr.includes("input_schema.json")) {
-        return JSON.stringify(mockSchema);
-      }
-      throw enoent; // INPUT.json missing
-    });
+    mockReadFile.mockImplementation(
+      async (/** @type {PathLike} */ filePath) => {
+        const pathStr = filePath.toString();
+        if (pathStr.includes("input_schema.json")) {
+          return JSON.stringify(mockSchema);
+        }
+        throw enoent; // INPUT.json missing
+      },
+    );
 
     await ensureLocalInputExists({ someOverride: 999 });
 
@@ -120,10 +120,10 @@ describe("bootstrap.js", () => {
     );
 
     // Verify success logs
-    expect(consoleLogSpy).toHaveBeenCalledWith(
+    expect(spies.log).toHaveBeenCalledWith(
       expect.stringContaining("Local configuration initialized at:"),
     );
-    expect(consoleLogSpy).toHaveBeenCalledWith(
+    expect(spies.log).toHaveBeenCalledWith(
       expect.stringContaining("Tip: Edit this file"),
     );
 
@@ -157,7 +157,7 @@ describe("bootstrap.js", () => {
 
     await ensureLocalInputExists({});
 
-    expect(consoleWarnSpy).toHaveBeenCalledWith(
+    expect(spies.warn).toHaveBeenCalledWith(
       expect.stringContaining("Failed to write default input file"),
       expect.any(String),
     );
@@ -169,16 +169,18 @@ describe("bootstrap.js", () => {
     mockWriteFile.mockResolvedValue(undefined);
 
     // Initial read returns bad JSON
-    mockReadFile.mockImplementation(async (/** @type {any} */ filePath) => {
-      const pathStr = filePath.toString();
-      if (pathStr.includes("input_schema.json")) {
-        return JSON.stringify({ properties: { urlCount: { default: 10 } } });
-      }
-      if (pathStr.includes("INPUT.json")) {
-        return "{ invalid json ";
-      }
-      return "";
-    });
+    mockReadFile.mockImplementation(
+      async (/** @type {import('fs').PathLike} */ filePath) => {
+        const pathStr = filePath.toString();
+        if (pathStr.includes("input_schema.json")) {
+          return JSON.stringify({ properties: { urlCount: { default: 10 } } });
+        }
+        if (pathStr.includes("INPUT.json")) {
+          return "{ invalid json ";
+        }
+        return "";
+      },
+    );
 
     await ensureLocalInputExists({ extra: 1 });
 
@@ -199,7 +201,7 @@ describe("bootstrap.js", () => {
       expect.stringContaining("INPUT.json"),
     );
 
-    expect(consoleWarnSpy).toHaveBeenCalledWith(
+    expect(spies.warn).toHaveBeenCalledWith(
       expect.stringContaining(
         "INPUT.json was invalid; rewritten with defaults",
       ),
@@ -219,7 +221,7 @@ describe("bootstrap.js", () => {
 
     // Should NOT attempt to rewrite on read errors
     expect(mockWriteFile).not.toHaveBeenCalled();
-    expect(consoleWarnSpy).toHaveBeenCalledWith(
+    expect(spies.warn).toHaveBeenCalledWith(
       expect.stringContaining("Failed to read INPUT.json"),
       expect.any(String),
     );
@@ -234,13 +236,15 @@ describe("bootstrap.js", () => {
     // We need to spy on readFile to see what path was requested
     /** @type {string[]} */
     const pathsAccessed = [];
-    mockReadFile.mockImplementation(async (/** @type {any} */ filePath) => {
-      pathsAccessed.push(filePath.toString());
-      if (filePath.toString().includes("input_schema.json")) {
-        return JSON.stringify({ properties: {} });
-      }
-      return "{ invalid json"; // INPUT.json is corrupt, forcing schema fallback lookup
-    });
+    mockReadFile.mockImplementation(
+      async (/** @type {import('fs').PathLike} */ filePath) => {
+        pathsAccessed.push(filePath.toString());
+        if (filePath.toString().includes("input_schema.json")) {
+          return JSON.stringify({ properties: {} });
+        }
+        return "{ invalid json"; // INPUT.json is corrupt, forcing schema fallback lookup
+      },
+    );
     mockAccess.mockResolvedValue(undefined); // INPUT.json exists
 
     try {

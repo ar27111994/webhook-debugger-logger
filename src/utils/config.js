@@ -1,27 +1,25 @@
 import {
   DEFAULT_URL_COUNT,
   DEFAULT_RETENTION_HOURS,
+  DEFAULT_REPLAY_RETRIES,
+  DEFAULT_REPLAY_TIMEOUT_MS,
   DEFAULT_RATE_LIMIT_PER_MINUTE,
   DEFAULT_PAYLOAD_LIMIT,
   MAX_ALLOWED_PAYLOAD_SIZE,
-  MAX_RESPONSE_DELAY_MS,
+  MAX_SAFE_RESPONSE_DELAY_MS,
+  MAX_SAFE_REPLAY_RETRIES,
+  MAX_SAFE_RATE_LIMIT_PER_MINUTE,
+  MAX_SAFE_RETENTION_HOURS,
+  MAX_SAFE_URL_COUNT,
+  MAX_SAFE_REPLAY_TIMEOUT_MS,
+  DEFAULT_FORWARD_RETRIES,
+  MAX_SAFE_FORWARD_RETRIES,
 } from "../consts.js";
 
 /**
- * @typedef {Object} SignatureVerificationConfig
- * @property {boolean} [enabled]
- * @property {string} [provider]
- * @property {string} [secret]
- * @property {string} [headerName]
- * @property {string} [algorithm]
- * @property {string} [encoding]
- * @property {string} [prefix]
- */
-
-/**
- * @typedef {Object} AlertsConfig
- * @property {{ webhookUrl: string }} [slack]
- * @property {{ webhookUrl: string }} [discord]
+ * @typedef {import("../typedefs.js").SignatureConfig} SignatureConfig
+ * @typedef {import("../typedefs.js").AlertConfig} AlertConfig
+ * @typedef {import("../typedefs.js").AlertTrigger} AlertTrigger
  */
 
 /**
@@ -42,9 +40,12 @@ import {
  * @property {boolean} [enableJSONParsing]
  * @property {number} [urlCount]
  * @property {number} [retentionHours]
- * @property {SignatureVerificationConfig} [signatureVerification]
- * @property {AlertsConfig} [alerts]
- * @property {string[]} [alertOn]
+ * @property {number} [replayMaxRetries]
+ * @property {number} [replayTimeoutMs]
+ * @property {number} [maxForwardRetries]
+ * @property {SignatureConfig} [signatureVerification]
+ * @property {AlertConfig} [alerts]
+ * @property {AlertTrigger[]} [alertOn]
  */
 
 /**
@@ -65,6 +66,9 @@ export function parseWebhookOptions(options = {}) {
     customScript: options.customScript,
     maskSensitiveData: options.maskSensitiveData ?? true, // Default to true
     enableJSONParsing: options.enableJSONParsing ?? true,
+    signatureVerification: options.signatureVerification,
+    alerts: options.alerts,
+    alertOn: options.alertOn,
     ...coerceRuntimeOptions(options),
   };
 }
@@ -77,6 +81,9 @@ export function parseWebhookOptions(options = {}) {
  * @property {string} authKey
  * @property {number} maxPayloadSize
  * @property {number} responseDelayMs
+ * @property {number} replayMaxRetries
+ * @property {number} replayTimeoutMs
+ * @property {number} maxForwardRetries
  */
 
 /**
@@ -88,19 +95,31 @@ export function coerceRuntimeOptions(input) {
   const urlCountRaw = Number(input.urlCount);
   const urlCount =
     Number.isFinite(urlCountRaw) && urlCountRaw >= 1
-      ? Math.floor(urlCountRaw)
+      ? clampWithWarning(
+          Math.floor(urlCountRaw),
+          MAX_SAFE_URL_COUNT,
+          "urlCount",
+        )
       : DEFAULT_URL_COUNT;
 
   const retentionRaw = Number(input.retentionHours);
   const retentionHours =
     Number.isFinite(retentionRaw) && retentionRaw >= 1
-      ? Math.floor(retentionRaw)
+      ? clampWithWarning(
+          Math.floor(retentionRaw),
+          MAX_SAFE_RETENTION_HOURS,
+          "retentionHours",
+        )
       : DEFAULT_RETENTION_HOURS;
 
   const rateLimitRaw = Number(input.rateLimitPerMinute);
   const rateLimitPerMinute =
     Number.isFinite(rateLimitRaw) && rateLimitRaw >= 1
-      ? Math.floor(rateLimitRaw)
+      ? clampWithWarning(
+          Math.floor(rateLimitRaw),
+          MAX_SAFE_RATE_LIMIT_PER_MINUTE,
+          "rateLimitPerMinute",
+        )
       : DEFAULT_RATE_LIMIT_PER_MINUTE;
 
   const authKey = typeof input.authKey === "string" ? input.authKey.trim() : "";
@@ -108,11 +127,45 @@ export function coerceRuntimeOptions(input) {
   const maxPayloadSizeRaw = Number(input.maxPayloadSize);
   const maxPayloadSize =
     Number.isFinite(maxPayloadSizeRaw) && maxPayloadSizeRaw > 0
-      ? Math.min(maxPayloadSizeRaw, MAX_ALLOWED_PAYLOAD_SIZE)
+      ? clampWithWarning(
+          maxPayloadSizeRaw,
+          MAX_ALLOWED_PAYLOAD_SIZE,
+          "maxPayloadSize",
+        )
       : DEFAULT_PAYLOAD_LIMIT;
 
   const responseDelayMsRaw = Number(input.responseDelayMs);
   const responseDelayMs = getSafeResponseDelay(responseDelayMsRaw);
+
+  const replayRetriesRaw = Number(input.replayMaxRetries);
+  const replayMaxRetries =
+    Number.isFinite(replayRetriesRaw) && replayRetriesRaw >= 0
+      ? clampWithWarning(
+          Math.floor(replayRetriesRaw),
+          MAX_SAFE_REPLAY_RETRIES,
+          "replayMaxRetries",
+        )
+      : DEFAULT_REPLAY_RETRIES;
+
+  const replayTimeoutRaw = Number(input.replayTimeoutMs);
+  const replayTimeoutMs =
+    Number.isFinite(replayTimeoutRaw) && replayTimeoutRaw >= 1000
+      ? clampWithWarning(
+          Math.floor(replayTimeoutRaw),
+          MAX_SAFE_REPLAY_TIMEOUT_MS,
+          "replayTimeoutMs",
+        )
+      : DEFAULT_REPLAY_TIMEOUT_MS;
+
+  const forwardRetriesRaw = Number(input.maxForwardRetries);
+  const maxForwardRetries =
+    Number.isFinite(forwardRetriesRaw) && forwardRetriesRaw >= 0
+      ? clampWithWarning(
+          Math.floor(forwardRetriesRaw),
+          MAX_SAFE_FORWARD_RETRIES,
+          "maxForwardRetries",
+        )
+      : DEFAULT_FORWARD_RETRIES;
 
   return {
     urlCount,
@@ -121,6 +174,9 @@ export function coerceRuntimeOptions(input) {
     authKey,
     maxPayloadSize,
     responseDelayMs,
+    replayMaxRetries,
+    replayTimeoutMs,
+    maxForwardRetries,
   };
 }
 
@@ -151,12 +207,26 @@ export function normalizeInput(value, fallback = {}) {
 export function getSafeResponseDelay(delayMs = 0) {
   if (!Number.isFinite(delayMs) || delayMs <= 0) return 0;
 
-  if (delayMs > MAX_RESPONSE_DELAY_MS) {
-    console.warn(
-      `[WARNING] Requested response delay ${delayMs}ms capped at ${MAX_RESPONSE_DELAY_MS}ms for stability.`,
-    );
-    return MAX_RESPONSE_DELAY_MS;
-  }
+  return clampWithWarning(
+    delayMs,
+    MAX_SAFE_RESPONSE_DELAY_MS,
+    "responseDelayMs",
+  );
+}
 
-  return delayMs;
+/**
+ * Clamps a value to a maximum safe limit and logs a warning if exceeded.
+ * @param {number} value - The input value to check
+ * @param {number} max - The maximum allowed value
+ * @param {string} name - The name of the configuration option (for logging)
+ * @returns {number} The original value, or the max if exceeded
+ */
+function clampWithWarning(value, max, name) {
+  if (value > max) {
+    console.warn(
+      `[CONFIG] Warning: '${name}' (${value}) exceeds safe max (${max}). Clamping to limit.`,
+    );
+    return max;
+  }
+  return value;
 }

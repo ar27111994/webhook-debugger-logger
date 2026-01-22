@@ -8,10 +8,9 @@ import {
 } from "@jest/globals";
 import { apifyMock } from "./helpers/shared-mocks.js";
 
-jest.unstable_mockModule("apify", async () => {
-  const { apifyMock } = await import("./helpers/shared-mocks.js");
-  return { Actor: apifyMock };
-});
+// Mock Apify
+import { setupCommonMocks } from "./helpers/mock-setup.js";
+await setupCommonMocks({ apify: true });
 
 const request = (await import("supertest")).default;
 const { app, webhookManager, initialize, shutdown } =

@@ -5,7 +5,7 @@
  */
 
 export { escapeHtml, asyncHandler, createBroadcaster } from "./utils.js";
-export { createLogsHandler } from "./logs.js";
+export { createLogsHandler, createLogDetailHandler } from "./logs.js";
 export { createInfoHandler } from "./info.js";
 export { createLogStreamHandler } from "./stream.js";
 export { createReplayHandler } from "./replay.js";

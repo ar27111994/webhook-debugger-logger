@@ -1,23 +1,10 @@
-import {
-  jest,
-  describe,
-  test,
-  expect,
-  beforeAll,
-  afterAll,
-} from "@jest/globals";
+import { describe, test, expect, beforeAll, afterAll } from "@jest/globals";
 
-// Mock axios
-jest.unstable_mockModule("axios", async () => {
-  const { axiosMock } = await import("./helpers/shared-mocks.js");
-  return { default: axiosMock };
-});
+// Mock Apify and Axios
+import { setupCommonMocks } from "./helpers/mock-setup.js";
+await setupCommonMocks({ axios: true, apify: true });
 
 // Mock Apify
-jest.unstable_mockModule("apify", async () => {
-  const { apifyMock } = await import("./helpers/shared-mocks.js");
-  return { Actor: apifyMock };
-});
 
 const request = (await import("supertest")).default;
 const { app, webhookManager, initialize, shutdown } =

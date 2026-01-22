@@ -21,6 +21,7 @@ import {
 import {
   createBroadcaster,
   createLogsHandler,
+  createLogDetailHandler,
   createInfoHandler,
   createLogStreamHandler,
   createReplayHandler,
@@ -42,11 +43,15 @@ import cors from "cors";
 const require = createRequire(import.meta.url);
 const packageJson = require("../package.json");
 
-/** @typedef {import("express").Request} Request */
-/** @typedef {import("express").Response} Response */
-/** @typedef {import("express").NextFunction} NextFunction */
-/** @typedef {import("./typedefs.js").CommonError} CommonError */
-/** @typedef {ReturnType<typeof setInterval> | undefined} Interval */
+/**
+ * @typedef {import("express").Request} Request
+ * @typedef {import("express").Response} Response
+ * @typedef {import("express").NextFunction} NextFunction
+ * @typedef {import("http").Server} Server
+ * @typedef {import("http").ServerResponse} ServerResponse
+ * @typedef {import("./typedefs.js").CommonError} CommonError
+ * @typedef {ReturnType<typeof setInterval> | undefined} Interval
+ */
 
 const INPUT_POLL_INTERVAL_MS =
   process.env.NODE_ENV === "test"
@@ -56,7 +61,7 @@ const INPUT_POLL_INTERVAL_MS =
 const APP_VERSION =
   process.env.npm_package_version || packageJson.version || "unknown";
 
-/** @type {import("http").Server | undefined} */
+/** @type {Server | undefined} */
 let server;
 /** @type {Interval} */
 let sseHeartbeat;
@@ -68,7 +73,7 @@ let appState;
 let hotReloadManager;
 
 const webhookManager = new WebhookManager();
-/** @type {Set<import("http").ServerResponse>} */
+/** @type {Set<ServerResponse>} */
 const clients = new Set();
 const app = express(); // Exported for tests
 
@@ -225,6 +230,10 @@ export async function initialize(testOptions = {}) {
   // 3. Auth Middleware (using modular factory)
   const authMiddleware = createAuthMiddleware(() => appState?.authKey || "");
 
+  // Rate Limiter managed by AppState
+  // RateLimiter is created in AppState constructor
+  const mgmtRateLimiter = appState.rateLimitMiddleware;
+
   // --- Express Middleware ---
   app.set("trust proxy", true);
   app.use(
@@ -250,19 +259,6 @@ export async function initialize(testOptions = {}) {
 
   app.use("/fonts", express.static(join(__dirname, "..", "public", "fonts")));
 
-  app.get(
-    "/",
-    authMiddleware,
-    createDashboardHandler({
-      webhookManager,
-      version: APP_VERSION,
-      getTemplate: () => indexTemplate,
-      setTemplate: (template) => {
-        indexTemplate = template;
-      },
-    }),
-  );
-
   app.use(cors());
 
   // Dynamic Body Parser managed by AppState
@@ -271,10 +267,6 @@ export async function initialize(testOptions = {}) {
   if (enableJSONParsing) {
     app.use(createJsonParserMiddleware());
   }
-
-  // Rate Limiter managed by AppState
-  // RateLimiter is created in AppState constructor
-  const mgmtRateLimiter = appState.rateLimitMiddleware;
 
   // --- Hot Reloading Logic ---
   hotReloadManager = new HotReloadManager({
@@ -298,6 +290,27 @@ export async function initialize(testOptions = {}) {
   if (sseHeartbeat.unref) sseHeartbeat.unref();
 
   // --- Routes ---
+  app.get(
+    "/",
+    mgmtRateLimiter,
+    authMiddleware,
+    createDashboardHandler({
+      webhookManager,
+      version: APP_VERSION,
+      getTemplate: () => indexTemplate,
+      setTemplate: (template) => {
+        indexTemplate = template;
+      },
+      getSignatureStatus: () => {
+        const opts = loggerMiddlewareInstance.options.signatureVerification;
+        if (opts?.provider && opts?.secret) {
+          return opts.provider.toUpperCase();
+        }
+        return null;
+      },
+    }),
+  );
+
   app.all(
     "/webhook/:id",
     (
@@ -321,7 +334,10 @@ export async function initialize(testOptions = {}) {
     "/replay/:webhookId/:itemId",
     mgmtRateLimiter,
     authMiddleware,
-    createReplayHandler(),
+    createReplayHandler(
+      () => appState?.replayMaxRetries,
+      () => appState?.replayTimeoutMs,
+    ),
   );
 
   app.get(
@@ -336,6 +352,13 @@ export async function initialize(testOptions = {}) {
     mgmtRateLimiter,
     authMiddleware,
     createLogsHandler(webhookManager),
+  );
+
+  app.get(
+    "/logs/:logId",
+    mgmtRateLimiter,
+    authMiddleware,
+    createLogDetailHandler(webhookManager),
   );
 
   app.get(

@@ -2,7 +2,9 @@ import dns from "dns/promises";
 import ipaddr from "ipaddr.js";
 import { SSRF_INTERNAL_ERRORS, SSRF_LOG_MESSAGES } from "../consts.js";
 
-/** @typedef {import('ipaddr.js').IPv6} IP */
+/**
+ * @typedef {import('ipaddr.js').IPv6} IP
+ */
 
 /**
  * IP ranges to block for SSRF prevention.

@@ -1,23 +1,27 @@
-import { jest, describe, test, expect, beforeEach } from "@jest/globals";
+import { describe, test, expect, beforeEach } from "@jest/globals";
+import { axiosMock } from "./helpers/shared-mocks.js";
+
+/**
+ * @typedef {import("../src/utils/alerting.js").AlertTrigger} AlertTrigger
+ */
 
 // Mock axios before importing the module
-/** @type {jest.Mock<(...args: any[]) => Promise<{ status: number }>>} */
-const mockPost = jest.fn();
-jest.unstable_mockModule("axios", () => ({
-  default: { post: mockPost },
-}));
+import { setupCommonMocks } from "./helpers/mock-setup.js";
+await setupCommonMocks({ axios: true });
 
 const { shouldAlert, sendAlert, triggerAlertIfNeeded } =
   await import("../src/utils/alerting.js");
 
 describe("Alerting", () => {
   beforeEach(() => {
-    mockPost.mockClear();
+    axiosMock.post.mockClear();
   });
 
   describe("shouldAlert", () => {
     test("should trigger on error when alertOn includes 'error'", () => {
-      const config = { alertOn: ["error"] };
+      const config = {
+        alertOn: /** @type {AlertTrigger[]} */ (["error"]),
+      };
       const context = {
         webhookId: "test",
         method: "POST",
@@ -28,7 +32,9 @@ describe("Alerting", () => {
     });
 
     test("should trigger on 4xx when alertOn includes '4xx'", () => {
-      const config = { alertOn: ["4xx"] };
+      const config = {
+        alertOn: /** @type {AlertTrigger[]} */ (["4xx"]),
+      };
       const context = {
         webhookId: "test",
         method: "POST",
@@ -39,7 +45,9 @@ describe("Alerting", () => {
     });
 
     test("should trigger on 5xx when alertOn includes '5xx'", () => {
-      const config = { alertOn: ["5xx"] };
+      const config = {
+        alertOn: /** @type {AlertTrigger[]} */ (["5xx"]),
+      };
       const context = {
         webhookId: "test",
         method: "POST",
@@ -50,7 +58,9 @@ describe("Alerting", () => {
     });
 
     test("should trigger on timeout when alertOn includes 'timeout'", () => {
-      const config = { alertOn: ["timeout"] };
+      const config = {
+        alertOn: /** @type {AlertTrigger[]} */ (["timeout"]),
+      };
       const context = {
         webhookId: "test",
         method: "POST",
@@ -61,7 +71,9 @@ describe("Alerting", () => {
     });
 
     test("should trigger on invalid signature when alertOn includes 'signature_invalid'", () => {
-      const config = { alertOn: ["signature_invalid"] };
+      const config = {
+        alertOn: /** @type {AlertTrigger[]} */ (["signature_invalid"]),
+      };
       const context = {
         webhookId: "test",
         method: "POST",
@@ -72,7 +84,9 @@ describe("Alerting", () => {
     });
 
     test("should not trigger when conditions not met", () => {
-      const config = { alertOn: ["error"] };
+      const config = {
+        alertOn: /** @type {AlertTrigger[]} */ (["error"]),
+      };
       const context = {
         webhookId: "test",
         method: "POST",
@@ -96,7 +110,7 @@ describe("Alerting", () => {
 
   describe("sendAlert", () => {
     test("should send Slack notification", async () => {
-      mockPost.mockResolvedValueOnce({ status: 200 });
+      axiosMock.post.mockResolvedValueOnce({ status: 200 });
 
       const config = { slack: { webhookUrl: "https://hooks.slack.com/test" } };
       const context = {
@@ -109,7 +123,7 @@ describe("Alerting", () => {
       const result = await sendAlert(config, context);
 
       expect(result.slack).toBe(true);
-      expect(mockPost).toHaveBeenCalledWith(
+      expect(axiosMock.post).toHaveBeenCalledWith(
         "https://hooks.slack.com/test",
         expect.objectContaining({ blocks: expect.any(Array) }),
         expect.any(Object),
@@ -117,7 +131,7 @@ describe("Alerting", () => {
     });
 
     test("should send Discord notification", async () => {
-      mockPost.mockResolvedValueOnce({ status: 200 });
+      axiosMock.post.mockResolvedValueOnce({ status: 200 });
 
       const config = {
         discord: { webhookUrl: "https://discord.com/api/webhooks/test" },
@@ -132,7 +146,7 @@ describe("Alerting", () => {
       const result = await sendAlert(config, context);
 
       expect(result.discord).toBe(true);
-      expect(mockPost).toHaveBeenCalledWith(
+      expect(axiosMock.post).toHaveBeenCalledWith(
         "https://discord.com/api/webhooks/test",
         expect.objectContaining({ embeds: expect.any(Array) }),
         expect.any(Object),
@@ -140,7 +154,7 @@ describe("Alerting", () => {
     });
 
     test("should handle Slack failure gracefully", async () => {
-      mockPost.mockRejectedValueOnce(new Error("Network error"));
+      axiosMock.post.mockRejectedValueOnce(new Error("Network error"));
 
       const config = { slack: { webhookUrl: "https://hooks.slack.com/test" } };
       const context = {
@@ -156,7 +170,7 @@ describe("Alerting", () => {
     });
 
     test("should send to multiple channels", async () => {
-      mockPost.mockResolvedValue({ status: 200 });
+      axiosMock.post.mockResolvedValue({ status: 200 });
 
       const config = {
         slack: { webhookUrl: "https://hooks.slack.com/test" },
@@ -173,7 +187,7 @@ describe("Alerting", () => {
 
       expect(result.slack).toBe(true);
       expect(result.discord).toBe(true);
-      expect(mockPost).toHaveBeenCalledTimes(2);
+      expect(axiosMock.post).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -186,11 +200,13 @@ describe("Alerting", () => {
         timestamp: new Date().toISOString(),
       };
       await triggerAlertIfNeeded(undefined, context);
-      expect(mockPost).not.toHaveBeenCalled();
+      expect(axiosMock.post).not.toHaveBeenCalled();
     });
 
     test("should not send alert when no webhook URLs configured", async () => {
-      const config = { alertOn: ["error"] };
+      const config = {
+        alertOn: /** @type {AlertTrigger[]} */ (["error"]),
+      };
       const context = {
         webhookId: "test",
         method: "POST",
@@ -198,15 +214,15 @@ describe("Alerting", () => {
         timestamp: new Date().toISOString(),
       };
       await triggerAlertIfNeeded(config, context);
-      expect(mockPost).not.toHaveBeenCalled();
+      expect(axiosMock.post).not.toHaveBeenCalled();
     });
 
     test("should send alert when conditions met", async () => {
-      mockPost.mockResolvedValueOnce({ status: 200 });
+      axiosMock.post.mockResolvedValueOnce({ status: 200 });
 
       const config = {
         slack: { webhookUrl: "https://hooks.slack.com/test" },
-        alertOn: ["5xx"],
+        alertOn: /** @type {AlertTrigger[]} */ (["5xx"]),
       };
       const context = {
         webhookId: "test",
@@ -217,13 +233,13 @@ describe("Alerting", () => {
 
       await triggerAlertIfNeeded(config, context);
 
-      expect(mockPost).toHaveBeenCalled();
+      expect(axiosMock.post).toHaveBeenCalled();
     });
 
     test("should not send alert when conditions not met", async () => {
       const config = {
         slack: { webhookUrl: "https://hooks.slack.com/test" },
-        alertOn: ["error"],
+        alertOn: /** @type {AlertTrigger[]} */ (["error"]),
       };
       const context = {
         webhookId: "test",
@@ -234,7 +250,7 @@ describe("Alerting", () => {
 
       await triggerAlertIfNeeded(config, context);
 
-      expect(mockPost).not.toHaveBeenCalled();
+      expect(axiosMock.post).not.toHaveBeenCalled();
     });
   });
 });

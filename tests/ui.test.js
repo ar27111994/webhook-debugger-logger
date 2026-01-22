@@ -2,19 +2,10 @@ import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const { version } = require("../package.json");
 
-import {
-  jest,
-  describe,
-  test,
-  expect,
-  beforeAll,
-  afterAll,
-} from "@jest/globals";
+import { describe, test, expect, beforeAll, afterAll } from "@jest/globals";
 
-jest.unstable_mockModule("apify", async () => {
-  const { apifyMock } = await import("./helpers/shared-mocks.js");
-  return { Actor: apifyMock };
-});
+import { setupCommonMocks } from "./helpers/mock-setup.js";
+await setupCommonMocks({ apify: true });
 
 const request = (await import("supertest")).default;
 const { app, initialize, shutdown, webhookManager } =

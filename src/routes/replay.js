@@ -8,10 +8,14 @@ import { validateUrlForSsrf, SSRF_ERRORS } from "../utils/ssrf.js";
 import { asyncHandler } from "./utils.js";
 import {
   REPLAY_HEADERS_TO_IGNORE,
-  MAX_REPLAY_RETRIES,
-  REPLAY_TIMEOUT_MS,
+  DEFAULT_REPLAY_RETRIES as MAX_REPLAY_RETRIES,
+  DEFAULT_REPLAY_TIMEOUT_MS as REPLAY_TIMEOUT_MS,
   ERROR_MESSAGES,
+  MAX_ITEMS_FOR_BATCH,
+  REPLAY_SCAN_MAX_DEPTH_MS,
+  TRANSIENT_ERROR_CODES,
 } from "../consts.js";
+import { findOffsetForTimestamp } from "../utils/dataset.js";
 
 /**
  * @typedef {import("express").Request} Request
@@ -23,14 +27,28 @@ import {
 
 /**
  * Creates the replay route handler.
+ * @param {() => number | undefined} [getReplayMaxRetries]
+ * @param {() => number | undefined} [getReplayTimeoutMs]
  * @returns {RequestHandler}
  */
-export const createReplayHandler = () =>
+export const createReplayHandler = (getReplayMaxRetries, getReplayTimeoutMs) =>
   asyncHandler(
-    async (/** @param {Request} req @param {Response} res */ req, res) => {
+    /** @param {Request} req @param {Response} res */
+    async (req, res) => {
+      let maxRetries = MAX_REPLAY_RETRIES;
+      let replayTimeout = REPLAY_TIMEOUT_MS;
+
       try {
         const { webhookId, itemId } = req.params;
         let targetUrl = req.query.url;
+
+        maxRetries = getReplayMaxRetries
+          ? (getReplayMaxRetries() ?? maxRetries)
+          : maxRetries;
+        replayTimeout = getReplayTimeoutMs
+          ? (getReplayTimeoutMs() ?? replayTimeout)
+          : replayTimeout;
+
         if (Array.isArray(targetUrl)) {
           targetUrl = targetUrl[0];
         }
@@ -58,10 +76,23 @@ export const createReplayHandler = () =>
         };
 
         const dataset = await Actor.openDataset();
+        const datasetInfo = await dataset.getInfo();
 
         let item;
         let offset = 0;
-        const limit = 1000;
+        const limit = MAX_ITEMS_FOR_BATCH;
+
+        // Optimization: Function to perform optimized scan
+        if (req.query.timestamp) {
+          const targetTs = new Date(String(req.query.timestamp));
+          if (!isNaN(targetTs.getTime())) {
+            offset = await findOffsetForTimestamp(
+              dataset,
+              targetTs,
+              datasetInfo?.itemCount || 0,
+            );
+          }
+        }
 
         // Paginate through dataset (newest first) to find the event
         while (true) {
@@ -81,6 +112,21 @@ export const createReplayHandler = () =>
             );
 
           if (item) break;
+
+          // Fail-fast logic for optimized scan:
+          // If we see items significantly OLDER than our target timestamp, we can stop.
+          // Since we scan newest->oldest (desc: true), timestamps decrease.
+          // If item's timestamp < target - margin, stop.
+          const lastItem = items[items.length - 1];
+          if (
+            req.query.timestamp &&
+            lastItem &&
+            new Date(lastItem.timestamp).getTime() <
+              new Date(String(req.query.timestamp)).getTime() -
+                REPLAY_SCAN_MAX_DEPTH_MS // Fail-fast margin
+          ) {
+            break;
+          }
 
           offset += limit;
         }
@@ -112,7 +158,7 @@ export const createReplayHandler = () =>
         let attempt = 0;
         /** @type {AxiosResponse | undefined} */
         let response;
-        while (attempt < MAX_REPLAY_RETRIES) {
+        while (attempt < maxRetries) {
           try {
             attempt++;
             response = await axios({
@@ -123,31 +169,25 @@ export const createReplayHandler = () =>
                 ...filteredHeaders,
                 "X-Apify-Replay": "true",
                 "X-Original-Webhook-Id": webhookId,
+                "Idempotency-Key": itemId, // Standard header using the unique event/log ID
                 host: target.host,
               },
               maxRedirects: 0,
               validateStatus: () => true,
-              timeout: REPLAY_TIMEOUT_MS,
+              timeout: replayTimeout,
             });
             break; // Success
           } catch (err) {
             const axiosError = /** @type {CommonError} */ (err);
-            const retryableErrors = [
-              "ECONNABORTED",
-              "ECONNRESET",
-              "ETIMEDOUT",
-              "ENOTFOUND",
-              "EAI_AGAIN",
-            ];
             if (
-              attempt >= MAX_REPLAY_RETRIES ||
-              !retryableErrors.includes(axiosError.code || "")
+              attempt >= maxRetries ||
+              !TRANSIENT_ERROR_CODES.includes(axiosError.code || "")
             ) {
               throw err;
             }
             const delay = 1000 * Math.pow(2, attempt - 1);
             console.warn(
-              `[REPLAY-RETRY] Attempt ${attempt}/${MAX_REPLAY_RETRIES} failed for ${target.href}: ${axiosError.code}. Retrying in ${delay}ms...`,
+              `[REPLAY-RETRY] Attempt ${attempt}/${maxRetries} failed for ${target.href}: ${axiosError.code}. Retrying in ${delay}ms...`,
             );
             await new Promise((resolve) => setTimeout(resolve, delay));
           }
@@ -156,7 +196,7 @@ export const createReplayHandler = () =>
         if (!response) {
           res.status(504).json({
             error: "Replay failed",
-            message: `All ${MAX_REPLAY_RETRIES} retry attempts exhausted`,
+            message: `All ${maxRetries} retry attempts exhausted`,
           });
           return;
         }
@@ -184,8 +224,8 @@ export const createReplayHandler = () =>
         res.status(isTimeout ? 504 : 500).json({
           error: "Replay failed",
           message: isTimeout
-            ? `Target destination timed out after ${MAX_REPLAY_RETRIES} attempts (${
-                REPLAY_TIMEOUT_MS / 1000
+            ? `Target destination timed out after ${maxRetries} attempts (${
+                replayTimeout / 1000
               }s timeout per attempt)`
             : axiosError.message,
           code: axiosError.code,

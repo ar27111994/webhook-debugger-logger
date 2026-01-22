@@ -1,61 +1,31 @@
-import { jest, describe, test, expect, beforeEach } from "@jest/globals";
+import { jest, describe, test, expect } from "@jest/globals";
+import { createMiddlewareTestContext } from "./helpers/middleware-test-utils.js";
 
-/** @typedef {import('../src/webhook_manager.js').WebhookManager} WebhookManager */
-
-// Mock axios
-jest.unstable_mockModule("axios", async () => {
-  const { axiosMock } = await import("./helpers/shared-mocks.js");
-  return { default: axiosMock };
-});
-
-// Mock apify
-jest.unstable_mockModule("apify", async () => {
-  const { apifyMock } = await import("./helpers/shared-mocks.js");
-  return { Actor: apifyMock };
-});
-
-const { createLoggerMiddleware } = await import("../src/logger_middleware.js");
-const httpMocks = (await import("node-mocks-http")).default;
+// Mock Apify and Axios
+import { setupCommonMocks } from "./helpers/mock-setup.js";
+await setupCommonMocks({ axios: true, apify: true });
 
 describe("Script Execution Extended", () => {
-  /** @type {WebhookManager} */
-  let webhookManager;
-  /** @type {jest.Mock} */
-  let onEvent;
-
-  beforeEach(() => {
-    webhookManager = /** @type {WebhookManager} */ ({
-      isValid: /** @type {WebhookManager['isValid']} */ (
-        jest.fn().mockReturnValue(true)
-      ),
-      getWebhookData: /** @type {WebhookManager['getWebhookData']} */ (
-        jest.fn().mockReturnValue({})
-      ),
-    });
-    onEvent = jest.fn();
-  });
-
   test("should handle script timeout (infinite loop)", async () => {
-    const options = {
-      customScript: "while(true) {}",
-      maxPayloadSize: 1024,
-      allowedIps: [],
-      authKey: "abc",
-    };
-
-    const middleware = createLoggerMiddleware(webhookManager, options, onEvent);
-    const req = httpMocks.createRequest({
-      params: { id: "wh_123" },
-      query: { key: "abc" },
+    const ctx = await createMiddlewareTestContext({
+      options: {
+        customScript: "while(true) {}",
+        maxPayloadSize: 1024,
+        allowedIps: [],
+        authKey: "abc",
+      },
+      request: {
+        params: { id: "wh_123" },
+        query: { key: "abc" },
+      },
     });
-    const res = httpMocks.createResponse();
 
     const consoleErrorSpy = jest
       .spyOn(console, "error")
       .mockImplementation(() => {});
 
     try {
-      await middleware(req, res);
+      await ctx.middleware(ctx.req, ctx.res, ctx.next);
 
       expect(consoleErrorSpy).toHaveBeenCalledWith(
         expect.stringContaining("[SCRIPT-EXEC-ERROR]"),
@@ -67,26 +37,25 @@ describe("Script Execution Extended", () => {
   });
 
   test("should handle script execution error", async () => {
-    const options = {
-      customScript: "throw new Error('Boom')",
-      maxPayloadSize: 1024,
-      allowedIps: [],
-      authKey: "abc",
-    };
-
-    const middleware = createLoggerMiddleware(webhookManager, options, onEvent);
-    const req = httpMocks.createRequest({
-      params: { id: "wh_123" },
-      query: { key: "abc" },
+    const ctx = await createMiddlewareTestContext({
+      options: {
+        customScript: "throw new Error('Boom')",
+        maxPayloadSize: 1024,
+        allowedIps: [],
+        authKey: "abc",
+      },
+      request: {
+        params: { id: "wh_123" },
+        query: { key: "abc" },
+      },
     });
-    const res = httpMocks.createResponse();
 
     const consoleErrorSpy = jest
       .spyOn(console, "error")
       .mockImplementation(() => {});
 
     try {
-      await middleware(req, res);
+      await ctx.middleware(ctx.req, ctx.res, ctx.next);
 
       expect(consoleErrorSpy).toHaveBeenCalledWith(
         expect.stringContaining("[SCRIPT-EXEC-ERROR]"),

@@ -5,20 +5,15 @@ import {
   expect,
   beforeAll,
   afterAll,
-  beforeEach,
 } from "@jest/globals";
+import { sleep, assertType } from "./helpers/test-utils.js";
+import { useMockCleanup, useConsoleSpy } from "./helpers/test-lifecycle.js";
 
 // Mock Apify and axios using shared components
-jest.unstable_mockModule("apify", async () => {
-  const { apifyMock } = await import("./helpers/shared-mocks.js");
-  return { Actor: apifyMock };
-});
-const { createDatasetMock } = await import("./helpers/shared-mocks.js");
+import { setupCommonMocks } from "./helpers/mock-setup.js";
+await setupCommonMocks({ axios: true, apify: true });
 
-jest.unstable_mockModule("axios", async () => {
-  const { axiosMock } = await import("./helpers/shared-mocks.js");
-  return { default: axiosMock };
-});
+const { createDatasetMock } = await import("./helpers/shared-mocks.js");
 
 const request = (await import("supertest")).default;
 const { app, initialize, shutdown, webhookManager } =
@@ -30,12 +25,10 @@ describe("Resilience & Retry Tests", () => {
   /** @type {string} */
   let webhookId;
 
+  useConsoleSpy("log", "warn", "error");
+
   beforeAll(async () => {
     // Disable logs for cleaner output
-    jest.spyOn(console, "log").mockImplementation(() => {});
-    jest.spyOn(console, "warn").mockImplementation(() => {});
-    jest.spyOn(console, "error").mockImplementation(() => {});
-
     await initialize();
     const ids = await webhookManager.generateWebhooks(1, 1);
     webhookId = ids[0];
@@ -46,9 +39,7 @@ describe("Resilience & Retry Tests", () => {
     jest.restoreAllMocks();
   });
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
+  useMockCleanup();
 
   describe("/replay Retroactive Retries", () => {
     test("should retry 3 times on transient network error (ECONNABORTED)", async () => {
@@ -62,7 +53,7 @@ describe("Resilience & Retry Tests", () => {
 
       jest
         .mocked(Actor.openDataset)
-        .mockResolvedValue(/** @type {any} */ (createDatasetMock([mockItem])));
+        .mockResolvedValue(createDatasetMock([mockItem]));
 
       // Mock axios to fail twice then succeed
       jest
@@ -94,7 +85,7 @@ describe("Resilience & Retry Tests", () => {
 
       jest
         .mocked(Actor.openDataset)
-        .mockResolvedValue(/** @type {any} */ (createDatasetMock([mockItem])));
+        .mockResolvedValue(createDatasetMock([mockItem]));
 
       // Always fail
       jest.mocked(axios).mockRejectedValue({ code: "ECONNABORTED" });
@@ -119,7 +110,7 @@ describe("Resilience & Retry Tests", () => {
 
       jest
         .mocked(Actor.openDataset)
-        .mockResolvedValue(/** @type {any} */ (createDatasetMock([mockItem])));
+        .mockResolvedValue(createDatasetMock([mockItem]));
 
       // Axios returns a response with 404 status (no exception thrown if validateStatus allows it)
       // But in our Replay logic we use validateStatus: () => true, so it wont throw.
@@ -138,18 +129,10 @@ describe("Resilience & Retry Tests", () => {
   describe("Background Tasks Resilience", () => {
     test("should NOT block response if background tasks are slow (Timeout Verification)", async () => {
       // Mock Actor.pushData to be very slow
-      jest.mocked(Actor.pushData).mockImplementation(
-        /** @type {any} */ (
-          () =>
-            new Promise((resolve) => {
-              const t = setTimeout(
-                () => resolve(/** @type {any} */ (undefined)),
-                1000,
-              );
-              if (t.unref) t.unref();
-            })
-        ),
-      );
+      jest.mocked(Actor.pushData).mockImplementation(async () => {
+        await sleep(1000);
+        return assertType(undefined);
+      });
 
       const startTime = Date.now();
       const res = await request(app)

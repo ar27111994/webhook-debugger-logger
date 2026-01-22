@@ -17,20 +17,19 @@
     "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
     "lint": "eslint src tests",
     "lint:fix": "eslint src tests --fix",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "ajv": "^8.17.1",
     "apify": "^3.5.3",
     "axios": "^1.13.2",
-    "body-parser": "^2.2.2",
     "compression": "^1.8.1",
     "cors": "^2.8.5",
-    "eventsource": "^4.1.0",
     "express": "^5.2.1",
     "ipaddr.js": "^2.3.0",
-    "nanoid": "^5.1.6",
-    "qs": "^6.14.1"
+    "nanoid": "^5.1.6"
   },
   "author": "",
   "license": "ISC",
@@ -48,7 +47,7 @@
     "eslint": "^9.39.2",
     "globals": "^17.0.0",
     "jest": "^30.2.0",
-    "node-mocks-http": "^1.17.2",
+    "prettier": "^3.8.0",
     "supertest": "^7.2.2",
     "typescript": "^5.9.3"
   },

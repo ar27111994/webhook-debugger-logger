@@ -79,7 +79,7 @@ export function createApifyMock(inputOverrides = {}) {
         if (event === "input") inputHandler = /** @type {Function} */ (handler);
       })
     ),
-    emitInput: async (/** @type {any} */ data) => {
+    emitInput: /** @param {any} data */ async (data) => {
       // Update the mocked input so subsequent calls to getInput return new data
       actorInstance.getInput.mockResolvedValue(data);
 

@@ -22,6 +22,26 @@
       "prefill": 3,
       "editor": "number"
     },
+    "replayMaxRetries": {
+      "type": "integer",
+      "title": "Replay Max Retries",
+      "description": "Maximum number of retry attempts for failed replay requests. Default is 3.",
+      "minimum": 0,
+      "maximum": 10,
+      "default": 3,
+      "prefill": 3,
+      "editor": "number"
+    },
+    "replayTimeoutMs": {
+      "type": "integer",
+      "title": "Replay Timeout (ms)",
+      "description": "Timeout for each replay attempt in milliseconds. Default is 10000 (10s).",
+      "minimum": 1000,
+      "maximum": 60000,
+      "default": 10000,
+      "prefill": 10000,
+      "editor": "number"
+    },
     "retentionHours": {
       "type": "integer",
       "title": "Retention Window (Hours)",
@@ -118,15 +138,29 @@
         "headerName": {
           "type": "string",
           "title": "Custom Header Name",
-          "description": "For custom provider: the header containing the signature.",
+          "description": "(Custom Provider Only) The header containing the signature.",
+          "editor": "textfield"
+        },
+        "timestampKey": {
+          "type": "string",
+          "title": "Timestamp Header Name",
+          "description": "(Custom Provider Only) The header containing the timestamp for replay protection.",
           "editor": "textfield"
         },
         "algorithm": {
           "type": "string",
           "title": "Hash Algorithm",
-          "description": "For custom provider: the HMAC algorithm (sha256 or sha1).",
+          "description": "(Custom Provider Only) The HMAC algorithm (sha256 or sha1).",
           "enum": ["sha256", "sha1"],
           "default": "sha256",
+          "editor": "select"
+        },
+        "encoding": {
+          "type": "string",
+          "title": "Signature Encoding",
+          "description": "(Custom Provider Only) The encoding of the signature string.",
+          "enum": ["hex", "base64"],
+          "default": "hex",
           "editor": "select"
         },
         "tolerance": {
@@ -251,6 +285,16 @@
       "description": "If enabled, all incoming headers will be forwarded to the destination. Disable this to send a 'clean' request (Type/Length only).",
       "default": true,
       "editor": "checkbox"
+    },
+    "maxForwardRetries": {
+      "type": "integer",
+      "title": "Forward Max Retries",
+      "description": "Maximum number of retry attempts for failed forward requests. Default is 3.",
+      "minimum": 0,
+      "maximum": 10,
+      "default": 3,
+      "prefill": 3,
+      "editor": "number"
     },
     "jsonSchema": {
       "type": "string",
