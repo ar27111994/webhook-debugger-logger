@@ -23,23 +23,24 @@ Have an idea for a new feature? We'd love to hear it! Open an issue describing:
 
 ### Pull Requests
 
-1.  **Fork the repository** and create a new branch for your feature or fix.
-2.  **Follow code style guidelines**:
-    - Use meaningful variable/function names.
-    - Write self-documenting code with comments for complex logic.
-    - Run `npm run lint` and `npm run typecheck` to ensure no errors.
-3.  **Write tests**:
-    - Add unit tests for new logic.
-    - Run `npm test` to ensure all tests pass.
-4.  **Submit a Pull Request**:
-    - Provide a clear title and description.
-    - Reference any related issues.
+1. **Fork the repository** and create a new branch for your feature or fix.
+2. **Follow code style guidelines**:
+   - Use meaningful variable/function names.
+   - Write self-documenting code with comments for complex logic.
+   - Run `npm run lint` and `npm run typecheck` to ensure no errors.
+3. **Write tests**:
+   - Add unit tests for new logic.
+   - Run `npm test` to ensure all tests pass.
+   - See [tests/README.md](tests/README.md) for detailed guidelines on test organization and helpers.
+4. **Submit a Pull Request**:
+   - Provide a clear title and description.
+   - Reference any related issues.
 
 ## Development Setup
 
-1.  Clone the repository.
-2.  Run `npm install` to install dependencies.
-3.  Run `npm test` to verify the setup.
+1. Clone the repository.
+2. Run `npm install` to install dependencies.
+3. Run `npm test` to verify the setup.
 
 ## License
 
