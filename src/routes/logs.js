@@ -13,6 +13,22 @@ import { MAX_ITEMS_FOR_BATCH } from "../consts.js";
  * @typedef {import("../webhook_manager.js").WebhookManager} WebhookManager
  */
 
+// Fields to fetch from the dataset
+const LOG_FIELDS = Object.freeze([
+  "id",
+  "webhookId",
+  "timestamp",
+  "method",
+  "statusCode",
+  "headers",
+  "signatureValid",
+  "requestId",
+  "remoteIp",
+  "userAgent",
+  "contentType",
+  "processingTime",
+]);
+
 /**
  * Creates the logs route handler.
  * @param {WebhookManager} webhookManager
@@ -68,20 +84,7 @@ export const createLogsHandler = (webhookManager) =>
             offset: currentOffset,
             desc: true,
             // Optimization: Only fetch metadata fields
-            fields: [
-              "id",
-              "webhookId",
-              "timestamp",
-              "method",
-              "statusCode",
-              "headers",
-              "signatureValid",
-              "requestId",
-              "remoteIp",
-              "userAgent",
-              "contentType",
-              "processingTime",
-            ],
+            fields: /** @type {string[]} */ (LOG_FIELDS),
           });
 
           if (items.length === 0) {
@@ -152,40 +155,46 @@ export const createLogsHandler = (webhookManager) =>
 
         // Sorting Logic
         const sortParam = req.query.sort ? String(req.query.sort) : "";
-        let [sortField, sortDir] = sortParam.split(":");
-        sortDir = (sortDir || "desc").toLowerCase(); // Default to desc
 
         // Whitelist allowed sort fields
-        const allowedSortFields = [
-          "timestamp",
-          "statusCode",
-          "method",
-          "processingTime",
-          "webhookId",
-          "remoteIp",
-          "userAgent",
-          "contentType",
-          "signatureValid",
-          "id",
-          "requestId",
-          // Excluded: 'headers' (object)
-        ];
-        if (!allowedSortFields.includes(sortField)) {
-          sortField = "timestamp"; // Fallback default
+        const allowedSortFields = LOG_FIELDS.filter(
+          (field) => field !== "headers",
+        ); // Exclude headers objects from sorting
+
+        // Parse sort criteria: "field1:dir1,field2:dir2"
+        const sortCriteria = sortParam
+          .split(",")
+          .map((part) => {
+            let [field, dir] = part.trim().split(":");
+            field = field?.trim();
+            dir = (dir || "desc").toLowerCase();
+            return { field, dir };
+          })
+          .filter(
+            (c) =>
+              c.field &&
+              allowedSortFields.includes(/** @type {any} */ (c.field)),
+          );
+
+        // Default to timestamp:desc if no valid criteria provided
+        if (sortCriteria.length === 0) {
+          sortCriteria.push({ field: "timestamp", dir: "desc" });
         }
 
         const filtered = itemsBuffer.sort((a, b) => {
-          let valA = a[sortField];
-          let valB = b[sortField];
+          for (const { field, dir } of sortCriteria) {
+            let valA = a[field];
+            let valB = b[field];
 
-          // Handle timestamp specifically (convert to Date for comparison)
-          if (sortField === "timestamp") {
-            valA = new Date(valA).getTime();
-            valB = new Date(valB).getTime();
+            // Handle timestamp specifically (convert to Date for comparison)
+            if (field === "timestamp") {
+              valA = new Date(valA).getTime();
+              valB = new Date(valB).getTime();
+            }
+
+            if (valA < valB) return dir === "asc" ? -1 : 1;
+            if (valA > valB) return dir === "asc" ? 1 : -1;
           }
-
-          if (valA < valB) return sortDir === "asc" ? -1 : 1;
-          if (valA > valB) return sortDir === "asc" ? 1 : -1;
           return 0;
         });
 

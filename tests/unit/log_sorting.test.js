@@ -1,11 +1,15 @@
 import { jest } from "@jest/globals";
-import { createLogsHandler } from "../../src/routes/logs.js";
-import { MAX_ITEMS_FOR_BATCH } from "../../src/consts.js";
-import { setupTestApp } from "../setup/helpers/app-utils.js";
-import { Actor } from "apify"; // Mocked
 
-// Mock Apify and Dataset
-jest.mock("apify");
+// Define mock factory BEFORE imports
+const mockOpenDataset = jest.fn();
+jest.unstable_mockModule("apify", () => ({
+  Actor: {
+    openDataset: mockOpenDataset,
+  },
+}));
+
+// Dynamic imports to ensure mock is used
+const { createLogsHandler } = await import("../../src/routes/logs.js");
 
 describe("Log Sorting Logic", () => {
   let req, res, mockDataset, mockWebhookManager;
@@ -18,6 +22,8 @@ describe("Log Sorting Logic", () => {
       statusCode: 200,
       processingTime: 100,
       method: "GET",
+      requestId: "REQ-A",
+      remoteIp: "10.0.0.1",
     },
     {
       id: "item2",
@@ -26,6 +32,8 @@ describe("Log Sorting Logic", () => {
       statusCode: 500,
       processingTime: 50,
       method: "POST",
+      requestId: "REQ-C",
+      remoteIp: "192.168.1.1",
     },
     {
       id: "item3",
@@ -34,6 +42,8 @@ describe("Log Sorting Logic", () => {
       statusCode: 404,
       processingTime: 200,
       method: "PUT",
+      requestId: "REQ-B",
+      remoteIp: "127.0.0.1",
     },
   ];
 
@@ -49,9 +59,9 @@ describe("Log Sorting Logic", () => {
     // Mock Dataset
     mockDataset = {
       getInfo: jest.fn().mockResolvedValue({ itemCount: 3 }),
-      getData: jest.fn().mockResolvedValue({ items: mockItems }),
+      getData: jest.fn().mockResolvedValue({ items: [...mockItems] }), // Clone array
     };
-    Actor.openDataset.mockResolvedValue(mockDataset);
+    mockOpenDataset.mockResolvedValue(mockDataset);
 
     // Mock WebhookManager
     mockWebhookManager = {
@@ -98,20 +108,6 @@ describe("Log Sorting Logic", () => {
     expect(codes).toEqual([500, 404, 200]);
   });
 
-  it("should sort by statusCode asc", async () => {
-    req = {
-      query: { sort: "statusCode:asc" },
-      protocol: "http",
-      get: () => "localhost",
-      baseUrl: "",
-    };
-    await getHandler()(req, res, jest.fn());
-
-    const response = res.json.mock.calls[0][0];
-    const codes = response.items.map((i) => i.statusCode);
-    expect(codes).toEqual([200, 404, 500]);
-  });
-
   it("should sort by processingTime desc", async () => {
     req = {
       query: { sort: "processingTime:desc" },
@@ -127,11 +123,6 @@ describe("Log Sorting Logic", () => {
   });
 
   it("should sort by remoteIp asc", async () => {
-    // Add mock IPs to items for this test
-    mockItems[0].remoteIp = "10.0.0.1";
-    mockItems[1].remoteIp = "192.168.1.1";
-    mockItems[2].remoteIp = "127.0.0.1";
-
     req = {
       query: { sort: "remoteIp:asc" },
       protocol: "http",
@@ -146,10 +137,6 @@ describe("Log Sorting Logic", () => {
   });
 
   it("should sort by requestId desc", async () => {
-    mockItems[0].requestId = "REQ-A";
-    mockItems[1].requestId = "REQ-C";
-    mockItems[2].requestId = "REQ-B";
-
     req = {
       query: { sort: "requestId:desc" },
       protocol: "http",
@@ -173,14 +160,39 @@ describe("Log Sorting Logic", () => {
     await getHandler()(req, res, jest.fn());
 
     const response = res.json.mock.calls[0][0];
-    // Should fallback to default timestamp logic sort, but user asked for asc in invalid field.
-    // Our implementation falls back to Field=timestamp, but keeps Dir if parsed?
-    // Let's check logic:
-    // let [sortField, sortDir] = sortParam.split(":");
-    // if (!allowed.includes(sortField)) sortField = "timestamp";
-    // So "invalid:asc" -> sortField="timestamp", sortDir="asc"
-
+    // Invalid criteria removed, default added (timestamp:desc)
     const ids = response.items.map((i) => i.id);
-    expect(ids).toEqual(["item1", "item3", "item2"]); // Timestamp ASC
+    expect(ids).toEqual(["item2", "item3", "item1"]);
+  });
+
+  it("should sort by multiple fields", async () => {
+    // Setup items with identical status codes to test secondary sort
+    const multiItems = [
+      { id: "A", statusCode: 200, timestamp: "2023-01-01T10:00:00Z" },
+      { id: "B", statusCode: 200, timestamp: "2023-01-01T10:00:02Z" }, // Newer
+      { id: "C", statusCode: 500, timestamp: "2023-01-01T10:00:01Z" },
+    ];
+    mockDataset.getData.mockResolvedValue({ items: multiItems });
+
+    req = {
+      query: { sort: "statusCode:asc,timestamp:desc" },
+      protocol: "http",
+      get: () => "localhost",
+      baseUrl: "",
+    };
+    await getHandler()(req, res, jest.fn());
+
+    const response = res.json.mock.calls[0][0];
+    const ids = response.items.map((i) => i.id);
+
+    // Expect:
+    // 1. C (500) - last because asc
+    // 2. A and B are 200.
+    //    Sort by timestamp desc -> B (Newer) then A (Older)
+    // Order: A, B, C if simple sort... wait.
+    // statusCode asc: [200, 200, 500] -> [A, B] then C
+    // Secondary: timestamp desc. B is newer than A. So B comes before A.
+    // Result: B, A, C
+    expect(ids).toEqual(["B", "A", "C"]);
   });
 });
