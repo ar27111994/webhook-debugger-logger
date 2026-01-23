@@ -1,7 +1,7 @@
 import { jest } from "@jest/globals";
 import { createLogsHandler } from "../../src/routes/logs.js";
 import { MAX_ITEMS_FOR_BATCH } from "../../src/consts.js";
-import { setupTestApp } from "../setup/app-utils.js";
+import { setupTestApp } from "../setup/helpers/app-utils.js";
 import { Actor } from "apify"; // Mocked
 
 // Mock Apify and Dataset
@@ -143,6 +143,24 @@ describe("Log Sorting Logic", () => {
     const response = res.json.mock.calls[0][0];
     const ips = response.items.map((i) => i.remoteIp);
     expect(ips).toEqual(["10.0.0.1", "127.0.0.1", "192.168.1.1"]);
+  });
+
+  it("should sort by requestId desc", async () => {
+    mockItems[0].requestId = "REQ-A";
+    mockItems[1].requestId = "REQ-C";
+    mockItems[2].requestId = "REQ-B";
+
+    req = {
+      query: { sort: "requestId:desc" },
+      protocol: "http",
+      get: () => "localhost",
+      baseUrl: "",
+    };
+    await getHandler()(req, res, jest.fn());
+
+    const response = res.json.mock.calls[0][0];
+    const rids = response.items.map((i) => i.requestId);
+    expect(rids).toEqual(["REQ-C", "REQ-B", "REQ-A"]);
   });
 
   it("should fallback to timestamp if invalid field provided", async () => {

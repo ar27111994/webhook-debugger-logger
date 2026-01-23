@@ -166,7 +166,9 @@ export const createLogsHandler = (webhookManager) =>
           "userAgent",
           "contentType",
           "signatureValid",
-          // Excluded: 'headers' (object), 'id'/'requestId' (random strings, usually not useful to sort, but safe to add if needed)
+          "id",
+          "requestId",
+          // Excluded: 'headers' (object)
         ];
         if (!allowedSortFields.includes(sortField)) {
           sortField = "timestamp"; // Fallback default
