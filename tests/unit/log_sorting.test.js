@@ -1,18 +1,31 @@
 import { jest } from "@jest/globals";
+import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
+import {
+  createDatasetMock,
+  createMockWebhookManager,
+} from "../setup/helpers/shared-mocks.js";
+import {
+  createMockRequest,
+  createMockResponse,
+  createMockNextFunction,
+} from "../setup/helpers/test-utils.js";
+import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 
-// Define mock factory BEFORE imports
-const mockOpenDataset = jest.fn();
-jest.unstable_mockModule("apify", () => ({
-  Actor: {
-    openDataset: mockOpenDataset,
-  },
-}));
+// Initialize mocks BEFORE imports
+await setupCommonMocks({ apify: true, axios: false });
 
-// Dynamic imports to ensure mock is used
 const { createLogsHandler } = await import("../../src/routes/logs.js");
 
 describe("Log Sorting Logic", () => {
-  let req, res, mockDataset, mockWebhookManager;
+  // Auto-cleanup mocks
+  useMockCleanup();
+
+  /** @type {import("../../src/routes/logs.js").Request} */
+  let req;
+  /** @type {import("../../src/routes/logs.js").Response} */
+  let res;
+  let next;
+  let mockWebhookManager;
 
   const mockItems = [
     {
@@ -48,32 +61,23 @@ describe("Log Sorting Logic", () => {
   ];
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    // Setup Dataset Mock
+    createDatasetMock({ items: [...mockItems] });
 
-    // Mock Response
-    res = {
-      json: jest.fn(),
-      status: jest.fn().mockReturnThis(),
-    };
+    // Setup WebhookManager Mock
+    mockWebhookManager = createMockWebhookManager();
+    mockWebhookManager.isValid.mockReturnValue(true);
 
-    // Mock Dataset
-    mockDataset = {
-      getInfo: jest.fn().mockResolvedValue({ itemCount: 3 }),
-      getData: jest.fn().mockResolvedValue({ items: [...mockItems] }), // Clone array
-    };
-    mockOpenDataset.mockResolvedValue(mockDataset);
-
-    // Mock WebhookManager
-    mockWebhookManager = {
-      isValid: jest.fn().mockReturnValue(true),
-    };
+    // Setup Request/Response
+    res = createMockResponse();
+    next = createMockNextFunction();
   });
 
   const getHandler = () => createLogsHandler(mockWebhookManager);
 
   it("should sort by timestamp desc by default", async () => {
-    req = { query: {}, protocol: "http", get: () => "localhost", baseUrl: "" };
-    await getHandler()(req, res, jest.fn());
+    req = createMockRequest({ query: {} });
+    await getHandler()(req, res, next);
 
     const response = res.json.mock.calls[0][0];
     const ids = response.items.map((i) => i.id);
@@ -81,13 +85,8 @@ describe("Log Sorting Logic", () => {
   });
 
   it("should sort by timestamp asc", async () => {
-    req = {
-      query: { sort: "timestamp:asc" },
-      protocol: "http",
-      get: () => "localhost",
-      baseUrl: "",
-    };
-    await getHandler()(req, res, jest.fn());
+    req = createMockRequest({ query: { sort: "timestamp:asc" } });
+    await getHandler()(req, res, next);
 
     const response = res.json.mock.calls[0][0];
     const ids = response.items.map((i) => i.id);
@@ -95,13 +94,8 @@ describe("Log Sorting Logic", () => {
   });
 
   it("should sort by statusCode desc", async () => {
-    req = {
-      query: { sort: "statusCode:desc" },
-      protocol: "http",
-      get: () => "localhost",
-      baseUrl: "",
-    };
-    await getHandler()(req, res, jest.fn());
+    req = createMockRequest({ query: { sort: "statusCode:desc" } });
+    await getHandler()(req, res, next);
 
     const response = res.json.mock.calls[0][0];
     const codes = response.items.map((i) => i.statusCode);
@@ -109,13 +103,8 @@ describe("Log Sorting Logic", () => {
   });
 
   it("should sort by processingTime desc", async () => {
-    req = {
-      query: { sort: "processingTime:desc" },
-      protocol: "http",
-      get: () => "localhost",
-      baseUrl: "",
-    };
-    await getHandler()(req, res, jest.fn());
+    req = createMockRequest({ query: { sort: "processingTime:desc" } });
+    await getHandler()(req, res, next);
 
     const response = res.json.mock.calls[0][0];
     const times = response.items.map((i) => i.processingTime);
@@ -123,13 +112,8 @@ describe("Log Sorting Logic", () => {
   });
 
   it("should sort by remoteIp asc", async () => {
-    req = {
-      query: { sort: "remoteIp:asc" },
-      protocol: "http",
-      get: () => "localhost",
-      baseUrl: "",
-    };
-    await getHandler()(req, res, jest.fn());
+    req = createMockRequest({ query: { sort: "remoteIp:asc" } });
+    await getHandler()(req, res, next);
 
     const response = res.json.mock.calls[0][0];
     const ips = response.items.map((i) => i.remoteIp);
@@ -137,13 +121,8 @@ describe("Log Sorting Logic", () => {
   });
 
   it("should sort by requestId desc", async () => {
-    req = {
-      query: { sort: "requestId:desc" },
-      protocol: "http",
-      get: () => "localhost",
-      baseUrl: "",
-    };
-    await getHandler()(req, res, jest.fn());
+    req = createMockRequest({ query: { sort: "requestId:desc" } });
+    await getHandler()(req, res, next);
 
     const response = res.json.mock.calls[0][0];
     const rids = response.items.map((i) => i.requestId);
@@ -151,48 +130,110 @@ describe("Log Sorting Logic", () => {
   });
 
   it("should fallback to timestamp if invalid field provided", async () => {
-    req = {
-      query: { sort: "invalidField:asc" },
-      protocol: "http",
-      get: () => "localhost",
-      baseUrl: "",
-    };
-    await getHandler()(req, res, jest.fn());
+    req = createMockRequest({ query: { sort: "invalidField:asc" } });
+    await getHandler()(req, res, next);
 
     const response = res.json.mock.calls[0][0];
-    // Invalid criteria removed, default added (timestamp:desc)
     const ids = response.items.map((i) => i.id);
     expect(ids).toEqual(["item2", "item3", "item1"]);
   });
 
   it("should sort by multiple fields", async () => {
-    // Setup items with identical status codes to test secondary sort
     const multiItems = [
-      { id: "A", statusCode: 200, timestamp: "2023-01-01T10:00:00Z" },
-      { id: "B", statusCode: 200, timestamp: "2023-01-01T10:00:02Z" }, // Newer
-      { id: "C", statusCode: 500, timestamp: "2023-01-01T10:00:01Z" },
+      {
+        id: "A",
+        statusCode: 200,
+        timestamp: "2023-01-01T10:00:00Z",
+        webhookId: "wh_1",
+      },
+      {
+        id: "B",
+        statusCode: 200,
+        timestamp: "2023-01-01T10:00:02Z",
+        webhookId: "wh_1",
+      },
+      {
+        id: "C",
+        statusCode: 500,
+        timestamp: "2023-01-01T10:00:01Z",
+        webhookId: "wh_1",
+      },
     ];
-    mockDataset.getData.mockResolvedValue({ items: multiItems });
+    createDatasetMock({ items: multiItems });
 
-    req = {
+    req = createMockRequest({
       query: { sort: "statusCode:asc,timestamp:desc" },
-      protocol: "http",
-      get: () => "localhost",
-      baseUrl: "",
-    };
-    await getHandler()(req, res, jest.fn());
+    });
+    await getHandler()(req, res, next);
 
     const response = res.json.mock.calls[0][0];
     const ids = response.items.map((i) => i.id);
-
-    // Expect:
-    // 1. C (500) - last because asc
-    // 2. A and B are 200.
-    //    Sort by timestamp desc -> B (Newer) then A (Older)
-    // Order: A, B, C if simple sort... wait.
-    // statusCode asc: [200, 200, 500] -> [A, B] then C
-    // Secondary: timestamp desc. B is newer than A. So B comes before A.
-    // Result: B, A, C
     expect(ids).toEqual(["B", "A", "C"]);
+  });
+
+  it("should filter by headers (string match)", async () => {
+    const headerItems = [
+      {
+        id: "item1",
+        webhookId: "wh_1",
+        headers: { "x-foo": "bar" },
+        timestamp: "2023-01-01T10:00:00Z",
+      },
+      {
+        id: "item2",
+        webhookId: "wh_1",
+        headers: { "x-abc": "xyz" },
+        timestamp: "2023-01-01T10:00:02Z",
+      },
+      {
+        id: "item3",
+        webhookId: "wh_1",
+        headers: { "x-foo": "baz" },
+        timestamp: "2023-01-01T10:00:01Z",
+      },
+    ];
+    createDatasetMock({ items: headerItems });
+
+    req = createMockRequest({ query: { headers: "x-foo" } });
+    await getHandler()(req, res, next);
+
+    const response = res.json.mock.calls[0][0];
+    const ids = response.items.map((i) => i.id);
+    expect(ids).toEqual(["item3", "item1"]);
+  });
+
+  it("should filter by headers (object match)", async () => {
+    const headerItems = [
+      {
+        id: "item1",
+        webhookId: "wh_1",
+        headers: { "content-type": "application/json", "x-id": "1" },
+        timestamp: "2023-01-01T10:00:00Z",
+      },
+      {
+        id: "item2",
+        webhookId: "wh_1",
+        headers: { "content-type": "text/html", "x-id": "2" },
+        timestamp: "2023-01-01T10:00:02Z",
+      },
+      {
+        id: "item3",
+        webhookId: "wh_1",
+        headers: { "content-type": "application/json", "x-id": "3" },
+        timestamp: "2023-01-01T10:00:01Z",
+      },
+    ];
+    createDatasetMock({ items: headerItems });
+
+    req = createMockRequest({
+      query: {
+        headers: { "content-type": "json" },
+      },
+    });
+    await getHandler()(req, res, next);
+
+    const response = res.json.mock.calls[0][0];
+    const ids = response.items.map((i) => i.id);
+    expect(ids).toEqual(["item3", "item1"]);
   });
 });
