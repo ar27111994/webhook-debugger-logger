@@ -80,6 +80,7 @@ export const createLogsHandler = (webhookManager) =>
               "remoteIp",
               "userAgent",
               "contentType",
+              "processingTime",
             ],
           });
 
@@ -149,10 +150,42 @@ export const createLogsHandler = (webhookManager) =>
           }
         }
 
-        const filtered = itemsBuffer.sort(
-          (a, b) =>
-            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-        );
+        // Sorting Logic
+        const sortParam = req.query.sort ? String(req.query.sort) : "";
+        let [sortField, sortDir] = sortParam.split(":");
+        sortDir = (sortDir || "desc").toLowerCase(); // Default to desc
+
+        // Whitelist allowed sort fields
+        const allowedSortFields = [
+          "timestamp",
+          "statusCode",
+          "method",
+          "processingTime",
+          "webhookId",
+          "remoteIp",
+          "userAgent",
+          "contentType",
+          "signatureValid",
+          // Excluded: 'headers' (object), 'id'/'requestId' (random strings, usually not useful to sort, but safe to add if needed)
+        ];
+        if (!allowedSortFields.includes(sortField)) {
+          sortField = "timestamp"; // Fallback default
+        }
+
+        const filtered = itemsBuffer.sort((a, b) => {
+          let valA = a[sortField];
+          let valB = b[sortField];
+
+          // Handle timestamp specifically (convert to Date for comparison)
+          if (sortField === "timestamp") {
+            valA = new Date(valA).getTime();
+            valB = new Date(valB).getTime();
+          }
+
+          if (valA < valB) return sortDir === "asc" ? -1 : 1;
+          if (valA > valB) return sortDir === "asc" ? 1 : -1;
+          return 0;
+        });
 
         // Add detailUrl to items and remove internal _index
         const baseUrl = `${req.protocol}://${req.get("host")}${req.baseUrl}`;
