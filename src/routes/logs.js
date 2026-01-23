@@ -100,48 +100,65 @@ export const createLogsHandler = (webhookManager) =>
           }));
 
           // Apply filters to current chunk
+          // Pre-process filters outside the loop for performance
+          const filterWebhookId = webhookId ? String(webhookId) : null;
+          const filterMethod = method ? String(method).toUpperCase() : null;
+          const filterStatus = statusCode ? Number(statusCode) : null;
+          const filterType = contentType
+            ? String(contentType).toLowerCase()
+            : null;
+          const filterRequestId = requestId ? String(requestId) : null;
+          const filterIp = req.query.remoteIp
+            ? String(req.query.remoteIp)
+            : null;
+          const filterUa = req.query.userAgent
+            ? String(req.query.userAgent)
+            : null;
+
+          // ISO String comparison is faster than new Date() per item
+          // (Assumes item.timestamp is always ISO 8601 from new Date().toISOString())
+          const filterStart =
+            startDate && !isNaN(startDate.getTime())
+              ? startDate.toISOString()
+              : null;
+          const filterEnd =
+            endDate && !isNaN(endDate.getTime()) ? endDate.toISOString() : null;
+
           const batchMatches = itemsWithIndex.filter((item) => {
-            if (webhookId && item.webhookId !== webhookId) return false;
-            if (
-              method &&
-              item.method?.toUpperCase() !== String(method).toUpperCase()
-            )
+            // 1. Webhook Validity (Security) - Check this first or last?
+            // Checking first prevents leaking info about invalid/expired webhooks
+            if (!webhookManager.isValid(item.webhookId)) return false;
+
+            // 2. Exact Match Filters (Fastest)
+            if (filterWebhookId && item.webhookId !== filterWebhookId)
               return false;
-            if (statusCode && String(item.statusCode) !== String(statusCode))
+            if (filterRequestId && item.requestId !== filterRequestId)
               return false;
-            if (
-              contentType &&
-              !item.headers?.["content-type"]?.includes(String(contentType))
-            )
+            // StatusCode: item.statusCode is number, filterStatus is number
+            if (filterStatus !== null && item.statusCode !== filterStatus)
               return false;
-            // Timestamp range filter
-            if (startDate && !isNaN(startDate.getTime())) {
-              const itemDate = new Date(item.timestamp);
-              if (itemDate < startDate) return false;
-            }
-            if (endDate && !isNaN(endDate.getTime())) {
-              const itemDate = new Date(item.timestamp);
-              if (itemDate > endDate) return false;
-            }
-            // Signature status filter
+            if (filterMethod && item.method !== filterMethod) return false;
             if (sigValid !== undefined && item.signatureValid !== sigValid)
               return false;
-            // Request ID filter
-            if (requestId && item.requestId !== requestId) return false;
 
-            // Security Filters
-            if (
-              req.query.remoteIp &&
-              item.remoteIp !== String(req.query.remoteIp)
-            )
-              return false;
-            if (
-              req.query.userAgent &&
-              item.userAgent !== String(req.query.userAgent)
-            )
-              return false;
+            // 3. String Match Filters
+            if (filterIp && item.remoteIp !== filterIp) return false;
+            if (filterUa && item.userAgent !== filterUa) return false;
 
-            return webhookManager.isValid(item.webhookId);
+            // 4. Content Type (Substring match on specialized field)
+            // Use top-level contentType instead of parsing headers
+            if (
+              filterType &&
+              !item.contentType?.includes(filterType) // item.contentType is normalized in logger
+            ) {
+              return false;
+            }
+
+            // 5. Timestamp Range (String comparison)
+            if (filterStart && item.timestamp < filterStart) return false;
+            if (filterEnd && item.timestamp > filterEnd) return false;
+
+            return true;
           });
 
           itemsBuffer = itemsBuffer.concat(batchMatches);
@@ -170,11 +187,7 @@ export const createLogsHandler = (webhookManager) =>
             dir = (dir || "desc").toLowerCase();
             return { field, dir };
           })
-          .filter(
-            (c) =>
-              c.field &&
-              allowedSortFields.includes(/** @type {any} */ (c.field)),
-          );
+          .filter((c) => c.field && allowedSortFields.includes(c.field));
 
         // Default to timestamp:desc if no valid criteria provided
         if (sortCriteria.length === 0) {
