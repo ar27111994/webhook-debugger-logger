@@ -74,38 +74,91 @@ export const createLogsHandler = (webhookManager) =>
             : signatureValid === "false"
               ? false
               : undefined;
-        const validFilterWebhookId = webhookId ? String(webhookId) : null;
-        const validFilterMethod = method ? String(method).toUpperCase() : null;
-        const validFilterStatus = statusCode ? Number(statusCode) : null;
-        const validFilterType = contentType
+        const filterWebhookId = webhookId ? String(webhookId) : null;
+        const filterMethod = method ? String(method).toUpperCase() : null;
+        const filterStatus = statusCode ? Number(statusCode) : null;
+        const filterType = contentType
           ? String(contentType).toLowerCase()
           : null;
-        const validFilterRequestId = requestId ? String(requestId) : null;
-        const validFilterIp = remoteIp ? String(remoteIp) : null;
-        const validFilterUa = userAgent ? String(userAgent) : null;
+        const filterRequestId = requestId ? String(requestId) : null;
+        const filterIp = remoteIp ? String(remoteIp) : null;
+        const filterUa = userAgent ? String(userAgent) : null;
 
-          const filterId = id ? String(id) : null;
-          const filterProcessingTime = processingTime
-            ? Number(processingTime)
+        const filterId = id ? String(id) : null;
+        const filterProcessingTime = processingTime
+          ? Number(processingTime)
+          : null;
+
+        // Handle headers filter (string or object)
+        /** @type {Record<string, string> | string | null} */
+        let filterHeaders = null;
+        if (headers) {
+          if (typeof headers === "string") {
+            filterHeaders = headers.toLowerCase();
+          } else if (typeof headers === "object") {
+            /** @type {Record<string, string>} */
+            const headerObj = {};
+            for (const [k, v] of Object.entries(headers)) {
+              headerObj[k.toLowerCase()] = String(v).toLowerCase();
+            }
+            filterHeaders = headerObj;
+          }
+        }
+
+        // ISO String comparison is faster than new Date() per item
+        // (Assumes item.timestamp is always ISO 8601 from new Date().toISOString())
+        const filterStart =
+          startDate && !isNaN(startDate.getTime())
+            ? startDate.toISOString()
             : null;
+        const filterEnd =
+          endDate && !isNaN(endDate.getTime()) ? endDate.toISOString() : null;
 
-          // ISO String comparison is faster than new Date() per item
-          // (Assumes item.timestamp is always ISO 8601 from new Date().toISOString())
-          // ... (existing timestamp logic)
+        const dataset = await Actor.openDataset();
+        const datasetInfo = await dataset.getInfo();
+        const totalItems = datasetInfo?.itemCount || 0;
 
+        /** @type {any[]} */
+        let itemsBuffer = [];
+        let currentOffset = offset;
+        let hasMore = true;
+
+        // Fetch in chunks until we have enough items or exhaust the dataset
+        while (itemsBuffer.length < limit && hasMore) {
+          const { items } = await dataset.getData({
+            limit: CHUNK_SIZE,
+            offset: currentOffset,
+            desc: true,
+            // Optimization: Only fetch metadata fields
+            fields: /** @type {string[]} */ (LOG_FIELDS),
+          });
+
+          if (items.length === 0) {
+            hasMore = false;
+            break;
+          }
+
+          // Add raw index tracking to items
+          /** @type {any[]} */
+          const itemsWithIndex = items.map((item, index) => ({
+            ...item,
+            _index: currentOffset + index,
+          }));
+
+          // Apply filters to current chunk
           const batchMatches = itemsWithIndex.filter((item) => {
-            // 1. Webhook Validity (Security)
+            // 1. Webhook Validity (Security) - Checking first prevents leaking info about invalid/expired webhooks
             if (!webhookManager.isValid(item.webhookId)) return false;
 
             // 2. Exact Match Filters
             if (filterId && item.id !== filterId) return false; // Added
-            if (validFilterWebhookId && item.webhookId !== validFilterWebhookId)
+            if (filterWebhookId && item.webhookId !== filterWebhookId)
               return false;
-            if (validFilterRequestId && item.requestId !== validFilterRequestId)
+            if (filterRequestId && item.requestId !== filterRequestId)
               return false;
-            
+
             // Numeric Checks
-            if (validFilterStatus !== null && item.statusCode !== validFilterStatus)
+            if (filterStatus !== null && item.statusCode !== filterStatus)
               return false;
             if (
               filterProcessingTime !== null &&
@@ -113,23 +166,49 @@ export const createLogsHandler = (webhookManager) =>
             )
               return false;
 
-            if (validFilterMethod && item.method !== validFilterMethod) return false;
+            // Checking method case-insensitively (assuming standard data, but safe)
+            if (filterMethod && item.method?.toUpperCase() !== filterMethod)
+              return false;
             if (sigValid !== undefined && item.signatureValid !== sigValid)
               return false;
 
             // 3. String Match Filters
-            if (validFilterIp && item.remoteIp !== validFilterIp) return false;
-            if (validFilterUa && item.userAgent !== validFilterUa) return false;
+            if (filterIp && item.remoteIp !== filterIp) return false;
+            if (filterUa && item.userAgent !== filterUa) return false;
 
-            // 4. Content Type
+            // 4. Content Type (Substring match on specialized field)
             if (
-              validFilterType &&
-              !item.contentType?.includes(validFilterType) 
+              filterType &&
+              !item.contentType?.toLowerCase().includes(filterType)
             ) {
               return false;
             }
 
-            // 5. Timestamp Range
+            // 5. Headers Filter
+            if (filterHeaders) {
+              const itemHeaders = item.headers || {};
+              if (typeof filterHeaders === "string") {
+                // Search entire headers object as string
+                if (
+                  !JSON.stringify(itemHeaders)
+                    .toLowerCase()
+                    .includes(filterHeaders)
+                )
+                  return false;
+              } else {
+                // Object match: All provided keys must substring-match
+                for (const [key, searchVal] of Object.entries(filterHeaders)) {
+                  const itemVal = itemHeaders[key];
+                  if (
+                    !itemVal ||
+                    !String(itemVal).toLowerCase().includes(searchVal)
+                  )
+                    return false;
+                }
+              }
+            }
+
+            // 5. Timestamp Range (String comparison)
             if (filterStart && item.timestamp < filterStart) return false;
             if (filterEnd && item.timestamp > filterEnd) return false;
 
