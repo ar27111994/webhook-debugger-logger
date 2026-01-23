@@ -24,11 +24,8 @@ import { setupBasicApifyMock } from "./helpers/shared-mocks.js";
  * @typedef {import("./helpers/app-utils.js").TeardownApp} TeardownApp
  */
 
-// Mock Apify at module level
-jest.unstable_mockModule("apify", async () => {
-  const { apifyMock } = await import("./helpers/shared-mocks.js");
-  return { Actor: apifyMock };
-});
+import { setupCommonMocks } from "./helpers/mock-setup.js";
+await setupCommonMocks({ apify: true });
 
 const { apifyMock } = await import("./helpers/shared-mocks.js");
 

@@ -54,11 +54,11 @@ describe("Stress Tests", () => {
     const finalMemory = process.memoryUsage().heapUsed;
     const memoryDiffMB = (finalMemory - initialMemory) / 1024 / 1024;
 
-    console.log(
-      `Memory growth after ${ITERATIONS} requests: ${memoryDiffMB.toFixed(
-        2,
-      )} MB`,
-    );
+    // console.log(
+    //   `Memory growth after ${ITERATIONS} requests: ${memoryDiffMB.toFixed(
+    //     2,
+    //   )} MB`,
+    // );
 
     // Expect memory growth to be reasonable (e.g., < 100MB for 1000 requests including overhead)
     // Note: This is an observation test; precise assertion depends on the environment

@@ -2,11 +2,8 @@ import { jest, describe, test, expect, beforeEach } from "@jest/globals";
 import { dnsPromisesMock } from "./helpers/shared-mocks.js";
 
 // Mock dns/promises
-jest.unstable_mockModule("dns/promises", () => ({
-  default: dnsPromisesMock,
-  resolve4: dnsPromisesMock.resolve4,
-  resolve6: dnsPromisesMock.resolve6,
-}));
+import { setupCommonMocks } from "./helpers/mock-setup.js";
+await setupCommonMocks({ dns: true });
 
 // Import utils after mocking
 // SSRF_INTERNAL_ERRORS is NOT exported by ssrf.js, it is imported from consts.js

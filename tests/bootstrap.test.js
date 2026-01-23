@@ -170,7 +170,7 @@ describe("bootstrap.js", () => {
 
     // Initial read returns bad JSON
     mockReadFile.mockImplementation(
-      async (/** @type {import('fs').PathLike} */ filePath) => {
+      async (/** @type {PathLike} */ filePath) => {
         const pathStr = filePath.toString();
         if (pathStr.includes("input_schema.json")) {
           return JSON.stringify({ properties: { urlCount: { default: 10 } } });
@@ -237,7 +237,7 @@ describe("bootstrap.js", () => {
     /** @type {string[]} */
     const pathsAccessed = [];
     mockReadFile.mockImplementation(
-      async (/** @type {import('fs').PathLike} */ filePath) => {
+      async (/** @type {PathLike} */ filePath) => {
         pathsAccessed.push(filePath.toString());
         if (filePath.toString().includes("input_schema.json")) {
           return JSON.stringify({ properties: {} });

@@ -5,10 +5,10 @@ import { jest, describe, test, expect, beforeEach } from "@jest/globals";
  * @typedef {import('../src/webhook_manager.js').WebhookManager} WebhookManager
  */
 
+import { setupCommonMocks } from "./helpers/mock-setup.js";
+await setupCommonMocks({ apify: true });
+
 import { apifyMock } from "./helpers/shared-mocks.js";
-jest.unstable_mockModule("apify", () => ({
-  Actor: apifyMock,
-}));
 
 const { Actor } = await import("apify");
 const { WebhookManager } = await import("../src/webhook_manager.js");

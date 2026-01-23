@@ -1,4 +1,5 @@
 ---
+trigger: always_on
 description: TypeScript coding standards and best practices for modern web development
 globs: **/*.ts, **/*.tsx, **/*.d.ts, **/*.js
 ---
@@ -13,6 +14,7 @@ globs: **/*.ts, **/*.tsx, **/*.d.ts, **/*.js
 - Use strict TypeScript configuration
 - Leverage TypeScript's built-in utility types
 - Use generics for reusable type patterns
+- Avoid using inline JSDoc types that require import statements (e.g. /** @type {import('fs').PathLike \*/) in favor of separate type definitions (e.g. /** @typedef {import('fs').PathLike} PathLike \*/) near the top of the file alongside other type definitions or close to the relevant code
 
 ## Naming Conventions
 
@@ -46,6 +48,7 @@ globs: **/*.ts, **/*.tsx, **/*.d.ts, **/*.js
 - Use type guards for runtime type checking
 - Implement proper null checking
 - Avoid type assertions unless necessary
+- Avoid using type suppressions at all cost, use @ts-expect-error as the last resort
 
 ## Error Handling
 

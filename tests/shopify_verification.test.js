@@ -109,11 +109,6 @@ describe("Shopify Signature Verification (Raw Body)", () => {
       executeTasksMock.mock.calls[0][0]
     );
 
-    if (!event.signatureValid) {
-      console.error("Signature Verification Failed:", event.signatureError);
-      console.error("Provider:", event.signatureProvider);
-    }
-
     expect(event.signatureValid).toBe(true);
     expect(event.signatureProvider).toBe("shopify");
   });
