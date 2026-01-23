@@ -15,9 +15,9 @@
     "urlCount": {
       "type": "integer",
       "title": "Number of Endpoints",
-      "description": "How many unique webhook URLs to generate for this run (1-10). Default is 3.",
+      "description": "How many unique webhook URLs to generate for this run (1-50). Default is 3.",
       "minimum": 1,
-      "maximum": 10,
+      "maximum": 50,
       "default": 3,
       "prefill": 3,
       "editor": "number"
@@ -45,9 +45,9 @@
     "retentionHours": {
       "type": "integer",
       "title": "Retention Window (Hours)",
-      "description": "How long to keep your webhook URLs active (1-72 hours). Note: Logs for expired webhooks are filtered out from the '/logs' endpoint.",
+      "description": "How long to keep your webhook URLs active (1-168 hours). Note: Logs for expired webhooks are filtered out from the '/logs' endpoint.",
       "minimum": 1,
-      "maximum": 72,
+      "maximum": 168,
       "default": 24,
       "prefill": 24,
       "editor": "number"
