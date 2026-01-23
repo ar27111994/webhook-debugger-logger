@@ -41,6 +41,7 @@ export const createLogsHandler = (webhookManager) =>
       try {
         const CHUNK_SIZE = MAX_ITEMS_FOR_BATCH;
         let {
+          id,
           webhookId,
           method,
           statusCode,
@@ -49,8 +50,13 @@ export const createLogsHandler = (webhookManager) =>
           endTime,
           signatureValid,
           requestId,
+          remoteIp,
+          userAgent,
+          processingTime,
+          headers,
           limit = 100,
           offset = 0,
+          sort = "timestamp:desc",
         } = req.query;
         limit = Math.min(
           Math.max(parseInt(String(limit), 10) || 100, 1),
@@ -59,6 +65,7 @@ export const createLogsHandler = (webhookManager) =>
         offset = Math.max(parseInt(String(offset), 10) || 0, 0);
 
         // Parse timestamp filters
+        // Pre-process filters outside the loop for performance
         const startDate = startTime ? new Date(String(startTime)) : null;
         const endDate = endTime ? new Date(String(endTime)) : null;
         const sigValid =
@@ -67,94 +74,62 @@ export const createLogsHandler = (webhookManager) =>
             : signatureValid === "false"
               ? false
               : undefined;
+        const validFilterWebhookId = webhookId ? String(webhookId) : null;
+        const validFilterMethod = method ? String(method).toUpperCase() : null;
+        const validFilterStatus = statusCode ? Number(statusCode) : null;
+        const validFilterType = contentType
+          ? String(contentType).toLowerCase()
+          : null;
+        const validFilterRequestId = requestId ? String(requestId) : null;
+        const validFilterIp = remoteIp ? String(remoteIp) : null;
+        const validFilterUa = userAgent ? String(userAgent) : null;
 
-        const dataset = await Actor.openDataset();
-        const datasetInfo = await dataset.getInfo();
-        const totalItems = datasetInfo?.itemCount || 0;
-
-        /** @type {any[]} */
-        let itemsBuffer = [];
-        let currentOffset = offset;
-        let hasMore = true;
-
-        // Fetch in chunks until we have enough items or exhaust the dataset
-        while (itemsBuffer.length < limit && hasMore) {
-          const { items } = await dataset.getData({
-            limit: CHUNK_SIZE,
-            offset: currentOffset,
-            desc: true,
-            // Optimization: Only fetch metadata fields
-            fields: /** @type {string[]} */ (LOG_FIELDS),
-          });
-
-          if (items.length === 0) {
-            hasMore = false;
-            break;
-          }
-
-          // Add raw index tracking to items
-          /** @type {any[]} */
-          const itemsWithIndex = items.map((item, index) => ({
-            ...item,
-            _index: currentOffset + index,
-          }));
-
-          // Apply filters to current chunk
-          // Pre-process filters outside the loop for performance
-          const filterWebhookId = webhookId ? String(webhookId) : null;
-          const filterMethod = method ? String(method).toUpperCase() : null;
-          const filterStatus = statusCode ? Number(statusCode) : null;
-          const filterType = contentType
-            ? String(contentType).toLowerCase()
-            : null;
-          const filterRequestId = requestId ? String(requestId) : null;
-          const filterIp = req.query.remoteIp
-            ? String(req.query.remoteIp)
-            : null;
-          const filterUa = req.query.userAgent
-            ? String(req.query.userAgent)
+          const filterId = id ? String(id) : null;
+          const filterProcessingTime = processingTime
+            ? Number(processingTime)
             : null;
 
           // ISO String comparison is faster than new Date() per item
           // (Assumes item.timestamp is always ISO 8601 from new Date().toISOString())
-          const filterStart =
-            startDate && !isNaN(startDate.getTime())
-              ? startDate.toISOString()
-              : null;
-          const filterEnd =
-            endDate && !isNaN(endDate.getTime()) ? endDate.toISOString() : null;
+          // ... (existing timestamp logic)
 
           const batchMatches = itemsWithIndex.filter((item) => {
-            // 1. Webhook Validity (Security) - Check this first or last?
-            // Checking first prevents leaking info about invalid/expired webhooks
+            // 1. Webhook Validity (Security)
             if (!webhookManager.isValid(item.webhookId)) return false;
 
-            // 2. Exact Match Filters (Fastest)
-            if (filterWebhookId && item.webhookId !== filterWebhookId)
+            // 2. Exact Match Filters
+            if (filterId && item.id !== filterId) return false; // Added
+            if (validFilterWebhookId && item.webhookId !== validFilterWebhookId)
               return false;
-            if (filterRequestId && item.requestId !== filterRequestId)
+            if (validFilterRequestId && item.requestId !== validFilterRequestId)
               return false;
-            // StatusCode: item.statusCode is number, filterStatus is number
-            if (filterStatus !== null && item.statusCode !== filterStatus)
+            
+            // Numeric Checks
+            if (validFilterStatus !== null && item.statusCode !== validFilterStatus)
               return false;
-            if (filterMethod && item.method !== filterMethod) return false;
+            if (
+              filterProcessingTime !== null &&
+              item.processingTime !== filterProcessingTime
+            )
+              return false;
+
+            if (validFilterMethod && item.method !== validFilterMethod) return false;
             if (sigValid !== undefined && item.signatureValid !== sigValid)
               return false;
 
             // 3. String Match Filters
-            if (filterIp && item.remoteIp !== filterIp) return false;
-            if (filterUa && item.userAgent !== filterUa) return false;
+            if (validFilterIp && item.remoteIp !== validFilterIp) return false;
+            if (validFilterUa && item.userAgent !== validFilterUa) return false;
 
-            // 4. Content Type (Substring match on specialized field)
-            // Use top-level contentType instead of parsing headers
+            // 4. Content Type
             if (
-              filterType &&
-              !item.contentType?.includes(filterType) // item.contentType is normalized in logger
+              validFilterType &&
+              !item.contentType?.includes(validFilterType) 
             ) {
               return false;
             }
 
-            // 5. Timestamp Range (String comparison)
+            // 5. Timestamp Range
             if (filterStart && item.timestamp < filterStart) return false;
             if (filterEnd && item.timestamp > filterEnd) return false;
 
@@ -171,7 +146,7 @@ export const createLogsHandler = (webhookManager) =>
         }
 
         // Sorting Logic
-        const sortParam = req.query.sort ? String(req.query.sort) : "";
+        const sortParam = sort ? String(sort) : "";
 
         // Whitelist allowed sort fields
         const allowedSortFields = LOG_FIELDS.filter(
