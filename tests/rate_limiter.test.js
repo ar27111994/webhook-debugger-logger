@@ -152,7 +152,7 @@ describe("RateLimiter Unit Tests", () => {
         message: expect.stringContaining("Client IP could not be identified"),
       }),
     );
-    expect(consoleSpy).toHaveBeenCalled();
+    expect(consoleSpy.warn).toHaveBeenCalled();
   });
 
   test("should identify IP from Express req.ip (default behavior)", () => {
