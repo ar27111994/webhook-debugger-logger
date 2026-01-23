@@ -28,16 +28,28 @@ jest.unstable_mockModule("compression", () => ({
       next(),
 }));
 
-const request = (await import("supertest")).default;
-const { app, initialize, shutdown } = await import("../src/main.js");
+const { setupTestApp } = await import("./helpers/app-utils.js");
+
+/**
+ * @typedef {import("./helpers/app-utils.js").AppClient} AppClient
+ * @typedef {import("./helpers/app-utils.js").TeardownApp} TeardownApp
+ * @typedef {import("./helpers/app-utils.js").App} App
+ */
 
 describe("Coverage Improvement Tests", () => {
+  /** @type {AppClient} */
+  let appClient;
+  /** @type {TeardownApp} */
+  let teardownApp;
+  /** @type {App} */
+  let _app;
+
   beforeAll(async () => {
-    await initialize();
+    ({ app: _app, appClient, teardownApp } = await setupTestApp());
   });
 
   afterAll(async () => {
-    await shutdown("TEST_COMPLETE");
+    await teardownApp();
   });
 
   test("should handle invalid JSON body gracefully", async () => {
@@ -46,7 +58,7 @@ describe("Coverage Improvement Tests", () => {
     const [id] = await webhookManager.generateWebhooks(1, 1);
 
     // This triggers the try/catch block in main.js around JSON.parse
-    const res = await request(app)
+    const res = await appClient
       .post(`/webhook/${id}`)
       .set("Content-Type", "application/json")
       .send("{ invalid json }");
@@ -133,14 +145,13 @@ describe("Coverage Improvement Tests", () => {
 
     // Trigger the SSE endpoint
     // It will hang because it's an open stream, so we race it with a timeout
-    try {
-      await request(app)
+    // We expect the request to fail (either via timeout or connection reset)
+    await expect(
+      appClient
         .get("/log-stream")
         .set("Authorization", "Bearer test-secret")
-        .timeout(500);
-    } catch (_e) {
-      // Expected timeout or connection close
-    }
+        .timeout(500),
+    ).rejects.toThrow();
 
     try {
       // Wait a bit for async logs
@@ -177,7 +188,7 @@ describe("Coverage Improvement Tests", () => {
       .spyOn(console, "error")
       .mockImplementation(() => {});
 
-    const res = await request(app).post(`/webhook/${id}`);
+    const res = await appClient.post(`/webhook/${id}`);
 
     expect(res.statusCode).toBe(500);
     expect(res.body.error).toBe("Internal Server Error");
@@ -218,7 +229,7 @@ describe("Coverage Improvement Tests", () => {
       .mockImplementation(() => {});
 
     // 1. Establish SSE Connection
-    const sseReq = request(app)
+    const sseReq = appClient
       .get("/log-stream")
       .set("Authorization", "Bearer test-secret")
       .timeout(2000); // Keep alive long enough to receive broadcast
@@ -243,10 +254,7 @@ describe("Coverage Improvement Tests", () => {
 
       // 2. Trigger a Webhook Event (which should broadcast)
       const [id] = await webhookManager.generateWebhooks(1, 24);
-      await request(app)
-        .post(`/webhook/${id}`)
-        .send({ test: "data" })
-        .expect(200);
+      await appClient.post(`/webhook/${id}`).send({ test: "data" }).expect(200);
 
       // 3. Verify Error Log
       await waitForCondition(

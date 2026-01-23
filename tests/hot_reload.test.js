@@ -11,6 +11,8 @@ import { sleep, waitForCondition, assertType } from "./helpers/test-utils.js";
 /**
  * @typedef {import('./helpers/apify-mock.js').ApifyMock} Actor
  * @typedef {import('express').Express} Express
+ * @typedef {import("./helpers/app-utils.js").AppClient} AppClient
+ * @typedef {import("./helpers/app-utils.js").TeardownApp} TeardownApp
  */
 
 // 1. Setup mocks
@@ -18,14 +20,18 @@ import { setupCommonMocks } from "./helpers/mock-setup.js";
 await setupCommonMocks({ apify: true });
 
 // 2. Import modules
-const request = (await import("supertest")).default;
+const { setupTestApp } = await import("./helpers/app-utils.js");
 /** @type {Actor} */
 const Actor = assertType((await import("apify")).Actor);
-const { initialize, shutdown, webhookManager } = await import("../src/main.js");
+const { webhookManager } = await import("../src/main.js");
 
 describe("Hot-Reloading Configuration Tests", () => {
   /** @type {Express} */
-  let app;
+  let _app;
+  /** @type {AppClient} */
+  let appClient;
+  /** @type {TeardownApp} */
+  let teardownApp;
 
   beforeAll(async () => {
     // Start with basic config
@@ -34,16 +40,16 @@ describe("Hot-Reloading Configuration Tests", () => {
       urlCount: 1,
       retentionHours: 1,
     });
-    app = /** @type {Express} */ (await initialize());
+    ({ app: _app, appClient, teardownApp } = await setupTestApp());
   });
 
   afterAll(async () => {
-    await shutdown("TEST_CLEANUP");
+    await teardownApp();
   });
 
   test("should update authKey in real-time", async () => {
     // Verify original key works
-    const res1 = await request(app)
+    const res1 = await appClient
       .get("/info")
       .set("Authorization", "Bearer original-key");
     expect(res1.statusCode).toBe(200);
@@ -58,20 +64,20 @@ describe("Hot-Reloading Configuration Tests", () => {
 
     // Wait for the new key to be accepted
     await waitForCondition(async () => {
-      const res = await request(app)
+      const res = await appClient
         .get("/info")
         .set("Authorization", "Bearer new-secret-key");
       return res.statusCode === 200;
     });
 
     // Verify old key fails
-    const res2 = await request(app)
+    const res2 = await appClient
       .get("/info")
       .set("Authorization", "Bearer original-key");
     expect(res2.statusCode).toBe(401);
 
     // Verify new key works
-    const res3 = await request(app)
+    const res3 = await appClient
       .get("/info")
       .set("Authorization", "Bearer new-secret-key");
     expect(res3.statusCode).toBe(200);
@@ -125,7 +131,7 @@ describe("Hot-Reloading Configuration Tests", () => {
     const whId = ids[0].id;
 
     // 1. Test original behavior (no script)
-    const res1 = await request(app)
+    const res1 = await appClient
       .post(`/webhook/${whId}`)
       .set("Authorization", "Bearer new-super-secret")
       .send({ data: "test" });
@@ -142,7 +148,7 @@ describe("Hot-Reloading Configuration Tests", () => {
 
     // Wait for script to take effect
     await waitForCondition(async () => {
-      const res = await request(app)
+      const res = await appClient
         .post(`/webhook/${whId}`)
         .set("Authorization", "Bearer new-super-secret")
         .send({ data: "test" });
@@ -150,7 +156,7 @@ describe("Hot-Reloading Configuration Tests", () => {
     });
 
     // 3. Verify transformation applies immediately
-    const res2 = await request(app)
+    const res2 = await appClient
       .post(`/webhook/${whId}`)
       .set("Authorization", "Bearer new-super-secret")
       .send({ data: "test" });
@@ -178,7 +184,7 @@ describe("Hot-Reloading Configuration Tests", () => {
     consoleSpy.mockRestore();
 
     // Verify app is still responsive
-    const res = await request(app)
+    const res = await appClient
       .get("/info")
       .set("Authorization", "Bearer new-super-secret");
 
@@ -199,7 +205,7 @@ describe("Hot-Reloading Configuration Tests", () => {
 
     // Wait until large payload is accepted
     await waitForCondition(async () => {
-      const res = await request(app)
+      const res = await appClient
         .post(`/webhook/${whId}`)
         .set("Authorization", "Bearer new-super-secret")
         .set("Content-Type", "text/plain")
@@ -207,7 +213,7 @@ describe("Hot-Reloading Configuration Tests", () => {
       return res.statusCode === 200;
     });
 
-    const res1 = await request(app)
+    const res1 = await appClient
       .post(`/webhook/${whId}`)
       .set("Authorization", "Bearer new-super-secret")
       .set("Content-Type", "text/plain")
@@ -222,7 +228,7 @@ describe("Hot-Reloading Configuration Tests", () => {
 
     // Wait until large payload is rejected
     await waitForCondition(async () => {
-      const res = await request(app)
+      const res = await appClient
         .post(`/webhook/${whId}`)
         .set("Authorization", "Bearer new-super-secret")
         .set("Content-Type", "text/plain")
@@ -230,7 +236,7 @@ describe("Hot-Reloading Configuration Tests", () => {
       return res.statusCode === 413;
     });
 
-    const res2 = await request(app)
+    const res2 = await appClient
       .post(`/webhook/${whId}`)
       .set("Authorization", "Bearer new-super-secret")
       .set("Content-Type", "text/plain")
@@ -255,7 +261,7 @@ describe("Hot-Reloading Configuration Tests", () => {
 
     // Wait for it to apply
     await waitForCondition(async () => {
-      const res = await request(app)
+      const res = await appClient
         .post(`/webhook/${whId}`)
         .set("Authorization", "Bearer new-super-secret")
         .set("Content-Type", "application/json")
@@ -274,7 +280,7 @@ describe("Hot-Reloading Configuration Tests", () => {
 
     // Wait for it to apply (validation should pass)
     await waitForCondition(async () => {
-      const res = await request(app)
+      const res = await appClient
         .post(`/webhook/${whId}`)
         .set("Authorization", "Bearer new-super-secret")
         .set("Content-Type", "application/json")
@@ -282,7 +288,7 @@ describe("Hot-Reloading Configuration Tests", () => {
       return res.statusCode === 200;
     });
 
-    const res = await request(app)
+    const res = await appClient
       .post(`/webhook/${whId}`)
       .set("Authorization", "Bearer new-super-secret")
       .set("Content-Type", "application/json")
@@ -303,14 +309,14 @@ describe("Hot-Reloading Configuration Tests", () => {
 
     // 2. Wait for it to apply
     await waitForCondition(async () => {
-      const res = await request(app)
+      const res = await appClient
         .get("/info")
         .set("Authorization", "Bearer stringified-secret");
       return res.statusCode === 200;
     });
 
     // 3. Verify it works
-    const res = await request(app)
+    const res = await appClient
       .get("/info")
       .set("Authorization", "Bearer stringified-secret");
 

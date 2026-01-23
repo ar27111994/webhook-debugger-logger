@@ -5,18 +5,26 @@ import { setupCommonMocks } from "./helpers/mock-setup.js";
 await setupCommonMocks({ axios: true, apify: true });
 
 // Mock Apify
+const { setupTestApp } = await import("./helpers/app-utils.js");
+const { webhookManager } = await import("../src/main.js");
 
-const request = (await import("supertest")).default;
-const { app, webhookManager, initialize, shutdown } =
-  await import("../src/main.js");
+/**
+ * @typedef {import("./helpers/app-utils.js").AppClient} AppClient
+ * @typedef {import("./helpers/app-utils.js").TeardownApp} TeardownApp
+ */
 
 describe("Large Payload Stability", () => {
+  /** @type {AppClient} */
+  let appClient;
+  /** @type {TeardownApp} */
+  let teardownApp;
+
   beforeAll(async () => {
-    await initialize();
+    ({ appClient, teardownApp } = await setupTestApp());
   });
 
   afterAll(async () => {
-    await shutdown("TEST_COMPLETE");
+    await teardownApp();
   });
 
   test("Should handle 10MB payload", async () => {
@@ -24,7 +32,7 @@ describe("Large Payload Stability", () => {
     const [webhookId] = await webhookManager.generateWebhooks(1, 1);
     const largeBody = "a".repeat(10 * 1024 * 1024); // 10MB
 
-    const res = await request(app)
+    const res = await appClient
       .post(`/webhook/${webhookId}`)
       .set("Content-Type", "text/plain")
       .send(largeBody);

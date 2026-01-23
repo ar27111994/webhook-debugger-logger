@@ -12,22 +12,30 @@ import { apifyMock } from "./helpers/shared-mocks.js";
 import { setupCommonMocks } from "./helpers/mock-setup.js";
 await setupCommonMocks({ apify: true });
 
-const request = (await import("supertest")).default;
-const { app, webhookManager, initialize, shutdown } =
-  await import("../src/main.js");
+const { setupTestApp } = await import("./helpers/app-utils.js");
+const { webhookManager } = await import("../src/main.js");
+
+/**
+ * @typedef {import("./helpers/app-utils.js").AppClient} AppClient
+ * @typedef {import("./helpers/app-utils.js").TeardownApp} TeardownApp
+ */
 
 describe("Stress Tests", () => {
   /** @type {string} */
   let webhookId;
+  /** @type {AppClient} */
+  let appClient;
+  /** @type {TeardownApp} */
+  let teardownApp;
 
   beforeAll(async () => {
-    await initialize();
+    ({ appClient, teardownApp } = await setupTestApp());
     const ids = await webhookManager.generateWebhooks(1, 1);
     webhookId = ids[0];
   });
 
   afterAll(async () => {
-    await shutdown("TEST_COMPLETE");
+    await teardownApp();
   });
 
   test("Memory usage should remain stable under high load", async () => {
@@ -35,7 +43,7 @@ describe("Stress Tests", () => {
     const ITERATIONS = 1000; // Simulate 1000 requests
 
     for (let i = 0; i < ITERATIONS; i++) {
-      await request(app)
+      await appClient
         .post(`/webhook/${webhookId}`)
         .send({ data: `payload-${i}`, timestamp: Date.now() })
         .expect(200);
@@ -54,11 +62,11 @@ describe("Stress Tests", () => {
     const finalMemory = process.memoryUsage().heapUsed;
     const memoryDiffMB = (finalMemory - initialMemory) / 1024 / 1024;
 
-    // console.log(
-    //   `Memory growth after ${ITERATIONS} requests: ${memoryDiffMB.toFixed(
-    //     2,
-    //   )} MB`,
-    // );
+    console.log(
+      `Memory growth after ${ITERATIONS} requests: ${memoryDiffMB.toFixed(
+        2,
+      )} MB`,
+    );
 
     // Expect memory growth to be reasonable (e.g., < 100MB for 1000 requests including overhead)
     // Note: This is an observation test; precise assertion depends on the environment

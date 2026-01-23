@@ -2,21 +2,36 @@ import { describe, test, expect, beforeAll } from "@jest/globals";
 import { setupCommonMocks } from "./helpers/mock-setup.js";
 await setupCommonMocks({ axios: true, apify: true });
 
-const request = (await import("supertest")).default;
-const { initialize, app } = await import("../src/main.js");
-
+const { setupTestApp } = await import("./helpers/app-utils.js");
 const { Actor } = await import("apify");
 
+/**
+ * @typedef {import("./helpers/app-utils.js").AppClient} AppClient
+ * @typedef {import("./helpers/app-utils.js").TeardownApp} TeardownApp
+ * @typedef {import("./helpers/app-utils.js").App} App
+ */
+
 describe("Security Headers", () => {
+  /** @type {AppClient} */
+  let appClient;
+  /** @type {TeardownApp} */
+  let teardownApp;
+  /** @type {App} */
+  let _app;
+
   beforeAll(async () => {
     // initialize logic calls Actor.init internally, but we mock it here too just in case
     await Actor.init();
-    await initialize({ urlCount: 1, testAndExit: true });
+    ({ app: _app, appClient, teardownApp } = await setupTestApp());
+  });
+
+  afterAll(async () => {
+    await teardownApp();
   });
 
   describe("Request ID", () => {
     test("should add X-Request-ID header to responses", async () => {
-      const res = await request(app).get("/info");
+      const res = await appClient.get("/info");
       expect(res.headers["x-request-id"]).toBeDefined();
       expect(typeof res.headers["x-request-id"]).toBe("string");
       expect(res.headers["x-request-id"].startsWith("req_")).toBe(true);
@@ -24,7 +39,7 @@ describe("Security Headers", () => {
 
     test("should respect incoming X-Request-ID header", async () => {
       const customRequestId = "custom-trace-id-12345";
-      const res = await request(app)
+      const res = await appClient
         .get("/info")
         .set("X-Request-ID", customRequestId);
       expect(res.headers["x-request-id"]).toBe(customRequestId);
@@ -33,7 +48,7 @@ describe("Security Headers", () => {
 
   describe("CSP Headers", () => {
     test("should add Content-Security-Policy to dashboard", async () => {
-      const res = await request(app).get("/");
+      const res = await appClient.get("/");
       expect(res.headers["content-security-policy"]).toBeDefined();
       expect(res.headers["content-security-policy"]).toContain(
         "default-src 'self'",
@@ -44,24 +59,24 @@ describe("Security Headers", () => {
     });
 
     test("should add X-Content-Type-Options to dashboard", async () => {
-      const res = await request(app).get("/");
+      const res = await appClient.get("/");
       expect(res.headers["x-content-type-options"]).toBe("nosniff");
     });
 
     test("should add X-Frame-Options to dashboard", async () => {
-      const res = await request(app).get("/");
+      const res = await appClient.get("/");
       expect(res.headers["x-frame-options"]).toBe("DENY");
     });
 
     test("should add Referrer-Policy to dashboard", async () => {
-      const res = await request(app).get("/");
+      const res = await appClient.get("/");
       expect(res.headers["referrer-policy"]).toBe(
         "strict-origin-when-cross-origin",
       );
     });
 
     test("should NOT add CSP headers to API endpoints", async () => {
-      const res = await request(app).get("/info");
+      const res = await appClient.get("/info");
       expect(res.headers["content-security-policy"]).toBeUndefined();
     });
   });
@@ -69,7 +84,7 @@ describe("Security Headers", () => {
   describe("Request ID in Webhook Events", () => {
     test("should include requestId in stored webhook events", async () => {
       // Fetch fresh info inside the test to avoid shared state issues
-      const freshInfoRes = await request(app).get("/info");
+      const freshInfoRes = await appClient.get("/info");
       if (
         !freshInfoRes.body.webhooks ||
         freshInfoRes.body.webhooks.length === 0
@@ -81,12 +96,12 @@ describe("Security Headers", () => {
       const testPayload = { event: "test_security" };
       const customRequestId = "trace-webhook-test-123";
 
-      await request(app)
+      await appClient
         .post(`/webhook/${webhookId}`)
         .set("X-Request-ID", customRequestId)
         .send(testPayload);
 
-      const logsRes = await request(app).get(
+      const logsRes = await appClient.get(
         `/logs?webhookId=${webhookId}&limit=1`,
       );
       expect(logsRes.body.items).toBeDefined();

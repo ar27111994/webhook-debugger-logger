@@ -8,8 +8,6 @@ import { jest, describe, test, expect, beforeEach } from "@jest/globals";
 import { setupCommonMocks } from "./helpers/mock-setup.js";
 await setupCommonMocks({ apify: true });
 
-import { apifyMock } from "./helpers/shared-mocks.js";
-
 const { Actor } = await import("apify");
 const { WebhookManager } = await import("../src/webhook_manager.js");
 

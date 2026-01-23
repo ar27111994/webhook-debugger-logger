@@ -18,30 +18,42 @@ import { setupCommonMocks } from "./helpers/mock-setup.js";
 import { useMockCleanup } from "./helpers/test-lifecycle.js";
 await setupCommonMocks({ apify: true });
 
-const { app, webhookManager, initialize, shutdown } =
-  await import("../src/main.js");
+const { setupTestApp } = await import("./helpers/app-utils.js");
+const { webhookManager } = await import("../src/main.js");
 const { Actor } = await import("apify");
-const request = (await import("supertest")).default;
 const { createDatasetMock } = await import("./helpers/shared-mocks.js");
 const authKey = "TEST_KEY";
 const authHeader = `Bearer ${authKey}`;
 
+/**
+ * @typedef {import("./helpers/app-utils.js").AppClient} AppClient
+ * @typedef {import("./helpers/app-utils.js").TeardownApp} TeardownApp
+ * @typedef {import("./helpers/app-utils.js").App} App
+ */
+
 describe("Log Filtering Routes", () => {
   useMockCleanup();
+
+  /** @type {AppClient} */
+  let appClient;
+  /** @type {TeardownApp} */
+  let teardownApp;
+  /** @type {App} */
+  let _app;
 
   beforeAll(async () => {
     // Enforce auth to test 401 scenarios
     jest.mocked(Actor.getInput).mockResolvedValue({ authKey });
-    await initialize();
+    ({ app: _app, appClient, teardownApp } = await setupTestApp());
   });
 
   afterAll(async () => {
-    await shutdown("TEST_COMPLETE");
+    await teardownApp();
   });
 
   describe("Root Route Content Negotiation", () => {
     test("GET / should return 200 OK for readiness probe", async () => {
-      const res = await request(app)
+      const res = await appClient
         .get("/")
         .set("X-Apify-Container-Server-Readiness-Probe", "1");
       expect(res.statusCode).toBe(200);
@@ -50,7 +62,7 @@ describe("Log Filtering Routes", () => {
 
     test("GET / should return 401 HTML for browser without auth", async () => {
       // Ensure we don't send auth headers
-      const res = await request(app).get("/").set("Accept", "text/html");
+      const res = await appClient.get("/").set("Accept", "text/html");
 
       expect(res.statusCode).toBe(401);
       expect(res.headers["content-type"]).toMatch(/text\/html/);
@@ -59,14 +71,14 @@ describe("Log Filtering Routes", () => {
     });
 
     test("GET / should return 401 JSON for non-browser without auth", async () => {
-      const res = await request(app).get("/").set("Accept", "application/json");
+      const res = await appClient.get("/").set("Accept", "application/json");
 
       expect(res.statusCode).toBe(401);
       expect(res.body.error).toBe("Unauthorized");
     });
 
     test("GET / should return 200 HTML with Dashboard loop for valid auth", async () => {
-      const res = await request(app)
+      const res = await appClient
         .get("/")
         .set("Accept", "text/html")
         .set("Authorization", authHeader);
@@ -108,7 +120,7 @@ describe("Log Filtering Routes", () => {
     jest.mocked(Actor.openDataset).mockResolvedValue(createDatasetMock(items));
 
     // Filter by Method
-    let res = await request(app)
+    let res = await appClient
       .get("/logs")
       .query({ method: "GET" })
       .set("Authorization", authHeader);
@@ -116,7 +128,7 @@ describe("Log Filtering Routes", () => {
     expect(res.body.items[0].method).toBe("GET");
 
     // Filter by StatusCode
-    res = await request(app)
+    res = await appClient
       .get("/logs")
       .query({ statusCode: "404" })
       .set("Authorization", authHeader);
@@ -124,7 +136,7 @@ describe("Log Filtering Routes", () => {
     expect(res.body.items[0].statusCode).toBe(404);
 
     // Filter by ContentType
-    res = await request(app)
+    res = await appClient
       .get("/logs")
       .query({ contentType: "text/plain" })
       .set("Authorization", authHeader);
@@ -132,7 +144,7 @@ describe("Log Filtering Routes", () => {
     expect(res.body.items[0].headers["content-type"]).toBe("text/plain");
 
     // Filter by WebhookId
-    res = await request(app)
+    res = await appClient
       .get("/logs")
       .query({ webhookId: "wh_2" })
       .set("Authorization", authHeader);
@@ -140,7 +152,7 @@ describe("Log Filtering Routes", () => {
     expect(res.body.items[0].webhookId).toBe("wh_2");
 
     // Combined Filters
-    res = await request(app)
+    res = await appClient
       .get("/logs")
       .query({ method: "POST", statusCode: 200 })
       .set("Authorization", authHeader);
@@ -151,7 +163,7 @@ describe("Log Filtering Routes", () => {
     });
 
     // Invalid Webhook ID
-    res = await request(app)
+    res = await appClient
       .get("/logs")
       .query({ webhookId: "non_existent" })
       .set("Authorization", authHeader);
@@ -163,9 +175,7 @@ describe("Log Filtering Routes", () => {
       .mocked(Actor.openDataset)
       .mockRejectedValue(new Error("Dataset access failed"));
 
-    const res = await request(app)
-      .get("/logs")
-      .set("Authorization", authHeader);
+    const res = await appClient.get("/logs").set("Authorization", authHeader);
 
     expect(res.statusCode).toBe(500);
     expect(res.body.error).toBe("Logs failed");
@@ -179,7 +189,7 @@ describe("Log Filtering Routes", () => {
     jest.mocked(Actor.openDataset).mockResolvedValue(createDatasetMock(items));
 
     // Case 1: Limit 0 (Should return default or handle gracefully, assuming default 100)
-    let res = await request(app)
+    let res = await appClient
       .get("/logs")
       .query({ limit: 0 })
       .set("Authorization", authHeader);
@@ -188,7 +198,7 @@ describe("Log Filtering Routes", () => {
     expect(res.body.items.length).toBeGreaterThan(0);
 
     // Case 2: Negative Limit (Should be ignored or clamped)
-    res = await request(app)
+    res = await appClient
       .get("/logs")
       .query({ limit: -10 })
       .set("Authorization", authHeader);
@@ -196,7 +206,7 @@ describe("Log Filtering Routes", () => {
     expect(res.body.items.length).toBeGreaterThan(0);
 
     // Case 3: Non-numeric Limit (Should use default)
-    res = await request(app)
+    res = await appClient
       .get("/logs")
       .query({ limit: "invalid" })
       .set("Authorization", authHeader);
@@ -213,7 +223,7 @@ describe("Log Filtering Routes", () => {
     const mockDataset = createDatasetMock(items);
     jest.mocked(Actor.openDataset).mockResolvedValue(assertType(mockDataset));
 
-    const res = await request(app)
+    const res = await appClient
       .get("/logs")
       .query({ limit: 10 })
       .set("Authorization", authHeader);

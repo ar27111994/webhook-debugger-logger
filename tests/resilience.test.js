@@ -15,27 +15,36 @@ await setupCommonMocks({ axios: true, apify: true });
 
 const { createDatasetMock } = await import("./helpers/shared-mocks.js");
 
-const request = (await import("supertest")).default;
-const { app, initialize, shutdown, webhookManager } =
-  await import("../src/main.js");
+const { setupTestApp } = await import("./helpers/app-utils.js");
+const { webhookManager } = await import("../src/main.js");
 const axios = (await import("axios")).default;
 const { Actor } = await import("apify");
+
+/**
+ * @typedef {import("./helpers/app-utils.js").AppClient} AppClient
+ * @typedef {import("./helpers/app-utils.js").TeardownApp} TeardownApp
+ */
 
 describe("Resilience & Retry Tests", () => {
   /** @type {string} */
   let webhookId;
 
+  /** @type {AppClient} */
+  let appClient;
+  /** @type {TeardownApp} */
+  let teardownApp;
+
   useConsoleSpy("log", "warn", "error");
 
   beforeAll(async () => {
     // Disable logs for cleaner output
-    await initialize();
+    ({ appClient, teardownApp } = await setupTestApp());
     const ids = await webhookManager.generateWebhooks(1, 1);
     webhookId = ids[0];
   });
 
   afterAll(async () => {
-    await shutdown("TEST_COMPLETE");
+    await teardownApp();
     jest.restoreAllMocks();
   });
 
@@ -62,7 +71,7 @@ describe("Resilience & Retry Tests", () => {
         .mockRejectedValueOnce({ code: "ECONNABORTED" })
         .mockResolvedValueOnce({ status: 200, data: "OK" });
 
-      const res = await request(app)
+      const res = await appClient
         .get(`/replay/${webhookId}/evt_retry`)
         .query({ url: "http://target.com" });
 
@@ -90,7 +99,7 @@ describe("Resilience & Retry Tests", () => {
       // Always fail
       jest.mocked(axios).mockRejectedValue({ code: "ECONNABORTED" });
 
-      const res = await request(app)
+      const res = await appClient
         .get(`/replay/${webhookId}/evt_fail`)
         .query({ url: "http://target.com" });
 
@@ -112,12 +121,9 @@ describe("Resilience & Retry Tests", () => {
         .mocked(Actor.openDataset)
         .mockResolvedValue(createDatasetMock([mockItem]));
 
-      // Axios returns a response with 404 status (no exception thrown if validateStatus allows it)
-      // But in our Replay logic we use validateStatus: () => true, so it wont throw.
-      // Wait, let's test a real error that SHOULDNT be retried, like a generic Error without code
       jest.mocked(axios).mockRejectedValueOnce(new Error("Generic Failure"));
 
-      const res = await request(app)
+      const res = await appClient
         .get(`/replay/${webhookId}/evt_generic`)
         .query({ url: "http://target.com" });
 
@@ -135,7 +141,7 @@ describe("Resilience & Retry Tests", () => {
       });
 
       const startTime = Date.now();
-      const res = await request(app)
+      const res = await appClient
         .post(`/webhook/${webhookId}`)
         .send({ test: "slow-bg" });
 

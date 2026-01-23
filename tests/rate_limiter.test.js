@@ -13,7 +13,11 @@ import {
   createMockNextFunction,
   assertType,
 } from "./helpers/test-utils.js";
-import { useFakeTimers } from "./helpers/test-lifecycle.js";
+import {
+  useConsoleSpy,
+  useFakeTimers,
+  useMockCleanup,
+} from "./helpers/test-lifecycle.js";
 import { DEFAULT_RATE_LIMIT_WINDOW_MS } from "../src/consts.js";
 
 /**
@@ -30,8 +34,12 @@ describe("RateLimiter Unit Tests", () => {
     // Other setup if needed, currently empty but keeping structure if preferred
   });
 
+  useMockCleanup();
+  const consoleSpy = useConsoleSpy("warn", "log");
+
   afterEach(() => {
     if (rateLimiter) rateLimiter.destroy();
+
     jest.restoreAllMocks();
   });
 
@@ -134,8 +142,6 @@ describe("RateLimiter Unit Tests", () => {
     });
     const res = createMockResponse();
     const next = createMockNextFunction();
-
-    const consoleSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
 
     mw(req, res, next);
 
@@ -379,7 +385,6 @@ describe("RateLimiter Unit Tests", () => {
   test("should log eviction when not in test environment", () => {
     const originalEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = "production";
-    const consoleSpy = jest.spyOn(console, "log").mockImplementation(() => {});
 
     try {
       rateLimiter = new RateLimiter(10, DEFAULT_RATE_LIMIT_WINDOW_MS, 1);
@@ -393,12 +398,11 @@ describe("RateLimiter Unit Tests", () => {
       // Trigger eviction
       mw(createMockRequest({ ip: "user2", headers: {} }), res, next);
 
-      expect(consoleSpy).toHaveBeenCalledWith(
+      expect(consoleSpy.log).toHaveBeenCalledWith(
         expect.stringContaining("[SYSTEM] RateLimiter evicted entry"),
       );
     } finally {
       process.env.NODE_ENV = originalEnv;
-      consoleSpy.mockRestore();
     }
   });
 });

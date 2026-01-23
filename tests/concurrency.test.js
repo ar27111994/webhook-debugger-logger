@@ -12,23 +12,31 @@ import {
 import { setupCommonMocks } from "./helpers/mock-setup.js";
 await setupCommonMocks({ apify: true });
 
-const request = (await import("supertest")).default;
-const { app, webhookManager, initialize, shutdown } =
-  await import("../src/main.js");
+const { setupTestApp } = await import("./helpers/app-utils.js");
+const { webhookManager } = await import("../src/main.js");
 const { Actor } = await import("apify");
+
+/**
+ * @typedef {import("./helpers/app-utils.js").AppClient} AppClient
+ * @typedef {import("./helpers/app-utils.js").TeardownApp} TeardownApp
+ */
 
 describe("Concurrency Tests", () => {
   /** @type {string} */
   let webhookId;
+  /** @type {AppClient} */
+  let appClient;
+  /** @type {TeardownApp} */
+  let teardownApp;
 
   beforeAll(async () => {
-    await initialize();
+    ({ appClient, teardownApp } = await setupTestApp());
     const ids = await webhookManager.generateWebhooks(1, 1);
     webhookId = ids[0];
   });
 
   afterAll(async () => {
-    await shutdown("TEST_COMPLETE");
+    await teardownApp();
   });
 
   beforeEach(() => {
@@ -42,7 +50,7 @@ describe("Concurrency Tests", () => {
 
     for (let i = 0; i < CONCURRENCY; i++) {
       promises.push(
-        request(app)
+        appClient
           .post(`/webhook/${webhookId}`)
           .send({ index: i, timestamp: Date.now() }),
       );

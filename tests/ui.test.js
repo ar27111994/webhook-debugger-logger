@@ -7,21 +7,30 @@ import { describe, test, expect, beforeAll, afterAll } from "@jest/globals";
 import { setupCommonMocks } from "./helpers/mock-setup.js";
 await setupCommonMocks({ apify: true });
 
-const request = (await import("supertest")).default;
-const { app, initialize, shutdown, webhookManager } =
-  await import("../src/main.js");
+const { setupTestApp } = await import("./helpers/app-utils.js");
+const { webhookManager } = await import("../src/main.js");
+
+/**
+ * @typedef {import("./helpers/app-utils.js").AppClient} AppClient
+ * @typedef {import("./helpers/app-utils.js").TeardownApp} TeardownApp
+ */
 
 describe("UI & Landing Page Tests", () => {
+  /** @type {AppClient} */
+  let appClient;
+  /** @type {TeardownApp} */
+  let teardownApp;
+
   beforeAll(async () => {
-    await initialize();
+    ({ appClient, teardownApp } = await setupTestApp());
   });
 
   afterAll(async () => {
-    await shutdown("TEST_COMPLETE");
+    await teardownApp();
   });
 
   test("GET / should return professional HTML landing page for browsers", async () => {
-    const res = await request(app).get("/").set("Accept", "text/html");
+    const res = await appClient.get("/").set("Accept", "text/html");
 
     expect(res.statusCode).toBe(200);
     expect(res.headers["content-type"]).toContain("text/html");
@@ -36,7 +45,7 @@ describe("UI & Landing Page Tests", () => {
   });
 
   test("GET / should return plain text for non-browser clients", async () => {
-    const res = await request(app).get("/").set("Accept", "text/plain");
+    const res = await appClient.get("/").set("Accept", "text/plain");
 
     expect(res.statusCode).toBe(200);
     expect(res.text).toContain("Enterprise Suite");
@@ -44,7 +53,7 @@ describe("UI & Landing Page Tests", () => {
   });
 
   test("Readiness probe should return 200 OK", async () => {
-    const res = await request(app)
+    const res = await appClient
       .get("/")
       .set("x-apify-container-server-readiness-probe", "1");
 

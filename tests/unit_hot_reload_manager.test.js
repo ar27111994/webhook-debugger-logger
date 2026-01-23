@@ -16,10 +16,9 @@ import { INPUT_POLL_INTERVAL_TEST_MS } from "../src/consts.js";
  */
 
 // 1. Mock Apify
+import { setupCommonMocks } from "./helpers/mock-setup.js";
+await setupCommonMocks({ apify: true });
 import { apifyMock } from "./helpers/shared-mocks.js";
-jest.unstable_mockModule("apify", () => ({
-  Actor: apifyMock,
-}));
 const mockActor = apifyMock;
 
 // 2. Mock fs/promises & fs & path

@@ -7,33 +7,39 @@ import {
   afterAll,
 } from "@jest/globals";
 
-// Mock Apify
-jest.unstable_mockModule("apify", async () => {
-  const { apifyMock } = await import("./helpers/shared-mocks.js");
-  return { Actor: apifyMock };
-});
+import { setupCommonMocks } from "./helpers/mock-setup.js";
+await setupCommonMocks({ apify: true });
 
-const request = (await import("supertest")).default;
-const { app, initialize, shutdown } = await import("../src/main.js");
+const { setupTestApp } = await import("./helpers/app-utils.js");
 const { Actor } = await import("apify");
+
+/**
+ * @typedef {import("./helpers/app-utils.js").AppClient} AppClient
+ * @typedef {import("./helpers/app-utils.js").TeardownApp} TeardownApp
+ */
 
 describe("Auth UI Hardening Tests", () => {
   const authKey = "secret-ui-key";
+
+  /** @type {AppClient} */
+  let appClient;
+  /** @type {TeardownApp} */
+  let teardownApp;
 
   beforeAll(async () => {
     jest.mocked(Actor.getInput).mockResolvedValue({
       authKey,
       urlCount: 1,
     });
-    await initialize();
+    ({ appClient, teardownApp } = await setupTestApp());
   });
 
   afterAll(async () => {
-    await shutdown("TEST_COMPLETE");
+    await teardownApp();
   });
 
   test("should allow readiness probe without auth", async () => {
-    const res = await request(app)
+    const res = await appClient
       .get("/")
       .set("x-apify-container-server-readiness-probe", "true");
 
@@ -42,7 +48,7 @@ describe("Auth UI Hardening Tests", () => {
   });
 
   test("should show 'Locked' HTML for browser unauthorized access", async () => {
-    const res = await request(app).get("/").set("Accept", "text/html");
+    const res = await appClient.get("/").set("Accept", "text/html");
 
     expect(res.statusCode).toBe(401);
     expect(res.text).toContain("Access Restricted");
@@ -50,14 +56,14 @@ describe("Auth UI Hardening Tests", () => {
   });
 
   test("should return JSON 401 for non-browser unauthorized access", async () => {
-    const res = await request(app).get("/");
+    const res = await appClient.get("/");
 
     expect(res.statusCode).toBe(401);
     expect(res.body.error).toBe("Unauthorized");
   });
 
   test("should allow access but NOT propagate key in links when authenticated via query", async () => {
-    const res = await request(app)
+    const res = await appClient
       .get("/")
       .query({ key: authKey })
       .set("Accept", "text/html");
@@ -70,7 +76,7 @@ describe("Auth UI Hardening Tests", () => {
   });
 
   test("should allow access but NOT propagate key when authenticated via Bearer header", async () => {
-    const res = await request(app)
+    const res = await appClient
       .get("/")
       .set("Authorization", `Bearer ${authKey}`)
       .set("Accept", "text/html");
@@ -82,7 +88,7 @@ describe("Auth UI Hardening Tests", () => {
   });
 
   test("should NOT leak key in /info JSON response when authed via header", async () => {
-    const res = await request(app)
+    const res = await appClient
       .get("/info")
       .set("Authorization", `Bearer ${authKey}`);
 
@@ -93,7 +99,7 @@ describe("Auth UI Hardening Tests", () => {
   });
 
   test("should NOT leak key in /info JSON response when authed via query", async () => {
-    const res = await request(app).get("/info").query({ key: authKey });
+    const res = await appClient.get("/info").query({ key: authKey });
 
     expect(res.statusCode).toBe(200);
     expect(res.body.endpoints.logs).not.toContain("key=");
@@ -102,19 +108,19 @@ describe("Auth UI Hardening Tests", () => {
   });
 
   test("should reject /info access without any auth", async () => {
-    const res = await request(app).get("/info");
+    const res = await appClient.get("/info");
     expect(res.statusCode).toBe(401);
     expect(res.body.error).toBe("Unauthorized");
   });
 
   test("should reject /info access with invalid key", async () => {
-    const res = await request(app).get("/info").query({ key: "wrong-key" });
+    const res = await appClient.get("/info").query({ key: "wrong-key" });
     expect(res.statusCode).toBe(401);
     expect(res.body.error).toBe("Unauthorized");
   });
 
   test("should show 'Locked' HTML for malformed auth key in query", async () => {
-    const res = await request(app)
+    const res = await appClient
       .get("/")
       .query({ key: "malformed-key" })
       .set("Accept", "text/html");
