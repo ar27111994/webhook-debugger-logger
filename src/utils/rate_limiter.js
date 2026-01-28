@@ -4,6 +4,10 @@
 import net from "node:net";
 import { DEFAULT_RATE_LIMIT_WINDOW_MS } from "../consts.js";
 
+/**
+ * @typedef {import('express').RequestHandler} RequestHandler
+ */
+
 export class RateLimiter {
   /** @type {number} */
   #limit;
@@ -152,7 +156,7 @@ export class RateLimiter {
    * @security trustProxy allows spoofing if the Actor is exposed directly to the internet.
    * Only enable trustProxy if the Actor is behind a trusted reverse proxy (e.g., Apify API).
    * Headers are strictly validated to prevent malformed or malicious IP data propagation.
-   * @returns {import('express').RequestHandler}
+   * @returns {RequestHandler}
    */
   middleware() {
     return (req, res, next) => {

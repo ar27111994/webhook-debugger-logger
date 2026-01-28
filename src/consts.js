@@ -18,6 +18,7 @@ export const INPUT_POLL_INTERVAL_PROD_MS = getInt(
   "INPUT_POLL_INTERVAL_PROD_MS",
   5000,
 );
+export const INPUT_POLL_INTERVAL_TEST_MS = getInt(
   "INPUT_POLL_INTERVAL_TEST_MS",
   100,
 );
