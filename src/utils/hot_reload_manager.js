@@ -3,38 +3,48 @@ import { watch as fsWatch } from "fs/promises";
 import { existsSync } from "fs";
 import { join } from "path";
 import { normalizeInput, coerceRuntimeOptions } from "./config.js";
+import { HOT_RELOAD_DEBOUNCE_MS } from "../consts.js";
 
 /**
  * @typedef {import("../typedefs.js").CommonError} CommonError
+ * @typedef {(newConfig: any, validated: any) => Promise<void>} OnConfigChange
  */
 
 export class HotReloadManager {
+  /** @type {string} */
+  #lastInputStr;
+  /** @type {number} */
+  #pollIntervalMs;
+  /** @type {OnConfigChange} */
+  #onConfigChange;
+
+  /** @type {Promise<void> | null} */
+  #activePollPromise = null;
+  /** @type {ReturnType<typeof setInterval> | undefined} */
+  #inputPollInterval;
+  /** @type {AbortController | undefined} */
+  #fileWatcherAbortController;
+
+  /** @type {any} */
+  #store = null;
+
   /**
    * @param {Object} options
    * @param {Object} options.initialInput - The initial configuration object
    * @param {number} options.pollIntervalMs - How often to poll the KV store
-   * @param {Function} options.onConfigChange - Callback when config changes: (newConfig) => Promise<void>
+   * @param {OnConfigChange} options.onConfigChange - Callback when config changes
    */
   constructor({ initialInput, pollIntervalMs, onConfigChange }) {
-    this.lastInputStr = JSON.stringify(initialInput);
-    this.pollIntervalMs = pollIntervalMs;
-    this.onConfigChange = onConfigChange;
-
-    /** @type {Promise<void> | null} */
-    this.activePollPromise = null;
-    /** @type {ReturnType<typeof setInterval> | undefined} */
-    this.inputPollInterval = undefined;
-    /** @type {AbortController | undefined} */
-    this.fileWatcherAbortController = undefined;
-
-    this.store = null;
+    this.#lastInputStr = JSON.stringify(initialInput);
+    this.#pollIntervalMs = pollIntervalMs;
+    this.#onConfigChange = onConfigChange;
   }
 
   /**
    * Initialize resources like the KeyValueStore
    */
   async init() {
-    this.store = await Actor.openKeyValueStore();
+    this.#store = await Actor.openKeyValueStore();
   }
 
   /**
@@ -42,17 +52,30 @@ export class HotReloadManager {
    */
   start() {
     // 1. Fallback to interval polling (works on platform and as backup for local)
-    this.inputPollInterval = setInterval(() => {
-      this._handleHotReload().catch((err) => {
-        console.error("[SYSTEM-ERROR] Polling hot-reload failed:", err.message);
-      });
-    }, this.pollIntervalMs);
+    // Can be disabled via env var for efficiency in production
+    if (process.env.DISABLE_HOT_RELOAD !== "true") {
+      this.#inputPollInterval = global.setInterval(() => {
+        this.#handleHotReload().catch((err) => {
+          console.error(
+            "[SYSTEM-ERROR] Polling hot-reload failed:",
+            err.message,
+          );
+        });
+      }, this.#pollIntervalMs);
 
-    if (this.inputPollInterval.unref) this.inputPollInterval.unref();
+      this.#inputPollInterval.unref();
+      console.log(
+        `[SYSTEM] Hot-reload polling enabled (interval: ${this.#pollIntervalMs}ms)`,
+      );
+    } else {
+      console.log(
+        "[SYSTEM] Hot-reload polling disabled via DISABLE_HOT_RELOAD",
+      );
+    }
 
     // 2. Use fs.watch for instant hot-reload in local development
     if (!Actor.isAtHome()) {
-      this._startFsWatch();
+      this.#startFsWatch();
     }
   }
 
@@ -60,21 +83,21 @@ export class HotReloadManager {
    * Stop all listeners and watchers.
    */
   async stop() {
-    if (this.inputPollInterval) clearInterval(this.inputPollInterval);
-    if (this.fileWatcherAbortController)
-      this.fileWatcherAbortController.abort();
-    if (this.activePollPromise) await this.activePollPromise;
+    if (this.#inputPollInterval) global.clearInterval(this.#inputPollInterval);
+    if (this.#fileWatcherAbortController)
+      this.#fileWatcherAbortController.abort();
+    if (this.#activePollPromise) await this.#activePollPromise;
   }
 
-  async _handleHotReload() {
-    if (this.activePollPromise) return;
+  async #handleHotReload() {
+    if (this.#activePollPromise) return;
 
-    this.activePollPromise = (async () => {
+    this.#activePollPromise = (async () => {
       try {
-        if (!this.store) return; // Should not happen if init() is called
+        if (!this.#store) return; // Should not happen if init() is called
 
         const newInput = /** @type {Record<string, any> | null} */ (
-          await this.store.getValue("INPUT")
+          await this.#store.getValue("INPUT")
         );
         if (!newInput) return;
 
@@ -82,18 +105,16 @@ export class HotReloadManager {
         const normalizedInput = normalizeInput(newInput);
 
         const newInputStr = JSON.stringify(normalizedInput);
-        if (newInputStr === this.lastInputStr) return;
+        if (newInputStr === this.#lastInputStr) return;
 
-        this.lastInputStr = newInputStr;
+        this.#lastInputStr = newInputStr;
         console.log("[SYSTEM] Detected input update! Applying new settings...");
 
         // Validate/Coerce new config
         const validated = coerceRuntimeOptions(normalizedInput);
 
         // Notify listener
-        if (this.onConfigChange) {
-          await this.onConfigChange(normalizedInput, validated);
-        }
+        await this.#onConfigChange(normalizedInput, validated);
 
         console.log("[SYSTEM] Hot-reload complete. New settings are active.");
       } catch (err) {
@@ -102,14 +123,14 @@ export class HotReloadManager {
           /** @type {Error} */ (err).message,
         );
       } finally {
-        this.activePollPromise = null;
+        this.#activePollPromise = null;
       }
     })();
 
-    await this.activePollPromise;
+    await this.#activePollPromise;
   }
 
-  _startFsWatch() {
+  #startFsWatch() {
     const localInputPath = join(
       process.cwd(),
       "storage",
@@ -123,7 +144,7 @@ export class HotReloadManager {
         "[SYSTEM] Local mode detected. Using fs.watch for instant hot-reload.",
       );
 
-      this.fileWatcherAbortController = new AbortController();
+      this.#fileWatcherAbortController = new AbortController();
       let debounceTimer =
         /** @type {ReturnType<typeof setTimeout> | undefined} */ (undefined);
 
@@ -131,20 +152,20 @@ export class HotReloadManager {
       (async () => {
         try {
           const watcher = fsWatch(localInputPath, {
-            signal: this.fileWatcherAbortController?.signal,
+            signal: this.#fileWatcherAbortController?.signal,
           });
           for await (const event of watcher) {
             if (event.eventType === "change") {
               // Debounce rapid file changes (editors often write multiple times)
               if (debounceTimer) clearTimeout(debounceTimer);
               debounceTimer = setTimeout(() => {
-                this._handleHotReload().catch((err) => {
+                this.#handleHotReload().catch((err) => {
                   console.error(
                     "[SYSTEM-ERROR] fs.watch hot-reload failed:",
                     /** @type {Error} */ (err).message,
                   );
                 });
-              }, 100);
+              }, HOT_RELOAD_DEBOUNCE_MS);
             }
           }
         } catch (err) {

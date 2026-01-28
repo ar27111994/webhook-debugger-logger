@@ -1,3 +1,9 @@
+---
+trigger: model_decision
+description: Guidelines for Apify Actors development (Python)
+globs: **/*.py, **/*.pyc, **/*.pyo, **/*.pyw, **/*.pyx, **/*.pxd, **/*.pxi, **/*.pyd
+---
+
 # Apify Actors Development Guide
 
 Important: Before you begin, fill in the model property in the meta section of `.actor/actor.json`. Replace it with the model you're currently using. This helps Apify monitor and improve AGENTS.md for specific LLM models.

@@ -13,19 +13,18 @@ import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
  * @typedef {import('../setup/helpers/app-utils.js').AppClient} AppClient
  * @typedef {import('../setup/helpers/app-utils.js').TeardownApp} TeardownApp
  * @typedef {import('../setup/helpers/app-utils.js').App} App
+ * @typedef {import('../../src/typedefs.js').LogEntry} LogEntry
  */
 
-import { getLastAxiosConfig } from "../setup/helpers/test-utils.js";
+import { assertType, getLastAxiosConfig } from "../setup/helpers/test-utils.js";
 
 // Mock Apify and axios using shared components
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 await setupCommonMocks({ axios: true, apify: true, dns: true, ssrf: true });
 
-const { createDatasetMock, resetNetworkMocks } =
-  await import("../setup/helpers/shared-mocks.js");
+const { resetNetworkMocks } = await import("../setup/helpers/shared-mocks.js");
 
 import { createRequire } from "module";
-import { MAX_ITEMS_FOR_BATCH } from "../../src/consts.js";
 
 const require = createRequire(import.meta.url);
 const { version } = require("../../package.json");
@@ -33,6 +32,8 @@ const { version } = require("../../package.json");
 const { setupTestApp } = await import("../setup/helpers/app-utils.js");
 const { webhookManager } = await import("../../src/main.js");
 const { Actor } = await import("apify");
+const { logRepository } =
+  await import("../../src/repositories/LogRepository.js");
 
 describe("API Contract & Regression Tests", () => {
   /** @type {string} */
@@ -108,22 +109,36 @@ describe("API Contract & Regression Tests", () => {
     test("should echo back applied filters and correctly filter items", async () => {
       const mockItems = [
         {
+          id: "log_2",
+          contentType: "application/json",
+          processingTime: 10,
+          remoteIp: "127.0.0.1",
           webhookId,
           method: "POST",
           statusCode: 201,
           timestamp: new Date().toISOString(),
+          headers: {},
+          query: {},
+          body: {},
+          size: 0,
         },
         {
           webhookId,
           method: "GET",
+          id: "log_1",
+          contentType: "application/json",
+          processingTime: 10,
+          remoteIp: "127.0.0.1",
           statusCode: 200,
           timestamp: new Date().toISOString(),
+          headers: {},
+          query: {},
+          body: {},
+          size: 0,
         },
       ];
 
-      jest
-        .mocked(Actor.openDataset)
-        .mockResolvedValue(createDatasetMock(mockItems));
+      await logRepository.batchInsertLogs(mockItems);
 
       const res = await appClient
         .get("/logs")
@@ -141,35 +156,9 @@ describe("API Contract & Regression Tests", () => {
       expect(res.body.items[0].statusCode).toBe(201);
     });
 
-    test("should fetch with limit * 5 when filters are present", async () => {
-      const datasetMock = createDatasetMock([]);
-      const getDataMock = jest.spyOn(datasetMock, "getData");
-      jest.mocked(Actor.openDataset).mockResolvedValue(datasetMock);
-
-      await appClient
-        .get("/logs")
-        .query({ method: "POST", limit: 10 })
-        .set("Authorization", "Bearer test-secret");
-
-      expect(getDataMock).toHaveBeenCalledWith(
-        expect.objectContaining({ limit: MAX_ITEMS_FOR_BATCH }),
-      );
-    });
-
-    test("should fetch with limit * 1 when NO filters are present", async () => {
-      const datasetMock = createDatasetMock([]);
-      const getDataMock = jest.spyOn(datasetMock, "getData");
-      jest.mocked(Actor.openDataset).mockResolvedValue(datasetMock);
-
-      await appClient
-        .get("/logs")
-        .query({ limit: 10 })
-        .set("Authorization", "Bearer test-secret");
-
-      expect(getDataMock).toHaveBeenCalledWith(
-        expect.objectContaining({ limit: MAX_ITEMS_FOR_BATCH }),
-      );
-    });
+    // Obsolete tests: New LogRepository uses SQL LIMIT directly, not in-memory filtering with over-fetching.
+    // test("should fetch with limit * 5 when filters are present", async () => { ... });
+    // test("should fetch with limit * 1 when NO filters are present", async () => { ... });
   });
 
   describe("Global Error Handler Contract", () => {
@@ -185,7 +174,10 @@ describe("API Contract & Regression Tests", () => {
   describe("/replay Header Stripping", () => {
     test("should strip transmission-specific headers and provide warning", async () => {
       // Mock dataset to return an item with "forbidden" headers
-      const mockItem = {
+      /**
+       * @type {LogEntry}
+       */
+      const mockItem = assertType({
         id: "evt_strip",
         webhookId,
         method: "POST",
@@ -197,11 +189,12 @@ describe("API Contract & Regression Tests", () => {
           host: "local",
           authorization: "[MASKED]", // Masked ones should also be stripped
         },
-      };
+        timestamp: new Date().toISOString(),
+        query: {},
+        size: 2,
+      });
 
-      jest
-        .mocked(Actor.openDataset)
-        .mockResolvedValue(createDatasetMock([mockItem]));
+      await logRepository.insertLog(mockItem);
 
       const res = await appClient
         .get(`/replay/${webhookId}/evt_strip`)
@@ -220,13 +213,22 @@ describe("API Contract & Regression Tests", () => {
 
     test("should prioritize exact ID match over timestamp match when both exist", async () => {
       const timestamp = new Date().toISOString();
-      const mockItems = [
+      /**
+       * @type {LogEntry[]}
+       */
+      const mockItems = assertType([
         {
           id: "evt_duplicate_timestamp",
           webhookId,
           method: "POST",
           body: '{"msg": "i am the correct one"}',
           timestamp,
+          headers: {},
+          query: {},
+          size: 10,
+          contentType: "application/json",
+          remoteIp: "127.0.0.1",
+          processingTime: 5,
         },
         {
           id: "evt_collided",
@@ -234,12 +236,16 @@ describe("API Contract & Regression Tests", () => {
           method: "POST",
           body: '{"msg": "i am an interloper with same timestamp"}',
           timestamp,
+          headers: {},
+          query: {},
+          size: 10,
+          contentType: "application/json",
+          remoteIp: "127.0.0.1",
+          processingTime: 5,
         },
-      ];
+      ]);
 
-      jest
-        .mocked(Actor.openDataset)
-        .mockResolvedValue(createDatasetMock(mockItems));
+      await logRepository.batchInsertLogs(mockItems);
 
       const { default: axiosMock } = await import("axios");
       /** @type {AxiosMock} */ (axiosMock).mockClear();
@@ -279,10 +285,16 @@ describe("API Contract & Regression Tests", () => {
         webhookId,
         method: "POST",
         body: "{}",
+        timestamp: new Date().toISOString(),
+        headers: { "content-type": "application/json" },
+        query: {},
+        size: 2,
+        contentType: "application/json",
+        remoteIp: "127.0.0.1",
+        processingTime: 5,
+        statusCode: 200,
       };
-      jest
-        .mocked(Actor.openDataset)
-        .mockResolvedValue(createDatasetMock([mockItem]));
+      await logRepository.insertLog(mockItem);
 
       const { default: axiosMock } = await import("axios");
       /** @type {AxiosMock} */ (axiosMock).mockClear().mockRejectedValue({

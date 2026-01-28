@@ -1,3 +1,9 @@
+---
+trigger: model_decision
+description: Apify Actors Storage Schema Specification (JS)
+globs: **/*.js, **/*.json, **/*.html, **/*.css, **/*.jsx
+---
+
 # Apify Actors Storage Schema Specification (JS)
 
 ## Dataset Schema Specification

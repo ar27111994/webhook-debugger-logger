@@ -1,3 +1,8 @@
+---
+trigger: always_on
+description: Actor Master Agent Guide
+---
+
 # Actor Master Agent Guide
 
 Use this guide to decide which per-language playbook to follow and how to integrate the Chrome DevTools MCP server into every stage of building and deploying an Apify Actor.

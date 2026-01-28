@@ -1,4 +1,8 @@
-# Apify Actors Input/Output Schema Specification (JS)
+---
+trigger: model_decision
+description: Apify Actors Input/Output Schema Specification (JS)
+globs: **/*.js, **/*.json, **/*.html, **/*.css, **/*.jsx
+---
 
 ## Actor Input Schema
 

@@ -32,20 +32,23 @@ describe("WebhookManager", () => {
 
     await webhookManager.init();
 
-    expect(webhookManager.webhooks.size).toBe(1);
-    expect(webhookManager.webhooks.get("wh_123")).toEqual(savedState.wh_123);
+    await webhookManager.init();
+
+    expect(webhookManager.webhookCount).toBe(1);
+    expect(webhookManager.getWebhookData("wh_123")).toEqual(savedState.wh_123);
   });
 
   test("init() should handle corrupted or missing state gracefully", async () => {
     jest.mocked(mockKvStore.getValue).mockResolvedValue(null);
+    jest.mocked(mockKvStore.getValue).mockResolvedValue(null);
     await webhookManager.init();
-    expect(webhookManager.webhooks.size).toBe(0);
+    expect(webhookManager.webhookCount).toBe(0);
 
     jest
       .mocked(mockKvStore.getValue)
       .mockRejectedValue(new Error("Storage failure"));
     await webhookManager.init(); // Should not throw
-    expect(webhookManager.webhooks.size).toBe(0);
+    expect(webhookManager.webhookCount).toBe(0);
   });
 
   test("generateWebhooks() should create IDs and persist", async () => {
@@ -54,7 +57,7 @@ describe("WebhookManager", () => {
 
     expect(ids).toHaveLength(2);
     expect(ids[0]).toMatch(/^wh_/);
-    expect(webhookManager.webhooks.size).toBe(2);
+    expect(webhookManager.webhookCount).toBe(2);
     expect(jest.mocked(mockKvStore.setValue)).toHaveBeenCalled();
   });
 
@@ -63,8 +66,8 @@ describe("WebhookManager", () => {
     const future = new Date(now.getTime() + 10000).toISOString();
     const past = new Date(now.getTime() - 10000).toISOString();
 
-    webhookManager.webhooks.set("wh_future", { expiresAt: future });
-    webhookManager.webhooks.set("wh_past", { expiresAt: past });
+    webhookManager.addWebhookForTest("wh_future", { expiresAt: future });
+    webhookManager.addWebhookForTest("wh_past", { expiresAt: past });
 
     expect(webhookManager.isValid("wh_future")).toBe(true);
     expect(webhookManager.isValid("wh_past")).toBe(false);
@@ -72,8 +75,8 @@ describe("WebhookManager", () => {
   });
 
   test("persist() should initialize kvStore if missing", async () => {
-    webhookManager.kvStore = null;
-    await webhookManager.init();
+    // Skip init() to keep kvStore null (default constructor state)
+
     await webhookManager.persist();
     expect(jest.mocked(Actor.openKeyValueStore)).toHaveBeenCalled();
     expect(jest.mocked(mockKvStore.setValue)).toHaveBeenCalled();
@@ -81,16 +84,18 @@ describe("WebhookManager", () => {
 
   test("cleanup() should remove expired hooks", async () => {
     const past = new Date(Date.now() - 10000).toISOString();
-    webhookManager.webhooks.set("wh_past", { expiresAt: past });
-    webhookManager.webhooks.set("wh_active", {
+    webhookManager.addWebhookForTest("wh_past", { expiresAt: past });
+    webhookManager.addWebhookForTest("wh_active", {
       expiresAt: new Date(Date.now() + 10000).toISOString(),
     });
 
     await webhookManager.init();
     await webhookManager.cleanup();
 
-    expect(webhookManager.webhooks.has("wh_past")).toBe(false);
-    expect(webhookManager.webhooks.has("wh_active")).toBe(true);
+    await webhookManager.cleanup();
+
+    expect(webhookManager.hasWebhook("wh_past")).toBe(false);
+    expect(webhookManager.hasWebhook("wh_active")).toBe(true);
   });
 
   test("generateWebhooks() should throw on invalid count (negative)", async () => {
@@ -152,8 +157,8 @@ describe("WebhookManager", () => {
     // Expiry in 2 hours
     const expiry2 = new Date(now + 7200 * 1000).toISOString();
 
-    webhookManager.webhooks.set("wh_short", { expiresAt: expiry1 });
-    webhookManager.webhooks.set("wh_long", { expiresAt: expiry2 });
+    webhookManager.addWebhookForTest("wh_short", { expiresAt: expiry1 });
+    webhookManager.addWebhookForTest("wh_long", { expiresAt: expiry2 });
 
     // Update to 24 hours
     await webhookManager.updateRetention(24);
@@ -184,7 +189,7 @@ describe("WebhookManager", () => {
       .mocked(mockKvStore.setValue)
       .mockRejectedValue(new Error("Write failure"));
     await webhookManager.init();
-    webhookManager.webhooks.set("wh_test", {
+    webhookManager.addWebhookForTest("wh_test", {
       expiresAt: new Date(Date.now() + 10000).toISOString(),
     });
     // Should not throw
@@ -195,7 +200,7 @@ describe("WebhookManager", () => {
   test("persist() should handle non-Error thrown values", async () => {
     jest.mocked(mockKvStore.setValue).mockRejectedValue("String error");
     await webhookManager.init();
-    webhookManager.webhooks.set("wh_test", {
+    webhookManager.addWebhookForTest("wh_test", {
       expiresAt: new Date(Date.now() + 10000).toISOString(),
     });
     // Should not throw
@@ -208,8 +213,8 @@ describe("WebhookManager", () => {
 
   test("getAllActive() should return all webhooks with IDs", async () => {
     const expiry = new Date(Date.now() + 10000).toISOString();
-    webhookManager.webhooks.set("wh_a", { expiresAt: expiry });
-    webhookManager.webhooks.set("wh_b", { expiresAt: expiry });
+    webhookManager.addWebhookForTest("wh_a", { expiresAt: expiry });
+    webhookManager.addWebhookForTest("wh_b", { expiresAt: expiry });
 
     const active = webhookManager.getAllActive();
     expect(active).toHaveLength(2);
@@ -222,8 +227,8 @@ describe("WebhookManager", () => {
     const future = new Date(now + 10000).toISOString();
     const past = new Date(now - 10000).toISOString();
 
-    webhookManager.webhooks.set("wh_valid", { expiresAt: future });
-    webhookManager.webhooks.set("wh_expired", { expiresAt: past });
+    webhookManager.addWebhookForTest("wh_valid", { expiresAt: future });
+    webhookManager.addWebhookForTest("wh_expired", { expiresAt: past });
 
     const active = webhookManager.getAllActive();
     expect(active).toHaveLength(1);

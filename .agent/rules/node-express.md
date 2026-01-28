@@ -1,6 +1,7 @@
 ---
+trigger: model_decision
 description: Node.js and Express.js best practices for backend development
-globs: **/*.js, **/*.ts, src/**/*.ts
+globs: **/*.js, **/*.ts
 ---
 
 # Node.js and Express.js Best Practices

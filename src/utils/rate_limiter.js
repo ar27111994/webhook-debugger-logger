@@ -5,6 +5,20 @@ import net from "node:net";
 import { DEFAULT_RATE_LIMIT_WINDOW_MS } from "../consts.js";
 
 export class RateLimiter {
+  /** @type {number} */
+  #limit;
+  /** @type {number} */
+  #windowMs;
+  /** @type {number} */
+  #maxEntries;
+  /** @type {boolean} */
+  #trustProxy;
+  /** @type {ReturnType<typeof setInterval> | undefined} */
+  #cleanupInterval;
+
+  /** @type {Map<string, number[]>} */
+  #hits = new Map();
+
   /**
    * @param {number} limit - Max requests per window
    * @param {number} windowMs - Window size in milliseconds
@@ -36,25 +50,24 @@ export class RateLimiter {
       throw new Error("RateLimiter: maxEntries must be a finite integer > 0");
     }
 
-    this.limit = limit;
-    this.windowMs = windowMs;
-    this.maxEntries = maxEntries;
-    this.trustProxy = trustProxy;
-    this.hits = /** @type {Map<string, number[]>} */ (new Map());
+    this.#limit = limit;
+    this.#windowMs = windowMs;
+    this.#maxEntries = maxEntries;
+    this.#trustProxy = trustProxy;
 
     // Background pruning to avoid blocking the request path
-    this.cleanupInterval = setInterval(() => {
+    this.#cleanupInterval = global.setInterval(() => {
       const now = Date.now();
-      const threshold = now - this.windowMs;
+      const threshold = now - this.#windowMs;
       let prunedCount = 0;
 
-      for (const [key, timestamps] of this.hits.entries()) {
+      for (const [key, timestamps] of this.#hits.entries()) {
         const fresh = timestamps.filter((t) => t > threshold);
         if (fresh.length === 0) {
-          this.hits.delete(key);
+          this.#hits.delete(key);
           prunedCount++;
         } else {
-          this.hits.set(key, fresh);
+          this.#hits.set(key, fresh);
         }
       }
 
@@ -64,7 +77,25 @@ export class RateLimiter {
         );
       }
     }, DEFAULT_RATE_LIMIT_WINDOW_MS);
-    if (this.cleanupInterval.unref) this.cleanupInterval.unref();
+    if (this.#cleanupInterval.unref) this.#cleanupInterval.unref();
+  }
+
+  /**
+   * Returns specific metric for validation/monitoring
+   */
+  get entryCount() {
+    return this.#hits.size;
+  }
+
+  /**
+   * Test-only helper to check if IP is tracked
+   * @param {string} ip
+   */
+  hasIp(ip) {
+    if (process.env.NODE_ENV === "test") {
+      return this.#hits.has(ip);
+    }
+    return false;
   }
 
   /**
@@ -112,7 +143,7 @@ export class RateLimiter {
   }
 
   destroy() {
-    if (this.cleanupInterval) clearInterval(this.cleanupInterval);
+    if (this.#cleanupInterval) global.clearInterval(this.#cleanupInterval);
   }
 
   /**
@@ -128,7 +159,7 @@ export class RateLimiter {
       /** @type {string | undefined} */
       let ip = req.ip || req.socket?.remoteAddress;
 
-      if (this.trustProxy) {
+      if (this.#trustProxy) {
         const forwardedIp = this.extractFirstValidIp(
           req.headers?.["x-forwarded-for"],
         );
@@ -162,13 +193,13 @@ export class RateLimiter {
       }
 
       const now = Date.now();
-      let userHits = this.hits.get(ip);
+      let userHits = this.#hits.get(ip);
 
       if (!userHits) {
         // Enforce maxEntries cap for new clients
-        if (this.hits.size >= this.maxEntries) {
-          const oldestKey = this.hits.keys().next().value;
-          if (typeof oldestKey === "string") this.hits.delete(oldestKey);
+        if (this.#hits.size >= this.#maxEntries) {
+          const oldestKey = this.#hits.keys().next().value;
+          if (typeof oldestKey === "string") this.#hits.delete(oldestKey);
           if (
             process.env.NODE_ENV !== "test" &&
             typeof oldestKey === "string"
@@ -176,30 +207,32 @@ export class RateLimiter {
             console.log(
               `[SYSTEM] RateLimiter evicted entry for ${this.maskIp(
                 oldestKey,
-              )} (Cap: ${this.maxEntries})`,
+              )} (Cap: ${this.#maxEntries})`,
             );
           }
         }
         userHits = [];
       } else {
         // LRU: Re-insert to mark as recently used
-        this.hits.delete(ip);
+        this.#hits.delete(ip);
       }
 
       // Filter hits within the window
-      const recentHits = userHits.filter((h) => now - h < this.windowMs);
-      if (recentHits.length >= this.limit) {
+      const recentHits = userHits.filter((h) => now - h < this.#windowMs);
+      if (recentHits.length >= this.#limit) {
+        // Restore existing hits before returning error (otherwise user is forgotten/reset)
+        this.#hits.set(ip, recentHits);
         return res.status(429).json({
           status: 429,
           error: "Too Many Requests",
-          message: `Rate limit exceeded. Max ${this.limit} requests per ${
-            this.windowMs / 1000
+          message: `Rate limit exceeded. Max ${this.#limit} requests per ${
+            this.#windowMs / 1000
           }s.`,
         });
       }
 
       recentHits.push(now);
-      this.hits.set(ip, recentHits);
+      this.#hits.set(ip, recentHits);
       next();
     };
   }

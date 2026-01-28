@@ -12,9 +12,13 @@ import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
  * @typedef {import("../setup/helpers/app-utils.js").AppClient} AppClient
  * @typedef {import("../setup/helpers/app-utils.js").TeardownApp} TeardownApp
  * @typedef {import("../setup/helpers/app-utils.js").App} App
+ * @typedef {import("../../src/typedefs.js").WebhookEvent} WebhookEvent
+ * @typedef {import("../../src/typedefs.js").LogEntry} LogEntry
  */
 
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
+import { assertType } from "../setup/helpers/test-utils.js";
+import { resetDb } from "../setup/helpers/db-hooks.js";
 await setupCommonMocks({ axios: true, apify: true, dns: true, ssrf: true });
 const { createDatasetMock, resetNetworkMocks } =
   await import("../setup/helpers/shared-mocks.js");
@@ -22,6 +26,8 @@ const { createDatasetMock, resetNetworkMocks } =
 const { setupTestApp } = await import("../setup/helpers/app-utils.js");
 const { webhookManager } = await import("../../src/main.js");
 const { Actor } = await import("apify");
+const { logRepository } =
+  await import("../../src/repositories/LogRepository.js");
 
 describe("API E2E Tests", () => {
   useMockCleanup(async () => {
@@ -46,6 +52,11 @@ describe("API E2E Tests", () => {
 
   afterAll(async () => {
     await teardownApp();
+  });
+
+  afterEach(async () => {
+    // Cleanup DuckDB to prevent PK violations between tests
+    await resetDb();
   });
 
   test("GET / should return version info", async () => {
@@ -83,15 +94,17 @@ describe("API E2E Tests", () => {
 
   test("GET /logs should return captured items and filters", async () => {
     // Mock dataset to return one item for this test
-    const mockItem = {
+    /** @type {LogEntry} */
+    const mockItem = assertType({
       webhookId,
       method: "POST",
       body: '{"test":"data"}',
       timestamp: new Date().toISOString(),
-    };
+    });
     jest
       .mocked(Actor.openDataset)
       .mockResolvedValue(createDatasetMock([mockItem]));
+    await logRepository.batchInsertLogs([mockItem]);
 
     const res = await appClient.get("/logs").query({ webhookId });
     expect(res.statusCode).toBe(200);
@@ -102,13 +115,15 @@ describe("API E2E Tests", () => {
 
   test("GET /replay should resend event (Deep Search)", async () => {
     // Mock dataset to return the item to replay ONLY on the second page
-    const mockItem = {
+    /** @type {LogEntry } */
+    const mockItem = assertType({
       id: "evt_123",
       webhookId,
       method: "POST",
       body: '{"test":"data"}',
       headers: {},
-    };
+      timestamp: new Date().toISOString(),
+    });
 
     const datasetMock = createDatasetMock([]); // Base mock
     datasetMock.getData = /** @type {jest.Mock<any>} */ (jest.fn())
@@ -116,10 +131,26 @@ describe("API E2E Tests", () => {
       .mockResolvedValueOnce({ items: [mockItem] }); // Page 2: Target
 
     jest.mocked(Actor.openDataset).mockResolvedValue(datasetMock);
+    // await logRepository.batchInsertLogs([mockItem]); // Insert target item (Page 2)
+    // Note: Noise items (Page 1) are not inserted into DuckDB for this test, as replay logic searches Dataset primarily?
+    // Wait, replay logic queries DuckDB first? No, Deep Search queries Dataset.
+    // If Replay deep search queries Dataset via Actor.openDataset, then explicit DB insert might NOT be needed for deep search?
+    // But failing test suggests it IS needed or logic changed.
+    // Actually, "GET /replay" logic: queries LogRepository.getLogById. If not found, attempts Deep Search.
+    // So if we want to test Deep Search, we ensure it's NOT in LogRepository (DuckDB).
+    // So for this test, we SHOULD NOT insert into LogRepository?
+    // The test expects "Replayed".
+    // If it finds it in DB, it replays. If not, it deep searches Dataset.
+    // So if datasetMock works, it should work.
+    // Why did it fail? "Event not found" or "Timeout"?
+    // I'll leave this one alone if it's testing Deep Search fallback.
+    // But if it fails, maybe Deep Search is broken?
+    // I'll skip insertion here to verify hypothesis.
 
     // Mock axios to prevent real network calls
-    const axios = (await import("axios")).default;
-    /** @type {AxiosMock} */ (axios).mockResolvedValue({
+    /** @type {AxiosMock} */
+    const axios = assertType((await import("axios")).default);
+    axios.mockResolvedValue({
       status: 200,
       data: "OK",
     });
@@ -146,16 +177,18 @@ describe("API E2E Tests", () => {
   });
 
   test("POST /replay should also resend event", async () => {
-    const mockItem = {
+    /** @type {LogEntry} */
+    const mockItem = assertType({
       id: "evt_789",
       webhookId,
-      method: "POST",
       body: '{"foo":"bar"}',
       headers: {},
-    };
+      timestamp: new Date().toISOString(),
+    });
     jest
       .mocked(Actor.openDataset)
       .mockResolvedValue(createDatasetMock([mockItem]));
+    await logRepository.batchInsertLogs([mockItem]);
 
     const res = await appClient
       .post(`/replay/${webhookId}/evt_789`)
@@ -265,8 +298,9 @@ describe("API E2E Tests", () => {
   test("GET /replay/:webhookId/:itemId with non-existent event should return 404", async () => {
     jest.mocked(Actor.openDataset).mockResolvedValue(createDatasetMock([]));
 
-    const axios = (await import("axios")).default;
-    /** @type {AxiosMock} */ (axios).mockResolvedValue({ status: 200 });
+    /** @type {AxiosMock} */
+    const axios = assertType((await import("axios")).default);
+    axios.mockResolvedValue({ status: 200 });
 
     const res = await appClient
       .get(`/replay/${webhookId}/evt_nonexistent`)
@@ -278,23 +312,26 @@ describe("API E2E Tests", () => {
   // --- Replay Coverage Tests ---
   test("POST /replay should handle multiple url parameters (take first)", async () => {
     // Mock openDataset to return an item
-    const mockItem = {
+    /** @type {LogEntry} */
+    const mockItem = assertType({
       id: "replay-id-1",
       webhookId: "wh_replay",
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ foo: "bar" }),
       timestamp: "2023-01-01T00:00:00Z",
-    };
+    });
 
     // Mock Dataset
     jest
       .mocked(Actor.openDataset)
       .mockResolvedValue(createDatasetMock([mockItem]));
+    await logRepository.batchInsertLogs([mockItem]);
 
     // Mock Axios (global shared mock)
-    const axios = (await import("axios")).default;
-    /** @type {AxiosMock} */ (axios).mockResolvedValue({
+    /** @type {AxiosMock} */
+    const axios = assertType((await import("axios")).default);
+    axios.mockResolvedValue({
       status: 200,
       data: "OK",
     });
@@ -318,31 +355,33 @@ describe("API E2E Tests", () => {
   test("POST /replay should find item by timestamp if ID not found", async () => {
     // Mock item
     const timestamp = "2023-01-01T12:34:56.789Z";
-    const mockItem = {
+    /** @type {LogEntry} */
+    const mockItem = assertType({
       id: "other-id",
       webhookId: "wh_replay",
       method: "POST",
       body: "{}",
       timestamp: timestamp, // Matches our ID param
-    };
+    });
 
     // Mock Dataset
     jest
       .mocked(Actor.openDataset)
       .mockResolvedValue(createDatasetMock([mockItem]));
+    await logRepository.batchInsertLogs([mockItem]);
 
     // Mock Axios
-    const axios = (await import("axios")).default;
-    /** @type {AxiosMock} */ (axios).mockResolvedValue({
+    /** @type {AxiosMock} */
+    const axios = assertType((await import("axios")).default);
+    axios.mockResolvedValue({
       status: 200,
       data: "OK",
     });
 
     // Mock DNS
-    const dns = /** @type {unknown} */ ((await import("dns/promises")).default);
-    /** @type {DnsPromisesMock} */ (dns).resolve4.mockResolvedValue([
-      "93.184.216.34",
-    ]);
+    /** @type {DnsPromisesMock} */
+    const dns = assertType((await import("dns/promises")).default);
+    dns.resolve4.mockResolvedValue(["93.184.216.34"]);
 
     const res = await appClient
       .post(`/replay/wh_replay/${timestamp}`)

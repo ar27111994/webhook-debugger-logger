@@ -9,7 +9,8 @@ import {
 import { MAX_ITEMS_FOR_BATCH } from "../../src/consts.js";
 
 /**
- * @typedef {import('../../src/typedefs.js').WebhookItem} WebhookItem
+ * @typedef {import('../../src/typedefs.js').LogEntry} LogEntry
+ * @typedef {import('../../src/typedefs.js').WebhookEvent} WebhookEvent
  */
 
 import { assertType } from "../setup/helpers/test-utils.js";
@@ -22,6 +23,8 @@ const { setupTestApp } = await import("../setup/helpers/app-utils.js");
 const { webhookManager } = await import("../../src/main.js");
 const { Actor } = await import("apify");
 const { createDatasetMock } = await import("../setup/helpers/shared-mocks.js");
+const { logRepository } =
+  await import("../../src/repositories/LogRepository.js");
 const authKey = "TEST_KEY";
 const authHeader = `Bearer ${authKey}`;
 
@@ -91,8 +94,8 @@ describe("Log Filtering Routes", () => {
   });
 
   test("GET /logs should filter by method, status, contentType", async () => {
-    /** @type {Array<Partial<WebhookItem>>} */
-    const items = [
+    /** @type {LogEntry[]} */
+    const items = assertType([
       {
         webhookId: "wh_1",
         method: "POST",
@@ -114,10 +117,11 @@ describe("Log Filtering Routes", () => {
         headers: { "content-type": "application/json" },
         timestamp: "2023-01-01T10:02:00Z",
       },
-    ];
+    ]);
 
     jest.spyOn(webhookManager, "isValid").mockReturnValue(true);
     jest.mocked(Actor.openDataset).mockResolvedValue(createDatasetMock(items));
+    await logRepository.batchInsertLogs(items);
 
     // Filter by Method
     let res = await appClient
@@ -157,7 +161,7 @@ describe("Log Filtering Routes", () => {
       .query({ method: "POST", statusCode: 200 })
       .set("Authorization", authHeader);
     expect(res.body.items).toHaveLength(2);
-    res.body.items.forEach((/** @type {WebhookItem} */ item) => {
+    res.body.items.forEach((/** @type {WebhookEvent} */ item) => {
       expect(item.method).toBe("POST");
       expect(item.statusCode).toBe(200);
     });
@@ -182,11 +186,15 @@ describe("Log Filtering Routes", () => {
   });
 
   test("GET /logs handles limit edge cases", async () => {
-    const items = new Array(5).fill(0).map(() => ({
-      webhookId: "wh_1",
-      timestamp: new Date().toISOString(),
-    }));
+    /** @type {LogEntry[]} */
+    const items = new Array(5).fill(0).map(() =>
+      assertType({
+        webhookId: "wh_1",
+        timestamp: new Date().toISOString(),
+      }),
+    );
     jest.mocked(Actor.openDataset).mockResolvedValue(createDatasetMock(items));
+    await logRepository.batchInsertLogs(items);
 
     // Case 1: Limit 0 (Should return default or handle gracefully, assuming default 100)
     let res = await appClient
@@ -215,13 +223,17 @@ describe("Log Filtering Routes", () => {
   });
 
   test("GET /logs handles pagination limits", async () => {
-    const items = new Array(200).fill(0).map((_, _i) => ({
-      webhookId: "wh_1",
-      timestamp: new Date().toISOString(),
-    }));
+    /** @type {LogEntry[]} */
+    const items = new Array(200).fill(0).map((_, _i) =>
+      assertType({
+        webhookId: "wh_1",
+        timestamp: new Date().toISOString(),
+      }),
+    );
 
     const mockDataset = createDatasetMock(items);
     jest.mocked(Actor.openDataset).mockResolvedValue(assertType(mockDataset));
+    await logRepository.batchInsertLogs(items);
 
     const res = await appClient
       .get("/logs")

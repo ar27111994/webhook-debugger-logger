@@ -8,22 +8,27 @@ import { MAX_BULK_CREATE } from "./consts.js";
  */
 
 export class WebhookManager {
+  /** @type {Map<string, WebhookData>} */
+  #webhooks = new Map();
+  /** @type {KeyValueStore} */
+  #kvStore = null;
+  /** @type {string} */
+  #STATE_KEY = "WEBHOOK_STATE";
+
   constructor() {
-    /** @type {Map<string, WebhookData>} */
-    this.webhooks = new Map();
-    /** @type {KeyValueStore} */
-    this.kvStore = null;
-    this.STATE_KEY = "WEBHOOK_STATE";
+    this.#webhooks = new Map();
+    this.#kvStore = null;
+    this.#STATE_KEY = "WEBHOOK_STATE";
   }
 
   async init() {
     try {
-      this.kvStore = await Actor.openKeyValueStore();
-      const savedState = await this.kvStore.getValue(this.STATE_KEY);
+      this.#kvStore = await Actor.openKeyValueStore();
+      const savedState = await this.#kvStore.getValue(this.#STATE_KEY);
       if (savedState && typeof savedState === "object") {
-        this.webhooks = new Map(Object.entries(savedState));
+        this.#webhooks = new Map(Object.entries(savedState));
         console.log(
-          `[STORAGE] Restored ${this.webhooks.size} webhooks from state.`,
+          `[STORAGE] Restored ${this.#webhooks.size} webhooks from state.`,
         );
       }
     } catch (error) {
@@ -41,11 +46,11 @@ export class WebhookManager {
 
   async persist() {
     try {
-      const state = Object.fromEntries(this.webhooks);
-      if (!this.kvStore) {
-        this.kvStore = await Actor.openKeyValueStore();
+      const state = Object.fromEntries(this.#webhooks);
+      if (!this.#kvStore) {
+        this.#kvStore = await Actor.openKeyValueStore();
       }
-      await this.kvStore.setValue(this.STATE_KEY, state);
+      await this.#kvStore.setValue(this.#STATE_KEY, state);
     } catch (error) {
       const message =
         error instanceof Error
@@ -93,7 +98,7 @@ export class WebhookManager {
 
     for (let i = 0; i < count; i++) {
       const id = `wh_${nanoid(10)}`;
-      this.webhooks.set(id, { expiresAt });
+      this.#webhooks.set(id, { expiresAt });
       newIds.push(id);
     }
 
@@ -107,7 +112,7 @@ export class WebhookManager {
    * @returns {boolean} True if valid
    */
   isValid(id) {
-    const webhook = this.webhooks.get(id);
+    const webhook = this.#webhooks.get(id);
     if (!webhook) return false;
 
     const now = new Date();
@@ -119,9 +124,9 @@ export class WebhookManager {
     const now = new Date();
     let changed = false;
 
-    for (const [id, data] of this.webhooks.entries()) {
+    for (const [id, data] of this.#webhooks.entries()) {
       if (now > new Date(data.expiresAt)) {
-        this.webhooks.delete(id);
+        this.#webhooks.delete(id);
         changed = true;
       }
     }
@@ -132,16 +137,45 @@ export class WebhookManager {
   }
 
   /**
+   * Test-only helper to seed webhooks
+   * @param {string} id
+   * @param {WebhookData} data
+   */
+  addWebhookForTest(id, data) {
+    if (process.env.NODE_ENV === "test") {
+      this.#webhooks.set(id, data);
+    }
+  }
+
+  /**
    * Retrieves data for a webhook.
    * @param {string} id Webhook ID
    * @returns {WebhookData | undefined} Webhook data
    */
   getWebhookData(id) {
-    return this.webhooks.get(id);
+    return this.#webhooks.get(id);
+  }
+
+  /**
+   * Returns current count of webhooks (active + expired)
+   */
+  get webhookCount() {
+    return this.#webhooks.size;
+  }
+
+  /**
+   * Test-only helper to check existence
+   * @param {string} id
+   */
+  hasWebhook(id) {
+    if (process.env.NODE_ENV === "test") {
+      return this.#webhooks.has(id);
+    }
+    return false;
   }
 
   getAllActive() {
-    return Array.from(this.webhooks.entries())
+    return Array.from(this.#webhooks.entries())
       .filter(([id]) => this.isValid(id))
       .map(([id, data]) => ({
         id,
@@ -170,7 +204,7 @@ export class WebhookManager {
 
     let maxExtensionMs = 0;
 
-    for (const [id, data] of this.webhooks.entries()) {
+    for (const [id, data] of this.#webhooks.entries()) {
       const currentExpiry = new Date(data.expiresAt).getTime();
 
       // Only extend retention for currently-active webhooks
@@ -180,7 +214,7 @@ export class WebhookManager {
       // that the user might have expected to stay longer based on previous settings.
       if (newExpiryMs > currentExpiry) {
         maxExtensionMs = Math.max(maxExtensionMs, newExpiryMs - currentExpiry);
-        this.webhooks.set(id, { ...data, expiresAt: newExpiresAt });
+        this.#webhooks.set(id, { ...data, expiresAt: newExpiresAt });
         updatedCount++;
       }
     }
@@ -189,7 +223,7 @@ export class WebhookManager {
       // Suppress log for insignificant updates (< 5 minutes)
       if (maxExtensionMs > 5 * 60 * 1000) {
         console.log(
-          `[STORAGE] Refreshed retention for ${updatedCount} of ${this.webhooks.size} webhooks to ${retentionHours}h.`,
+          `[STORAGE] Refreshed retention for ${updatedCount} of ${this.#webhooks.size} webhooks to ${retentionHours}h.`,
         );
       }
       await this.persist();

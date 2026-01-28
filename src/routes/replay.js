@@ -2,8 +2,8 @@
  * Replay route handler module.
  * @module routes/replay
  */
-import { Actor } from "apify";
 import axios from "axios";
+import { logRepository } from "../repositories/LogRepository.js";
 import { validateUrlForSsrf, SSRF_ERRORS } from "../utils/ssrf.js";
 import { asyncHandler } from "./utils.js";
 import {
@@ -11,11 +11,8 @@ import {
   DEFAULT_REPLAY_RETRIES as MAX_REPLAY_RETRIES,
   DEFAULT_REPLAY_TIMEOUT_MS as REPLAY_TIMEOUT_MS,
   ERROR_MESSAGES,
-  MAX_ITEMS_FOR_BATCH,
-  REPLAY_SCAN_MAX_DEPTH_MS,
   TRANSIENT_ERROR_CODES,
 } from "../consts.js";
-import { findOffsetForTimestamp } from "../utils/dataset.js";
 
 /**
  * @typedef {import("express").Request} Request
@@ -39,7 +36,8 @@ export const createReplayHandler = (getReplayMaxRetries, getReplayTimeoutMs) =>
       let replayTimeout = REPLAY_TIMEOUT_MS;
 
       try {
-        const { webhookId, itemId } = req.params;
+        /** @type {{webhookId?: string, itemId?: string}} */
+        const { webhookId = "", itemId = "" } = req.params;
         let targetUrl = req.query.url;
 
         maxRetries = getReplayMaxRetries
@@ -75,60 +73,18 @@ export const createReplayHandler = (getReplayMaxRetries, getReplayTimeoutMs) =>
           host: ssrfResult.host,
         };
 
-        const dataset = await Actor.openDataset();
-        const datasetInfo = await dataset.getInfo();
+        let item = await logRepository.getLogById(itemId);
 
-        let item;
-        let offset = 0;
-        const limit = MAX_ITEMS_FOR_BATCH;
-
-        // Optimization: Function to perform optimized scan
-        if (req.query.timestamp) {
-          const targetTs = new Date(String(req.query.timestamp));
-          if (!isNaN(targetTs.getTime())) {
-            offset = await findOffsetForTimestamp(
-              dataset,
-              targetTs,
-              datasetInfo?.itemCount || 0,
-            );
-          }
-        }
-
-        // Paginate through dataset (newest first) to find the event
-        while (true) {
-          const { items } = await dataset.getData({
-            desc: true,
-            limit,
-            offset,
+        // Fallback: Try to find by timestamp if ID not found (and ID looks like a date)
+        if (!item && !isNaN(Date.parse(itemId))) {
+          const { items } = await logRepository.findLogs({
+            timestamp: [{ operator: "eq", value: itemId }],
+            webhookId, // Ensure it matches the webhook
+            limit: 1,
           });
-
-          if (items.length === 0) break;
-
-          // Prioritize exact ID match. Fallback to timestamp only if no ID matches.
-          item =
-            items.find((i) => i.webhookId === webhookId && i.id === itemId) ||
-            items.find(
-              (i) => i.webhookId === webhookId && i.timestamp === itemId,
-            );
-
-          if (item) break;
-
-          // Fail-fast logic for optimized scan:
-          // If we see items significantly OLDER than our target timestamp, we can stop.
-          // Since we scan newest->oldest (desc: true), timestamps decrease.
-          // If item's timestamp < target - margin, stop.
-          const lastItem = items[items.length - 1];
-          if (
-            req.query.timestamp &&
-            lastItem &&
-            new Date(lastItem.timestamp).getTime() <
-              new Date(String(req.query.timestamp)).getTime() -
-                REPLAY_SCAN_MAX_DEPTH_MS // Fail-fast margin
-          ) {
-            break;
+          if (items.length > 0) {
+            item = items[0];
           }
-
-          offset += limit;
         }
 
         if (!item) {

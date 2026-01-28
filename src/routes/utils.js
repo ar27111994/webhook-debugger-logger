@@ -60,3 +60,17 @@ export const createBroadcaster = (clients) => (data) => {
     }
   });
 };
+/**
+ * Safely serializes an object to JSON-compatible format.
+ * Handles BigInt by converting to Number.
+ * @param {Record<string, any>} obj
+ * @returns {Record<string, any>}
+ */
+export const jsonSafe = (obj) => {
+  return JSON.parse(
+    JSON.stringify(obj, (_, value) => {
+      if (typeof value === "bigint") return Number(value);
+      return value;
+    }),
+  );
+};

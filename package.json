@@ -1,6 +1,6 @@
 {
   "name": "webhook-debugger-logger",
-  "version": "2.8.7",
+  "version": "2.9.0",
   "type": "module",
   "description": "Generate temporary webhook URLs and log all incoming requests with full details.",
   "main": "src/main.js",
@@ -22,9 +22,11 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
+    "@duckdb/node-api": "^1.4.3-r.3",
     "ajv": "^8.17.1",
     "apify": "^3.5.3",
     "axios": "^1.13.2",
+    "bottleneck": "^2.19.5",
     "compression": "^1.8.1",
     "cors": "^2.8.5",
     "express": "^5.2.1",
@@ -60,7 +62,10 @@
         "lines": 90,
         "statements": 90
       }
-    }
+    },
+    "setupFiles": [
+      "./tests/setup/env.js"
+    ]
   },
   "publishConfig": {
     "access": "public",

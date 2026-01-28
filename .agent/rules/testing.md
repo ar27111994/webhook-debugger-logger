@@ -1,4 +1,5 @@
 ---
+trigger: model_decision
 description: Testing standards and best practices for Jest test suites
 globs: tests/**/*.test.js, tests/**/*.spec.js, **/__tests__/**/*.js
 ---

@@ -9,6 +9,18 @@
         "description": "Unique identifier for this captured request",
         "example": "evt_z8X2n0P5q1"
       },
+      "requestId": {
+        "type": "string",
+        "title": "Request ID",
+        "description": "Unique request tracer ID",
+        "example": "req_12345abcdef"
+      },
+      "signatureValid": {
+        "type": "boolean",
+        "title": "Sig Valid",
+        "description": "Whether the webhook signature was verified",
+        "example": true
+      },
       "timestamp": {
         "type": "string",
         "format": "date-time",
@@ -86,6 +98,30 @@
         "title": "Status",
         "description": "HTTP response status code returned to the sender",
         "example": 200
+      },
+      "responseBody": {
+        "type": "string",
+        "title": "Response Body",
+        "description": "Body returned to the webhook sender",
+        "example": "{\"received\": true}"
+      },
+      "responseHeaders": {
+        "type": "object",
+        "title": "Response Headers",
+        "description": "Headers returned to the webhook sender",
+        "example": { "content-type": "application/json" }
+      },
+      "signatureProvider": {
+        "type": "string",
+        "title": "Sig Provider",
+        "description": "The provider used for verification (e.g., stripe, github)",
+        "example": "stripe"
+      },
+      "signatureError": {
+        "type": "string",
+        "title": "Sig Error",
+        "description": "Error message if signature verification failed",
+        "example": "Signature mismatch"
       }
     }
   },
@@ -95,13 +131,16 @@
       "transformation": {
         "fields": [
           "timestamp",
+          "requestId",
+          "signatureValid",
           "webhookId",
           "method",
           "statusCode",
           "contentType",
           "size",
           "processingTime",
-          "remoteIp"
+          "remoteIp",
+          "signatureProvider"
         ],
         "desc": true
       },
@@ -109,30 +148,51 @@
         "component": "table",
         "properties": {
           "timestamp": { "label": "Time", "format": "date" },
+          "requestId": { "label": "Req ID" },
+          "signatureValid": { "label": "Sig", "format": "boolean" },
           "webhookId": { "label": "Webhook ID" },
           "method": { "label": "Method" },
           "statusCode": { "label": "Status" },
           "contentType": { "label": "Content-Type" },
           "size": { "label": "Size (Bytes)" },
           "processingTime": { "label": "Latency (ms)" },
-          "remoteIp": { "label": "Source IP" }
+          "remoteIp": { "label": "Source IP" },
+          "signatureProvider": { "label": "Provider" }
         }
       }
     },
     "details": {
       "title": "Full Payloads",
       "transformation": {
-        "fields": ["timestamp", "method", "statusCode", "headers", "body"],
+        "fields": [
+          "timestamp",
+          "requestId",
+          "signatureValid",
+          "method",
+          "statusCode",
+          "headers",
+          "body",
+          "responseBody",
+          "responseHeaders",
+          "signatureProvider",
+          "signatureError"
+        ],
         "desc": true
       },
       "display": {
         "component": "table",
         "properties": {
           "timestamp": { "label": "Time", "format": "date" },
+          "requestId": { "label": "Req ID" },
+          "signatureValid": { "label": "Sig", "format": "boolean" },
           "method": { "label": "Method" },
           "statusCode": { "label": "Status" },
           "headers": { "label": "Headers", "format": "object" },
-          "body": { "label": "Body", "format": "text" }
+          "body": { "label": "Body", "format": "text" },
+          "responseBody": { "label": "Res Body", "format": "text" },
+          "responseHeaders": { "label": "Res Headers", "format": "object" },
+          "signatureProvider": { "label": "Sig Provider" },
+          "signatureError": { "label": "Sig Error" }
         }
       }
     }

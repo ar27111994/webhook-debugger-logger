@@ -1,4 +1,6 @@
 import { Actor } from "apify";
+import { getDbInstance } from "./db/duckdb.js";
+import { SyncService } from "./services/SyncService.js";
 import express from "express";
 import compression from "compression";
 import { WebhookManager } from "./webhook_manager.js";
@@ -73,6 +75,8 @@ let appState;
 let hotReloadManager;
 
 const webhookManager = new WebhookManager();
+/** @type {SyncService} */
+const syncService = new SyncService();
 /** @type {Set<ServerResponse>} */
 const clients = new Set();
 const app = express(); // Exported for tests
@@ -88,6 +92,9 @@ const shutdown = async (signal) => {
   if (cleanupInterval) clearInterval(cleanupInterval);
   if (sseHeartbeat) clearInterval(sseHeartbeat);
   if (hotReloadManager) await hotReloadManager.stop();
+
+  syncService.stop();
+
   if (appState) appState.destroy();
 
   if (process.env.NODE_ENV === "test" && signal !== "TEST_COMPLETE") return;
@@ -174,6 +181,19 @@ export async function initialize(testOptions = {}) {
   const testAndExit = input.testAndExit || false;
 
   await webhookManager.init();
+
+  // Initialize DB and Sync Service
+  try {
+    await getDbInstance();
+    // Start background sync (non-blocking, but initial sync will happen)
+    await syncService.start();
+  } catch (err) {
+    console.error("Failed to initialize DuckDB or SyncService:", err);
+    // Strategy: Disposable Read Model
+    // We intentionally allow the application to start even if the Read Model (DuckDB) fails.
+    // The Dataset (Write Model) is the single source of truth, so ingestion remains functional.
+    // Query capabilities may be unavailable, but data integrity is preserved in the Dataset.
+  }
 
   if (process.env.NODE_ENV !== "test") {
     try {

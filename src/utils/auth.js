@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "crypto";
+import { secureCompare } from "./crypto.js";
 
 /**
  * Validates the authentication key from query or headers.
@@ -46,17 +46,9 @@ export function validateAuth(req, authKey) {
   }
 
   // 3. Timing-safe comparison
-  const expectedBuffer = Buffer.from(authKey);
-  const providedBuffer = Buffer.from(providedKey);
-  const safeBuffer =
-    expectedBuffer.length === providedBuffer.length
-      ? providedBuffer
-      : Buffer.alloc(expectedBuffer.length);
+  const isValid = secureCompare(authKey, providedKey);
 
-  if (
-    !timingSafeEqual(expectedBuffer, safeBuffer) ||
-    expectedBuffer.length !== providedBuffer.length
-  ) {
+  if (!isValid) {
     return {
       isValid: false,
       error: "Unauthorized: Invalid API key",

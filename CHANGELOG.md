@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.9.0] - 2026-01-29
+
+### Added (2.9.0)
+
+- **Database Optimization**: Added generic indices for `requestId`, `remoteIp`, `size`, and `requestUrl` to DuckDB to improve query performance on high-cardinality fields.
+- **Advanced Filtering**: Implemented `requestUrl` filtering support in the `/logs` API and Repository layer.
+- **Multi-Sort**: Added support for multi-field sorting in the `/logs` API (e.g., `sort=statusCode:desc,timestamp:asc`).
+- **Pagination**: Implemented standardized `DEFAULT_PAGE_LIMIT` (20), `MAX_PAGE_LIMIT` (10000), and `DEFAULT_PAGE_OFFSET` constants to replace magic numbers and support larger data fetches.
+- **Hot-Reload Efficiency**: Added `HOT_RELOAD_DEBOUNCE_MS` (100ms) and `DISABLE_HOT_RELOAD` environment variable to optimize resource usage in production environments.
+
+### Refactored (2.9.0)
+
+- **Architecture**: Converted core services (`LogRepository`, `SyncService`) to ES6 Classes for better encapsulation and testability.
+- **Synchronization**: Migrated `SyncService` to an event-driven architecture using `Bottleneck` for concurrency control, replacing the legacy polling mechanism.
+- **Code Quality**: Removed "Magic Numbers" from pagination and timeout logic, ensuring consistent behavior across the application.
+
+### Fixed (2.9.0)
+
+- **Test Stability**: Resolved `PRIMARY KEY` violations in integration tests (`api.test.js`) by ensuring proper database cleanup between test runs.
+- **Rate Limiting**: Fixed an issue where the Rate Limiter could prematurely block users without properly restoring their hit budget on rejection.
+- **Legacy Filtering**: Removed deprecated/legacy filter fields from the `/logs` API response payload to reduce payload size.
+
 ## [2.8.7] - 2026-01-15
 
 ### Fixed (2.8.7)

@@ -2,44 +2,36 @@
  * Logs route handler module.
  * @module routes/logs
  */
-import { Actor } from "apify";
-import { asyncHandler } from "./utils.js";
-import { MAX_ITEMS_FOR_BATCH } from "../consts.js";
+import { asyncHandler, jsonSafe } from "./utils.js";
+import { logRepository } from "../repositories/LogRepository.js";
+import { parseRangeQuery, parseObjectFilter } from "../utils/filter_utils.js";
+import {
+  DEFAULT_PAGE_LIMIT,
+  DEFAULT_PAGE_OFFSET,
+  MAX_PAGE_LIMIT,
+} from "../consts.js";
 
 /**
+ * @typedef {import("../webhook_manager.js").WebhookManager} WebhookManager
+ * @typedef {import("../typedefs.js").LogFilters} LogFilters
+ * @typedef {import("../typedefs.js").SortRule} SortRule
  * @typedef {import("express").Request} Request
  * @typedef {import("express").Response} Response
  * @typedef {import("express").RequestHandler} RequestHandler
- * @typedef {import("../webhook_manager.js").WebhookManager} WebhookManager
  */
-
-// Fields to fetch from the dataset
-const LOG_FIELDS = Object.freeze([
-  "id",
-  "webhookId",
-  "timestamp",
-  "method",
-  "statusCode",
-  "headers",
-  "signatureValid",
-  "requestId",
-  "remoteIp",
-  "userAgent",
-  "contentType",
-  "processingTime",
-]);
 
 /**
  * Creates the logs route handler.
- * @param {WebhookManager} webhookManager
+ * @param {WebhookManager} _webhookManager
  * @returns {RequestHandler}
  */
-export const createLogsHandler = (webhookManager) =>
+export const createLogsHandler = (_webhookManager) =>
   asyncHandler(
     /** @param {Request} req @param {Response} res */
     async (req, res) => {
       try {
-        const CHUNK_SIZE = MAX_ITEMS_FOR_BATCH;
+        const DEFAULT_SORT = ["timestamp", "desc"];
+
         let {
           id,
           webhookId,
@@ -53,273 +45,135 @@ export const createLogsHandler = (webhookManager) =>
           remoteIp,
           userAgent,
           processingTime,
+          size,
           headers,
-          limit = 100,
-          offset = 0,
-          sort = "timestamp:desc",
+          query,
+          body,
+          responseBody,
+          responseHeaders,
+          signatureProvider,
+          signatureError,
+          limit = MAX_PAGE_LIMIT,
+          offset = DEFAULT_PAGE_OFFSET,
+          sort = DEFAULT_SORT.join(":"),
+          timestamp,
         } = req.query;
-        limit = Math.min(
-          Math.max(parseInt(String(limit), 10) || 100, 1),
-          CHUNK_SIZE,
+
+        // Parse pagination
+        const limitNum = Math.max(
+          parseInt(String(limit), 10) || DEFAULT_PAGE_LIMIT,
+          1,
         );
-        offset = Math.max(parseInt(String(offset), 10) || 0, 0);
+        const offsetNum = Math.max(
+          parseInt(String(offset), 10) || DEFAULT_PAGE_OFFSET,
+          0,
+        );
 
-        // Parse timestamp filters
-        // Pre-process filters outside the loop for performance
-        const startDate = startTime ? new Date(String(startTime)) : null;
-        const endDate = endTime ? new Date(String(endTime)) : null;
-        const sigValid =
-          signatureValid === "true"
-            ? true
-            : signatureValid === "false"
-              ? false
-              : undefined;
-        const filterWebhookId = webhookId ? String(webhookId) : null;
-        const filterMethod = method ? String(method).toUpperCase() : null;
-        const filterStatus = statusCode ? Number(statusCode) : null;
-        const filterType = contentType
-          ? String(contentType).toLowerCase()
-          : null;
-        const filterRequestId = requestId ? String(requestId) : null;
-        const filterIp = remoteIp ? String(remoteIp) : null;
-        const filterUa = userAgent ? String(userAgent) : null;
-
-        const filterId = id ? String(id) : null;
-        const filterProcessingTime = processingTime
-          ? Number(processingTime)
-          : null;
-
-        // Handle headers filter (string or object)
-        /** @type {Record<string, string> | string | null} */
-        let filterHeaders = null;
-        if (headers) {
-          if (typeof headers === "string") {
-            filterHeaders = headers.toLowerCase();
-          } else if (typeof headers === "object") {
-            /** @type {Record<string, string>} */
-            const headerObj = {};
-            for (const [k, v] of Object.entries(headers)) {
-              headerObj[k.toLowerCase()] = String(v).toLowerCase();
-            }
-            filterHeaders = headerObj;
-          }
+        // Parse timestamp filters (Legacy support + Range support)
+        const timestampConditions = parseRangeQuery(timestamp, "string") || [];
+        if (startTime) {
+          timestampConditions.push({
+            operator: "gte",
+            value: new Date(String(startTime)).toISOString(),
+          });
+        }
+        if (endTime) {
+          timestampConditions.push({
+            operator: "lte",
+            value: new Date(String(endTime)).toISOString(),
+          });
         }
 
-        // ISO String comparison is faster than new Date() per item
-        // (Assumes item.timestamp is always ISO 8601 from new Date().toISOString())
-        const filterStart =
-          startDate && !isNaN(startDate.getTime())
-            ? startDate.toISOString()
-            : null;
-        const filterEnd =
-          endDate && !isNaN(endDate.getTime()) ? endDate.toISOString() : null;
-
-        const dataset = await Actor.openDataset();
-        const datasetInfo = await dataset.getInfo();
-        const totalItems = datasetInfo?.itemCount || 0;
-
-        /** @type {any[]} */
-        let itemsBuffer = [];
-        let currentOffset = offset;
-        let hasMore = true;
-
-        // Fetch in chunks until we have enough items or exhaust the dataset
-        while (itemsBuffer.length < limit && hasMore) {
-          const { items } = await dataset.getData({
-            limit: CHUNK_SIZE,
-            offset: currentOffset,
-            desc: true,
-            // Optimization: Only fetch metadata fields
-            fields: /** @type {string[]} */ (LOG_FIELDS),
-          });
-
-          if (items.length === 0) {
-            hasMore = false;
-            break;
-          }
-
-          // Add raw index tracking to items
-          /** @type {any[]} */
-          const itemsWithIndex = items.map((item, index) => ({
-            ...item,
-            _index: currentOffset + index,
-          }));
-
-          // Apply filters to current chunk
-          const batchMatches = itemsWithIndex.filter((item) => {
-            // 1. Webhook Validity (Security) - Checking first prevents leaking info about invalid/expired webhooks
-            if (!webhookManager.isValid(item.webhookId)) return false;
-
-            // 2. Exact Match Filters
-            if (filterId && item.id !== filterId) return false; // Added
-            if (filterWebhookId && item.webhookId !== filterWebhookId)
-              return false;
-            if (filterRequestId && item.requestId !== filterRequestId)
-              return false;
-
-            // Numeric Checks
-            if (filterStatus !== null && item.statusCode !== filterStatus)
-              return false;
-            if (
-              filterProcessingTime !== null &&
-              item.processingTime !== filterProcessingTime
-            )
-              return false;
-
-            // Checking method case-insensitively (assuming standard data, but safe)
-            if (filterMethod && item.method?.toUpperCase() !== filterMethod)
-              return false;
-            if (sigValid !== undefined && item.signatureValid !== sigValid)
-              return false;
-
-            // 3. String Match Filters
-            if (filterIp && item.remoteIp !== filterIp) return false;
-            if (filterUa && item.userAgent !== filterUa) return false;
-
-            // 4. Content Type (Substring match on specialized field)
-            if (
-              filterType &&
-              !item.contentType?.toLowerCase().includes(filterType)
-            ) {
-              return false;
-            }
-
-            // 5. Headers Filter
-            if (filterHeaders) {
-              const itemHeaders = item.headers || {};
-              if (typeof filterHeaders === "string") {
-                // Search entire headers object as string
-                if (
-                  !JSON.stringify(itemHeaders)
-                    .toLowerCase()
-                    .includes(filterHeaders)
-                )
-                  return false;
-              } else {
-                // Object match: All provided keys must substring-match
-                for (const [key, searchVal] of Object.entries(filterHeaders)) {
-                  const itemVal = itemHeaders[key];
-                  if (
-                    !itemVal ||
-                    !String(itemVal).toLowerCase().includes(searchVal)
-                  )
-                    return false;
-                }
-              }
-            }
-
-            // 5. Timestamp Range (String comparison)
-            if (filterStart && item.timestamp < filterStart) return false;
-            if (filterEnd && item.timestamp > filterEnd) return false;
-
-            return true;
-          });
-
-          itemsBuffer = itemsBuffer.concat(batchMatches);
-          currentOffset += CHUNK_SIZE; // Advance offset by strictly the chunk size (raw dataset positions)
-
-          // Optimization: If we fetched less than CHUNK_SIZE, we are at the end
-          if (items.length < CHUNK_SIZE) {
-            hasMore = false;
-          }
-        }
-
-        // Sorting Logic
+        // Sorting
         const sortParam = sort ? String(sort) : "";
+        /** @type {SortRule[]} */
+        const sortRules = [];
 
-        // Whitelist allowed sort fields
-        const allowedSortFields = LOG_FIELDS.filter(
-          (field) => field !== "headers",
-        ); // Exclude headers objects from sorting
-
-        // Parse sort criteria: "field1:dir1,field2:dir2"
-        const sortCriteria = sortParam
-          .split(",")
-          .map((part) => {
-            let [field, dir] = part.trim().split(":");
-            field = field?.trim();
-            dir = (dir || "desc").toLowerCase();
-            return { field, dir };
-          })
-          .filter((c) => c.field && allowedSortFields.includes(c.field));
-
-        // Default to timestamp:desc if no valid criteria provided
-        if (sortCriteria.length === 0) {
-          sortCriteria.push({ field: "timestamp", dir: "desc" });
+        if (sortParam) {
+          const parts = sortParam.split(",");
+          for (const part of parts) {
+            const [field, dir] = part.split(":");
+            sortRules.push({
+              field: field.trim(),
+              dir: (dir || "desc").toLowerCase() === "asc" ? "asc" : "desc",
+            });
+          }
+        } else {
+          sortRules.push({ field: "timestamp", dir: "desc" });
         }
 
-        const filtered = itemsBuffer.sort((a, b) => {
-          for (const { field, dir } of sortCriteria) {
-            let valA = a[field];
-            let valB = b[field];
+        // Parse other filters
+        /** @type {LogFilters} */
+        const filters = {
+          limit: limitNum,
+          offset: offsetNum,
+          sort: sortRules,
+          id: id ? String(id) : undefined,
+          webhookId: webhookId ? String(webhookId) : undefined,
+          requestUrl: req.query.requestUrl
+            ? String(req.query.requestUrl)
+            : undefined,
+          method: method ? String(method).toUpperCase() : undefined,
+          contentType: contentType ? String(contentType) : undefined,
+          requestId: requestId ? String(requestId) : undefined,
+          remoteIp: typeof remoteIp === "string" ? remoteIp : undefined,
+          userAgent: userAgent ? String(userAgent) : undefined,
+          signatureValid:
+            signatureValid !== undefined
+              ? String(signatureValid) === "true"
+              : undefined,
+          signatureProvider: signatureProvider
+            ? String(signatureProvider)
+            : undefined,
+          signatureError: signatureError ? String(signatureError) : undefined,
+          // StatusCode can be a range (e.g. gt:400) or exact value
+          statusCode: parseRangeQuery(statusCode),
+          processingTime: parseRangeQuery(processingTime),
+          size: parseRangeQuery(size),
+          timestamp:
+            timestampConditions.length > 0 ? timestampConditions : undefined,
+          headers: parseObjectFilter(headers) || undefined,
+          query: parseObjectFilter(query) || undefined,
+          body: parseObjectFilter(body) || undefined,
+          responseHeaders: parseObjectFilter(responseHeaders) || undefined,
+          responseBody: parseObjectFilter(responseBody) || undefined,
+        };
 
-            // Handle timestamp specifically (convert to Date for comparison)
-            if (field === "timestamp") {
-              valA = new Date(valA).getTime();
-              valB = new Date(valB).getTime();
-            }
+        // Execute Query
+        const { items, total } = await logRepository.findLogs(filters);
 
-            if (valA < valB) return dir === "asc" ? -1 : 1;
-            if (valA > valB) return dir === "asc" ? 1 : -1;
-          }
-          return 0;
-        });
-
-        // Add detailUrl to items and remove internal _index
+        // Transform items (add detailUrl)
         const baseUrl = `${req.protocol}://${req.get("host")}${req.baseUrl}`;
-        const enrichedItems = filtered.slice(0, limit).map((item) => {
-          const { _index, ...rest } = item;
-          return {
-            ...rest,
-            detailUrl: `${baseUrl}/${item.id}`,
-          };
-        });
+        const enrichedItems = items.map((item) => ({
+          ...item,
+          detailUrl: `${baseUrl}/${item.id}`,
+        }));
 
-        // Calculate nextOffset based on the last item's raw index
+        // Pagination Metadata
         let nextOffset = null;
-        if (enrichedItems.length > 0) {
-          const lastItem = filtered[enrichedItems.length - 1];
-          nextOffset = lastItem._index + 1;
-
-          // If we exhausted the dataset AND there are no more matches in memory,
-          // then there is effectively no next page.
-          if (!hasMore && filtered.length <= limit) {
-            nextOffset = null;
-          }
-        } else if (hasMore) {
-          // If we found no matches but dataset has more, continue from the next chunk.
-          nextOffset = currentOffset;
+        if (offsetNum + items.length < total) {
+          nextOffset = offsetNum + limitNum;
         }
 
         let nextPageUrl = null;
         if (nextOffset !== null) {
           const nextParams = new URLSearchParams(
-            /** @type {any} */ (req.query),
+            /** @type {Record<string, any>} */ (req.query),
           );
           nextParams.set("offset", String(nextOffset));
           nextPageUrl = `${baseUrl}?${nextParams.toString()}`;
         }
 
-        res.json({
-          filters: {
-            webhookId,
-            method,
-            statusCode,
-            contentType,
-            startTime,
-            endTime,
-            signatureValid,
-            requestId,
-            remoteIp: req.query.remoteIp,
-            userAgent: req.query.userAgent,
-          },
-          count: enrichedItems.length,
-          total: totalItems,
-          items: enrichedItems,
-          nextOffset,
-          nextPageUrl,
-        });
-        return;
+        res.json(
+          jsonSafe({
+            filters, // Return understood filters
+            count: enrichedItems.length,
+            total,
+            items: enrichedItems,
+            nextOffset,
+            nextPageUrl,
+          }),
+        );
       } catch (e) {
         res.status(500).json({
           error: "Logs failed",
@@ -335,35 +189,16 @@ export const createLogsHandler = (webhookManager) =>
  * @returns {RequestHandler}
  */
 export const createLogDetailHandler = (webhookManager) =>
+  /**
+   * @param {Request} req
+   * @param {Response} res
+   */
   asyncHandler(async (req, res) => {
     try {
-      const { logId } = req.params;
-      const dataset = await Actor.openDataset();
+      /** @type {{logId?: string}} */
+      const { logId = "" } = req.params;
 
-      // Scan for the item by ID.
-      // Since we don't know the offset, we have to scan.
-      // Optimization: We could take an optional 'timestamp' query param to narrow the search range if needed in future.
-      const CHUNK_SIZE = MAX_ITEMS_FOR_BATCH;
-      let offset = 0;
-      let foundItem = null;
-
-      // Simple linear scan (most recent first)
-      // Limitation: Slow for very deep history, but acceptable for detail view of recent items.
-      while (!foundItem) {
-        const { items } = await dataset.getData({
-          offset,
-          limit: CHUNK_SIZE,
-          desc: true,
-        });
-
-        if (items.length === 0) break;
-
-        foundItem = items.find((item) => item.id === logId);
-        if (foundItem) break;
-
-        if (items.length < CHUNK_SIZE) break;
-        offset += CHUNK_SIZE;
-      }
+      const foundItem = await logRepository.getLogById(logId);
 
       if (!foundItem) {
         res.status(404).json({ error: "Log entry not found" });
@@ -371,7 +206,6 @@ export const createLogDetailHandler = (webhookManager) =>
       }
 
       // Security Check: Ensure webhook ID is still valid for this user context
-      // (Though currently single-tenant, good practice)
       if (!webhookManager.isValid(foundItem.webhookId)) {
         res.status(404).json({ error: "Log entry belongs to invalid webhook" });
         return;

@@ -1,9 +1,14 @@
 import dns from "dns/promises";
 import ipaddr from "ipaddr.js";
-import { SSRF_INTERNAL_ERRORS, SSRF_LOG_MESSAGES } from "../consts.js";
+import {
+  SSRF_INTERNAL_ERRORS,
+  SSRF_LOG_MESSAGES,
+  DNS_RESOLUTION_TIMEOUT_MS,
+} from "../consts.js";
 
 /**
  * @typedef {import('ipaddr.js').IPv6} IP
+ * @typedef {import('../typedefs.js').SsrfValidationResult} SsrfValidationResult
  */
 
 /**
@@ -48,7 +53,6 @@ export const SSRF_ERRORS = Object.freeze({
 });
 
 /**
- * Checks if an IP address falls within any of the specified CIDR ranges.
  * Checks if an IP address falls within any of the specified CIDR ranges or single IP addresses.
  * Uses ipaddr.js for robust parsing and matching.
  *
@@ -106,7 +110,7 @@ export function checkIpInRanges(ipStr, ranges) {
  * Checks protocol, resolves hostname to IPs, and validates against blocked ranges.
  *
  * @param {string} urlString - The URL to validate
- * @returns {Promise<import('../typedefs.js').SsrfValidationResult>}
+ * @returns {Promise<SsrfValidationResult>}
  */
 export async function validateUrlForSsrf(urlString) {
   // Parse URL
@@ -144,17 +148,29 @@ export async function validateUrlForSsrf(urlString) {
       ipsToCheck = [hostnameUnbracketed];
     } else {
       // Resolve DNS - get both A and AAAA records
-      const timeoutPromise = (/** @type {number} */ ms) =>
-        new Promise((_, reject) =>
-          setTimeout(
-            () => reject(new Error(SSRF_INTERNAL_ERRORS.DNS_TIMEOUT)),
-            ms,
-          ),
-        );
+      const timeoutPromise =
+        /**
+         * Helper function to create a timeout promise.
+         * @param {number} ms
+         * @returns {Promise<never>}
+         */
+        (ms) =>
+          new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new Error(SSRF_INTERNAL_ERRORS.DNS_TIMEOUT)),
+              ms,
+            ),
+          );
 
       const [ipv4Results, ipv6Results] = await Promise.allSettled([
-        Promise.race([dns.resolve4(hostname), timeoutPromise(5000)]),
-        Promise.race([dns.resolve6(hostname), timeoutPromise(5000)]),
+        Promise.race([
+          dns.resolve4(hostname),
+          timeoutPromise(DNS_RESOLUTION_TIMEOUT_MS),
+        ]),
+        Promise.race([
+          dns.resolve6(hostname),
+          timeoutPromise(DNS_RESOLUTION_TIMEOUT_MS),
+        ]),
       ]);
       ipsToCheck = [
         ...(ipv4Results.status === "fulfilled" ? ipv4Results.value : []),

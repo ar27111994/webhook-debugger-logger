@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { DEFAULT_TOLERANCE_SECONDS } from "../consts.js";
+import { secureCompare } from "./crypto.js";
 
 /**
  * @typedef {import("../typedefs.js").SignatureConfig} SignatureConfig
@@ -146,14 +147,7 @@ function verifyStripe(
     .digest("hex");
 
   // Timing-safe comparison
-  const expectedBuffer = Buffer.from(expectedSignature, "hex");
-  const actualBuffer = Buffer.from(signature, "hex");
-
-  if (expectedBuffer.length !== actualBuffer.length) {
-    return { valid: false, error: "Signature mismatch", provider: "stripe" };
-  }
-
-  const isValid = crypto.timingSafeEqual(expectedBuffer, actualBuffer);
+  const isValid = secureCompare(expectedSignature, signature);
   return isValid
     ? { valid: true, provider: "stripe" }
     : { valid: false, error: "Signature mismatch", provider: "stripe" };
@@ -205,14 +199,7 @@ function verifyShopify(
   const expectedSignature = hmac.digest("base64");
 
   // Timing-safe comparison
-  const expectedBuffer = Buffer.from(expectedSignature, "base64");
-  const actualBuffer = Buffer.from(sigHeader, "base64");
-
-  if (expectedBuffer.length !== actualBuffer.length) {
-    return { valid: false, error: "Signature mismatch", provider: "shopify" };
-  }
-
-  const isValid = crypto.timingSafeEqual(expectedBuffer, actualBuffer);
+  const isValid = secureCompare(expectedSignature, sigHeader);
   return isValid
     ? { valid: true, provider: "shopify" }
     : { valid: false, error: "Signature mismatch", provider: "shopify" };
@@ -254,14 +241,7 @@ function verifyGitHub(secret, payload, headers) {
   const expectedSignature = hmac.digest("hex");
 
   // Timing-safe comparison
-  const expectedBuffer = Buffer.from(expectedSignature, "hex");
-  const actualBuffer = Buffer.from(signature, "hex");
-
-  if (expectedBuffer.length !== actualBuffer.length) {
-    return { valid: false, error: "Signature mismatch", provider: "github" };
-  }
-
-  const isValid = crypto.timingSafeEqual(expectedBuffer, actualBuffer);
+  const isValid = secureCompare(expectedSignature, signature);
   return isValid
     ? { valid: true, provider: "github" }
     : { valid: false, error: "Signature mismatch", provider: "github" };
@@ -314,14 +294,7 @@ function verifySlack(
     .digest("hex");
 
   // Timing-safe comparison
-  const expectedBuffer = Buffer.from(expectedSignature, "hex");
-  const actualBuffer = Buffer.from(signature, "hex");
-
-  if (expectedBuffer.length !== actualBuffer.length) {
-    return { valid: false, error: "Signature mismatch", provider: "slack" };
-  }
-
-  const isValid = crypto.timingSafeEqual(expectedBuffer, actualBuffer);
+  const isValid = secureCompare(expectedSignature, signature);
   return isValid
     ? { valid: true, provider: "slack" }
     : { valid: false, error: "Signature mismatch", provider: "slack" };
@@ -396,14 +369,7 @@ function verifyCustom(config, payload, headers) {
   const expectedSignature = hmac.digest(encoding);
 
   // Timing-safe comparison
-  const expectedBuffer = Buffer.from(expectedSignature, encoding);
-  const actualBuffer = Buffer.from(sigHeader, encoding);
-
-  if (expectedBuffer.length !== actualBuffer.length) {
-    return { valid: false, error: "Signature mismatch", provider: "custom" };
-  }
-
-  const isValid = crypto.timingSafeEqual(expectedBuffer, actualBuffer);
+  const isValid = secureCompare(expectedSignature, sigHeader);
   return isValid
     ? { valid: true, provider: "custom" }
     : { valid: false, error: "Signature mismatch", provider: "custom" };

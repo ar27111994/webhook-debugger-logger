@@ -1,4 +1,8 @@
-# Apify Actors Storage Schema Specification (Python)
+---
+trigger: model_decision
+description: Apify Actors Storage Schema Specification (Python)
+globs: **/*.py, **/*.pyc, **/*.pyo, **/*.pyw, **/*.pyx, **/*.pxd, **/*.pxi, **/*.pyd
+---
 
 ## Dataset Schema Specification
 

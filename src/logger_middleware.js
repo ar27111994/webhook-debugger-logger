@@ -1,50 +1,50 @@
 import { Actor } from "apify";
-import axios from "axios";
 import Ajv from "ajv";
 import { nanoid } from "nanoid";
 import vm from "vm";
 import { validateAuth } from "./utils/auth.js";
 import { getSafeResponseDelay, parseWebhookOptions } from "./utils/config.js";
-import { validateUrlForSsrf, checkIpInRanges } from "./utils/ssrf.js";
+import { checkIpInRanges } from "./utils/ssrf.js";
 import {
   BACKGROUND_TASK_TIMEOUT_PROD_MS,
   BACKGROUND_TASK_TIMEOUT_TEST_MS,
-  FORWARD_HEADERS_TO_IGNORE,
-  FORWARD_TIMEOUT_MS,
   SCRIPT_EXECUTION_TIMEOUT_MS,
   SENSITIVE_HEADERS,
   DEFAULT_PAYLOAD_LIMIT,
-  DEFAULT_FORWARD_RETRIES,
-  TRANSIENT_ERROR_CODES,
 } from "./consts.js";
 import { verifySignature } from "./utils/signature.js";
 import { triggerAlertIfNeeded } from "./utils/alerting.js";
+import { appEvents, EVENTS } from "./utils/events.js";
+import { ForwardingService } from "./services/ForwardingService.js";
 
 /**
- * @typedef {import('express').RequestHandler} RequestHandler
- * @typedef {import("ajv").default} Ajv
- * @typedef {import('express').Request} Request
- * @typedef {import('express').Response} Response
- * @typedef {import('express').NextFunction} NextFunction
- * @typedef {import('ajv').ValidateFunction | null} ValidateFunction
- * @typedef {import('./webhook_manager.js').WebhookManager} WebhookManager
- * @typedef {import('./typedefs.js').WebhookEvent} WebhookEvent
+ * @typedef {import("express").RequestHandler} RequestHandler
+ * @typedef {import("ajv").default} AjvType
+ * @typedef {import("express").Request} Request
+ * @typedef {import("express").Response} Response
+ * @typedef {import("express").NextFunction} NextFunction
+ * @typedef {import("ajv").ValidateFunction | null} ValidateFunction
+ * @typedef {import("./webhook_manager.js").WebhookManager} WebhookManager
+ * @typedef {import("./typedefs.js").WebhookEvent} WebhookEvent
  * @typedef {import('./typedefs.js').LoggerOptions} LoggerOptions
  * @typedef {import('./typedefs.js').CommonError} CommonError
  * @typedef {import('./typedefs.js').MiddlewareValidationResult} MiddlewareValidationResult
  */
 
-/** @type {Ajv} */
-// @ts-expect-error - Ajv's default export is a class constructor but TypeScript infers namespace type; explicit cast required
-const ajv = new Ajv();
+/** @type {AjvType} */
+// Force cast to handle ESM/CommonJS interop usually found with ajv
+const ajv = new Ajv.default();
 
-/**
- * Validates and coerces a forced status code.
- * @param {any} forcedStatus
- * @param {number} [defaultCode=200]
- * @returns {number}
- */
 export class LoggerMiddleware {
+  #webhookManager;
+  #onEvent;
+  #options;
+  #forwardingService;
+  /** @type {vm.Script | null} */
+  #compiledScript = null;
+  /** @type {ValidateFunction} */
+  #validate = null;
+
   /**
    * Validates and coerces a forced status code.
    * @param {any} forcedStatus
@@ -63,15 +63,11 @@ export class LoggerMiddleware {
    * @param {WebhookManager} webhookManager
    * @param {Object} rawOptions
    * @param {Function} onEvent
+   * @param {ForwardingService} [forwardingService] - Dependency injection for testing
    */
-  constructor(webhookManager, rawOptions, onEvent) {
-    this.webhookManager = webhookManager;
-    this.onEvent = onEvent;
-
-    /** @type {vm.Script | null} */
-    this.compiledScript = null;
-    /** @type {ValidateFunction} */
-    this.validate = null;
+  constructor(webhookManager, rawOptions, onEvent, forwardingService) {
+    this.#webhookManager = webhookManager;
+    this.#onEvent = onEvent;
 
     // Bind methods where necessary (middleware is used as value)
     this.middleware = this.middleware.bind(this);
@@ -80,9 +76,36 @@ export class LoggerMiddleware {
 
     // Initial compilation
     const options = parseWebhookOptions(rawOptions);
-    this._refreshCompilations(options);
+    this.#refreshCompilations(options);
     /** @type {LoggerOptions} */
-    this.options = options;
+    this.#options = options;
+
+    /** @type {ForwardingService} */
+    this.#forwardingService = forwardingService || new ForwardingService();
+  }
+
+  /**
+   * Expose options getter for testing or read-only access
+   * @returns {LoggerOptions}
+   */
+  get options() {
+    return this.#options;
+  }
+
+  /**
+   * Expose compiled script availability for testing or read-only access
+   * @returns {boolean}
+   */
+  hasCompiledScript() {
+    return this.#compiledScript !== null;
+  }
+
+  /**
+   * Expose validator availability for testing or read-only access
+   * @returns {boolean}
+   */
+  hasValidator() {
+    return this.#validate !== null;
   }
 
   /**
@@ -90,62 +113,72 @@ export class LoggerMiddleware {
    */
   updateOptions(newRawOptions) {
     const newOptions = parseWebhookOptions(newRawOptions);
-    this._refreshCompilations(newOptions);
-    this.options = newOptions; // Switch to new options
+    this.#refreshCompilations(newOptions);
+    this.#options = newOptions; // Switch to new options
+  }
+
+  /**
+   * Generic helper to compile resources (scripts, schemas) safely
+   * @template T
+   * @param {string | object | undefined} source
+   * @param {(src: any) => T} compilerFn
+   * @param {string} successMsg
+   * @param {string} errorPrefix
+   * @returns {T | null}
+   */
+  #compileResource(source, compilerFn, successMsg, errorPrefix) {
+    if (!source) return null;
+    try {
+      const result = compilerFn(source);
+      console.log(`[SYSTEM] ${successMsg}`);
+      return result;
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : String(err ?? "Unknown error");
+      console.error(`[${errorPrefix}] Invalid resource:`, message);
+      return null;
+    }
   }
 
   /**
    * @param {LoggerOptions} newOptions
    */
-  _refreshCompilations(newOptions) {
+  #refreshCompilations(newOptions) {
+    const currentOptions = this.#options;
+
     // 1. Smart script re-compilation
     if (
-      !this.options ||
-      newOptions.customScript !== this.options.customScript
+      !currentOptions ||
+      newOptions.customScript !== currentOptions.customScript
     ) {
-      if (newOptions.customScript) {
-        try {
-          this.compiledScript = new vm.Script(newOptions.customScript);
-          console.log("[SYSTEM] Custom script re-compiled successfully.");
-        } catch (err) {
-          const message =
-            err instanceof Error ? err.message : String(err ?? "Unknown error");
-          console.error("[SCRIPT-ERROR] Invalid Custom Script:", message);
-          this.compiledScript = null; // Clear on failure
-        }
-      } else {
-        this.compiledScript = null;
-      }
+      this.#compiledScript = this.#compileResource(
+        newOptions.customScript,
+        (src) => new vm.Script(src),
+        "Custom script re-compiled successfully.",
+        "SCRIPT-ERROR",
+      );
     }
 
     // 2. Smart schema re-compilation
     const oldSchemaStr =
-      this.options && typeof this.options.jsonSchema === "object"
-        ? JSON.stringify(this.options.jsonSchema)
-        : this.options?.jsonSchema;
+      currentOptions && typeof currentOptions.jsonSchema === "object"
+        ? JSON.stringify(currentOptions.jsonSchema)
+        : currentOptions?.jsonSchema;
     const newSchemaStr =
       typeof newOptions.jsonSchema === "object"
         ? JSON.stringify(newOptions.jsonSchema)
         : newOptions.jsonSchema;
 
-    if (!this.options || newSchemaStr !== oldSchemaStr) {
-      if (newOptions.jsonSchema) {
-        try {
-          const schema =
-            typeof newOptions.jsonSchema === "string"
-              ? JSON.parse(newOptions.jsonSchema)
-              : newOptions.jsonSchema;
-          this.validate = ajv.compile(schema);
-          console.log("[SYSTEM] JSON Schema re-compiled successfully.");
-        } catch (err) {
-          const message =
-            err instanceof Error ? err.message : String(err ?? "Unknown error");
-          console.error("[SCHEMA-ERROR] Invalid JSON Schema:", message);
-          this.validate = null; // Clear on failure
-        }
-      } else {
-        this.validate = null;
-      }
+    if (!currentOptions || newSchemaStr !== oldSchemaStr) {
+      this.#validate = this.#compileResource(
+        newOptions.jsonSchema,
+        (src) => {
+          const schema = typeof src === "string" ? JSON.parse(src) : src;
+          return ajv.compile(schema);
+        },
+        "JSON Schema re-compiled successfully.",
+        "SCHEMA-ERROR",
+      );
     }
   }
 
@@ -159,7 +192,7 @@ export class LoggerMiddleware {
     const webhookId = String(req.params.id);
 
     // 1. Validate & Load Per-Webhook Options
-    const webhookData = this.webhookManager.getWebhookData(webhookId) || {};
+    const webhookData = this.#webhookManager.getWebhookData(webhookId) || {};
 
     // Only allow non-security settings to be overridden per-webhook
     const allowedOverrides = [
@@ -175,11 +208,11 @@ export class LoggerMiddleware {
     );
 
     const mergedOptions = {
-      ...this.options,
+      ...this.#options,
       ...webhookOverrides,
     };
 
-    const validation = this._validateWebhookRequest(
+    const validation = this.#validateWebhookRequest(
       req,
       webhookId,
       mergedOptions,
@@ -197,7 +230,7 @@ export class LoggerMiddleware {
     try {
       // 2. Prepare
       const { loggedBody, loggedHeaders, contentType } =
-        this._prepareRequestData(req, mergedOptions);
+        this.#prepareRequestData(req, mergedOptions);
 
       // 3. Transform
       /** @type {WebhookEvent} */
@@ -221,6 +254,7 @@ export class LoggerMiddleware {
         remoteIp: validation.remoteIp,
         userAgent: req.headers["user-agent"]?.toString(),
         requestId: /** @type {any} */ (req).requestId,
+        requestUrl: req.originalUrl || req.url,
       };
 
       // 3a. Signature Verification (if configured)
@@ -251,7 +285,7 @@ export class LoggerMiddleware {
         }
       }
 
-      this._transformRequestData(event, req);
+      this.#transformRequestData(event, req);
 
       // 4. Orchestration: Respond synchronous-ish, then race background tasks
       const delayMs = getSafeResponseDelay(mergedOptions.responseDelayMs);
@@ -261,12 +295,12 @@ export class LoggerMiddleware {
       }
 
       event.processingTime = Date.now() - startTime;
-      this._sendResponse(res, event, mergedOptions);
+      this.#sendResponse(res, event, mergedOptions);
 
       // Execute background tasks (storage, forwarding, alerting) after response
       const backgroundPromise = async () => {
         try {
-          await this._executeBackgroundTasks(event, req, mergedOptions);
+          await this.#executeBackgroundTasks(event, req, mergedOptions);
 
           // Trigger alerts if configured
           if (mergedOptions.alerts) {
@@ -344,12 +378,12 @@ export class LoggerMiddleware {
    * @param {LoggerOptions} options
    * @returns {MiddlewareValidationResult}
    */
-  _validateWebhookRequest(req, webhookId, options) {
+  #validateWebhookRequest(req, webhookId, options) {
     const authKey = options.authKey || "";
     const allowedIps = options.allowedIps || [];
 
     // 1. Basic ID Validation
-    if (!this.webhookManager.isValid(webhookId)) {
+    if (!this.#webhookManager.isValid(webhookId)) {
       return {
         isValid: false,
         statusCode: 404,
@@ -420,7 +454,7 @@ export class LoggerMiddleware {
    * @param {LoggerOptions} options
    * @returns {{ loggedBody: string, loggedHeaders: Object, contentType: string }}
    */
-  _prepareRequestData(req, options) {
+  #prepareRequestData(req, options) {
     const { maskSensitiveData } = options;
     const rawContentType =
       req.headers["content-type"] || "application/octet-stream";
@@ -432,7 +466,7 @@ export class LoggerMiddleware {
     }
 
     // JSON Schema Validation
-    if (this.validate && contentType === "application/json") {
+    if (this.#validate && contentType === "application/json") {
       let bodyToValidate = req.body;
       if (typeof bodyToValidate === "string") {
         try {
@@ -444,12 +478,12 @@ export class LoggerMiddleware {
           };
         }
       }
-      const isValid = this.validate(bodyToValidate);
+      const isValid = this.#validate(bodyToValidate);
       if (!isValid) {
         throw {
           statusCode: 400,
           error: "JSON Schema Validation Failed",
-          details: this.validate.errors,
+          details: this.#validate.errors,
         };
       }
     }
@@ -485,11 +519,11 @@ export class LoggerMiddleware {
    * @param {WebhookEvent} event
    * @param {Request} req
    */
-  _transformRequestData(event, req) {
-    if (this.compiledScript) {
+  #transformRequestData(event, req) {
+    if (this.#compiledScript) {
       try {
         const sandbox = { event, req, console };
-        this.compiledScript.runInNewContext(sandbox, {
+        this.#compiledScript.runInNewContext(sandbox, {
           timeout: SCRIPT_EXECUTION_TIMEOUT_MS,
         });
       } catch (err) {
@@ -512,7 +546,7 @@ export class LoggerMiddleware {
    * @param {WebhookEvent} event
    * @param {LoggerOptions} options
    */
-  _sendResponse(res, event, options) {
+  #sendResponse(res, event, options) {
     const { defaultResponseBody, defaultResponseHeaders } = options;
 
     // 1. Headers (Global defaults -> Event overrides)
@@ -550,17 +584,24 @@ export class LoggerMiddleware {
    * @param {Request} req
    * @param {LoggerOptions} options
    */
-  async _executeBackgroundTasks(event, req, options) {
+  async #executeBackgroundTasks(event, req, options) {
     const { forwardUrl } = options;
 
     try {
       if (event && event.webhookId) {
         await Actor.pushData(event);
-        if (this.onEvent) this.onEvent(event);
+        // Emit internal event for real-time SyncService
+        appEvents.emit(EVENTS.LOG_RECEIVED, event);
+        if (this.#onEvent) this.#onEvent(event);
       }
 
       if (forwardUrl) {
-        await this._forwardWebhook(event, req, options, forwardUrl);
+        await this.#forwardingService.forwardWebhook(
+          event,
+          req,
+          options,
+          forwardUrl,
+        );
       }
     } catch (error) {
       const errorMessage = /** @type {Error} */ (error).message;
@@ -581,109 +622,6 @@ export class LoggerMiddleware {
         console.warn(
           "[ADVICE] Check your Apify platform limits or storage availability.",
         );
-      }
-    }
-  }
-
-  /**
-   * @param {WebhookEvent} event
-   * @param {Request} req
-   * @param {LoggerOptions} options
-   * @param {string} forwardUrl
-   */
-  async _forwardWebhook(event, req, options, forwardUrl) {
-    let validatedUrl = forwardUrl.startsWith("http")
-      ? forwardUrl
-      : `http://${forwardUrl}`;
-
-    let attempt = 0;
-    let success = false;
-
-    // SSRF validation for forwardUrl
-    const ssrfResult = await validateUrlForSsrf(validatedUrl);
-    if (!ssrfResult.safe) {
-      console.error(
-        `[FORWARD-ERROR] SSRF blocked: ${ssrfResult.error} for ${validatedUrl}`,
-      );
-      return;
-    }
-    const hostHeader = ssrfResult.host || "";
-    validatedUrl = ssrfResult.href || validatedUrl;
-
-    while (
-      attempt < (options.maxForwardRetries ?? DEFAULT_FORWARD_RETRIES) &&
-      !success
-    ) {
-      try {
-        attempt++;
-
-        const sensitiveHeaders = FORWARD_HEADERS_TO_IGNORE;
-
-        const forwardingHeaders =
-          options.forwardHeaders !== false
-            ? Object.fromEntries(
-                Object.entries(req.headers).filter(
-                  ([key]) => !sensitiveHeaders.includes(key.toLowerCase()),
-                ),
-              )
-            : {
-                "content-type": req.headers["content-type"],
-              };
-
-        await axios.post(validatedUrl, req.body, {
-          headers: {
-            ...forwardingHeaders,
-            "X-Forwarded-By": "Apify-Webhook-Debugger",
-            host: hostHeader,
-          },
-          timeout: FORWARD_TIMEOUT_MS,
-          maxRedirects: 0,
-        });
-        success = true;
-      } catch (err) {
-        const axiosError = /** @type {CommonError} */ (err);
-        const isTransient = TRANSIENT_ERROR_CODES.includes(
-          axiosError.code || "",
-        );
-        const delay = 1000 * Math.pow(2, attempt - 1);
-
-        console.error(
-          `[FORWARD-ERROR] Attempt ${attempt}/${
-            options.maxForwardRetries ?? DEFAULT_FORWARD_RETRIES
-          } failed for ${validatedUrl}:`,
-          axiosError.code === "ECONNABORTED" ? "Timed out" : axiosError.message,
-        );
-
-        if (
-          attempt >= (options.maxForwardRetries ?? DEFAULT_FORWARD_RETRIES) ||
-          !isTransient
-        ) {
-          try {
-            await Actor.pushData({
-              id: nanoid(10),
-              timestamp: new Date().toISOString(),
-              webhookId: event.webhookId,
-              method: "SYSTEM",
-              type: "forward_error",
-              body: `Forwarding to ${validatedUrl} failed${
-                !isTransient ? " (Non-transient error)" : ""
-              } after ${attempt} attempts. Last error: ${axiosError.message}`,
-              statusCode: 500,
-              originalEventId: event.id,
-            });
-          } catch (pushErr) {
-            console.error(
-              "[CRITICAL] Failed to log forward error:",
-              /** @type {Error} */ (pushErr).message,
-            );
-          }
-          break; // Stop retrying
-        } else {
-          await new Promise((resolve) => {
-            const h = setTimeout(resolve, delay);
-            if (h.unref) h.unref();
-          });
-        }
       }
     }
   }

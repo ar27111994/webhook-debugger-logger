@@ -43,6 +43,7 @@
  * @property {string} [signatureProvider]
  * @property {string} [signatureError]
  * @property {string} [requestId]
+ * @property {string} [requestUrl]
  */
 
 /**
@@ -130,6 +131,52 @@
  * @property {boolean} valid
  * @property {string} [error]
  * @property {string} provider
+ */
+
+/**
+ * @typedef {import('express').Request['query'][string]} QueryValue
+ */
+
+/**
+ * @typedef {WebhookEvent & { sourceOffset?: number, url?: string, signatureValidation?: SignatureResult }} LogEntry
+ */
+
+/**
+ * @typedef {Object} SortRule
+ * @property {string} field
+ * @property {'asc' | 'desc'} dir
+ */
+
+/**
+ * @typedef {import('./utils/filter_utils.js').RangeCondition} RangeCondition
+ */
+
+/**
+ * @typedef {Object} LogFilters
+ * @property {string} [id]
+ * @property {number} [limit]
+ * @property {number} [offset]
+ * @property {SortRule[]} [sort]
+ * @property {string} [search] - text search in ID or URL
+ * @property {string} [requestUrl]
+ * @property {string} [method]
+ * @property {string} [webhookId]
+ * @property {string} [requestId]
+ * @property {string} [remoteIp]
+ * @property {string} [userAgent]
+ * @property {string} [contentType] - checked against headers['content-type']
+ * @property {boolean|string} [signatureValid]
+ * @property {string} [signatureProvider]
+ * @property {string} [signatureError]
+ * @property {number|string|RangeCondition[]} [statusCode]
+ * @property {RangeCondition[]} [processingTime]
+ * @property {RangeCondition[]} [size]
+ * @property {RangeCondition[]} [timestamp]
+ * @property {Object|string} [headers]
+ * @property {Object|string} [query]
+ * @property {Object|string} [body]
+ * @property {Object|string} [responseHeaders]
+ * @property {Object|string} [responseBody]
  */
 
 export {};

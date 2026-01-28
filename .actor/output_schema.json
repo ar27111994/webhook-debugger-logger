@@ -24,13 +24,17 @@
       "transformation": {
         "fields": [
           "timestamp",
+          "requestId",
+          "signatureValid",
           "webhookId",
           "method",
           "statusCode",
           "contentType",
           "size",
           "processingTime",
-          "remoteIp"
+          "processingTime",
+          "remoteIp",
+          "signatureProvider"
         ],
         "desc": true
       },
@@ -41,7 +45,20 @@
     "details": {
       "title": "Full Payloads",
       "transformation": {
-        "fields": ["timestamp", "method", "statusCode", "headers", "body"],
+        "fields": [
+          "timestamp",
+          "requestId",
+          "signatureValid",
+          "method",
+          "statusCode",
+          "headers",
+          "headers",
+          "body",
+          "responseBody",
+          "responseHeaders",
+          "signatureProvider",
+          "signatureError"
+        ],
         "desc": true
       },
       "display": {

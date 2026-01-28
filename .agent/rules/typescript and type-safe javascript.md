@@ -1,5 +1,5 @@
 ---
-trigger: always_on
+trigger: model_decision
 description: TypeScript coding standards and best practices for modern web development
 globs: **/*.ts, **/*.tsx, **/*.d.ts, **/*.js
 ---

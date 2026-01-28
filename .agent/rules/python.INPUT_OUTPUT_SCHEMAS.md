@@ -1,4 +1,8 @@
-# Apify Actors Input/Output Schema Specification (Python)
+---
+trigger: model_decision
+description: Apify Actors Input/Output Schema Specification (Python)
+globs: **/*.py, **/*.pyc, **/*.pyo, **/*.pyw, **/*.pyx, **/*.pxd, **/*.pxi, **/*.pyd
+---
 
 ## Actor Input Schema
 
