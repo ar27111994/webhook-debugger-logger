@@ -69,6 +69,12 @@
         "description": "MIME type of the request body",
         "example": "application/json"
       },
+      "bodyEncoding": {
+        "type": "string",
+        "title": "Body Encoding",
+        "description": "Encoding of the body (utf8 or base64)",
+        "example": "utf8"
+      },
       "size": {
         "type": "integer",
         "title": "Size (Bytes)",
@@ -170,6 +176,7 @@
           "signatureValid",
           "method",
           "statusCode",
+          "query",
           "headers",
           "body",
           "responseBody",
@@ -187,6 +194,7 @@
           "signatureValid": { "label": "Sig", "format": "boolean" },
           "method": { "label": "Method" },
           "statusCode": { "label": "Status" },
+          "query": { "label": "Query", "format": "object" },
           "headers": { "label": "Headers", "format": "object" },
           "body": { "label": "Body", "format": "text" },
           "responseBody": { "label": "Res Body", "format": "text" },

@@ -1,4 +1,10 @@
 /**
+ * @file src/typedefs.js
+ * @description Centralized JSDoc type definitions for the application.
+ * Provides type safety and IDE support across all modules.
+ */
+
+/**
  * @typedef {Object} WebhookItem
  * @property {string} id
  * @property {string} webhookId
@@ -31,6 +37,7 @@
  * @property {Object.<string, string | string[] | undefined>} headers
  * @property {Object.<string, any>} query
  * @property {string|Object|Buffer} body
+ * @property {string} [bodyEncoding]
  * @property {string} contentType
  * @property {number | undefined} size
  * @property {number} statusCode
@@ -156,6 +163,7 @@
  * @property {string} [id]
  * @property {number} [limit]
  * @property {number} [offset]
+ * @property {string} [cursor] - Cursor for keyset pagination (timestamp:id encoded)
  * @property {SortRule[]} [sort]
  * @property {string} [search] - text search in ID or URL
  * @property {string} [requestUrl]

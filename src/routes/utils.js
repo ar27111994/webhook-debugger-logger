@@ -1,7 +1,11 @@
 /**
- * Shared utilities for route handlers.
+ * @file src/routes/utils.js
+ * @description Shared utilities for route handlers including async wrappers and broadcasting.
  * @module routes/utils
  */
+import { createChildLogger } from "../utils/logger.js";
+
+const log = createChildLogger({ component: "RouteUtils" });
 
 /**
  * @typedef {import("express").Request} Request
@@ -52,10 +56,7 @@ export const createBroadcaster = (clients) => (data) => {
         code: /** @type {CommonError} */ (err).code || "UNKNOWN",
         name: /** @type {Error} */ (err).name,
       };
-      console.error(
-        "[SSE-ERROR] Failed to broadcast message to client:",
-        JSON.stringify(safeError),
-      );
+      log.error({ error: safeError }, "Failed to broadcast message to client");
       clients.delete(client);
     }
   });

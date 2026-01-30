@@ -1,4 +1,10 @@
 /**
+ * @file src/middleware/json_parser.js
+ * @module middleware/json_parser
+ * @description JSON body parsing middleware with raw body preservation for signature verification.
+ */
+
+/**
  * Middleware to parse JSON body if content-type header is present.
  * It strictly parses strings but is lenient to buffer/string mismatch as main.js logic was.
  *
@@ -18,9 +24,8 @@ export const jsonParserMiddleware = (req, _res, next) => {
     } catch (_) {
       req.body = req.body.toString();
     }
-  } else {
-    req.body = req.body.toString();
   }
+  // Else: Leave as Buffer. logger_middleware will handle encoding (utf8/base64).
   next();
 };
 

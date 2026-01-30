@@ -1,4 +1,9 @@
 /**
+ * @file src/utils/common.js
+ * @description Shared utility functions for environment parsing and JSON handling.
+ */
+
+/**
  * Helper to safely parse integer environment variables
  * @param {string} key
  * @param {number} fallback

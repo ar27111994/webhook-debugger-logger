@@ -58,6 +58,9 @@ export const createMockRequest = (overrides = {}) =>
     query: {},
     route: {},
     params: {},
+    path: "/test",
+    method: "GET",
+    requestId: "test_req_123", // Default requestId for error handler tests
     get: (/** @type {string} */ header) => {
       if (header.toLowerCase() === "host") return "localhost";
       return undefined;

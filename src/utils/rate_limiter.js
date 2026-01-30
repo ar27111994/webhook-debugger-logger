@@ -2,7 +2,13 @@
  * Simple in-memory rate limiter with background pruning and eviction.
  */
 import net from "node:net";
-import { DEFAULT_RATE_LIMIT_WINDOW_MS } from "../consts.js";
+import {
+  DEFAULT_RATE_LIMIT_MAX_ENTRIES,
+  DEFAULT_RATE_LIMIT_WINDOW_MS,
+} from "../consts.js";
+import { createChildLogger } from "./logger.js";
+
+const log = createChildLogger({ component: "RateLimiter" });
 
 /**
  * @typedef {import('express').RequestHandler} RequestHandler
@@ -29,15 +35,12 @@ export class RateLimiter {
    * @param {number} maxEntries - Max unique IPs to track before eviction
    * @param {boolean} trustProxy - Whether to trust X-Forwarded-For/X-Real-IP headers
    */
-  constructor(limit, windowMs, maxEntries = 1000, trustProxy = false) {
-    if (
-      typeof limit !== "number" ||
-      !Number.isFinite(limit) ||
-      !Number.isInteger(limit) ||
-      limit < 0
-    ) {
-      throw new Error("RateLimiter: limit must be a finite integer >= 0");
-    }
+  constructor(
+    limit,
+    windowMs,
+    maxEntries = DEFAULT_RATE_LIMIT_MAX_ENTRIES,
+    trustProxy = false,
+  ) {
     if (
       typeof windowMs !== "number" ||
       !Number.isFinite(windowMs) ||
@@ -54,7 +57,9 @@ export class RateLimiter {
       throw new Error("RateLimiter: maxEntries must be a finite integer > 0");
     }
 
-    this.#limit = limit;
+    // Initialize fields
+    this.#limit = limit; // Explicit initialization before setter used (though this.limit sets it too)
+    this.limit = limit; // Validate and set via setter
     this.#windowMs = windowMs;
     this.#maxEntries = maxEntries;
     this.#trustProxy = trustProxy;
@@ -76,12 +81,32 @@ export class RateLimiter {
       }
 
       if (prunedCount > 0 && process.env.NODE_ENV !== "test") {
-        console.log(
-          `[SYSTEM] RateLimiter pruned ${prunedCount} expired entries.`,
-        );
+        log.info({ prunedCount }, "RateLimiter pruned expired entries");
       }
     }, DEFAULT_RATE_LIMIT_WINDOW_MS);
     if (this.#cleanupInterval.unref) this.#cleanupInterval.unref();
+  }
+
+  /**
+   * @returns {number}
+   */
+  get limit() {
+    return this.#limit;
+  }
+
+  /**
+   * @param {number} value
+   */
+  set limit(value) {
+    if (
+      typeof value !== "number" ||
+      !Number.isFinite(value) ||
+      !Number.isInteger(value) ||
+      value < 0
+    ) {
+      throw new Error("RateLimiter: limit must be a finite integer >= 0");
+    }
+    this.#limit = value;
   }
 
   /**
@@ -184,10 +209,10 @@ export class RateLimiter {
           ),
         );
 
-        console.warn("[SECURITY] Rejecting request with unidentifiable IP:", {
-          userAgent: req.headers["user-agent"],
-          headers: loggedHeaders,
-        });
+        log.warn(
+          { userAgent: req.headers["user-agent"], headers: loggedHeaders },
+          "Rejecting request with unidentifiable IP",
+        );
         return res.status(400).json({
           status: 400,
           error: "Bad Request",
@@ -208,10 +233,12 @@ export class RateLimiter {
             process.env.NODE_ENV !== "test" &&
             typeof oldestKey === "string"
           ) {
-            console.log(
-              `[SYSTEM] RateLimiter evicted entry for ${this.maskIp(
-                oldestKey,
-              )} (Cap: ${this.#maxEntries})`,
+            log.info(
+              {
+                evictedIp: this.maskIp(oldestKey),
+                maxEntries: this.#maxEntries,
+              },
+              "RateLimiter evicted entry",
             );
           }
         }
@@ -223,9 +250,20 @@ export class RateLimiter {
 
       // Filter hits within the window
       const recentHits = userHits.filter((h) => now - h < this.#windowMs);
+
+      // Set rate limit headers for all responses
+      const resetTime = Math.ceil((now + this.#windowMs) / 1000);
+      res.setHeader("X-RateLimit-Limit", this.#limit);
+      res.setHeader(
+        "X-RateLimit-Remaining",
+        Math.max(0, this.#limit - recentHits.length - 1),
+      );
+      res.setHeader("X-RateLimit-Reset", resetTime);
+
       if (recentHits.length >= this.#limit) {
         // Restore existing hits before returning error (otherwise user is forgotten/reset)
         this.#hits.set(ip, recentHits);
+        res.setHeader("Retry-After", Math.ceil(this.#windowMs / 1000));
         return res.status(429).json({
           status: 429,
           error: "Too Many Requests",

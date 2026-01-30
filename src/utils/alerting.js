@@ -1,4 +1,7 @@
 import axios from "axios";
+import { createChildLogger, serializeError } from "./logger.js";
+
+const log = createChildLogger({ component: "Alerting" });
 
 /**
  * @typedef {import("../typedefs.js").AlertTrigger} AlertTrigger
@@ -69,7 +72,7 @@ export async function sendAlert(config, context) {
           results.slack = true;
         })
         .catch((err) => {
-          console.error("[ALERT] Slack notification failed:", err.message);
+          log.error({ err: serializeError(err) }, "Slack notification failed");
           results.slack = false;
         }),
     );
@@ -82,7 +85,10 @@ export async function sendAlert(config, context) {
           results.discord = true;
         })
         .catch((err) => {
-          console.error("[ALERT] Discord notification failed:", err.message);
+          log.error(
+            { err: serializeError(err) },
+            "Discord notification failed",
+          );
           results.discord = false;
         }),
     );

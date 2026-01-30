@@ -247,4 +247,69 @@ describe("Log Filtering Routes", () => {
       expect.objectContaining({ limit: MAX_ITEMS_FOR_BATCH }),
     );
   });
+
+  describe("GET /logs/:logId", () => {
+    test("should return full log entry when no fields specified", async () => {
+      /** @type {LogEntry} */
+      const item = assertType({
+        id: "log_1",
+        webhookId: "wh_1",
+        method: "POST",
+        statusCode: 200,
+        timestamp: new Date().toISOString(),
+      });
+      jest.mocked(logRepository.getLogById).mockResolvedValue(item);
+      jest.spyOn(webhookManager, "isValid").mockReturnValue(true);
+
+      const res = await appClient
+        .get("/logs/log_1")
+        .set("Authorization", authHeader);
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toEqual(item);
+    });
+
+    test("should return partial log entry when fields specified", async () => {
+      /** @type {LogEntry} */
+      const item = assertType({
+        id: "log_2",
+        webhookId: "wh_1",
+        method: "GET",
+        statusCode: 404,
+      });
+
+      jest.mocked(logRepository.getLogById).mockResolvedValue(item);
+      jest.spyOn(webhookManager, "isValid").mockReturnValue(true);
+
+      const res = await appClient
+        .get("/logs/log_2")
+        .query({ fields: "method,statusCode" })
+        .set("Authorization", authHeader);
+
+      expect(res.statusCode).toBe(200);
+      expect(logRepository.getLogById).toHaveBeenCalledWith(
+        "log_2",
+        expect.arrayContaining(["method", "statusCode", "webhookId"]),
+      );
+    });
+
+    test("should strip webhookId if not requested but fetched for security", async () => {
+      /** @type {LogEntry} */
+      const item = assertType({
+        id: "log_3",
+        webhookId: "wh_1",
+        method: "POST",
+      });
+      jest.mocked(logRepository.getLogById).mockResolvedValue(item);
+      jest.spyOn(webhookManager, "isValid").mockReturnValue(true);
+
+      const res = await appClient
+        .get("/logs/log_3")
+        .query({ fields: "method" })
+        .set("Authorization", authHeader);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.webhookId).toBeUndefined();
+      expect(res.body.method).toBe("POST");
+    });
+  });
 });

@@ -16,7 +16,28 @@ import { jest } from "@jest/globals";
  * @property {boolean} [apify=true] - Register Apify Actor mock
  * @property {boolean} [dns=false] - Register dns/promises mock
  * @property {boolean} [ssrf=false] - Register SSRF utils mock
+ * @property {boolean} [logger=false] - Register structured logger mock
  */
+
+/**
+ * Shared logger mock for test assertions.
+ * Import this in tests to verify logging behavior.
+ *
+ * @example
+ * import { loggerMock } from "../setup/helpers/mock-setup.js";
+ * expect(loggerMock.error).toHaveBeenCalledWith(expect.objectContaining({ component: "Main" }), "Failed");
+ */
+export const loggerMock = {
+  trace: jest.fn(),
+  debug: jest.fn(),
+  info: jest.fn(),
+  warn: jest.fn(),
+  error: jest.fn(),
+  fatal: jest.fn(),
+  child: jest.fn(function () {
+    return loggerMock;
+  }),
+};
 
 /**
  * Registers common mock modules for test isolation.
@@ -40,7 +61,13 @@ import { jest } from "@jest/globals";
  * @returns {Promise<void>}
  */
 export async function setupCommonMocks(options = {}) {
-  const { axios = true, apify = true, dns = false, ssrf = false } = options;
+  const {
+    axios = true,
+    apify = true,
+    dns = false,
+    ssrf = false,
+    logger = false,
+  } = options;
 
   if (axios) {
     jest.unstable_mockModule("axios", async () => {
@@ -51,8 +78,16 @@ export async function setupCommonMocks(options = {}) {
 
   if (apify) {
     jest.unstable_mockModule("apify", async () => {
-      const { apifyMock } = await import("./shared-mocks.js");
-      return { Actor: apifyMock };
+      const { createApifyMock } = await import("./apify-mock.js");
+      const apifyMock = createApifyMock();
+      return {
+        // Mock default export
+        default: apifyMock,
+        // Mock named exports
+        Actor: apifyMock,
+        KeyValueStore: apifyMock.openKeyValueStore(),
+        Dataset: apifyMock.openDataset(),
+      };
     });
   }
 
@@ -72,5 +107,24 @@ export async function setupCommonMocks(options = {}) {
       const { ssrfMock } = await import("./shared-mocks.js");
       return ssrfMock;
     });
+  }
+
+  if (logger) {
+    jest.unstable_mockModule("../../../src/utils/logger.js", () => ({
+      logger: loggerMock,
+      createChildLogger: jest.fn(() => loggerMock),
+      createRequestLogger: jest.fn(() => loggerMock),
+      serializeError: jest.fn((err) => ({
+        message: err instanceof Error ? err.message : String(err),
+      })),
+      LogLevel: {
+        TRACE: "trace",
+        DEBUG: "debug",
+        INFO: "info",
+        WARN: "warn",
+        ERROR: "error",
+        FATAL: "fatal",
+      },
+    }));
   }
 }

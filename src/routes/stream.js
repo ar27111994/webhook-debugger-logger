@@ -1,7 +1,13 @@
 /**
- * SSE Log Stream route handler module.
+ * @file src/routes/stream.js
+ * @description SSE Log Stream route handler for real-time log streaming.
  * @module routes/stream
  */
+
+import { MAX_SSE_CLIENTS } from "../consts.js";
+import { createChildLogger, serializeError } from "../utils/logger.js";
+
+const log = createChildLogger({ component: "Stream" });
 
 /**
  * @typedef {import("express").Request} Request
@@ -12,11 +18,22 @@
 
 /**
  * Creates the log-stream SSE route handler.
- * @param {Set<ServerResponse>} clients - Set of connected SSE clients
- * @returns {RequestHandler}
+ * Manages the Server-Sent Events connection, headers, and keep-alive.
+ *
+ * @param {Set<ServerResponse>} clients - Set of connected SSE client responses
+ * @returns {RequestHandler} Express middleware
  */
 export const createLogStreamHandler =
   (clients) => /** @param {Request} req @param {Response} res */ (req, res) => {
+    // 0. Enforce connection limit
+    if (clients.size >= MAX_SSE_CLIENTS) {
+      res.status(503).json({
+        error: "Service Unavailable",
+        message: `Maximum SSE connections reached (${MAX_SSE_CLIENTS}). Try again later.`,
+      });
+      return;
+    }
+
     // 1. Optimize headers
     res.setHeader("Content-Encoding", "identity"); // Disable compression
     res.setHeader("Content-Type", "text/event-stream");
@@ -36,9 +53,9 @@ export const createLogStreamHandler =
       res.write(`: ${" ".repeat(2048)}\n\n`);
       clients.add(res);
     } catch (error) {
-      console.error(
-        "[SSE-ERROR] Failed to establish stream:",
-        /** @type {Error} */ (error).message,
+      log.error(
+        { err: serializeError(error) },
+        "Failed to establish SSE stream",
       );
       // Cleanup handled by 'close' event
     }

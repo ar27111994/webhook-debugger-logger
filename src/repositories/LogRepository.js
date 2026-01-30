@@ -9,6 +9,10 @@ import {
   MAX_PAGE_LIMIT,
   DEFAULT_PAGE_OFFSET,
 } from "../consts.js";
+import {
+  OFFLOAD_MARKER_SYNC,
+  OFFLOAD_MARKER_STREAM,
+} from "../utils/storage_helper.js";
 
 /**
  * @typedef {import('@duckdb/node-api').DuckDBValue} DuckDBValue
@@ -37,17 +41,42 @@ const INSERT_LOG_SQL = `
         headers, query, body, responseHeaders, responseBody,
         signatureValid, signatureProvider, signatureError,
         requestId, processingTime, contentType,
-        source_offset
+        source_offset, bodyEncoding
     ) VALUES (
         $id, $webhookId, $timestamp, $method, $statusCode, $size, $remoteIp, $userAgent, $requestUrl,
         $headers, $query, $body, $responseHeaders, $responseBody,
         $signatureValid, $signatureProvider, $signatureError,
         $requestId, $processingTime, $contentType,
-        $sourceOffset
+        $sourceOffset, $bodyEncoding
     )
     ON CONFLICT (id) DO UPDATE SET
         source_offset = COALESCE(EXCLUDED.source_offset, logs.source_offset)
 `;
+
+const VALID_LOG_COLUMNS = Object.freeze([
+  "id",
+  "webhookId",
+  "timestamp",
+  "method",
+  "statusCode",
+  "size",
+  "remoteIp",
+  "userAgent",
+  "requestUrl",
+  "headers",
+  "query",
+  "body",
+  "responseHeaders",
+  "responseBody",
+  "signatureValid",
+  "signatureProvider",
+  "signatureError",
+  "requestId",
+  "processingTime",
+  "contentType",
+  "source_offset",
+  "bodyEncoding",
+]);
 
 export class LogRepository {
   async #getDb() {
@@ -332,22 +361,40 @@ export class LogRepository {
   /**
    * Get single log by ID
    * @param {string} id
+   * @param {string[]} [fields=[]] - Optional list of fields to fetch. Defaults to all.
    * @returns {Promise<LogEntry | null>}
    */
-  async getLogById(id) {
-    const sql = "SELECT * FROM logs WHERE id = $id";
+  async getLogById(id, fields = []) {
+    // Validate and whitelist fields
+    const selectedFields =
+      fields && fields.length > 0
+        ? fields.filter((f) => VALID_LOG_COLUMNS.includes(f))
+        : [];
+
+    // Ensure we select what we asked for, or default to all
+    const finalSelect =
+      selectedFields.length > 0 ? selectedFields.join(", ") : "*";
+
+    const sql = `SELECT ${finalSelect} FROM logs WHERE id = $id`;
     const rows = await executeQuery(sql, { id });
     if (rows.length === 0) return null;
 
     const rawRow = rows[0];
     const row = this.#fixBigInts(rawRow);
+
+    // Helper to conditionally parse if the field exists in the row
+    const parseIfPresent = /**
+     * @param {string} key
+     * @returns {any}
+     */ (key) => (row[key] !== undefined ? tryParse(row[key]) : row[key]);
+
     return /** @type {LogEntry} */ ({
       ...row,
-      headers: tryParse(row.headers),
-      query: tryParse(row.query),
-      body: tryParse(row.body),
-      responseHeaders: tryParse(row.responseHeaders),
-      responseBody: tryParse(row.responseBody),
+      headers: parseIfPresent("headers"),
+      query: parseIfPresent("query"),
+      body: parseIfPresent("body"),
+      responseHeaders: parseIfPresent("responseHeaders"),
+      responseBody: parseIfPresent("responseBody"),
     });
   }
 
@@ -386,6 +433,7 @@ export class LogRepository {
       requestId: log.requestId || null,
       processingTime: log.processingTime || null,
       contentType: log.contentType || null,
+      bodyEncoding: log.bodyEncoding || null,
 
       sourceOffset: log.sourceOffset !== undefined ? log.sourceOffset : null,
     };
@@ -429,6 +477,129 @@ export class LogRepository {
     } finally {
       conn.closeSync();
     }
+  }
+
+  /**
+   * Find all offloaded payloads for a specific webhook.
+   * Dictionary-encoded string searching in DuckDB is fast, but JSON extraction is safer.
+   * @param {string} webhookId
+   * @returns {Promise<Array<{ key: string }>>}
+   */
+  async findOffloadedPayloads(webhookId) {
+    // We only select the body.
+    // We filter where body.data is one of our markers.
+    // Note: body is stored as JSON text in our schema, but inserted as JSON.
+    // DuckDB `json_extract_string` works on JSON strings.
+
+    const sql = `
+      SELECT body
+      FROM logs
+      WHERE webhookId = $webhookId
+      AND (
+        json_extract_string(body, '$.data') = $markerSync
+        OR
+        json_extract_string(body, '$.data') = $markerStream
+      )
+    `;
+
+    const rows = await executeQuery(sql, {
+      webhookId,
+      markerSync: OFFLOAD_MARKER_SYNC,
+      markerStream: OFFLOAD_MARKER_STREAM,
+    });
+
+    // Parse bodies and return keys
+    return rows
+      .map((row) => {
+        try {
+          const body = JSON.parse(String(row.body));
+          if (body && body.key) {
+            return { key: body.key };
+          }
+        } catch {
+          // ignore parse errors
+        }
+        return null;
+      })
+      .filter((item) => item !== null);
+  }
+
+  /**
+   * Delete all logs associated with a webhook ID.
+   * @param {string} webhookId
+   * @returns {Promise<void>}
+   */
+  async deleteLogsByWebhookId(webhookId) {
+    const sql = `DELETE FROM logs WHERE webhookId = $webhookId`;
+    await executeQuery(sql, { webhookId });
+  }
+
+  /**
+   * Cursor-based pagination for large datasets.
+   * Uses (timestamp, id) as composite cursor for consistent ordering.
+   * @param {LogFilters} filters
+   * @returns {Promise<{ items: Array<LogEntry>, nextCursor: string | null }>}
+   */
+  async findLogsCursor(filters) {
+    const { sql: whereSql, params } = this.#buildWhereClause(filters);
+    const limit = Math.min(
+      Number(filters.limit) || DEFAULT_PAGE_LIMIT,
+      MAX_PAGE_LIMIT,
+    );
+
+    // Parse cursor: base64(timestamp:id)
+    if (filters.cursor) {
+      try {
+        const decoded = Buffer.from(filters.cursor, "base64").toString("utf-8");
+        const [cursorTs, cursorId] = decoded.split(":");
+        if (cursorTs && cursorId) {
+          params.cursorTs = cursorTs;
+          params.cursorId = cursorId;
+        }
+      } catch {
+        // Invalid cursor, ignore
+      }
+    }
+
+    // Build cursor condition (descending: older than cursor)
+    const cursorCondition = params.cursorTs
+      ? `AND (timestamp < $cursorTs OR (timestamp = $cursorTs AND id < $cursorId))`
+      : "";
+
+    params.limit = limit + 1; // Fetch one extra to detect hasMore
+
+    const sql = `
+      SELECT * FROM logs
+      WHERE ${whereSql} ${cursorCondition}
+      ORDER BY timestamp DESC, id DESC
+      LIMIT $limit
+    `;
+
+    const rows = await executeQuery(sql, params);
+
+    const hasMore = rows.length > limit;
+    const items = rows.slice(0, limit).map((rawRow) => {
+      const row = this.#fixBigInts(rawRow);
+      return /** @type {LogEntry} */ ({
+        ...row,
+        headers: tryParse(row.headers),
+        query: tryParse(row.query),
+        body: tryParse(row.body),
+        responseHeaders: tryParse(row.responseHeaders),
+        responseBody: tryParse(row.responseBody),
+        signatureValid: row.signatureValid === true || row.signatureValid === 1,
+      });
+    });
+
+    // Generate next cursor from last item
+    let nextCursor = null;
+    if (hasMore && items.length > 0) {
+      const last = items[items.length - 1];
+      const cursorData = `${last.timestamp}:${last.id}`;
+      nextCursor = Buffer.from(cursorData).toString("base64");
+    }
+
+    return { items, nextCursor };
   }
 }
 

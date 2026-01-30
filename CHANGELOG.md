@@ -2,6 +2,43 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.0] - 2026-01-30
+
+### Added (3.0.0)
+
+- **Structured Logging**: Integrated Pino for structured JSON logging across all components:
+  - Component-specific child loggers with context (`{ component: "Name" }`)
+  - Consistent error serialization via `serializeError()` utility
+  - Sensitive data redaction (passwords, tokens, API keys)
+  - Configurable log levels via `LOG_LEVEL` environment variable
+  - Human-readable pretty-printing via `PRETTY_LOGS=true` for development
+- **Logger Utility**: New `src/utils/logger.js` with `createChildLogger()` factory and `serializeError()` helper
+- **Webhook Rate Limiter**: New `src/utils/webhook_rate_limiter.js` with high-throughput limits (10K/min) for DDoS protection on ingestion endpoints
+- **Storage Helper**: New `src/utils/storage_helper.js` for KVS offload markers and large payload handling
+- **Health/System Routes**: Separated health endpoints into `src/routes/health.js` and `src/routes/system.js`
+- **API Reference**: New `docs/api-reference.md` with comprehensive endpoint documentation
+
+### Improved (3.0.0)
+
+- **Observability**: All 60+ `console.log/warn/error` calls replaced with structured Pino logger across 23 source files
+- **Error Messages**: Enhanced log messages with contextual information (timeout durations, retry counts, KVS keys)
+- **Security**: Updated middleware chain with improved authentication and JSON parsing
+- **Type Safety**: Added JSDoc typedefs for Logger types and improved type annotations
+- **Test Infrastructure**: Enhanced mock setup with logger mock support for precise test assertions
+
+### Refactored (3.0.0)
+
+- **Logger Middleware**: Major refactoring with private class fields (`#log`, `#serializeError`) for encapsulation
+- **Services**: `ForwardingService` and `SyncService` now use structured logging with error serialization
+- **Route Handlers**: All route modules (`dashboard`, `replay`, `stream`, `utils`) migrated to structured logging
+- **Utilities**: Comprehensive logger integration in `rate_limiter`, `hot_reload_manager`, `app_state`, `bootstrap`, `alerting`, `auth`, `ssrf`, `config`
+
+### Fixed (3.0.0)
+
+- **Signature Verification**: Improved stream signature verification and verification pipeline
+- **Large Payload Handling**: Enhanced KVS offloading with proper error handling and logging
+- **Test Stability**: Updated tests to work with new logger architecture
+
 ## [2.9.0] - 2026-01-29
 
 ### Added (2.9.0)

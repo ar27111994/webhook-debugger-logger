@@ -3,6 +3,7 @@ storage/
 .apify/
 .DS_Store
 *.log
+*.txt
 .env
 *.mp4
 coverage/

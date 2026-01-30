@@ -1,6 +1,20 @@
+/**
+ * @file src/webhook_manager.js
+ * @description Manages webhook lifecycle: creation, persistence, validation, and cleanup.
+ * State is persisted to KeyValueStore to survive Actor restarts and migrations.
+ */
 import { Actor } from "apify";
 import { nanoid } from "nanoid";
-import { MAX_BULK_CREATE } from "./consts.js";
+import {
+  MAX_BULK_CREATE,
+  DUCKDB_VACUUM_ENABLED,
+  DUCKDB_VACUUM_INTERVAL_MS,
+} from "./consts.js";
+import { logRepository } from "./repositories/LogRepository.js";
+import { vacuumDb } from "./db/duckdb.js";
+import { createChildLogger, serializeError } from "./utils/logger.js";
+
+const log = createChildLogger({ component: "WebhookManager" });
 
 /**
  * @typedef {import('apify').KeyValueStore | null} KeyValueStore
@@ -14,6 +28,8 @@ export class WebhookManager {
   #kvStore = null;
   /** @type {string} */
   #STATE_KEY = "WEBHOOK_STATE";
+  /** @type {number} */
+  #lastVacuumTime = 0;
 
   constructor() {
     this.#webhooks = new Map();
@@ -21,29 +37,34 @@ export class WebhookManager {
     this.#STATE_KEY = "WEBHOOK_STATE";
   }
 
+  /**
+   * Initializes the manager by restoring state from KeyValueStore.
+   * This ensures webhooks persist across Actor restarts or migrations.
+   */
   async init() {
     try {
       this.#kvStore = await Actor.openKeyValueStore();
       const savedState = await this.#kvStore.getValue(this.#STATE_KEY);
       if (savedState && typeof savedState === "object") {
         this.#webhooks = new Map(Object.entries(savedState));
-        console.log(
-          `[STORAGE] Restored ${this.#webhooks.size} webhooks from state.`,
+        log.info(
+          { count: this.#webhooks.size },
+          "Restored webhooks from state",
         );
       }
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : String(error ?? "Unknown error");
-      console.error(
-        "[CRITICAL] Failed to initialize WebhookManager state:",
-        message,
+      log.error(
+        { err: serializeError(error) },
+        "Failed to initialize WebhookManager state",
       );
       // Fallback to empty map is already handled by constructor
     }
   }
 
+  /**
+   * Persists the current state (active webhooks) to KeyValueStore.
+   * Atomic operation to ensure consistency.
+   */
   async persist() {
     try {
       const state = Object.fromEntries(this.#webhooks);
@@ -52,19 +73,17 @@ export class WebhookManager {
       }
       await this.#kvStore.setValue(this.#STATE_KEY, state);
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : String(error ?? "Unknown error");
-      console.error(
-        "[STORAGE-ERROR] Failed to persist webhook state:",
-        message,
+      log.error(
+        { err: serializeError(error) },
+        "Failed to persist webhook state",
       );
     }
   }
 
   /**
-   * Generates new webhooks.
+   * Generates new unique webhook endpoints.
+   * Enforces limits on count and retention.
+   *
    * @param {number} count Number of webhooks to generate
    * @param {number} retentionHours Retention period in hours
    * @returns {Promise<string[]>} List of generated IDs
@@ -120,12 +139,60 @@ export class WebhookManager {
     return now < expiry;
   }
 
+  /**
+   * Periodic cleanup task.
+   * 1. Identifies expired webhooks.
+   * 2. Deletes offloaded payloads from KVS.
+   * 3. Deletes logs from DuckDB.
+   * 4. Removes from memory.
+   * 5. Triggers DuckDB vacuum if enabled.
+   */
   async cleanup() {
     const now = new Date();
     let changed = false;
 
+    if (!this.#kvStore) {
+      this.#kvStore = await Actor.openKeyValueStore();
+    }
+
     for (const [id, data] of this.#webhooks.entries()) {
       if (now > new Date(data.expiresAt)) {
+        try {
+          // 1. Find and delete offloaded payloads
+          const payloads = await logRepository.findOffloadedPayloads(id);
+          let deletedCount = 0;
+          for (const item of payloads) {
+            if (item && item.key) {
+              try {
+                await this.#kvStore.setValue(item.key, null);
+                deletedCount++;
+              } catch (kvsErr) {
+                log.warn(
+                  { key: item.key, webhookId: id, err: serializeError(kvsErr) },
+                  "Failed to delete KVS key during cleanup",
+                );
+              }
+            }
+          }
+          if (deletedCount > 0) {
+            log.info(
+              { deleted: deletedCount, total: payloads.length, webhookId: id },
+              "Deleted offloaded payloads",
+            );
+          }
+
+          // 2. Delete logs from database
+          await logRepository.deleteLogsByWebhookId(id);
+
+          log.info({ webhookId: id }, "Removed expired webhook and data");
+        } catch (err) {
+          log.error(
+            { webhookId: id, err: serializeError(err) },
+            "Failed to clean up webhook",
+          );
+        }
+
+        // 3. Remove from memory
         this.#webhooks.delete(id);
         changed = true;
       }
@@ -133,6 +200,22 @@ export class WebhookManager {
 
     if (changed) {
       await this.persist();
+
+      // Periodic vacuum for SaaS/long-running instances
+      if (DUCKDB_VACUUM_ENABLED) {
+        const now = Date.now();
+        if (now - this.#lastVacuumTime > DUCKDB_VACUUM_INTERVAL_MS) {
+          try {
+            await vacuumDb();
+            this.#lastVacuumTime = now;
+          } catch (vacuumErr) {
+            log.warn(
+              { err: serializeError(vacuumErr) },
+              "DuckDB vacuum failed",
+            );
+          }
+        }
+      }
     }
   }
 
@@ -222,8 +305,9 @@ export class WebhookManager {
     if (updatedCount > 0) {
       // Suppress log for insignificant updates (< 5 minutes)
       if (maxExtensionMs > 5 * 60 * 1000) {
-        console.log(
-          `[STORAGE] Refreshed retention for ${updatedCount} of ${this.#webhooks.size} webhooks to ${retentionHours}h.`,
+        log.info(
+          { count: updatedCount, total: this.#webhooks.size, retentionHours },
+          "Refreshed webhook retention",
         );
       }
       await this.persist();

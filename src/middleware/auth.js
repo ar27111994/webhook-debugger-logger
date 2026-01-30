@@ -1,5 +1,6 @@
 /**
- * Authentication middleware module.
+ * @file src/middleware/auth.js
+ * @description Authentication middleware for API key validation.
  * @module middleware/auth
  */
 import { validateAuth } from "../utils/auth.js";

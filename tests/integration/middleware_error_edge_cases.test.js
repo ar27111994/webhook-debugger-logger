@@ -52,6 +52,7 @@ describe("Error Middleware - Edge Cases", () => {
 
       expect(res.status).toHaveBeenCalledWith(404);
       expect(res.json).toHaveBeenCalledWith({
+        requestId: "test_req_123",
         status: 404,
         error: "Not Found",
         message: "Test error",
@@ -66,6 +67,7 @@ describe("Error Middleware - Edge Cases", () => {
 
       expect(res.status).toHaveBeenCalledWith(403);
       expect(res.json).toHaveBeenCalledWith({
+        requestId: "test_req_123",
         status: 403,
         error: "Client Error",
         message: "Test error",
@@ -79,6 +81,7 @@ describe("Error Middleware - Edge Cases", () => {
 
       expect(res.status).toHaveBeenCalledWith(500);
       expect(res.json).toHaveBeenCalledWith({
+        requestId: "test_req_123",
         status: 500,
         error: "Internal Server Error",
         message: "Internal Server Error",
@@ -107,7 +110,10 @@ describe("Error Middleware - Edge Cases", () => {
 
       expect(consoleSpy.error).toHaveBeenCalledWith(
         "[SERVER-ERROR]",
-        expect.any(String),
+        expect.objectContaining({
+          requestId: expect.any(String),
+          status: expect.any(Number),
+        }),
       );
     });
 
@@ -120,6 +126,7 @@ describe("Error Middleware - Edge Cases", () => {
       errorHandler(err, req, res, next);
 
       expect(res.json).toHaveBeenCalledWith({
+        requestId: "test_req_123",
         status: 500,
         error: "Internal Server Error",
         message: "Internal Server Error", // Sanitized, not original message
@@ -133,6 +140,7 @@ describe("Error Middleware - Edge Cases", () => {
       errorHandler(err, req, res, next);
 
       expect(res.json).toHaveBeenCalledWith({
+        requestId: "test_req_123",
         status: 502,
         error: "Internal Server Error",
         message: "Internal Server Error",
@@ -146,6 +154,7 @@ describe("Error Middleware - Edge Cases", () => {
       errorHandler(err, req, res, next);
 
       expect(res.json).toHaveBeenCalledWith({
+        requestId: "test_req_123",
         status: 503,
         error: "Internal Server Error",
         message: "Internal Server Error",
@@ -161,7 +170,9 @@ describe("Error Middleware - Edge Cases", () => {
 
       expect(consoleSpy.error).toHaveBeenCalledWith(
         "[SERVER-ERROR]",
-        expect.stringContaining("Error: Test error"),
+        expect.objectContaining({
+          stack: expect.stringContaining("Error: Test error"),
+        }),
       );
     });
 
@@ -175,7 +186,9 @@ describe("Error Middleware - Edge Cases", () => {
 
       expect(consoleSpy.error).toHaveBeenCalledWith(
         "[SERVER-ERROR]",
-        "Test error",
+        expect.objectContaining({
+          message: "Test error",
+        }),
       );
     });
 
@@ -202,6 +215,7 @@ describe("Error Middleware - Edge Cases", () => {
       errorHandler(err, req, res, next);
 
       expect(res.json).toHaveBeenCalledWith({
+        requestId: "test_req_123",
         status: 400,
         error: "Bad Request",
         message: "Invalid JSON",
@@ -217,6 +231,7 @@ describe("Error Middleware - Edge Cases", () => {
       errorHandler(err, req, res, next);
 
       expect(res.json).toHaveBeenCalledWith({
+        requestId: "test_req_123",
         status: 401,
         error: "Client Error",
         message: "Authentication required",
@@ -232,6 +247,7 @@ describe("Error Middleware - Edge Cases", () => {
       errorHandler(err, req, res, next);
 
       expect(res.json).toHaveBeenCalledWith({
+        requestId: "test_req_123",
         status: 413,
         error: "Payload Too Large",
         message: "Payload exceeds limit",
@@ -245,6 +261,7 @@ describe("Error Middleware - Edge Cases", () => {
       errorHandler(err, req, res, next);
 
       expect(res.json).toHaveBeenCalledWith({
+        requestId: "test_req_123",
         status: 404,
         error: "Not Found",
         message: "Resource not found",
@@ -258,6 +275,7 @@ describe("Error Middleware - Edge Cases", () => {
       errorHandler(err, req, res, next);
 
       expect(res.json).toHaveBeenCalledWith({
+        requestId: "test_req_123",
         status: 409,
         error: "Client Error",
         message: "Conflict",
@@ -309,6 +327,7 @@ describe("Error Middleware - Edge Cases", () => {
 
       expect(res.status).toHaveBeenCalledWith(400);
       expect(res.json).toHaveBeenCalledWith({
+        requestId: "test_req_123",
         status: 400,
         error: "Bad Request",
         message: "Standard error",
@@ -325,6 +344,7 @@ describe("Error Middleware - Edge Cases", () => {
 
       expect(res.status).toHaveBeenCalledWith(500);
       expect(res.json).toHaveBeenCalledWith({
+        requestId: "test_req_123",
         status: 500,
         error: "Internal Server Error",
         message: "Internal Server Error",
@@ -338,6 +358,7 @@ describe("Error Middleware - Edge Cases", () => {
       errorHandler(err, req, res, next);
 
       expect(res.json).toHaveBeenCalledWith({
+        requestId: "test_req_123",
         status: 400,
         error: "Bad Request",
         message: "Invalid range",
@@ -354,6 +375,7 @@ describe("Error Middleware - Edge Cases", () => {
 
       expect(res.status).toHaveBeenCalledWith(422);
       expect(res.json).toHaveBeenCalledWith({
+        requestId: "test_req_123",
         status: 422,
         error: "Client Error",
         message: "Plain object error",
@@ -369,6 +391,7 @@ describe("Error Middleware - Edge Cases", () => {
       errorHandler(err, req, res, next);
 
       expect(res.json).toHaveBeenCalledWith({
+        requestId: "test_req_123",
         status: 400,
         error: "Bad Request",
         message: undefined,
@@ -382,6 +405,7 @@ describe("Error Middleware - Edge Cases", () => {
       errorHandler(err, req, res, next);
 
       expect(res.json).toHaveBeenCalledWith({
+        requestId: "test_req_123",
         status: 400,
         error: "Bad Request",
         message: "",
@@ -399,6 +423,7 @@ describe("Error Middleware - Edge Cases", () => {
       // Status 0 is falsy, so defaults to 500
       expect(res.status).toHaveBeenCalledWith(500);
       expect(res.json).toHaveBeenCalledWith({
+        requestId: "test_req_123",
         status: 500,
         error: "Internal Server Error",
         message: "Internal Server Error",
@@ -413,6 +438,7 @@ describe("Error Middleware - Edge Cases", () => {
 
       expect(res.status).toHaveBeenCalledWith(999);
       expect(res.json).toHaveBeenCalledWith({
+        requestId: "test_req_123",
         status: 999,
         error: "Internal Server Error",
         message: "Internal Server Error",
@@ -427,6 +453,7 @@ describe("Error Middleware - Edge Cases", () => {
 
       expect(res.status).toHaveBeenCalledWith(-1);
       expect(res.json).toHaveBeenCalledWith({
+        requestId: "test_req_123",
         status: -1,
         error: "Error",
         message: "Negative status",
@@ -440,6 +467,7 @@ describe("Error Middleware - Edge Cases", () => {
       errorHandler(err, req, res, next);
 
       expect(res.json).toHaveBeenCalledWith({
+        requestId: "test_req_123",
         status: 100,
         error: "Error",
         message: "Informational",
@@ -453,6 +481,7 @@ describe("Error Middleware - Edge Cases", () => {
       errorHandler(err, req, res, next);
 
       expect(res.json).toHaveBeenCalledWith({
+        requestId: "test_req_123",
         status: 200,
         error: "Error",
         message: "Success error",
@@ -466,6 +495,7 @@ describe("Error Middleware - Edge Cases", () => {
       errorHandler(err, req, res, next);
 
       expect(res.json).toHaveBeenCalledWith({
+        requestId: "test_req_123",
         status: 302,
         error: "Error",
         message: "Redirect error",
@@ -501,12 +531,14 @@ describe("Error Middleware - Edge Cases", () => {
       errorHandler(err2, req, res2, next);
 
       expect(res.json).toHaveBeenCalledWith({
+        requestId: "test_req_123",
         status: 400,
         error: "Bad Request",
         message: "Error 1",
       });
 
       expect(res2.json).toHaveBeenCalledWith({
+        requestId: "test_req_123",
         status: 500,
         error: "Internal Server Error",
         message: "Internal Server Error",

@@ -1,3 +1,8 @@
+/**
+ * @file src/utils/filter_utils.js
+ * @description Query parameter parsing and range filter utilities for log filtering.
+ * Supports operators (gt, gte, lt, lte, eq, ne), IP matching, and object filters.
+ */
 import { checkIpInRanges } from "./ssrf.js";
 
 /**

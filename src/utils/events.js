@@ -1,3 +1,7 @@
+/**
+ * @file src/utils/events.js
+ * @description Centralized event emitter for internal application events (e.g., log:received).
+ */
 import { EventEmitter } from "node:events";
 
 import { EVENT_MAX_LISTENERS } from "../consts.js";

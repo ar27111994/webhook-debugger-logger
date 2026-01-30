@@ -1,4 +1,7 @@
 import { secureCompare } from "./crypto.js";
+import { createChildLogger } from "./logger.js";
+
+const log = createChildLogger({ component: "Auth" });
 
 /**
  * Validates the authentication key from query or headers.
@@ -33,8 +36,8 @@ export function validateAuth(req, authKey) {
       ? req.query.key[0]
       : req.query.key;
     if (typeof rawKey === "string") providedKey = rawKey.trim();
-    console.warn(
-      "[SECURITY] API key provided in query string. Use Authorization header instead.",
+    log.warn(
+      "API key provided in query string, use Authorization header instead",
     );
   }
 

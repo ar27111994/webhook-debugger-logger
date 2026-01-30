@@ -1,3 +1,8 @@
+/**
+ * @file src/utils/config.js
+ * @description Configuration parsing and normalization utilities.
+ * Validates Actor input and applies sensible defaults with safety bounds.
+ */
 import {
   DEFAULT_URL_COUNT,
   DEFAULT_RETENTION_HOURS,
@@ -223,9 +228,9 @@ export function getSafeResponseDelay(delayMs = 0) {
  */
 function clampWithWarning(value, max, name) {
   if (value > max) {
-    console.warn(
-      `[CONFIG] Warning: '${name}' (${value}) exceeds safe max (${max}). Clamping to limit.`,
-    );
+    const { createChildLogger } = require("./logger.js");
+    const log = createChildLogger({ component: "Config" });
+    log.warn({ name, value, max }, "Value exceeds safe max, clamping to limit");
     return max;
   }
   return value;

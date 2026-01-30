@@ -31,7 +31,9 @@
     "cors": "^2.8.5",
     "express": "^5.2.1",
     "ipaddr.js": "^2.3.0",
-    "nanoid": "^5.1.6"
+    "nanoid": "^5.1.6",
+    "pino": "^10.3.0",
+    "pino-http": "^11.0.0"
   },
   "author": "",
   "license": "ISC",

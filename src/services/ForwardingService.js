@@ -12,6 +12,9 @@ import {
   DEFAULT_FORWARD_RETRIES,
   TRANSIENT_ERROR_CODES,
 } from "../consts.js";
+import { createChildLogger, serializeError } from "../utils/logger.js";
+
+const log = createChildLogger({ component: "ForwardingService" });
 
 /**
  * @typedef {import('../typedefs.js').WebhookEvent} WebhookEvent
@@ -40,8 +43,9 @@ export class ForwardingService {
     // SSRF validation for forwardUrl
     const ssrfResult = await validateUrlForSsrf(validatedUrl);
     if (!ssrfResult.safe) {
-      console.error(
-        `[FORWARD-ERROR] SSRF blocked: ${ssrfResult.error} for ${validatedUrl}`,
+      log.error(
+        { url: validatedUrl, error: ssrfResult.error },
+        "SSRF blocked forward URL",
       );
       return;
     }
@@ -84,9 +88,17 @@ export class ForwardingService {
         );
         const delay = 1000 * Math.pow(2, attempt - 1);
 
-        console.error(
-          `[FORWARD-ERROR] Attempt ${attempt}/${maxRetries} failed for ${validatedUrl}:`,
-          axiosError.code === "ECONNABORTED" ? "Timed out" : axiosError.message,
+        log.error(
+          {
+            attempt,
+            maxRetries,
+            url: validatedUrl,
+            code: axiosError.code,
+            err: serializeError(err),
+          },
+          axiosError.code === "ECONNABORTED"
+            ? "Forward attempt timed out"
+            : "Forward attempt failed",
         );
 
         if (attempt >= maxRetries || !isTransient) {
@@ -104,9 +116,9 @@ export class ForwardingService {
               originalEventId: event.id,
             });
           } catch (pushErr) {
-            console.error(
-              "[CRITICAL] Failed to log forward error:",
-              /** @type {Error} */ (pushErr).message,
+            log.error(
+              { err: serializeError(pushErr) },
+              "Failed to log forward error",
             );
           }
           break; // Stop retrying

@@ -1,10 +1,14 @@
 /**
- * Dashboard route handler module.
+ * @file src/routes/dashboard.js
+ * @description Dashboard route handler providing HTML landing page and status display.
  * @module routes/dashboard
  */
 import { readFile } from "fs/promises";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
+import { createChildLogger, serializeError } from "../utils/logger.js";
+
+const log = createChildLogger({ component: "Dashboard" });
 
 /**
  * @typedef {import("express").Request} Request
@@ -75,7 +79,7 @@ export const createDashboardHandler =
 
       res.send(html);
     } catch (err) {
-      console.error("[SERVER-ERROR] Failed to load index.html:", err);
+      log.error({ err: serializeError(err) }, "Failed to load index.html");
       res.status(500).send("Internal Server Error");
     }
   };
@@ -91,7 +95,7 @@ export const preloadTemplate = async () => {
       "utf-8",
     );
   } catch (err) {
-    console.warn("Failed to preload index.html:", err);
+    log.warn({ err: serializeError(err) }, "Failed to preload index.html");
     return "";
   }
 };

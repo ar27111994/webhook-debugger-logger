@@ -163,13 +163,18 @@ export const createDatasetMock = (items = [], options = {}) => {
 
 /**
  * Creates a mock KeyValueStore.
+ * @param {Partial<KeyValueStoreMock>} [overrides={}] - Additional mock methods to override
  * @returns {KeyValueStoreMock}
  */
-export const createKeyValueStoreMock = () => ({
+export const createKeyValueStoreMock = (overrides = {}) => ({
   getValue: /** @type {jest.Mock<any>} */ (jest.fn()).mockResolvedValue(null),
   setValue: /** @type {jest.Mock<any>} */ (jest.fn()).mockResolvedValue(
     undefined,
   ),
+  getPublicUrl: /** @type {jest.Mock<any>} */ (jest.fn()).mockResolvedValue(
+    "https://api.apify.com/v2/key-value-stores/default/records/payload_123",
+  ),
+  ...overrides,
 });
 
 /**
@@ -252,7 +257,7 @@ export const resetNetworkMocks = async () => {
  * @returns {WebhookManager}
  */
 export function createMockWebhookManager(overrides = {}) {
-  return {
+  return /** @type {any} */ ({
     // Core methods actually used in tests
     isValid: /** @type {jest.Mock<any>} */ (jest.fn()).mockReturnValue(
       overrides.isValid ?? true,
@@ -285,5 +290,5 @@ export function createMockWebhookManager(overrides = {}) {
     webhooks: new Map(),
     kvStore: null,
     STATE_KEY: "WEBHOOK_STATE",
-  };
+  });
 }

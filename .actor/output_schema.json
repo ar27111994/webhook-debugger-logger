@@ -32,7 +32,6 @@
           "contentType",
           "size",
           "processingTime",
-          "processingTime",
           "remoteIp",
           "signatureProvider"
         ],
@@ -51,7 +50,6 @@
           "signatureValid",
           "method",
           "statusCode",
-          "headers",
           "headers",
           "body",
           "responseBody",

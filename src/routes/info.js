@@ -1,5 +1,6 @@
 /**
- * Info route handler module.
+ * @file src/routes/info.js
+ * @description Info route handler providing system status and configuration details.
  * @module routes/info
  */
 

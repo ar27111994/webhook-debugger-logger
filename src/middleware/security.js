@@ -1,9 +1,9 @@
-import { nanoid } from "nanoid";
-
 /**
- * Security middleware module (Request ID + CSP headers).
+ * @file src/middleware/security.js
+ * @description Security middleware module providing Request ID tracing and CSP headers.
  * @module middleware/security
  */
+import { nanoid } from "nanoid";
 
 /**
  * @typedef {import("express").Request} Request

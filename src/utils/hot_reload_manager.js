@@ -1,9 +1,17 @@
+/**
+ * @file src/utils/hot_reload_manager.js
+ * @description Manages runtime configuration hot-reloading from KeyValueStore and filesystem.
+ * Supports both platform polling and local fs.watch for instant updates.
+ */
 import { Actor } from "apify";
 import { watch as fsWatch } from "fs/promises";
 import { existsSync } from "fs";
 import { join } from "path";
 import { normalizeInput, coerceRuntimeOptions } from "./config.js";
 import { HOT_RELOAD_DEBOUNCE_MS } from "../consts.js";
+import { createChildLogger, serializeError } from "./logger.js";
+
+const log = createChildLogger({ component: "HotReloadManager" });
 
 /**
  * @typedef {import("../typedefs.js").CommonError} CommonError
@@ -56,21 +64,17 @@ export class HotReloadManager {
     if (process.env.DISABLE_HOT_RELOAD !== "true") {
       this.#inputPollInterval = global.setInterval(() => {
         this.#handleHotReload().catch((err) => {
-          console.error(
-            "[SYSTEM-ERROR] Polling hot-reload failed:",
-            err.message,
-          );
+          log.error({ err: serializeError(err) }, "Polling hot-reload failed");
         });
       }, this.#pollIntervalMs);
 
       this.#inputPollInterval.unref();
-      console.log(
-        `[SYSTEM] Hot-reload polling enabled (interval: ${this.#pollIntervalMs}ms)`,
+      log.info(
+        { intervalMs: this.#pollIntervalMs },
+        "Hot-reload polling enabled",
       );
     } else {
-      console.log(
-        "[SYSTEM] Hot-reload polling disabled via DISABLE_HOT_RELOAD",
-      );
+      log.info("Hot-reload polling disabled via DISABLE_HOT_RELOAD");
     }
 
     // 2. Use fs.watch for instant hot-reload in local development
@@ -108,7 +112,7 @@ export class HotReloadManager {
         if (newInputStr === this.#lastInputStr) return;
 
         this.#lastInputStr = newInputStr;
-        console.log("[SYSTEM] Detected input update! Applying new settings...");
+        log.info("Detected input update, applying new settings");
 
         // Validate/Coerce new config
         const validated = coerceRuntimeOptions(normalizedInput);
@@ -116,12 +120,9 @@ export class HotReloadManager {
         // Notify listener
         await this.#onConfigChange(normalizedInput, validated);
 
-        console.log("[SYSTEM] Hot-reload complete. New settings are active.");
+        log.info("Hot-reload complete, new settings active");
       } catch (err) {
-        console.error(
-          "[SYSTEM-ERROR] Failed to apply new settings:",
-          /** @type {Error} */ (err).message,
-        );
+        log.error({ err: serializeError(err) }, "Failed to apply new settings");
       } finally {
         this.#activePollPromise = null;
       }
@@ -140,9 +141,7 @@ export class HotReloadManager {
     );
 
     if (existsSync(localInputPath)) {
-      console.log(
-        "[SYSTEM] Local mode detected. Using fs.watch for instant hot-reload.",
-      );
+      log.info("Local mode detected, using fs.watch for instant hot-reload");
 
       this.#fileWatcherAbortController = new AbortController();
       let debounceTimer =
@@ -160,9 +159,9 @@ export class HotReloadManager {
               if (debounceTimer) clearTimeout(debounceTimer);
               debounceTimer = setTimeout(() => {
                 this.#handleHotReload().catch((err) => {
-                  console.error(
-                    "[SYSTEM-ERROR] fs.watch hot-reload failed:",
-                    /** @type {Error} */ (err).message,
+                  log.error(
+                    { err: serializeError(err) },
+                    "fs.watch hot-reload failed",
                   );
                 });
               }, HOT_RELOAD_DEBOUNCE_MS);
@@ -171,7 +170,7 @@ export class HotReloadManager {
         } catch (err) {
           const error = /** @type {CommonError} */ (err);
           if (error.name !== "AbortError") {
-            console.error("[SYSTEM-ERROR] fs.watch failed:", error.message);
+            log.error({ err: serializeError(error) }, "fs.watch failed");
           }
         }
       })();

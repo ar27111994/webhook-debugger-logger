@@ -1,8 +1,10 @@
 /**
- * Replay route handler module.
+ * @file src/routes/replay.js
+ * @description Replay route handler for re-sending captured webhook payloads.
  * @module routes/replay
  */
 import axios from "axios";
+import { Actor } from "apify";
 import { logRepository } from "../repositories/LogRepository.js";
 import { validateUrlForSsrf, SSRF_ERRORS } from "../utils/ssrf.js";
 import { asyncHandler } from "./utils.js";
@@ -13,6 +15,13 @@ import {
   ERROR_MESSAGES,
   TRANSIENT_ERROR_CODES,
 } from "../consts.js";
+import {
+  OFFLOAD_MARKER_SYNC,
+  OFFLOAD_MARKER_STREAM,
+} from "../utils/storage_helper.js";
+import { createChildLogger, serializeError } from "../utils/logger.js";
+
+const log = createChildLogger({ component: "Replay" });
 
 /**
  * @typedef {import("express").Request} Request
@@ -20,6 +29,7 @@ import {
  * @typedef {import("express").RequestHandler} RequestHandler
  * @typedef {import("axios").AxiosResponse} AxiosResponse
  * @typedef {import("../typedefs.js").CommonError} CommonError
+ * @typedef {Object.<string, string> | null} ReqBody
  */
 
 /**
@@ -111,6 +121,41 @@ export const createReplayHandler = (getReplayMaxRetries, getReplayTimeoutMs) =>
           {},
         );
 
+        /** @type {ReqBody} */
+        let bodyToSend = /** @type {ReqBody} */ (item.body);
+
+        // Hydrate large payloads from KVS if necessary
+        if (
+          bodyToSend &&
+          typeof bodyToSend === "object" &&
+          [OFFLOAD_MARKER_SYNC, OFFLOAD_MARKER_STREAM].includes(
+            bodyToSend.data,
+          ) &&
+          bodyToSend.key
+        ) {
+          log.info(
+            { kvsKey: bodyToSend.key },
+            "Hydrating offloaded payload from KVS",
+          );
+          try {
+            /** @type {ReqBody} */
+            const hydrated = await Actor.getValue(bodyToSend.key);
+            if (hydrated) {
+              bodyToSend = hydrated;
+            } else {
+              log.warn(
+                { kvsKey: bodyToSend.key },
+                "Failed to find KVS key, sending metadata instead",
+              );
+            }
+          } catch (e) {
+            log.error(
+              { kvsKey: bodyToSend.key, err: serializeError(e) },
+              "Error fetching KVS key",
+            );
+          }
+        }
+
         let attempt = 0;
         /** @type {AxiosResponse | undefined} */
         let response;
@@ -120,7 +165,7 @@ export const createReplayHandler = (getReplayMaxRetries, getReplayTimeoutMs) =>
             response = await axios({
               method: item.method,
               url: target.href,
-              data: item.body,
+              data: bodyToSend,
               headers: {
                 ...filteredHeaders,
                 "X-Apify-Replay": "true",
@@ -142,8 +187,15 @@ export const createReplayHandler = (getReplayMaxRetries, getReplayTimeoutMs) =>
               throw err;
             }
             const delay = 1000 * Math.pow(2, attempt - 1);
-            console.warn(
-              `[REPLAY-RETRY] Attempt ${attempt}/${maxRetries} failed for ${target.href}: ${axiosError.code}. Retrying in ${delay}ms...`,
+            log.warn(
+              {
+                attempt,
+                maxRetries,
+                url: target.href,
+                code: axiosError.code,
+                delay,
+              },
+              "Replay attempt failed, retrying",
             );
             await new Promise((resolve) => setTimeout(resolve, delay));
           }
@@ -165,6 +217,7 @@ export const createReplayHandler = (getReplayMaxRetries, getReplayTimeoutMs) =>
             )}`,
           );
         }
+
         res.json({
           status: "Replayed",
           targetUrl,

@@ -10,7 +10,11 @@ import {
   DUCKDB_MEMORY_LIMIT,
   DUCKDB_STORAGE_DIR,
   DUCKDB_THREADS,
+  DUCKDB_POOL_SIZE,
 } from "../consts.js";
+import { createChildLogger } from "../utils/logger.js";
+
+const log = createChildLogger({ component: "DuckDB" });
 
 /**
  * @typedef {import("@duckdb/node-api").DuckDBValue} DuckDBValue
@@ -20,6 +24,12 @@ import {
 
 /** @type {DuckDBInstance | null} */
 let dbInstance = null;
+
+/** @type {DuckDBConnection[]} */
+const connectionPool = [];
+
+/** @type {DuckDBConnection[]} */
+const inUseConnections = [];
 
 const IN_MEM_DB = ":memory:";
 const DB_PATH =
@@ -62,15 +72,51 @@ export async function getDbInstance() {
 }
 
 /**
+ * Acquires a connection from the pool or creates a new one.
+ * @returns {Promise<DuckDBConnection>}
+ */
+async function acquireConnection() {
+  const instance = await getDbInstance();
+
+  // Try to get from pool
+  const pooledConn = connectionPool.pop();
+  if (pooledConn) {
+    inUseConnections.push(pooledConn);
+    return pooledConn;
+  }
+
+  // Create new connection
+  const newConn = await instance.connect();
+  inUseConnections.push(newConn);
+  return newConn;
+}
+
+/**
+ * Releases a connection back to the pool or closes it if pool is full.
+ * @param {DuckDBConnection} conn
+ */
+function releaseConnection(conn) {
+  const idx = inUseConnections.indexOf(conn);
+  if (idx !== -1) {
+    inUseConnections.splice(idx, 1);
+  }
+
+  if (connectionPool.length < DUCKDB_POOL_SIZE) {
+    connectionPool.push(conn);
+  } else {
+    conn.closeSync();
+  }
+}
+
+/**
  * Executes a query and returns all rows as objects.
- * Uses a fresh connection.
+ * Uses connection pooling for efficiency.
  * @param {string} sql - SQL query with named parameters (e.g. $id)
  * @param {Record<string, DuckDBValue>} [params] - Key-value pairs for parameters
  * @returns {Promise<(Record<string, DuckDBValue>)[]>}
  */
 export async function executeQuery(sql, params) {
-  const instance = await getDbInstance();
-  const conn = await instance.connect();
+  const conn = await acquireConnection();
   try {
     let reader;
     if (params) {
@@ -81,7 +127,7 @@ export async function executeQuery(sql, params) {
     }
     return reader.getRowObjects();
   } finally {
-    conn.closeSync();
+    releaseConnection(conn);
   }
 }
 
@@ -112,6 +158,7 @@ async function initSchema(conn) {
     "remoteIp VARCHAR",
     "userAgent VARCHAR",
     "requestUrl VARCHAR",
+    "bodyEncoding VARCHAR",
 
     // JSON Columns
     "headers JSON",
@@ -161,9 +208,31 @@ async function initSchema(conn) {
 }
 
 export async function closeDb() {
-  // The DuckDB instance is managed by the C++ bindings and usually tied to the process lifecycle.
-  // Setting it to null allows the JS wrapper to be garbage collected if needed,
-  // but explicit closing of the instance isn't strictly required or always available in the Node bindings
-  // beyond closing individual connections (which we do in `executeQuery`).
+  // Drain connection pool
+  while (connectionPool.length > 0) {
+    const conn = connectionPool.pop();
+    if (conn) conn.closeSync();
+  }
+  while (inUseConnections.length > 0) {
+    const conn = inUseConnections.pop();
+    if (conn) conn.closeSync();
+  }
   dbInstance = null;
+}
+
+/**
+ * Runs VACUUM and CHECKPOINT to reclaim space after bulk deletes.
+ * Useful for long-running self-hosted instances with high data churn.
+ * @returns {Promise<void>}
+ */
+export async function vacuumDb() {
+  const instance = await getDbInstance();
+  const conn = await instance.connect();
+  try {
+    await conn.run("VACUUM");
+    await conn.run("CHECKPOINT");
+    log.info("Vacuum and checkpoint completed");
+  } finally {
+    conn.closeSync();
+  }
 }

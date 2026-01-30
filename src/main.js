@@ -1,3 +1,8 @@
+/**
+ * @file src/main.js
+ * @description Main Entry Point. Initializes the Apify Actor, sets up the Express server,
+ * configures middleware (Auth, DB, Sync), and handles graceful shutdown.
+ */
 import { Actor } from "apify";
 import { getDbInstance } from "./db/duckdb.js";
 import { SyncService } from "./services/SyncService.js";
@@ -24,10 +29,13 @@ import {
   createBroadcaster,
   createLogsHandler,
   createLogDetailHandler,
+  createLogPayloadHandler,
   createInfoHandler,
   createLogStreamHandler,
   createReplayHandler,
   createDashboardHandler,
+  createSystemMetricsHandler,
+  createHealthRoutes,
   preloadTemplate,
 } from "./routes/index.js";
 import {
@@ -41,6 +49,9 @@ import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { createRequire } from "module";
 import cors from "cors";
+import { createChildLogger, serializeError } from "./utils/logger.js";
+
+const log = createChildLogger({ component: "Main" });
 
 const require = createRequire(import.meta.url);
 const packageJson = require("../package.json");
@@ -49,6 +60,7 @@ const packageJson = require("../package.json");
  * @typedef {import("express").Request} Request
  * @typedef {import("express").Response} Response
  * @typedef {import("express").NextFunction} NextFunction
+ * @typedef {import("express").Application} Application
  * @typedef {import("http").Server} Server
  * @typedef {import("http").ServerResponse} ServerResponse
  * @typedef {import("./typedefs.js").CommonError} CommonError
@@ -99,9 +111,9 @@ const shutdown = async (signal) => {
 
   if (process.env.NODE_ENV === "test" && signal !== "TEST_COMPLETE") return;
 
-  console.log(`Received ${signal}. Shutting down...`);
+  log.info({ signal }, "Shutting down");
   const forceExitTimer = setTimeout(() => {
-    console.error("Forceful shutdown after timeout");
+    log.error("Forceful shutdown after timeout");
     process.exit(1);
   }, SHUTDOWN_TIMEOUT_MS);
 
@@ -122,7 +134,7 @@ const shutdown = async (signal) => {
 /**
  * Main initialization logic.
  * @param {Object} testOptions - Options for testing purposes.
- * @returns {Promise<import("express").Application>}
+ * @returns {Promise<Application>}
  */
 // Exported for tests to allow dependency injection
 export async function initialize(testOptions = {}) {
@@ -156,17 +168,12 @@ export async function initialize(testOptions = {}) {
         ) {
           // Override local artifacts completely for stateless CLI usage
           input = envInput;
-          console.log(
-            "[SYSTEM] Using override from INPUT environment variable.",
-          );
+          log.info("Using override from INPUT environment variable");
         } else {
           throw new Error("INPUT env var must be a non-array JSON object");
         }
       } catch (e) {
-        console.warn(
-          "[SYSTEM] Failed to parse INPUT env var:",
-          /** @type {Error} */ (e).message,
-        );
+        log.warn({ err: serializeError(e) }, "Failed to parse INPUT env var");
       }
     }
   }
@@ -188,7 +195,10 @@ export async function initialize(testOptions = {}) {
     // Start background sync (non-blocking, but initial sync will happen)
     await syncService.start();
   } catch (err) {
-    console.error("Failed to initialize DuckDB or SyncService:", err);
+    log.error(
+      { err: serializeError(err) },
+      "Failed to initialize DuckDB or SyncService",
+    );
     // Strategy: Disposable Read Model
     // We intentionally allow the application to start even if the Read Model (DuckDB) fails.
     // The Dataset (Write Model) is the single source of truth, so ingestion remains functional.
@@ -205,9 +215,9 @@ export async function initialize(testOptions = {}) {
         body: "Enterprise Webhook Suite initialized.",
         statusCode: 200,
       });
-      console.log("🚀 Startup event pushed to dataset.");
+      log.info("Startup event pushed to dataset");
     } catch (e) {
-      console.warn("Startup log failed:", /** @type {Error} */ (e).message);
+      log.warn({ err: serializeError(e) }, "Startup log failed");
     }
     if (testAndExit)
       setTimeout(() => shutdown("TESTANDEXIT"), STARTUP_TEST_EXIT_DELAY_MS);
@@ -219,19 +229,18 @@ export async function initialize(testOptions = {}) {
   if (active.length < urlCount) {
     const diff = urlCount - active.length;
     if (active.length === 0) {
-      console.log(`[SYSTEM] Initializing ${diff} webhook(s)...`);
+      log.info({ count: diff }, "Initializing webhooks");
     } else {
-      console.log(
-        `[SYSTEM] Scaling up: Generating ${diff} additional webhook(s).`,
-      );
+      log.info({ count: diff }, "Scaling up: generating additional webhooks");
     }
     await webhookManager.generateWebhooks(diff, retentionHours);
   } else if (active.length > urlCount) {
-    console.log(
-      `[SYSTEM] Notice: Active webhooks (${active.length}) exceed requested count (${urlCount}). No new IDs generated.`,
+    log.info(
+      { active: active.length, requested: urlCount },
+      "Active webhooks exceed requested count",
     );
   } else {
-    console.log(`[SYSTEM] Resuming with ${active.length} active webhooks.`);
+    log.info({ count: active.length }, "Resuming with active webhooks");
   }
 
   // 2. Sync Retention (Global Extension)
@@ -282,6 +291,8 @@ export async function initialize(testOptions = {}) {
   app.use(cors());
 
   // Dynamic Body Parser managed by AppState
+  // Crucial: Mount ingestMiddleware BEFORE body-parser to handle streams
+  app.all("/webhook/:id", loggerMiddlewareInstance.ingestMiddleware);
   app.use(appState.bodyParserMiddleware);
 
   if (enableJSONParsing) {
@@ -382,6 +393,13 @@ export async function initialize(testOptions = {}) {
   );
 
   app.get(
+    "/logs/:logId/payload",
+    mgmtRateLimiter,
+    authMiddleware,
+    createLogPayloadHandler(webhookManager),
+  );
+
+  app.get(
     "/info",
     mgmtRateLimiter,
     authMiddleware,
@@ -396,18 +414,31 @@ export async function initialize(testOptions = {}) {
     }),
   );
 
+  // System metrics endpoint for monitoring
+  app.get(
+    "/system/metrics",
+    mgmtRateLimiter,
+    authMiddleware,
+    createSystemMetricsHandler(syncService),
+  );
+
+  // Health check endpoints (rate-limited but no auth required for orchestrators)
+  const { health, ready } = createHealthRoutes(
+    () => webhookManager.getAllActive().length,
+  );
+  app.get("/health", mgmtRateLimiter, health);
+  app.get("/ready", mgmtRateLimiter, ready);
+
   // Error handling middleware (using modular factory)
   app.use(createErrorHandler());
 
   /* istanbul ignore next */
   if (process.env.NODE_ENV !== "test") {
     const port = process.env.ACTOR_WEB_SERVER_PORT || 8080;
-    server = app.listen(port, () =>
-      console.log(`Server listening on port ${port}`),
-    );
+    server = app.listen(port, () => log.info({ port }, "Server listening"));
     cleanupInterval = setInterval(() => {
       webhookManager.cleanup().catch((e) => {
-        console.error("[CLEANUP-ERROR]", e?.message || e);
+        log.error({ err: serializeError(e) }, "Cleanup error");
       });
     }, CLEANUP_INTERVAL_MS);
     Actor.on("migrating", () => shutdown("MIGRATING"));
@@ -421,7 +452,7 @@ export async function initialize(testOptions = {}) {
 
 if (process.env.NODE_ENV !== "test") {
   initialize().catch((err) => {
-    console.error("[FATAL] Server failed to start:", err.message);
+    log.error({ err: serializeError(err) }, "Server failed to start");
     process.exit(1);
   });
 }

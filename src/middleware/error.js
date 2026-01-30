@@ -1,7 +1,11 @@
 /**
- * Error handling middleware module.
+ * @file src/middleware/error.js
+ * @description Error handling middleware for Express with sanitized responses.
  * @module middleware/error
  */
+import { createChildLogger, serializeError } from "../utils/logger.js";
+
+const log = createChildLogger({ component: "ErrorHandler" });
 
 /**
  * @typedef {import("express").Request} Request
@@ -19,20 +23,35 @@ export const createErrorHandler =
   () =>
   /**
    * @param {CommonError} err
-   * @param {Request} _req
+   * @param {Request} req
    * @param {Response} res
    * @param {NextFunction} next
    */
-  (err, _req, res, next) => {
+  (err, req, res, next) => {
     if (res.headersSent) return next(err);
     const status = err.statusCode || err.status || 500;
     // Sanitize: don't leak internal error details for 500-level errors
     const isServerError = status >= 500;
+
+    // Extract request ID for correlation
+    const requestId = /** @type {any} */ (req).requestId || "unknown";
+
     if (isServerError) {
-      console.error("[SERVER-ERROR]", err.stack || err.message || err);
+      log.error(
+        {
+          requestId,
+          status,
+          path: req.path,
+          method: req.method,
+          err: serializeError(err),
+        },
+        "Server error",
+      );
     }
+
     res.status(status).json({
       status,
+      requestId,
       error:
         status >= 500
           ? "Internal Server Error"

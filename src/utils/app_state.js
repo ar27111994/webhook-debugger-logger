@@ -1,3 +1,7 @@
+/**
+ * @file src/utils/app_state.js
+ * @description Manages application runtime state and propagates configuration updates to components.
+ */
 import bodyParser from "body-parser";
 import {
   DEFAULT_PAYLOAD_LIMIT,
@@ -7,6 +11,9 @@ import {
   DEFAULT_REPLAY_TIMEOUT_MS,
 } from "../consts.js";
 import { RateLimiter } from "./rate_limiter.js";
+import { createChildLogger } from "./logger.js";
+
+const log = createChildLogger({ component: "AppState" });
 
 /**
  * @typedef {import('express').RequestHandler} RequestHandler
@@ -51,6 +58,7 @@ export class AppState {
   /**
    * Creates the body parser middleware with current limits.
    * @private
+   * @returns {RequestHandler}
    */
   _createBodyParser() {
     return bodyParser.raw({
@@ -88,8 +96,9 @@ export class AppState {
 
     // 2. Update Body Parser if limit changed
     if (validated.maxPayloadSize !== this.maxPayloadSize) {
-      console.log(
-        `[SYSTEM] Updating Max Payload Size to ${validated.maxPayloadSize} bytes`,
+      log.info(
+        { maxPayloadSize: validated.maxPayloadSize },
+        "Updating max payload size",
       );
       this.maxPayloadSize = validated.maxPayloadSize;
       this.bodyParser = this._createBodyParser();
@@ -98,14 +107,14 @@ export class AppState {
     // 3. Update Rate Limiter
     const newRateLimit = validated.rateLimitPerMinute;
     if (this.rateLimiter.limit !== newRateLimit) {
-      console.log(`[SYSTEM] Updating Rate Limit to ${newRateLimit} req/min`);
+      log.info({ rateLimit: newRateLimit }, "Updating rate limit");
       this.rateLimiter.limit = newRateLimit;
     }
 
     // 4. Update Auth Key
     if (validated.authKey !== this.authKey) {
       // Sensitive, so maybe don't log the key itself
-      console.log("[SYSTEM] Auth Key updated");
+      log.info("Auth key updated");
       this.authKey = validated.authKey;
     }
 
@@ -114,8 +123,9 @@ export class AppState {
     const activeWebhooks = this.webhookManager.getAllActive();
     if (activeWebhooks.length < this.urlCount) {
       const diff = this.urlCount - activeWebhooks.length;
-      console.log(
-        `[SYSTEM] Dynamic Scale-up: Generating ${diff} additional webhook(s).`,
+      log.info(
+        { count: diff },
+        "Dynamic scale-up: generating additional webhook(s)",
       );
       await this.webhookManager.generateWebhooks(
         diff,
@@ -125,23 +135,26 @@ export class AppState {
 
     // 6. Update Retention
     if (validated.retentionHours !== this.retentionHours) {
-      console.log(
-        `[SYSTEM] Updating Retention Policy to ${validated.retentionHours} hours`,
+      log.info(
+        { retentionHours: validated.retentionHours },
+        "Updating retention policy",
       );
       this.retentionHours = validated.retentionHours;
       await this.webhookManager.updateRetention(this.retentionHours);
     }
 
     if (validated.replayMaxRetries !== this.replayMaxRetries) {
-      console.log(
-        `[SYSTEM] Updating Replay Max Retries to ${validated.replayMaxRetries}`,
+      log.info(
+        { replayMaxRetries: validated.replayMaxRetries },
+        "Updating replay max retries",
       );
       this.replayMaxRetries = validated.replayMaxRetries;
     }
 
     if (validated.replayTimeoutMs !== this.replayTimeoutMs) {
-      console.log(
-        `[SYSTEM] Updating Replay Timeout to ${validated.replayTimeoutMs}ms`,
+      log.info(
+        { replayTimeoutMs: validated.replayTimeoutMs },
+        "Updating replay timeout",
       );
       this.replayTimeoutMs = validated.replayTimeoutMs;
     }

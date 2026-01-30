@@ -33,6 +33,8 @@ jest.unstable_mockModule("../../src/utils/auth.js", () => ({
 // 5. Mock Signature
 jest.unstable_mockModule("../../src/utils/signature.js", () => ({
   verifySignature: jest.fn(() => ({ valid: true })),
+  createStreamVerifier: jest.fn(() => ({ hmac: null })),
+  finalizeStreamVerification: jest.fn(() => ({ valid: true })),
 }));
 
 // 6. Mock CONSTS (for timeouts)
@@ -49,6 +51,11 @@ jest.unstable_mockModule("../../src/consts.js", () => ({
   DEFAULT_URL_COUNT: 1,
   DEFAULT_RETENTION_HOURS: 1,
   DEFAULT_RATE_LIMIT_PER_MINUTE: 10,
+  DEFAULT_RATE_LIMIT_MAX_ENTRIES: 10,
+  DEFAULT_WEBHOOK_RATE_LIMIT_PER_MINUTE: 100,
+  DEFAULT_WEBHOOK_RATE_LIMIT_MAX_ENTRIES: 100,
+  DEFAULT_RATE_LIMIT_WINDOW_MS: 1000,
+  KVS_OFFLOAD_THRESHOLD: 5000,
   MAX_ALLOWED_PAYLOAD_SIZE: 10000,
   DEFAULT_REPLAY_RETRIES: 3,
   DEFAULT_REPLAY_TIMEOUT_MS: 10000,

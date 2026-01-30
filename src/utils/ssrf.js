@@ -5,6 +5,9 @@ import {
   SSRF_LOG_MESSAGES,
   DNS_RESOLUTION_TIMEOUT_MS,
 } from "../consts.js";
+import { createChildLogger } from "./logger.js";
+
+const log = createChildLogger({ component: "SSRF" });
 
 /**
  * @typedef {import('ipaddr.js').IPv6} IP
@@ -217,11 +220,14 @@ export async function validateUrlForSsrf(urlString) {
   } catch (e) {
     // Sanitize error to avoid leaking full URL/credentials in logs
     const msg = e instanceof Error ? e.message : String(e);
-    console.error(
-      "[SSRF] Validation error:",
-      msg === SSRF_INTERNAL_ERRORS.DNS_TIMEOUT
-        ? SSRF_LOG_MESSAGES.DNS_TIMEOUT
-        : SSRF_LOG_MESSAGES.RESOLUTION_FAILED,
+    log.error(
+      {
+        error:
+          msg === SSRF_INTERNAL_ERRORS.DNS_TIMEOUT
+            ? SSRF_LOG_MESSAGES.DNS_TIMEOUT
+            : SSRF_LOG_MESSAGES.RESOLUTION_FAILED,
+      },
+      "SSRF validation error",
     );
     return { safe: false, error: SSRF_ERRORS.VALIDATION_FAILED };
   }

@@ -1,3 +1,9 @@
+/**
+ * @file src/consts.js
+ * @description Application-wide constants and configurable defaults.
+ * Values can be overridden via environment variables using getInt().
+ */
+import { Actor } from "apify";
 import { getInt } from "./utils/common.js";
 
 export const SSE_HEARTBEAT_INTERVAL_MS = getInt(
@@ -52,6 +58,7 @@ export const DNS_RESOLUTION_TIMEOUT_MS = getInt(
   "DNS_RESOLUTION_TIMEOUT_MS",
   5000,
 );
+export const MAX_SSE_CLIENTS = getInt("MAX_SSE_CLIENTS", 100);
 
 export const MAX_BULK_CREATE = getInt("MAX_BULK_CREATE", 1000);
 export const MAX_ITEMS_FOR_BATCH = getInt("MAX_ITEMS_FOR_BATCH", 1000);
@@ -61,6 +68,18 @@ export const DEFAULT_RATE_LIMIT_PER_MINUTE = getInt(
   "DEFAULT_RATE_LIMIT_PER_MINUTE",
   60,
 );
+export const DEFAULT_RATE_LIMIT_MAX_ENTRIES = getInt(
+  "DEFAULT_RATE_LIMIT_MAX_ENTRIES",
+  1000,
+); // Max unique IPs to track
+export const DEFAULT_WEBHOOK_RATE_LIMIT_PER_MINUTE = getInt(
+  "DEFAULT_WEBHOOK_RATE_LIMIT_PER_MINUTE",
+  10000,
+); // Per-webhook ingestion limit (generous for bursts)
+export const DEFAULT_WEBHOOK_RATE_LIMIT_MAX_ENTRIES = getInt(
+  "DEFAULT_WEBHOOK_RATE_LIMIT_MAX_ENTRIES",
+  10000,
+); // Max unique webhookIds to track
 export const DEFAULT_RATE_LIMIT_WINDOW_MS = getInt(
   "DEFAULT_RATE_LIMIT_WINDOW_MS",
   60 * 1000,
@@ -73,6 +92,10 @@ export const DEFAULT_TOLERANCE_SECONDS = getInt(
   "DEFAULT_TOLERANCE_SECONDS",
   300,
 ); // 5 minutes
+export const KVS_OFFLOAD_THRESHOLD = getInt(
+  "KVS_OFFLOAD_THRESHOLD",
+  5 * 1024 * 1024,
+); // 5MB
 
 // Safe Maximums for Self-Hosting/Validation
 export const MAX_SAFE_REPLAY_RETRIES = getInt("MAX_SAFE_REPLAY_RETRIES", 10);
@@ -104,6 +127,13 @@ export const DUCKDB_STORAGE_DIR =
 export const DUCKDB_FILENAME = process.env.DUCKDB_FILENAME || "logs.duckdb";
 export const DUCKDB_MEMORY_LIMIT = process.env.DUCKDB_MEMORY_LIMIT || "512MB";
 export const DUCKDB_THREADS = getInt("DUCKDB_THREADS", 4);
+export const DUCKDB_VACUUM_ENABLED =
+  process.env.DUCKDB_VACUUM_ENABLED === "true";
+export const DUCKDB_VACUUM_INTERVAL_MS = getInt(
+  "DUCKDB_VACUUM_INTERVAL_MS",
+  24 * 60 * 60 * 1000,
+); // 24 hours
+export const DUCKDB_POOL_SIZE = getInt("DUCKDB_POOL_SIZE", 5);
 
 export const REPLAY_HEADERS_TO_IGNORE = Object.freeze([
   "content-length",
@@ -161,7 +191,10 @@ export const TRANSIENT_ERROR_CODES = Object.freeze([
   "ENOTFOUND",
 ]);
 
-export const SYNC_MAX_CONCURRENT = getInt("SYNC_MAX_CONCURRENT", 1);
+export const SYNC_MAX_CONCURRENT = getInt(
+  "SYNC_MAX_CONCURRENT",
+  Actor.isAtHome() ? 1 : 5,
+);
 export const SYNC_MIN_TIME_MS = getInt("SYNC_MIN_TIME_MS", 500);
 export const SYNC_BATCH_SIZE = getInt("SYNC_BATCH_SIZE", 1000);
 

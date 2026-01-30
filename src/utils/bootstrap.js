@@ -1,6 +1,14 @@
+/**
+ * @file src/utils/bootstrap.js
+ * @description Local development bootstrap utilities.
+ * Creates default INPUT.json from schema for hot-reload workflows.
+ */
 import * as fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
+import { createChildLogger, serializeError } from "./logger.js";
+
+const log = createChildLogger({ component: "Bootstrap" });
 
 /**
  * Helper to build the full configuration object by merging defaults.
@@ -53,15 +61,15 @@ export async function ensureLocalInputExists(defaultInput) {
           "utf-8",
         );
         await fs.rename(tmpPath, inputPath);
-        console.warn(
-          "[SYSTEM] INPUT.json was invalid; rewritten with defaults:",
-          /** @type {Error} */ (parseErr).message,
+        log.warn(
+          { err: serializeError(parseErr) },
+          "INPUT.json was invalid, rewritten with defaults",
         );
       } else {
         // This is likely a filesystem error (e.g. permissions)
-        console.warn(
-          "[SYSTEM] Failed to read INPUT.json:",
-          /** @type {Error} */ (parseErr).message,
+        log.warn(
+          { err: serializeError(parseErr) },
+          "Failed to read INPUT.json",
         );
       }
       return;
@@ -93,22 +101,18 @@ export async function ensureLocalInputExists(defaultInput) {
           throw e;
         }
 
-        console.log(
-          `[SYSTEM] 📦 Local configuration initialized at: ${inputPath}`,
-        );
-        console.log(
-          `[SYSTEM] 💡 Tip: Edit this file to hot-reload settings while running!`,
-        );
+        log.info({ inputPath }, "Local configuration initialized");
+        log.info("Tip: Edit this file to hot-reload settings while running");
       } catch (writeErr) {
-        console.warn(
-          "[SYSTEM] Failed to write default input file:",
-          /** @type {Error} */ (writeErr).message,
+        log.warn(
+          { err: serializeError(writeErr) },
+          "Failed to write default input file",
         );
       }
     } else {
-      console.warn(
-        "[SYSTEM] Unexpected error accessing INPUT.json:",
-        /** @type {Error} */ (err).message,
+      log.warn(
+        { err: serializeError(err) },
+        "Unexpected error accessing INPUT.json",
       );
     }
   }
@@ -157,9 +161,9 @@ async function getDefaultsFromSchema() {
     }
     return defaults;
   } catch (e) {
-    console.warn(
-      "[BOOTSTRAP] Failed to load input_schema.json, using minimal defaults.",
-      /** @type {Error} */ (e).message,
+    log.warn(
+      { err: serializeError(e) },
+      "Failed to load input_schema.json, using minimal defaults",
     );
     // Fallback if schema is missing (should verify with coerce in caller, but caller merges)
     return {};
