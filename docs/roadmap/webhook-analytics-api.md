@@ -171,7 +171,34 @@ interface SessionSummary {
 
 ---
 
-## Implementation
+## 3. Technical Architecture
+
+### 3.1. Persistence Strategy: "Embedded OLAP" (Two-Tier)
+
+This feature utilizes the **Existing DuckDB Persistence** as the primary source of truth for historical queries/aggregations, while using **In-Memory Buffering** for real-time streams.
+
+1. **Tier 1: Real-time Stream (In-Memory)**
+   - **Mechanism**: `AnalyticsCollector` buffers metrics in a Ring Buffer (last 1 hour or 10k events).
+   - **Purpose**: Powers `/analytics/stream` (SSE) and `/analytics/summary` (Live Dashboard).
+   - **Persistence**: Transient. Dropped on restart.
+
+2. **Tier 2: Historical Analysis (DuckDB)**
+   - **Mechanism**: The `logs` table in `primary.db`.
+   - **Purpose**: Powers `/analytics/timeseries` (Historical Charts) and deep analysis.
+   - **Optimization**: Use `PRAGMA` settings to prioritize read-concurrency during heavy OLAP queries.
+   - **Materialized Views**: For volumes >10M rows, background cron jobs create pre-aggregated `hourly_stats` tables.
+
+### 3.2. Caching Layer
+
+Analytics queries can be expensive.
+
+1. **Short-Term Cache (LRU)**:
+   - Cache results of `/analytics/timeseries` for `30s`.
+   - Prevents "F5 hammer" from dashboard users saturating the CPU.
+
+---
+
+## 4. Implementation
 
 ### [NEW] src/analytics/AnalyticsCollector.js
 

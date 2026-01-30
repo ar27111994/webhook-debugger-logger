@@ -170,7 +170,34 @@ exporters:
     endpoint: tempo:4317
 ```
 
-## Implementation
+## 3. Technical Architecture
+
+### 3.1. Persistence Strategy: "Stream & Buffer" (Transient)
+
+Unlike the Logging or Analytics features, OpenTelemetry data is **NOT persisited to Disk or DB**. It is transient by design.
+
+1. **Transport (In-Memory)**:
+   - Traces/Metrics are buffered in memory (batch processor).
+   - Flushed to the OTLP endpoint every `5s` or `512` items.
+
+2. **Failure Handling (No Persistence)**:
+   - If the OTLP endpoint is down, the buffer fills up.
+   - **Strategy:** Drop oldest spans (Ring Buffer) to prevent Actor OOM.
+   - **Reasoning:** Use-case is real-time debugging. Storing failed traces in DuckDB would explode storage costs for "noise".
+
+### 3.2. Integration Points
+
+1. **Trace Context Propagation (W3C)**:
+   - **Incoming:** Extract `traceparent` header from incoming webhooks to link with sender's trace.
+   - **Outgoing:** Inject `traceparent` header into Forwarded requests to continue trace to user's backend.
+
+2. **Instrumentation Scope**:
+   - `b3` headers support.
+   - **Spans**: `webhook.capture` (Root), `db.save` (Child), `forwarding_service.send` (Child), `mock_rule.evaluate` (Child).
+
+---
+
+## 4. Implementation
 
 ### Phase 1: Core SDK Setup
 
