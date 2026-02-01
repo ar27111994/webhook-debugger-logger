@@ -1,16 +1,18 @@
 import { jest, describe, test, expect, beforeEach } from "@jest/globals";
 
 /**
- * @typedef {import('apify').KeyValueStore} KeyValueStore
+ * @typedef {import('../setup/helpers/shared-mocks.js').KeyValueStoreMock} KeyValueStore
  * @typedef {import('../../src/webhook_manager.js').WebhookManager} WebhookManager
  */
 
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 
+import { apifyMock } from "../setup/helpers/shared-mocks.js";
+
 await setupCommonMocks({ apify: true });
 
-const { Actor } = await import("apify");
+const Actor = apifyMock;
 const { WebhookManager } = await import("../../src/webhook_manager.js");
 
 describe("WebhookManager", () => {

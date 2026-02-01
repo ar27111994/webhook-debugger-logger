@@ -5,6 +5,7 @@ import {
   createMockNextFunction,
   createMockRequest,
   createMockResponse,
+  sleep,
 } from "../setup/helpers/test-utils.js";
 
 /**
@@ -242,7 +243,7 @@ describe("LoggerMiddleware Coverage Tests", () => {
       await middleware.middleware(req, res, next);
 
       // Wait for background tasks (they are race-protected but we want to assert log)
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await sleep(10);
 
       expect(loggerMock.error).toHaveBeenCalledWith(
         expect.objectContaining({ isPlatformError: true }),

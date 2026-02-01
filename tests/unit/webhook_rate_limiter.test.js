@@ -6,12 +6,14 @@ import {
   beforeEach,
   afterEach,
 } from "@jest/globals";
+import { sleep } from "../setup/helpers/test-utils.js";
 
 // Mock consts
 jest.unstable_mockModule("../../src/consts.js", () => ({
   DEFAULT_RATE_LIMIT_WINDOW_MS: 1000,
   DEFAULT_WEBHOOK_RATE_LIMIT_PER_MINUTE: 5,
   DEFAULT_WEBHOOK_RATE_LIMIT_MAX_ENTRIES: 10,
+  MAX_SAFE_RATE_LIMIT_PER_MINUTE: 1000,
 }));
 
 // Import class under test
@@ -70,7 +72,7 @@ describe("WebhookRateLimiter", () => {
     expect(shortLimiter.check(webhookId).allowed).toBe(false);
 
     // Wait for window
-    await new Promise((r) => setTimeout(r, 150));
+    await sleep(150);
 
     // Should be allowed again
     expect(shortLimiter.check(webhookId).allowed).toBe(true);
@@ -102,10 +104,6 @@ describe("WebhookRateLimiter", () => {
     // Adding 3rd should evict one (LRU)
     limiter.check("wh_3");
     expect(limiter.entryCount).toBe(2);
-    // wh_1 was oldest accessed, should be gone?
-    // Actually Map iterates in insertion order. wh_1 inserted first.
-    // If accessed again, it moves to end? The implementation deletes and sets again on access, so yes LRU.
-    // Here we only accessed once. So wh_1 is oldest.
 
     // Verify wh_1 state is gone (conceptually, though check() re-initializes it essentially)
     limiter.destroy();

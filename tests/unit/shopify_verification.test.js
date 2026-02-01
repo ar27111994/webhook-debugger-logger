@@ -250,9 +250,10 @@ describe("Shopify Signature Verification (Raw Body)", () => {
     await middleware.middleware(req, res, next);
 
     /** @type {WebhookEvent} */
-    const event = assertType(
-      emitSpy.mock.calls.find((call) => call[0] === EVENTS.LOG_RECEIVED)?.[1],
-    );
+    const event = emitSpy.mock.calls.find(
+      (call) => call[0] === EVENTS.LOG_RECEIVED,
+    )?.[1];
+    expect(event).toBeDefined();
     expect(event.signatureValid).toBe(true);
   });
 });

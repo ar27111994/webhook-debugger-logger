@@ -1,10 +1,16 @@
-import { jest, describe, test, expect } from "@jest/globals";
+import { describe, test, expect } from "@jest/globals";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 import { assertType, createMockRequest } from "../setup/helpers/test-utils.js";
 
 // 1. Setup Common Mocks (including logger for ForwardingService)
 import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
-await setupCommonMocks({ axios: true, apify: true, ssrf: true, logger: true });
+await setupCommonMocks({
+  axios: true,
+  apify: true,
+  ssrf: true,
+  logger: true,
+  consts: true,
+});
 import {
   apifyMock,
   axiosMock,
@@ -19,16 +25,6 @@ const mockAxios = axiosMock;
  * @typedef {import('../../src/typedefs.js').WebhookEvent} WebhookEvent
  * @typedef {import('../../src/typedefs.js').CommonError} CommonError
  */
-
-// Mock CONSTS
-jest.unstable_mockModule("../../src/consts.js", () => ({
-  FORWARD_HEADERS_TO_IGNORE: ["host", "content-length"],
-  FORWARD_TIMEOUT_MS: 100,
-  DEFAULT_FORWARD_RETRIES: 3,
-  MAX_SAFE_FORWARD_RETRIES: 10,
-  TRANSIENT_ERROR_CODES: ["ECONNABORTED", "ETIMEDOUT", "ENETUNREACH"],
-  RETRY_BASE_DELAY_MS: 1, // Fast retries for testing
-}));
 
 // Import class under test
 const { ForwardingService } =

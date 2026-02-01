@@ -18,6 +18,8 @@ import { assertType } from "./test-utils.js";
  * @typedef {import("../../../src/typedefs.js").SignatureProvider} SignatureProvider
  * @typedef {import("../../../src/utils/webhook_rate_limiter.js").WebhookRateLimiter} WebhookRateLimiter
  * @typedef {import("../../../src/repositories/LogRepository.js").LogRepository} LogRepository
+ * @typedef {import('../../../src/consts.js')} ConstsMock
+ * @typedef {import('../../../src/webhook_manager.js').WebhookManager} WebhookManager
  */
 
 /**
@@ -56,10 +58,7 @@ export const apifyMock = Object.assign(createApifyMock(), {
  * DNS promises mock for SSRF testing.
  * Resolves to safe external IPs by default.
  */
-/**
- * DNS promises mock for SSRF testing.
- * Resolves to safe external IPs by default.
- */
+
 export const dnsPromisesMock = {
   resolve4: /** @type {jest.Mock<any>} */ (jest.fn()).mockResolvedValue([
     "93.184.216.34",
@@ -67,9 +66,6 @@ export const dnsPromisesMock = {
   resolve6: /** @type {jest.Mock<any>} */ (jest.fn()).mockResolvedValue([]),
 };
 
-/**
- * SSRF Utils Mock
- */
 /**
  * SSRF Utils Mock with proper type signatures.
  */
@@ -245,7 +241,7 @@ export const resetNetworkMocks = async () => {
 };
 
 /**
- * @typedef {import('../../../src/webhook_manager.js').WebhookManager} WebhookManager
+ * @type {WebhookManager}
  */
 
 /**
@@ -465,7 +461,7 @@ export const middlewareFactoriesMock = assertType({
  * Shared Consts Mock.
  */
 /**
- * @type {jest.Mocked<{CLEANUP_INTERVAL_MS: number, INPUT_POLL_INTERVAL_PROD_MS: number, INPUT_POLL_INTERVAL_TEST_MS: number, SHUTDOWN_TIMEOUT_MS: number, SSE_HEARTBEAT_INTERVAL_MS: number, STARTUP_TEST_EXIT_DELAY_MS: number, DEFAULT_URL_COUNT: number, DEFAULT_RETENTION_HOURS: number, DEFAULT_PAYLOAD_LIMIT: number, MAX_SAFE_URL_COUNT: number, MAX_SAFE_RETENTION_HOURS: number, MAX_SAFE_RATE_LIMIT_PER_MINUTE: number, MAX_ALLOWED_PAYLOAD_SIZE: number, MAX_SAFE_REPLAY_RETRIES: number, MAX_SAFE_REPLAY_TIMEOUT_MS: number, MAX_SAFE_FORWARD_RETRIES: number, MAX_SAFE_RESPONSE_DELAY_MS: number, DEFAULT_RATE_LIMIT_PER_MINUTE: number, DEFAULT_REPLAY_RETRIES: number, DEFAULT_REPLAY_TIMEOUT_MS: number, DEFAULT_FORWARD_RETRIES: number, FORWARD_TIMEOUT_MS: number, RETRY_BASE_DELAY_MS: number, TRANSIENT_ERROR_CODES: string[], SENSITIVE_HEADERS: string[]}>}
+ * @type {ConstsMock}
  */
 export const constsMock = assertType({
   CLEANUP_INTERVAL_MS: 100,
@@ -491,7 +487,15 @@ export const constsMock = assertType({
   DEFAULT_FORWARD_RETRIES: 3,
   FORWARD_TIMEOUT_MS: 1000,
   RETRY_BASE_DELAY_MS: 100,
-  TRANSIENT_ERROR_CODES: ["ECONNABORTED", "ECONNRESET"],
+  TRANSIENT_ERROR_CODES: [
+    "ECONNABORTED",
+    "ECONNRESET",
+    "ETIMEDOUT",
+    "ENETUNREACH",
+    "EHOSTUNREACH",
+    "EAI_AGAIN",
+    "ENOTFOUND",
+  ],
   SENSITIVE_HEADERS: ["authorization"],
   SYNC_BATCH_SIZE: 10,
   SYNC_MAX_CONCURRENT: 1,
@@ -503,6 +507,16 @@ export const constsMock = assertType({
     "host",
     "connection",
     "ignored-header",
+  ],
+  FORWARD_HEADERS_TO_IGNORE: [
+    "authorization", // SENSITIVE_HEADERS
+    "content-length",
+    "host",
+    "connection",
+    "transfer-encoding",
+    "keep-alive",
+    "proxy-connection",
+    "upgrade",
   ],
 });
 

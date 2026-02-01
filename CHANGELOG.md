@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.4] - 2026-02-02
+
+### Improved (3.0.4)
+
+- **Test Suite Quality**: Performed a comprehensive Deep Dive and Quality Audit (Round 2 & 3).
+  - Eliminated all usage of `setTimeout` in favor of `waitForCondition` or `sleep` (KISS).
+  - Consolidated JSDoc types in `shared-mocks.js` for better maintainability.
+  - Simplified assertions in `shopify_verification.test.js` and `api.test.js` (DRY).
+  - Removed code redundancy and unused imports across the suite.
+  - Achieved exceptional code hygiene (zero `TODO`s, zero skipped tests).
+
+### Fixed (3.0.4)
+
+- **Test Stability**: Fixed flakiness in SSE integration tests (`api.test.js`) by replacing manual timeouts with robust condition waiting.
+- **Linting**: Resolved unused import errors and redundant timer cleanup in `forwarding.test.js`.
+
 ## [3.0.3] - 2026-02-01
 
 ### Fixed (3.0.3)

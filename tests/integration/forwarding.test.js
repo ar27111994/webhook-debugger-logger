@@ -1,11 +1,4 @@
-import {
-  jest,
-  describe,
-  test,
-  expect,
-  beforeEach,
-  afterEach,
-} from "@jest/globals";
+import { jest, describe, test, expect, beforeEach } from "@jest/globals";
 import {
   waitForCondition,
   getLastAxiosConfig,
@@ -196,10 +189,6 @@ describe("Forwarding Security", () => {
   describe("Forwarding Retries & Error Handling", () => {
     beforeEach(() => {
       jest.setTimeout(30000);
-    });
-
-    afterEach(() => {
-      jest.useRealTimers();
     });
 
     test("should retry transient errors (ECONNABORTED) and log failure", async () => {

@@ -116,15 +116,12 @@ describe("API E2E Tests", () => {
     expect(res.statusCode).toBe(200);
     expect(res.body.filters).toBeDefined();
     // Use finding logic instead of exact length check to be robust against test pollution
-    const foundItem = res.body.items.find(
-      /**
-       * @param {LogEntry} i
-       * @returns {boolean}
-       */
-      (i) => i.id === "evt_logs_test",
+    expect(res.body.items).toContainEqual(
+      expect.objectContaining({
+        id: "evt_logs_test",
+        webhookId,
+      }),
     );
-    expect(foundItem).toBeDefined();
-    expect(foundItem.webhookId).toBe(webhookId);
   });
 
   test("POST /replay should also resend event", async () => {
@@ -156,33 +153,25 @@ describe("API E2E Tests", () => {
     expect(res.statusCode).toBe(200);
   });
 
-  test("GET /log-stream should set SSE headers and be connectable", (done) => {
+  test("GET /log-stream should set SSE headers and be connectable", async () => {
     const http = require("http");
     const port = 0;
-    /** @type {Server} */
-    let testServer;
-    let finished = false;
+    /** @type {Server | null} */
+    let testServer = null;
 
-    // Cleanup helper: Ensures we only call done() once, clear timeout, and properly close the server.
-    // This prevents "JEST: done() called multiple times" errors and dangling handles.
-    const finalize = (/** @type {Error|null} */ err) => {
-      if (finished) return;
-      finished = true;
-      clearTimeout(timeout);
-      if (testServer) {
-        testServer.close(() => done(err || undefined));
-      } else {
-        done(err || undefined);
-      }
-    };
+    try {
+      // 1. Start server
+      await new Promise((resolve) => {
+        testServer = app.listen(port, resolve);
+      });
 
-    const timeout = setTimeout(() => {
-      finalize(new Error("SSE test timed out"));
-    }, 5000);
+      if (!testServer) throw new Error("Server failed to start");
 
-    testServer = app.listen(port, () => {
-      const addr = testServer.address();
+      const addr = /** @type {Server} */ (testServer).address();
       const allocatedPort = typeof addr === "object" ? addr?.port : port;
+
+      // 2. Connect and wait for handshake
+      let connected = false;
       const req = http.get(
         `http://localhost:${allocatedPort}/log-stream`,
         {
@@ -191,30 +180,31 @@ describe("API E2E Tests", () => {
           },
         },
         (res) => {
-          try {
-            expect(res.headers["content-type"]).toContain("text/event-stream");
-            expect(res.headers["cache-control"]).toBe("no-cache");
-            expect(res.headers["connection"]).toBe("keep-alive");
-            expect(res.headers["x-accel-buffering"]).toBe("no");
-            expect(res.headers["content-encoding"]).toBe("identity"); // Ensure compression is disabled
+          expect(res.headers["content-type"]).toContain("text/event-stream");
+          expect(res.headers["cache-control"]).toBe("no-cache");
+          expect(res.headers["connection"]).toBe("keep-alive");
+          expect(res.headers["x-accel-buffering"]).toBe("no");
+          expect(res.headers["content-encoding"]).toBe("identity");
 
-            res.on("data", (chunk) => {
-              const msg = chunk.toString();
-              if (msg.includes(": connected")) {
-                req.destroy(); // Connection successful, test passed
-                finalize(null);
-              }
-            });
-          } catch (e) {
-            req.destroy();
-            finalize(/** @type {Error} */ (e));
-          }
+          res.on("data", (chunk) => {
+            if (chunk.toString().includes(": connected")) {
+              connected = true;
+            }
+          });
         },
       );
-      req.on("error", () => {
-        finalize(null); // Abort handled gracefully
-      });
-    });
+
+      // 3. Wait for condition instead of manual timeout
+      await import("../setup/helpers/test-utils.js").then(
+        ({ waitForCondition }) => waitForCondition(() => connected, 5000),
+      );
+
+      req.destroy();
+    } finally {
+      if (testServer) {
+        await new Promise((resolve) => testServer?.close(resolve));
+      }
+    }
   });
 
   test("POST /webhook/:id with __status should set forcedStatus", async () => {
