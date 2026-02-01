@@ -4,7 +4,7 @@ import {
   createMockResponse,
   createMockNextFunction,
 } from "../setup/helpers/test-utils.js";
-import { useConsoleSpy } from "../setup/helpers/test-lifecycle.js";
+import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 
 /**
  * @typedef {import("express").Request} Request
@@ -13,6 +13,10 @@ import { useConsoleSpy } from "../setup/helpers/test-lifecycle.js";
  * @typedef {import("../../src/typedefs.js").CommonError} CommonError
  * @typedef {import("express").ErrorRequestHandler} ErrorRequestHandler
  */
+
+// Setup logger mock before importing error middleware
+import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
+await setupCommonMocks({ logger: true });
 
 const { createErrorHandler } = await import("../../src/middleware/error.js");
 
@@ -34,7 +38,7 @@ describe("Error Middleware - Edge Cases", () => {
    */
   let errorHandler;
 
-  const consoleSpy = useConsoleSpy("error");
+  useMockCleanup();
 
   beforeEach(() => {
     req = createMockRequest();
@@ -100,7 +104,7 @@ describe("Error Middleware - Edge Cases", () => {
   });
 
   describe("Server Error Sanitization (5xx)", () => {
-    test("should log server errors to console", () => {
+    test("should log server errors to structured logger", () => {
       const err = /** @type {CommonError} */ (
         new Error("Internal database error")
       );
@@ -108,12 +112,13 @@ describe("Error Middleware - Edge Cases", () => {
 
       errorHandler(err, req, res, next);
 
-      expect(consoleSpy.error).toHaveBeenCalledWith(
-        "[SERVER-ERROR]",
+      // Source uses structured pino logging via log.error
+      expect(loggerMock.error).toHaveBeenCalledWith(
         expect.objectContaining({
           requestId: expect.any(String),
-          status: expect.any(Number),
+          status: 500,
         }),
+        "Server error",
       );
     });
 
@@ -167,12 +172,16 @@ describe("Error Middleware - Edge Cases", () => {
       err.stack = "Error: Test error\n    at file.js:10:5";
 
       errorHandler(err, req, res, next);
-
-      expect(consoleSpy.error).toHaveBeenCalledWith(
-        "[SERVER-ERROR]",
+      // Source uses structured pino logging with serialized error
+      // Note: The mock serializeError extracts message from Error instances
+      expect(loggerMock.error).toHaveBeenCalledWith(
         expect.objectContaining({
-          stack: expect.stringContaining("Error: Test error"),
+          err: expect.objectContaining({
+            stack: err.stack,
+          }),
+          status: 500,
         }),
+        "Server error",
       );
     });
 
@@ -183,12 +192,16 @@ describe("Error Middleware - Edge Cases", () => {
       });
 
       errorHandler(err, req, res, next);
-
-      expect(consoleSpy.error).toHaveBeenCalledWith(
-        "[SERVER-ERROR]",
+      // Source uses structured pino logging with serialized error
+      // Plain objects passed to serializeError mock are serialized differently
+      expect(loggerMock.error).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: "Test error",
+          err: expect.objectContaining({
+            message: err.message,
+          }),
+          status: 500,
         }),
+        "Server error",
       );
     });
 
@@ -200,9 +213,11 @@ describe("Error Middleware - Edge Cases", () => {
 
       errorHandler(err, req, res, next);
 
-      expect(consoleSpy.error).toHaveBeenCalledWith(
-        "[SERVER-ERROR]",
-        expect.anything(),
+      expect(loggerMock.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          err: expect.anything(),
+        }),
+        "Server error",
       );
     });
   });
@@ -282,13 +297,13 @@ describe("Error Middleware - Edge Cases", () => {
       });
     });
 
-    test("should NOT log 4xx errors to console", () => {
+    test("should NOT log 4xx errors to structured logger", () => {
       const err = /** @type {CommonError} */ (new Error("Not found"));
       err.statusCode = 404;
 
       errorHandler(err, req, res, next);
 
-      expect(consoleSpy.error).not.toHaveBeenCalled();
+      expect(loggerMock.error).not.toHaveBeenCalled();
     });
   });
 
@@ -313,7 +328,7 @@ describe("Error Middleware - Edge Cases", () => {
 
       errorHandler(err, req, res, next);
 
-      expect(consoleSpy.error).not.toHaveBeenCalled();
+      expect(loggerMock.error).not.toHaveBeenCalled();
       expect(next).toHaveBeenCalledWith(err);
     });
   });
@@ -544,7 +559,7 @@ describe("Error Middleware - Edge Cases", () => {
         message: "Internal Server Error",
       });
 
-      expect(consoleSpy.error).toHaveBeenCalledTimes(1); // Only for 500 error
+      expect(loggerMock.error).toHaveBeenCalledTimes(1); // Only for 500 error
     });
   });
 });

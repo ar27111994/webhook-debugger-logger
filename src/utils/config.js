@@ -20,6 +20,7 @@ import {
   DEFAULT_FORWARD_RETRIES,
   MAX_SAFE_FORWARD_RETRIES,
 } from "../consts.js";
+import { createChildLogger } from "./logger.js";
 
 /**
  * @typedef {import("../typedefs.js").SignatureConfig} SignatureConfig
@@ -228,7 +229,6 @@ export function getSafeResponseDelay(delayMs = 0) {
  */
 function clampWithWarning(value, max, name) {
   if (value > max) {
-    const { createChildLogger } = require("./logger.js");
     const log = createChildLogger({ component: "Config" });
     log.warn({ name, value, max }, "Value exceeds safe max, clamping to limit");
     return max;

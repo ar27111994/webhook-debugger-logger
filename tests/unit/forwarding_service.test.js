@@ -2,9 +2,9 @@ import { jest, describe, test, expect } from "@jest/globals";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 import { assertType, createMockRequest } from "../setup/helpers/test-utils.js";
 
-// 1. Setup Common Mocks
+// 1. Setup Common Mocks (including logger for ForwardingService)
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
-await setupCommonMocks({ axios: true, apify: true, ssrf: true });
+await setupCommonMocks({ axios: true, apify: true, ssrf: true, logger: true });
 import { apifyMock, axiosMock } from "../setup/helpers/shared-mocks.js";
 
 const mockActor = apifyMock;
@@ -39,10 +39,6 @@ describe("ForwardingService Tests", () => {
 
   describe("Forwarding Retries & Failures", () => {
     test("should stop retrying on non-transient errors (404)", async () => {
-      const consoleErrorSpy = jest
-        .spyOn(console, "error")
-        .mockImplementation(() => {});
-
       /** @type {CommonError} */
       const error = new Error("Not Found");
       error.code = "E_GENERIC";
@@ -68,15 +64,9 @@ describe("ForwardingService Tests", () => {
       );
       // Wait for 1 attempt
       expect(mockAxios.post).toHaveBeenCalledTimes(1);
-
-      consoleErrorSpy.mockRestore();
     });
 
     test("should exhaust retries on transient errors", async () => {
-      const consoleErrorSpy = jest
-        .spyOn(console, "error")
-        .mockImplementation(() => {});
-
       /** @type {CommonError} */
       const error = new Error("Timeout");
       error.code = "ETIMEDOUT";
@@ -101,15 +91,9 @@ describe("ForwardingService Tests", () => {
           body: expect.stringContaining("after 3 attempts"),
         }),
       );
-
-      consoleErrorSpy.mockRestore();
     });
 
     test("should respect custom maxForwardRetries", async () => {
-      const consoleErrorSpy = jest
-        .spyOn(console, "error")
-        .mockImplementation(() => {});
-
       /** @type {CommonError} */
       const error = new Error("Timeout");
       error.code = "ETIMEDOUT";
@@ -134,8 +118,6 @@ describe("ForwardingService Tests", () => {
           body: expect.stringContaining("after 2 attempts"),
         }),
       );
-
-      consoleErrorSpy.mockRestore();
     });
   });
 });

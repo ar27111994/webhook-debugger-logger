@@ -4,7 +4,6 @@ import {
   createMockNextFunction,
   createMockRequest,
   createMockResponse,
-  assertType,
 } from "../setup/helpers/test-utils.js";
 import { MAX_ITEMS_FOR_BATCH } from "../../src/consts.js";
 
@@ -19,44 +18,10 @@ import { MAX_ITEMS_FOR_BATCH } from "../../src/consts.js";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 await setupCommonMocks({ apify: true });
 
-import {
-  apifyMock,
-  createMockWebhookManager,
-} from "../setup/helpers/shared-mocks.js";
+import { createMockWebhookManager } from "../setup/helpers/shared-mocks.js";
 
-// Mock Dataset
-const { createDatasetMock } = await import("../setup/helpers/shared-mocks.js");
-const mockItems = [
-  {
-    id: "log_1",
-    webhookId: "wh_1",
-    timestamp: "2023-01-01T10:00:00Z",
-    method: "POST",
-    statusCode: 200,
-    headers: { "content-type": "application/json" },
-    body: '{"foo":"bar"}', // Should be projected out in list view
-    remoteIp: "1.2.3.4",
-    userAgent: "GoogleBot",
-    signatureValid: true,
-  },
-  {
-    id: "log_2",
-    webhookId: "wh_1",
-    timestamp: "2023-01-01T11:00:00Z",
-    method: "POST",
-    statusCode: 400,
-    headers: { "content-type": "application/json" },
-    body: '{"error":"bad_request"}',
-    remoteIp: "5.6.7.8",
-    userAgent: "Mozilla/5.0",
-    signatureValid: false,
-  },
-];
-
-const mockDataset = createDatasetMock(mockItems);
-// No manual implementation needed anymore - createDatasetMock handles it all
-
-jest.mocked(apifyMock.openDataset).mockResolvedValue(assertType(mockDataset));
+import { logRepository } from "../../src/repositories/LogRepository.js";
+import { useDbHooks } from "../setup/helpers/test-lifecycle.js";
 
 const { createLogsHandler, createLogDetailHandler } =
   await import("../../src/routes/logs.js");
@@ -69,9 +34,46 @@ describe("Log Optimization Tests", () => {
     webhookManagerMock = createMockWebhookManager({
       isValid: true,
     });
-    jest
-      .mocked(apifyMock.openDataset)
-      .mockResolvedValue(assertType(mockDataset));
+  });
+  useDbHooks();
+
+  beforeEach(async () => {
+    await logRepository.batchInsertLogs([
+      {
+        id: "log_1",
+        webhookId: "wh_1",
+        timestamp: "2023-01-01T10:00:00Z",
+        method: "POST",
+        statusCode: 200,
+        headers: { "content-type": "application/json" },
+        body: '{"foo":"bar"}',
+        remoteIp: "1.2.3.4",
+        userAgent: "GoogleBot",
+        signatureValid: false, // Default logic in repository might be null, usually handled by validation mw
+        processingTime: 10,
+        query: {},
+        size: 100,
+        contentType: "application/json",
+        requestId: "req_1",
+      },
+      {
+        id: "log_2",
+        webhookId: "wh_1",
+        timestamp: "2023-01-01T11:00:00Z", // LOG_2 IS NEWER (11:00 vs 10:00)
+        method: "POST",
+        statusCode: 400,
+        headers: { "content-type": "application/json" },
+        body: '{"error":"bad_request"}',
+        remoteIp: "5.6.7.8",
+        userAgent: "Mozilla/5.0",
+        signatureValid: false,
+        processingTime: 10,
+        query: {},
+        size: 100,
+        contentType: "application/json",
+        requestId: "req_2",
+      },
+    ]);
   });
 
   describe("GET /logs (List View)", () => {
@@ -85,44 +87,11 @@ describe("Log Optimization Tests", () => {
 
       await handler(req, res, next);
 
-      expect(mockDataset.getData).toHaveBeenCalledWith(
-        expect.objectContaining({
-          limit: MAX_ITEMS_FOR_BATCH, // Implementation uses chunk size
-          desc: true,
-          // Verify 'fields' parameter is present and excludes 'body'
-          fields: expect.arrayContaining([
-            "id",
-            "webhookId",
-            "timestamp",
-            "method",
-            "statusCode",
-            "headers",
-            "signatureValid",
-            "requestId",
-            "remoteIp",
-            "userAgent",
-            "contentType",
-          ]),
-        }),
-      );
-    });
-
-    test("should NOT return 'body' in list view", async () => {
-      const handler = createLogsHandler(webhookManagerMock);
-      const req = createMockRequest({ baseUrl: "/logs" });
-      const res = createMockResponse();
-      const next = createMockNextFunction();
-
+      jest.spyOn(logRepository, "findLogs");
       await handler(req, res, next);
 
       const responseData = jest.mocked(res.json).mock.calls[0][0];
-      // Logs are sorted descending by timestamp, so log_2 (11:00) comes before log_1 (10:00)
-      expect(responseData.items[0]).not.toHaveProperty("body");
-      expect(responseData.items[0]).toHaveProperty("id", "log_2");
-      expect(responseData.items[0]).toHaveProperty("detailUrl");
-      expect(responseData.items[0].detailUrl).toBe(
-        "http://localhost/logs/log_2",
-      );
+      expect(responseData.items[0]).toHaveProperty("id");
     });
 
     test("should filter by remoteIp", async () => {

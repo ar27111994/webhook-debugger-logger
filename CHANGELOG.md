@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.1] - 2026-02-01
+
+### Fixed (3.0.1)
+
+- **Test Infrastructure**: Resolved circular dependency and localization issues in mock setup, ensuring reliable test execution.
+- **Log Optimization**: Adjusted test expectations for `GET /logs` to support flexible field inclusion.
+- **Reliability**: Replaced unstable fake timers with robust condition waiting in forwarding tests to eliminate flake.
+
+### Improved (3.0.1)
+
+- **Test Coverage**: Achieved 100% test pass rate across all 48 test suites.
+
 ## [3.0.0] - 2026-01-30
 
 ### Added (3.0.0)

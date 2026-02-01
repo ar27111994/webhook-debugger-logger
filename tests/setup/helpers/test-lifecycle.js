@@ -8,6 +8,8 @@
  */
 
 import { jest, beforeEach, afterEach } from "@jest/globals";
+import { resetDb } from "./db-hooks.js";
+import { sleep } from "./test-utils.js";
 
 /**
  * Automatically clears all mocks before each test.
@@ -39,6 +41,10 @@ export function useMockCleanup(additionalSetup) {
     jest.clearAllMocks();
     additionalSetup?.();
   });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
 }
 
 /**
@@ -68,6 +74,14 @@ export function useFakeTimers() {
     jest.useRealTimers();
   });
 }
+
+export const useDbHooks = () => {
+  beforeEach(async () => {
+    // Wait for background tasks (SyncService) to release DB locks
+    await sleep(1000);
+    await resetDb();
+  });
+};
 
 /**
  * Automatically spies on and restores console methods.

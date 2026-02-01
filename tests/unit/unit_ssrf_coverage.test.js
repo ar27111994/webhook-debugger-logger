@@ -1,18 +1,22 @@
-import { jest, describe, test, expect, beforeEach } from "@jest/globals";
+import { describe, test, expect, beforeEach } from "@jest/globals";
+import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
 import { dnsPromisesMock } from "../setup/helpers/shared-mocks.js";
+import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 
-// Mock dns/promises
-import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
-await setupCommonMocks({ dns: true });
+// Mock logger and dns/promises
+await setupCommonMocks({ logger: true, dns: true });
 
 // Import utils after mocking
 // SSRF_INTERNAL_ERRORS is NOT exported by ssrf.js, it is imported from consts.js
 // We must import it from consts.js directly for the test.
 const { checkIpInRanges, validateUrlForSsrf, SSRF_ERRORS } =
   await import("../../src/utils/ssrf.js");
-const { SSRF_INTERNAL_ERRORS } = await import("../../src/consts.js");
+const { SSRF_INTERNAL_ERRORS, SSRF_LOG_MESSAGES } =
+  await import("../../src/consts.js");
 
 describe("SSRF Coverage Tests", () => {
+  useMockCleanup();
+
   describe("checkIpInRanges", () => {
     test("should return false for empty/null IP", () => {
       expect(checkIpInRanges("", [])).toBe(false);
@@ -107,19 +111,15 @@ describe("SSRF Coverage Tests", () => {
         new Error(SSRF_INTERNAL_ERRORS.DNS_TIMEOUT),
       );
 
-      const consoleSpy = jest
-        .spyOn(console, "error")
-        .mockImplementation(() => {});
-
       const result = await validateUrlForSsrf("http://timeout.com");
       expect(result.safe).toBe(false);
       expect(result.error).toBe(SSRF_ERRORS.VALIDATION_FAILED);
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining("Validation error"),
-        expect.stringContaining("DNS resolution timed out"),
+      // Source uses structured pino logger
+      expect(loggerMock.error).toHaveBeenCalledWith(
+        expect.objectContaining({ error: SSRF_LOG_MESSAGES.DNS_TIMEOUT }),
+        "SSRF validation error",
       );
-      consoleSpy.mockRestore();
     });
 
     test("should reject if resolved IP is blocked", async () => {

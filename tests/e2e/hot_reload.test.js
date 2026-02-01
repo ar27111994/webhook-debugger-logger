@@ -20,8 +20,8 @@ import {
  */
 
 // 1. Setup mocks
-import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
-await setupCommonMocks({ apify: true });
+import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
+await setupCommonMocks({ apify: true, logger: true });
 
 // 2. Import modules
 const { setupTestApp } = await import("../setup/helpers/app-utils.js");
@@ -169,23 +169,21 @@ describe("Hot-Reloading Configuration Tests", () => {
   });
 
   test("should handle invalid JSON schema updates gracefully", async () => {
-    const consoleSpy = jest
-      .spyOn(console, "error")
-      .mockImplementation(() => {});
-
     await Actor.emitInput({
       jsonSchema: "{ invalid json: }", // Malformed
       authKey: "new-super-secret",
     });
-    // Wait for error to be logged
-    await waitForCondition(() => consoleSpy.mock.calls.length > 0);
 
-    // Verify error was logged
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining("[SCHEMA-ERROR]"),
-      expect.any(String),
+    // Wait for error to be logged via structured logger
+    await waitForCondition(() => loggerMock.error.mock.calls.length > 0);
+
+    // Verify error was logged via structured pino logging
+    expect(loggerMock.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        errorPrefix: "SCHEMA-ERROR",
+      }),
+      "Invalid resource",
     );
-    consoleSpy.mockRestore();
 
     // Verify app is still responsive
     const res = await appClient

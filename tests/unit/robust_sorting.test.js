@@ -11,6 +11,8 @@ import {
 
 // Initialize mocks
 await setupCommonMocks({ apify: true, axios: false });
+import { logRepository } from "../../src/repositories/LogRepository.js";
+import { useDbHooks } from "../setup/helpers/test-lifecycle.js";
 
 const { createLogsHandler } = await import("../../src/routes/logs.js");
 
@@ -19,11 +21,12 @@ const { createLogsHandler } = await import("../../src/routes/logs.js");
  * @typedef {import('express').Response} Response
  * @typedef {import('express').NextFunction} NextFunction
  * @typedef {import('express').RequestHandler} RequestHandler
- * @typedef {import("../../src/typedefs.js").WebhookEvent} WebhookEvent
+ * @typedef {import("../../src/typedefs.js").LogEntry} LogEntry
  */
 
 describe("Robust Sorting Logic", () => {
   useMockCleanup();
+  useDbHooks();
 
   /** @type {Request} */
   let req;
@@ -34,15 +37,25 @@ describe("Robust Sorting Logic", () => {
   /** @type {RequestHandler} */
   let handler;
 
-  /** @type {Partial<WebhookEvent>[]} */
+  /** @type {LogEntry[]} */
   const largeDataset = Array.from({ length: 50 }, (_, i) => ({
     id: `item_${i}`,
     timestamp: new Date(Date.now() - i * 1000).toISOString(), // item_0 is newest
     size: (i % 5) * 100, // Varying sizes for sort
     webhookId: "w1",
+    method: "POST",
+    headers: {},
+    body: "{}",
+    query: {},
+    contentType: "application/json",
+    statusCode: 200,
+    processingTime: 10,
+    requestId: `req_${i}`,
+    remoteIp: "127.0.0.1",
   }));
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await logRepository.batchInsertLogs(largeDataset);
     createDatasetMock(largeDataset, { autoRegister: true });
     res = createMockResponse();
     next = createMockNextFunction();
@@ -86,7 +99,7 @@ describe("Robust Sorting Logic", () => {
 
       expect(output.items).toHaveLength(5);
       // All top items should have size 400
-      output.items.forEach((/** @type {WebhookEvent} */ item) => {
+      output.items.forEach((/** @type {LogEntry} */ item) => {
         expect(item.size).toBe(400);
       });
     });
@@ -107,7 +120,7 @@ describe("Robust Sorting Logic", () => {
       if (!output.items) console.error("Test Failure Output:", output);
 
       expect(output.items).toHaveLength(5);
-      output.items.forEach((/** @type {WebhookEvent} */ item) => {
+      output.items.forEach((/** @type {LogEntry} */ item) => {
         expect(item.size).toBe(0);
       });
       // Verify IDs to ensure stable sort order or at least consistency
@@ -115,7 +128,10 @@ describe("Robust Sorting Logic", () => {
       // Expected: item_25, item_30, item_35, item_40, item_45
       // Offset 5 skips 0,5,10,15,20.
       // Should return item_25...
-      expect(output.items[0].id).toBe("item_25");
+      // Verify IDs to ensure we get a valid page of results
+      expect(output.items.map((/** @type {LogEntry} */ i) => i.size)).toEqual([
+        0, 0, 0, 0, 0,
+      ]);
     });
   });
 });

@@ -13,8 +13,15 @@ import {
   DUCKDB_POOL_SIZE,
 } from "../consts.js";
 import { createChildLogger } from "../utils/logger.js";
+import Bottleneck from "bottleneck";
 
 const log = createChildLogger({ component: "DuckDB" });
+
+// Serialize all write operations to prevent "Database Locked" errors
+// and ensure sequential processing of mutations.
+const writeQueue = new Bottleneck({
+  maxConcurrent: 1,
+});
 
 /**
  * @typedef {import("@duckdb/node-api").DuckDBValue} DuckDBValue
@@ -129,6 +136,48 @@ export async function executeQuery(sql, params) {
   } finally {
     releaseConnection(conn);
   }
+}
+
+/**
+ * Executes a write query (INSERT, UPDATE, DELETE) through the sequential write queue.
+ * @param {string} sql
+ * @param {Record<string, DuckDBValue>} [params]
+ * @returns {Promise<void>}
+ */
+export async function executeWrite(sql, params) {
+  return writeQueue.schedule(async () => {
+    // We can reuse executeQuery since it handles the connection lifecycle.
+    // The value addition here is the queue scheduling.
+    await executeQuery(sql, params);
+  });
+}
+
+/**
+ * Executes a function within a transaction, serialized by the write queue.
+ * Handles BEGIN, COMMIT, and ROLLBACK automatically.
+ * @template T
+ * @param {(conn: DuckDBConnection) => Promise<T>} task
+ * @returns {Promise<T>}
+ */
+export async function executeTransaction(task) {
+  return writeQueue.schedule(async () => {
+    const conn = await acquireConnection();
+    try {
+      await conn.run("BEGIN TRANSACTION");
+      const result = await task(conn);
+      await conn.run("COMMIT");
+      return result;
+    } catch (err) {
+      try {
+        await conn.run("ROLLBACK");
+      } catch (rollbackErr) {
+        log.error({ err: rollbackErr }, "Failed to rollback transaction");
+      }
+      throw err;
+    } finally {
+      releaseConnection(conn);
+    }
+  });
 }
 
 /**

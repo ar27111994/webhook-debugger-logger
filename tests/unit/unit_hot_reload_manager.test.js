@@ -15,10 +15,13 @@ import { INPUT_POLL_INTERVAL_TEST_MS } from "../../src/consts.js";
  * @typedef {import('../setup/helpers/apify-mock.js').KeyValueStoreMock} KeyValueStoreMock
  */
 
-// 1. Mock Apify
-import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
-await setupCommonMocks({ apify: true });
-import { apifyMock } from "../setup/helpers/shared-mocks.js";
+// 1. Mock Apify and Logger
+import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
+await setupCommonMocks({ apify: true, logger: true });
+import {
+  apifyMock,
+  createKeyValueStoreMock,
+} from "../setup/helpers/shared-mocks.js";
 const mockActor = apifyMock;
 
 // 2. Mock fs/promises & fs & path
@@ -103,10 +106,7 @@ describe("HotReloadManager Unit Tests", () => {
   let onConfigChange;
 
   useMockCleanup(() => {
-    mockStore = {
-      getValue: jest.fn(),
-      setValue: jest.fn(),
-    };
+    mockStore = createKeyValueStoreMock();
     mockActor.openKeyValueStore.mockResolvedValue(mockStore);
     mockActor.isAtHome.mockReturnValue(true);
     onConfigChange = assertType(jest.fn()).mockResolvedValue(undefined);
@@ -187,20 +187,19 @@ describe("HotReloadManager Unit Tests", () => {
     });
 
     test("should catch and log errors during polling", async () => {
-      const consoleSpy = jest
-        .spyOn(console, "error")
-        .mockImplementation(() => {});
       mockStore.getValue.mockRejectedValue(new Error("KV Error"));
 
       manager.start();
 
       await jest.advanceTimersByTimeAsync(INPUT_POLL_INTERVAL_TEST_MS + 10);
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining("[SYSTEM-ERROR]"),
-        "KV Error",
+      // Source uses structured pino logging via log.error
+      expect(loggerMock.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          err: expect.objectContaining({ message: "KV Error" }),
+        }),
+        "Failed to apply new settings",
       );
-      consoleSpy.mockRestore();
     });
   });
 

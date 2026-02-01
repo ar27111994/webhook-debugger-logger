@@ -1,21 +1,29 @@
-import { describe, test, expect, jest } from "@jest/globals";
+import { describe, test, expect } from "@jest/globals";
+import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
-import {
+
+// Mock logger before importing config module
+await setupCommonMocks({ logger: true });
+
+const {
   parseWebhookOptions,
   coerceRuntimeOptions,
   normalizeInput,
   getSafeResponseDelay,
-} from "../../src/utils/config.js";
-import {
+} = await import("../../src/utils/config.js");
+
+const {
   DEFAULT_PAYLOAD_LIMIT,
   MAX_ALLOWED_PAYLOAD_SIZE,
   DEFAULT_URL_COUNT,
   DEFAULT_RETENTION_HOURS,
   DEFAULT_RATE_LIMIT_PER_MINUTE,
   MAX_SAFE_RESPONSE_DELAY_MS,
-} from "../../src/consts.js";
+} = await import("../../src/consts.js");
 
 describe("Config Utils", () => {
+  useMockCleanup();
+
   describe("normalizeInput", () => {
     test("should parse valid JSON string", () => {
       const input = '{"a": 1}';
@@ -76,6 +84,8 @@ describe("Config Utils", () => {
 });
 
 describe("coerceRuntimeOptions", () => {
+  useMockCleanup();
+
   test("should return defaults for empty input", () => {
     const result = coerceRuntimeOptions({});
     expect(result.urlCount).toBe(DEFAULT_URL_COUNT);
@@ -121,10 +131,6 @@ describe("coerceRuntimeOptions", () => {
 });
 
 describe("getSafeResponseDelay", () => {
-  const consoleWarnSpy = jest
-    .spyOn(console, "warn")
-    .mockImplementation(() => {});
-
   useMockCleanup();
 
   test("should return 0 for invalid or negative inputs", () => {
@@ -138,13 +144,14 @@ describe("getSafeResponseDelay", () => {
     expect(getSafeResponseDelay(MAX_SAFE_RESPONSE_DELAY_MS)).toBe(
       MAX_SAFE_RESPONSE_DELAY_MS,
     );
-    expect(consoleWarnSpy).not.toHaveBeenCalled();
+    expect(loggerMock.warn).not.toHaveBeenCalled();
   });
 
-  test("should cap huge delay and warn", () => {
+  test("should cap huge delay and warn via structured logger", () => {
     const huge = MAX_SAFE_RESPONSE_DELAY_MS + 1;
     expect(getSafeResponseDelay(huge)).toBe(MAX_SAFE_RESPONSE_DELAY_MS);
-    expect(consoleWarnSpy).toHaveBeenCalledWith(
+    expect(loggerMock.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "responseDelayMs" }),
       expect.stringContaining("exceeds safe max"),
     );
   });

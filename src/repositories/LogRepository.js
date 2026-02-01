@@ -2,8 +2,13 @@
  * @file src/repositories/LogRepository.js
  * @description Data access layer for Logs (Read Model)
  */
-import { executeQuery, getDbInstance } from "../db/duckdb.js";
-import { tryParse } from "../utils/common.js";
+
+import {
+  executeQuery,
+  executeWrite,
+  executeTransaction,
+} from "../db/duckdb.js";
+import { parseIfPresent } from "../utils/common.js";
 import {
   DEFAULT_PAGE_LIMIT,
   MAX_PAGE_LIMIT,
@@ -79,10 +84,6 @@ const VALID_LOG_COLUMNS = Object.freeze([
 ]);
 
 export class LogRepository {
-  async #getDb() {
-    return await getDbInstance();
-  }
-
   /**
    * Validates sort fields
    * @param {SortRule[]} sortRules
@@ -344,15 +345,23 @@ export class LogRepository {
 
     const items = rows.map((rawRow) => {
       const row = this.#fixBigInts(rawRow);
-      return /** @type {LogEntry} */ ({
+      const entry = /** @type {LogEntry} */ ({
         ...row,
-        headers: tryParse(row.headers),
-        query: tryParse(row.query),
-        body: tryParse(row.body),
-        responseHeaders: tryParse(row.responseHeaders),
-        responseBody: tryParse(row.responseBody),
+        headers: parseIfPresent("headers", row),
+        query: parseIfPresent("query", row),
+        body: parseIfPresent("body", row),
+        responseHeaders: parseIfPresent("responseHeaders", row),
+        responseBody: parseIfPresent("responseBody", row),
         signatureValid: row.signatureValid === true || row.signatureValid === 1,
       });
+
+      // Strip undefined keys
+      Object.keys(entry).forEach((k) => {
+        const key = /** @type {keyof LogEntry} */ (k);
+        if (entry[key] === undefined) delete entry[key];
+      });
+
+      return entry;
     });
 
     return { items, total };
@@ -382,19 +391,13 @@ export class LogRepository {
     const rawRow = rows[0];
     const row = this.#fixBigInts(rawRow);
 
-    // Helper to conditionally parse if the field exists in the row
-    const parseIfPresent = /**
-     * @param {string} key
-     * @returns {any}
-     */ (key) => (row[key] !== undefined ? tryParse(row[key]) : row[key]);
-
     return /** @type {LogEntry} */ ({
       ...row,
-      headers: parseIfPresent("headers"),
-      query: parseIfPresent("query"),
-      body: parseIfPresent("body"),
-      responseHeaders: parseIfPresent("responseHeaders"),
-      responseBody: parseIfPresent("responseBody"),
+      headers: parseIfPresent("headers", row),
+      query: parseIfPresent("query", row),
+      body: parseIfPresent("body", row),
+      responseHeaders: parseIfPresent("responseHeaders", row),
+      responseBody: parseIfPresent("responseBody", row),
     });
   }
 
@@ -446,7 +449,7 @@ export class LogRepository {
    * @returns {Promise<void>}
    */
   async insertLog(log) {
-    await executeQuery(INSERT_LOG_SQL, this.#mapLogToParams(log));
+    await executeWrite(INSERT_LOG_SQL, this.#mapLogToParams(log));
   }
 
   /**
@@ -456,27 +459,17 @@ export class LogRepository {
    */
   async batchInsertLogs(logs) {
     if (!logs.length) return;
-    const db = await this.#getDb();
-    const conn = await db.connect();
 
-    try {
-      await conn.run("BEGIN TRANSACTION");
-
+    await executeTransaction(async (conn) => {
       for (const log of logs) {
+        // conn.run is used directly inside transaction task
+        // We need to map params correctly.
+        // NOTE: executeTransaction gives us a connection.
+        // We can't use executeQuery here because it acquires a NEW connection.
+        // We must use the transaction connection.
         await conn.run(INSERT_LOG_SQL, this.#mapLogToParams(log));
       }
-
-      await conn.run("COMMIT");
-    } catch (err) {
-      try {
-        await conn.run("ROLLBACK");
-      } catch {
-        // ignore rollback error
-      }
-      throw err;
-    } finally {
-      conn.closeSync();
-    }
+    });
   }
 
   /**
@@ -531,7 +524,7 @@ export class LogRepository {
    */
   async deleteLogsByWebhookId(webhookId) {
     const sql = `DELETE FROM logs WHERE webhookId = $webhookId`;
-    await executeQuery(sql, { webhookId });
+    await executeWrite(sql, { webhookId });
   }
 
   /**
@@ -580,15 +573,24 @@ export class LogRepository {
     const hasMore = rows.length > limit;
     const items = rows.slice(0, limit).map((rawRow) => {
       const row = this.#fixBigInts(rawRow);
-      return /** @type {LogEntry} */ ({
+
+      const entry = /** @type {LogEntry} */ ({
         ...row,
-        headers: tryParse(row.headers),
-        query: tryParse(row.query),
-        body: tryParse(row.body),
-        responseHeaders: tryParse(row.responseHeaders),
-        responseBody: tryParse(row.responseBody),
+        headers: parseIfPresent("headers", row),
+        query: parseIfPresent("query", row),
+        body: parseIfPresent("body", row),
+        responseHeaders: parseIfPresent("responseHeaders", row),
+        responseBody: parseIfPresent("responseBody", row),
         signatureValid: row.signatureValid === true || row.signatureValid === 1,
       });
+
+      // Strip undefined keys
+      Object.keys(entry).forEach((k) => {
+        const key = /** @type {keyof LogEntry} */ (k);
+        if (entry[key] === undefined) delete entry[key];
+      });
+
+      return entry;
     });
 
     // Generate next cursor from last item

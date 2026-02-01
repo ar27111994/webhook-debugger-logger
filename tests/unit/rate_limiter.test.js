@@ -6,7 +6,7 @@ import {
   beforeEach,
   afterEach,
 } from "@jest/globals";
-import { RateLimiter } from "../../src/utils/rate_limiter.js";
+import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
 import {
   createMockRequest,
   createMockResponse,
@@ -14,28 +14,32 @@ import {
   assertType,
 } from "../setup/helpers/test-utils.js";
 import {
-  useConsoleSpy,
   useFakeTimers,
   useMockCleanup,
 } from "../setup/helpers/test-lifecycle.js";
-import { DEFAULT_RATE_LIMIT_WINDOW_MS } from "../../src/consts.js";
+
+// Mock logger before importing RateLimiter
+await setupCommonMocks({ logger: true });
+
+const { RateLimiter } = await import("../../src/utils/rate_limiter.js");
+const { DEFAULT_RATE_LIMIT_WINDOW_MS } = await import("../../src/consts.js");
 
 /**
  * @typedef {import("net").Socket} Socket
+ * @typedef {import("../../src/utils/rate_limiter.js").RateLimiter} RateLimiterType
  */
 
 describe("RateLimiter Unit Tests", () => {
-  /** @type {RateLimiter | null} */
-  let rateLimiter = null;
+  /** @type {RateLimiterType} */
+  let rateLimiter;
 
   useFakeTimers();
 
   beforeEach(() => {
-    // Other setup if needed, currently empty but keeping structure if preferred
+    rateLimiter = new RateLimiter(2, DEFAULT_RATE_LIMIT_WINDOW_MS);
   });
 
   useMockCleanup();
-  const consoleSpy = useConsoleSpy("warn", "log");
 
   afterEach(() => {
     if (rateLimiter) rateLimiter.destroy();
@@ -44,7 +48,6 @@ describe("RateLimiter Unit Tests", () => {
   });
 
   test("should enforce limit within windowMs", () => {
-    rateLimiter = new RateLimiter(2, DEFAULT_RATE_LIMIT_WINDOW_MS); // 2 requests per 1s
     const mw = rateLimiter.middleware();
     const req = createMockRequest({ ip: "1.2.3.4", headers: {} });
     const res = createMockResponse();
@@ -156,7 +159,11 @@ describe("RateLimiter Unit Tests", () => {
         message: expect.stringContaining("Client IP could not be identified"),
       }),
     );
-    expect(consoleSpy.warn).toHaveBeenCalled();
+    // Source uses structured pino logging via log.warn
+    expect(loggerMock.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ userAgent: "test-bot" }),
+      "Rejecting request with unidentifiable IP",
+    );
   });
 
   test("should identify IP from Express req.ip (default behavior)", () => {
@@ -384,12 +391,15 @@ describe("RateLimiter Unit Tests", () => {
     rateLimiter.destroy();
     expect(clearIntervalSpy).toHaveBeenCalled(); // Cannot verify ID as it is private
 
-    rateLimiter = null; // Prevent afterEach from destroying it again
+    rateLimiter = assertType(null); // Prevent afterEach from destroying it again
     clearIntervalSpy.mockRestore();
   });
 
   test("should log eviction when not in test environment", () => {
     const originalEnv = process.env.NODE_ENV;
+
+    // We must rebuild the rate limiter instance while NODE_ENV is production
+    // because logger initialization might depend on it.
     process.env.NODE_ENV = "production";
 
     try {
@@ -404,8 +414,10 @@ describe("RateLimiter Unit Tests", () => {
       // Trigger eviction
       mw(createMockRequest({ ip: "user2", headers: {} }), res, next);
 
-      expect(consoleSpy.log).toHaveBeenCalledWith(
-        expect.stringContaining("[SYSTEM] RateLimiter evicted entry"),
+      // Source uses structured pino logging via log.info
+      expect(loggerMock.info).toHaveBeenCalledWith(
+        expect.objectContaining({ evictedIp: expect.any(String) }),
+        "RateLimiter evicted entry",
       );
     } finally {
       process.env.NODE_ENV = originalEnv;

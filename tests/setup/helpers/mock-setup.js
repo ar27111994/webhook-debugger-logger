@@ -9,6 +9,11 @@
  */
 
 import { jest } from "@jest/globals";
+import { apifyMock } from "./shared-mocks.js";
+
+/**
+ * @typedef {import("../../../src/typedefs.js").CommonError} CommonError
+ */
 
 /**
  * @typedef {Object} MockOptions
@@ -77,18 +82,14 @@ export async function setupCommonMocks(options = {}) {
   }
 
   if (apify) {
-    jest.unstable_mockModule("apify", async () => {
-      const { createApifyMock } = await import("./apify-mock.js");
-      const apifyMock = createApifyMock();
-      return {
-        // Mock default export
-        default: apifyMock,
-        // Mock named exports
-        Actor: apifyMock,
-        KeyValueStore: apifyMock.openKeyValueStore(),
-        Dataset: apifyMock.openDataset(),
-      };
-    });
+    jest.unstable_mockModule("apify", () => ({
+      // Mock default export
+      default: apifyMock, // Use the instance directly
+      // Mock named exports
+      Actor: apifyMock,
+      KeyValueStore: apifyMock.openKeyValueStore(),
+      Dataset: apifyMock.openDataset(),
+    }));
   }
 
   if (dns) {
@@ -114,9 +115,18 @@ export async function setupCommonMocks(options = {}) {
       logger: loggerMock,
       createChildLogger: jest.fn(() => loggerMock),
       createRequestLogger: jest.fn(() => loggerMock),
-      serializeError: jest.fn((err) => ({
-        message: err instanceof Error ? err.message : String(err),
-      })),
+      serializeError: jest.fn(
+        /**
+         * @param {any} err
+         * @returns {CommonError}
+         */
+        (err) => ({
+          message:
+            err instanceof Error ? err.message : String(err?.message || err),
+          stack: err instanceof Error ? err.stack : undefined,
+          name: err instanceof Error ? err.name : undefined,
+        }),
+      ),
       LogLevel: {
         TRACE: "trace",
         DEBUG: "debug",

@@ -6,7 +6,6 @@ import {
   beforeAll,
   afterAll,
 } from "@jest/globals";
-import { MAX_ITEMS_FOR_BATCH } from "../../src/consts.js";
 
 /**
  * @typedef {import('../../src/typedefs.js').LogEntry} LogEntry
@@ -16,7 +15,7 @@ import { MAX_ITEMS_FOR_BATCH } from "../../src/consts.js";
 import { assertType } from "../setup/helpers/test-utils.js";
 
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
-import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
+import { useMockCleanup, useDbHooks } from "../setup/helpers/test-lifecycle.js";
 await setupCommonMocks({ apify: true });
 
 const { setupTestApp } = await import("../setup/helpers/app-utils.js");
@@ -25,6 +24,23 @@ const { Actor } = await import("apify");
 const { createDatasetMock } = await import("../setup/helpers/shared-mocks.js");
 const { logRepository } =
   await import("../../src/repositories/LogRepository.js");
+
+const createMockLog = (overrides = {}) => ({
+  id: "log_" + Math.random().toString(36).substr(2, 9),
+  webhookId: "wh_1",
+  method: "POST",
+  headers: {},
+  body: "{}",
+  query: {},
+  contentType: "application/json",
+  size: 2,
+  statusCode: 200,
+  processingTime: 10,
+  timestamp: new Date().toISOString(),
+  requestId: "req_" + Math.random().toString(36).substr(2, 9),
+  remoteIp: "127.0.0.1",
+  ...overrides,
+});
 const authKey = "TEST_KEY";
 const authHeader = `Bearer ${authKey}`;
 
@@ -36,6 +52,7 @@ const authHeader = `Bearer ${authKey}`;
 
 describe("Log Filtering Routes", () => {
   useMockCleanup();
+  useDbHooks();
 
   /** @type {AppClient} */
   let appClient;
@@ -96,27 +113,31 @@ describe("Log Filtering Routes", () => {
   test("GET /logs should filter by method, status, contentType", async () => {
     /** @type {LogEntry[]} */
     const items = assertType([
-      {
+      createMockLog({
+        id: "log_filter_1",
         webhookId: "wh_1",
         method: "POST",
         statusCode: 200,
         headers: { "content-type": "application/json" },
         timestamp: "2023-01-01T10:00:00Z",
-      },
-      {
+      }),
+      createMockLog({
+        id: "log_filter_2",
         webhookId: "wh_1",
         method: "GET",
         statusCode: 404,
         headers: { "content-type": "text/plain" },
+        contentType: "text/plain",
         timestamp: "2023-01-01T10:01:00Z",
-      },
-      {
+      }),
+      createMockLog({
+        id: "log_filter_3",
         webhookId: "wh_2",
         method: "POST",
         statusCode: 200,
         headers: { "content-type": "application/json" },
         timestamp: "2023-01-01T10:02:00Z",
-      },
+      }),
     ]);
 
     jest.spyOn(webhookManager, "isValid").mockReturnValue(true);
@@ -176,8 +197,8 @@ describe("Log Filtering Routes", () => {
 
   test("GET /logs handles dataset errors gracefully", async () => {
     jest
-      .mocked(Actor.openDataset)
-      .mockRejectedValue(new Error("Dataset access failed"));
+      .spyOn(logRepository, "findLogs")
+      .mockRejectedValue(new Error("Database access failed"));
 
     const res = await appClient.get("/logs").set("Authorization", authHeader);
 
@@ -187,11 +208,14 @@ describe("Log Filtering Routes", () => {
 
   test("GET /logs handles limit edge cases", async () => {
     /** @type {LogEntry[]} */
-    const items = new Array(5).fill(0).map(() =>
-      assertType({
-        webhookId: "wh_1",
-        timestamp: new Date().toISOString(),
-      }),
+    const items = new Array(5).fill(0).map((_, i) =>
+      assertType(
+        createMockLog({
+          id: `limit_log_${i}`,
+          webhookId: "wh_1",
+          timestamp: new Date().toISOString(),
+        }),
+      ),
     );
     jest.mocked(Actor.openDataset).mockResolvedValue(createDatasetMock(items));
     await logRepository.batchInsertLogs(items);
@@ -225,10 +249,13 @@ describe("Log Filtering Routes", () => {
   test("GET /logs handles pagination limits", async () => {
     /** @type {LogEntry[]} */
     const items = new Array(200).fill(0).map((_, _i) =>
-      assertType({
-        webhookId: "wh_1",
-        timestamp: new Date().toISOString(),
-      }),
+      assertType(
+        createMockLog({
+          id: `log_${_i}`,
+          webhookId: "wh_1",
+          timestamp: new Date().toISOString(),
+        }),
+      ),
     );
 
     const mockDataset = createDatasetMock(items);
@@ -241,12 +268,7 @@ describe("Log Filtering Routes", () => {
       .set("Authorization", authHeader);
     expect(res.body.items).toHaveLength(10);
     expect(res.body.count).toBe(10);
-
-    // Verify getData was called with the correct limit
-    expect(mockDataset.getData).toHaveBeenCalledWith(
-      expect.objectContaining({ limit: MAX_ITEMS_FOR_BATCH }),
-    );
-  });
+  }, 10000);
 
   describe("GET /logs/:logId", () => {
     test("should return full log entry when no fields specified", async () => {
@@ -258,7 +280,7 @@ describe("Log Filtering Routes", () => {
         statusCode: 200,
         timestamp: new Date().toISOString(),
       });
-      jest.mocked(logRepository.getLogById).mockResolvedValue(item);
+      jest.spyOn(logRepository, "getLogById").mockResolvedValue(item);
       jest.spyOn(webhookManager, "isValid").mockReturnValue(true);
 
       const res = await appClient
@@ -277,7 +299,7 @@ describe("Log Filtering Routes", () => {
         statusCode: 404,
       });
 
-      jest.mocked(logRepository.getLogById).mockResolvedValue(item);
+      jest.spyOn(logRepository, "getLogById").mockResolvedValue(item);
       jest.spyOn(webhookManager, "isValid").mockReturnValue(true);
 
       const res = await appClient
@@ -299,7 +321,7 @@ describe("Log Filtering Routes", () => {
         webhookId: "wh_1",
         method: "POST",
       });
-      jest.mocked(logRepository.getLogById).mockResolvedValue(item);
+      jest.spyOn(logRepository, "getLogById").mockResolvedValue(item);
       jest.spyOn(webhookManager, "isValid").mockReturnValue(true);
 
       const res = await appClient

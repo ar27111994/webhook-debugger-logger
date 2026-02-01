@@ -15,9 +15,9 @@ import {
  * @typedef {import('../../src/services/ForwardingService.js').ForwardingService} ForwardingService
  */
 
-// 1. Setup Common Mocks (Apify, Axios, SSRF)
-import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
-await setupCommonMocks({ axios: true, apify: true, ssrf: true });
+// 1. Setup Common Mocks (Apify, Axios, SSRF, Logger)
+import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
+await setupCommonMocks({ axios: true, apify: true, ssrf: true, logger: true });
 import {
   apifyMock,
   createMockWebhookManager,
@@ -193,13 +193,6 @@ describe("LoggerMiddleware Coverage Tests", () => {
 
   describe("Background Task Failures", () => {
     test("should handle Platform Limit errors gracefully", async () => {
-      const consoleErrorSpy = jest
-        .spyOn(console, "error")
-        .mockImplementation(() => {});
-      const consoleWarnSpy = jest
-        .spyOn(console, "warn")
-        .mockImplementation(() => {});
-
       mockActor.pushData.mockRejectedValue(
         new Error("Dataset storage limit reached"),
       );
@@ -213,16 +206,19 @@ describe("LoggerMiddleware Coverage Tests", () => {
 
       await middleware.middleware(req, res, next);
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining("[CRITICAL] PLATFORM-LIMIT"),
-        expect.stringContaining("Dataset storage limit reached"),
+      // Source uses structured pino logging via this.#log.error
+      expect(loggerMock.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          isPlatformError: true,
+          err: expect.objectContaining({
+            message: "Dataset storage limit reached",
+          }),
+        }),
+        "Platform limit error",
       );
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining("[ADVICE] Check your Apify platform limits"),
+      expect(loggerMock.warn).toHaveBeenCalledWith(
+        "Check Apify platform limits or storage availability",
       );
-
-      consoleErrorSpy.mockRestore();
-      consoleWarnSpy.mockRestore();
     });
   });
 

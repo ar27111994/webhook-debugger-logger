@@ -6,277 +6,264 @@ globs: tests/**/*.test.js, tests/**/*.spec.js, **/__tests__/**/*.js
 
 # Test Development Best Practices
 
-## Test Organization
+## Directory Structure
 
-- Use descriptive `describe` blocks to group related tests
-- Keep test names clear and specific (what is being tested, expected outcome)
-- Follow AAA pattern: Arrange, Act, Assert
-- One assertion concept per test (but multiple expects for related checks OK)
-- Use `beforeEach` and `afterEach` for test isolation
-- Never skip cleanup in `afterEach` - always restore spies and reset mocks
+- `tests/unit/` - Isolated module tests
+- `tests/integration/` - Module interaction tests
+- `tests/e2e/` - End-to-end system tests
+- `tests/setup/` - Shared helpers, mocks, setup logic
 
-## Shared Test Utilities
+## Always Reuse Helpers
 
-### Always Reuse Existing Helpers
-
-- Import and use `sleep` and `waitForCondition` from `./helpers/test-utils.js`
-- Use `createMockRequest`, `createMockResponse`, `createMockNextFunction` from test-utils
-- Reuse `apifyMock`, `axiosMock`, `dnsPromisesMock` from `./helpers/shared-mocks.js`
-- Use `createApifyMock` for custom Actor mock configurations
-- Use `createDatasetMock` for dataset-specific tests
-
-### Never Reinvent
+**CRITICAL**: Import from `tests/setup/helpers/` instead of recreating utilities.
 
 ```javascript
-// ✅ GOOD - Reuse existing utilities
-import { sleep, waitForCondition } from "./helpers/test-utils.js";
-import { apifyMock } from "./helpers/shared-mocks.js";
+// ✅ GOOD
+import {
+  sleep,
+  waitForCondition,
+  createMockRequest,
+  createMockResponse,
+  assertType,
+} from "../setup/helpers/test-utils.js";
+import {
+  apifyMock,
+  axiosMock,
+  createDatasetMock,
+  dnsPromisesMock,
+} from "../setup/helpers/shared-mocks.js";
+import {
+  useMockCleanup,
+  useFakeTimers,
+  useConsoleSpy,
+} from "../setup/helpers/test-lifecycle.js";
+import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 
-// ❌ BAD - Creating new sleep/wait functions
-const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+// ❌ BAD - Never recreate these
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 ```
 
-## Type Safety in Tests
+## Available Helpers
 
-### Always Add JSDoc Types
+### mock-setup.js
+
+- `setupCommonMocks({ axios, apify, dns, ssrf, logger })` - Register mocks BEFORE imports
+- `loggerMock` - Shared logger mock for assertions
+
+### shared-mocks.js
+
+- `apifyMock`, `axiosMock`, `dnsPromisesMock`, `ssrfMock` - Pre-configured mocks
+- `createDatasetMock(items, { autoRegister })` - Dataset with getData/pushData/getInfo
+- `createKeyValueStoreMock(overrides)` - KV store mock
+- `createMockWebhookManager(overrides)` - WebhookManager mock
+- `setupBasicApifyMock(mockInstance, options)` - Configure apifyMock
+- `resetNetworkMocks()` - Reset SSRF, DNS, Axios to defaults
+
+### test-utils.js
+
+- `createMockRequest(overrides)`, `createMockResponse(overrides)`, `createMockNextFunction(fn)`
+- `sleep(ms)`, `waitForCondition(condition, timeout, interval)`
+- `assertType<T>(value)` - Type-safe casting (use instead of `@type {any}`)
+- `getLastAxiosCall(axios, method)`, `getLastAxiosConfig(axios, method)`
+
+### test-lifecycle.js
+
+- `useMockCleanup(additionalSetup)` - Auto-clear mocks in beforeEach
+- `useFakeTimers()` - Auto-manage fake timers
+- `useConsoleSpy(...methods)` - Auto-manage console spies, returns spy object
+
+### Other Helpers
+
+- `middleware-test-utils.js`: `createMiddlewareTestContext()`, `runMiddlewareWithTimers()`
+- `app-utils.js`: `setupTestApp()` - Initialize app + supertest for integration tests
+- `db-hooks.js`: `resetDb()` - Clear DuckDB logs table
+- `signature-utils.js`: `createStripeSignature()`, `createShopifySignature()`, `createGitHubSignature()`, `createSlackSignature()`
+
+## Module Mocking Pattern
 
 ```javascript
-// ✅ GOOD - Proper typing
-/**
- * @typedef {import("express").Request} Request
- * @typedef {import("express").Response} Response
- */
+// TOP of test file, BEFORE other imports:
+import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
+await setupCommonMocks({ axios: true, apify: true, dns: true });
 
-/** @type {Request} */
-let req;
-/** @type {Response} */
-let res;
-/** @type {jest.SpiedFunction<(...args: any[]) => void>} */
-let consoleErrorSpy;
+// THEN import module under test:
+const { someFunction } = await import("../../src/some-module.js");
+const { Actor } = await import("apify"); // Mocked version
 ```
 
-### Type Mock Returns
+## Type Safety
 
 ```javascript
 // ✅ GOOD - Typed mock
 const kvStore = {
   getValue: /** @type {jest.Mock<any>} */ (jest.fn()).mockResolvedValue(null),
-  setValue: /** @type {jest.Mock<any>} */ (jest.fn()).mockResolvedValue(
-    undefined,
-  ),
 };
 
-// ❌ BAD - Untyped
-const kvStore = {
-  getValue: jest.fn().mockResolvedValue(null),
-  setValue: jest.fn().mockResolvedValue(undefined),
-};
+// ✅ GOOD - Use assertType for casting
+expect(() => new RateLimiter(assertType("10"), 1000)).toThrow();
+
+// ✅ GOOD - Type variables
+/** @type {string} */
+let webhookId;
+/** @type {AppClient} */
+let appClient;
 ```
 
-## Mock Management
-
-### Module-Level Mocking
-
-- Use `jest.unstable_mockModule` before imports
-- Mock dependencies BEFORE importing the module under test
-- Keep mock setup at top of test file for clarity
-
-### Mock Lifecycle
+## Lifecycle Helpers
 
 ```javascript
-beforeEach(() => {
-  jest.clearAllMocks(); // Clear call history
+describe("My Suite", () => {
+  const consoleSpy = useConsoleSpy("log", "warn", "error");
+  useMockCleanup(() => {
+    process.env.MY_VAR = "test-value"; // Additional setup per test
+  });
+  useFakeTimers(); // Auto-manages timers
 
-  // Reset mock implementations
-  apifyMock.init.mockResolvedValue(undefined);
-  apifyMock.getInput.mockResolvedValue({});
-});
+  afterEach(() => {
+    delete process.env.MY_VAR; // Cleanup env vars
+  });
 
-afterEach(() => {
-  // Restore spies
-  consoleErrorSpy.mockRestore();
-
-  // Reset all mocks
-  jest.resetAllMocks();
+  test("example", () => {
+    expect(consoleSpy.error).toHaveBeenCalled();
+  });
 });
 ```
 
 ## Async Testing
 
-### Use waitForCondition for Polling
-
 ```javascript
-// ✅ GOOD - Wait for async conditions
-await waitForCondition(
-  () => consoleLogSpy.mock.calls.length > 0,
-  1000, // timeout
-  50, // interval
-);
+// ✅ GOOD - Wait for conditions
+await waitForCondition(() => spy.mock.calls.length > 0, 1000, 50);
 
 // ❌ BAD - Arbitrary sleep
-await sleep(1000); // How do you know 1000ms is enough?
+await sleep(1000);
+
+// Extended timeout for slow tests
+test("slow operation", async () => {
+  // ...test code
+}, 15000); // 15 second timeout
 ```
 
-### Handle Promises Properly
-
-```javascript
-// ✅ GOOD - Proper async/await
-test("should handle async operation", async () => {
-  await someAsyncOperation();
-  expect(result).toBeDefined();
-});
-
-// ❌ BAD - Missing await
-test("should handle async operation", async () => {
-  someAsyncOperation(); // Will pass before promise resolves!
-  expect(result).toBeDefined();
-});
-```
-
-## Test Isolation
-
-### Environment Variables
+## DNS / SSRF Mocking
 
 ```javascript
 beforeEach(() => {
-  originalNodeEnv = process.env.NODE_ENV;
+  dnsPromisesMock.resolve4.mockReset();
+  dnsPromisesMock.resolve6.mockReset();
 });
 
-afterEach(() => {
-  process.env.NODE_ENV = originalNodeEnv; // Always restore
-  delete process.env.TEMP_VAR; // Clean up test vars
-});
-```
-
-### Fake Timers
-
-```javascript
-test("should handle timeout", async () => {
-  jest.useFakeTimers();
-
-  // Test code with timers
-  await jest.advanceTimersByTimeAsync(1000);
-
-  jest.useRealTimers(); // CRITICAL: Always restore
+test("should reject internal IP", async () => {
+  dnsPromisesMock.resolve4.mockResolvedValue(["10.0.0.1"]);
+  dnsPromisesMock.resolve6.mockRejectedValue(new Error("No AAAA"));
+  // ...test SSRF protection
 });
 ```
 
-## Integration vs Unit Tests
+## Common Patterns
 
-### Integration Tests
-
-- Test full request/response cycles with `supertest`
-- Minimal mocking - only external services
-- Test authentication, middleware chains, error handling
-- File naming: `integration_*.test.js`
-
-### Unit Tests
-
-- Test individual functions/classes in isolation
-- Mock all dependencies
-- Fast execution
-- File naming: matches source file or `unit_*.test.js`
-
-## Assertions Best Practices
-
-### Specific Assertions
+### Express Middleware
 
 ```javascript
-// ✅ GOOD - Specific expectations
-expect(response.status).toBe(200);
-expect(response.body).toHaveProperty("data");
-expect(Array.isArray(response.body.data)).toBe(true);
+const req = createMockRequest({ body: { test: "data" } });
+const res = createMockResponse();
+const next = createMockNextFunction();
 
-// ❌ BAD - Too vague
-expect(response).toBeTruthy();
+middleware(req, res, next);
+expect(next).toHaveBeenCalled();
+```
+
+### Integration Tests with supertest
+
+```javascript
+import { setupTestApp } from "../setup/helpers/app-utils.js";
+
+let appClient, teardownApp;
+beforeAll(async () => {
+  ({ appClient, teardownApp } = await setupTestApp());
+});
+afterAll(() => teardownApp());
+
+test("GET /health", async () => {
+  expect((await appClient.get("/health")).status).toBe(200);
+});
+```
+
+### Dataset Mocking
+
+```javascript
+const mockItem = { id: "evt_1", webhookId, method: "POST", body: "{}" };
+jest.mocked(Actor.openDataset).mockResolvedValue(createDatasetMock([mockItem]));
+```
+
+### Retry / Resilience Testing
+
+```javascript
+// Mock axios to fail twice then succeed
+jest
+  .mocked(axios)
+  .mockRejectedValueOnce({ code: "ECONNABORTED" })
+  .mockRejectedValueOnce({ code: "ECONNABORTED" })
+  .mockResolvedValueOnce({ status: 200, data: "OK" });
+
+expect(axios).toHaveBeenCalledTimes(3);
+```
+
+### Stream Consumption in Mocks
+
+```javascript
+// When mocking KVS setValue with streams
+setValue: jest.fn().mockImplementation(async (_, value) => {
+  if (value && typeof value.resume === "function") {
+    value.resume();
+    await new Promise((resolve) => value.on("end", resolve));
+  }
+});
 ```
 
 ### Error Testing
 
 ```javascript
-// ✅ GOOD - Test specific error
-await expect(someFunction()).rejects.toThrow("Specific error message");
+await expect(fn()).rejects.toThrow("Specific error");
+expect(consoleSpy.error).toHaveBeenCalledWith(expect.stringContaining("Error"));
 
-// ✅ GOOD - Test error with matcher
-expect(consoleErrorSpy).toHaveBeenCalledWith(
-  expect.stringContaining("Error prefix"),
+// Test error code matching
+const err = /** @type {NodeJS.ErrnoException} */ (new Error("File not found"));
+err.code = "ENOENT";
+mockAccess.mockRejectedValue(err);
+```
+
+## Assertions
+
+```javascript
+// ✅ Specific
+expect(res.status).toBe(200);
+expect(res.body).toHaveProperty("data");
+expect(mockFn).toHaveBeenCalledTimes(1);
+expect(mockFn).toHaveBeenCalledWith(expect.objectContaining({ id: "123" }));
+expect(writeFile).toHaveBeenCalledWith(
+  expect.stringContaining("INPUT.json"),
+  expect.any(String),
+  "utf-8",
 );
 
-// ❌ BAD - Catching all errors
-try {
-  await someFunction();
-} catch (e) {
-  expect(e).toBeDefined(); // Too vague!
-}
+// ❌ Vague
+expect(res).toBeTruthy();
 ```
 
-## Common Patterns
+## Performance & Coverage
 
-### Testing Express Middlewares
+- Unit tests < 100ms each; use extended timeouts for slow E2E tests
+- Use `waitForCondition` instead of `sleep`
+- Mock expensive operations (I/O, network)
+- Aim for 90%+ statement, 85%+ branch coverage
+- Test edge cases, error paths, and retries
 
-```javascript
-const { createMockRequest, createMockResponse, createMockNextFunction } =
-  await import("./helpers/test-utils.js");
+## Running Tests
 
-let req, res, next;
-
-beforeEach(() => {
-  req = createMockRequest({ body: { test: "data" } });
-  res = createMockResponse();
-  next = createMockNextFunction();
-});
-
-test("should call next()", () => {
-  middleware(req, res, next);
-  expect(next).toHaveBeenCalled();
-});
+```bash
+npm test                              # All tests
+npm test tests/unit/                  # Unit only
+npm test -- tests/unit/file.test.js   # Specific file
+npm test -- --watch                   # Watch mode
+npm run test:coverage                 # Coverage
 ```
-
-### Testing Async Functions
-
-```javascript
-test("should process data async", async () => {
-  const result = await processData(input);
-
-  expect(result).toBeDefined();
-  expect(result.status).toBe("success");
-});
-```
-
-### Testing Error Paths
-
-```javascript
-test("should handle errors gracefully", async () => {
-  mockFn.mockRejectedValueOnce(new Error("Test error"));
-
-  await expect(functionUnderTest()).rejects.toThrow("Test error");
-  // OR
-  await functionUnderTest();
-  expect(consoleErrorSpy).toHaveBeenCalledWith(
-    expect.stringContaining("Test error"),
-  );
-});
-```
-
-## Performance
-
-- Keep unit tests under 100ms each
-- Use `test.concurrent` for independent tests
-- Avoid unnecessary `sleep()` - use `waitForCondition` instead
-- Mock expensive operations (file I/O, network calls)
-
-## Coverage
-
-- Aim for 90%+ statement coverage
-- Aim for 85%+ branch coverage
-- Test edge cases: null, undefined, empty arrays, boundaries
-- Test error paths, not just happy paths
-- Don't test implementation details, test behavior
-
-## Debugging Tests
-
-- Use `test.only()` to isolate failing tests
-- Use `console.log` liberally during development (remove after)
-- Check mock call counts: `expect(mockFn).toHaveBeenCalledTimes(1)`
-- Verify mock call arguments: `expect(mockFn).toHaveBeenCalledWith(...)`
-- Run with `--verbose` flag for detailed output

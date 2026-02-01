@@ -1,10 +1,14 @@
-import { jest, describe, test, expect } from "@jest/globals";
-import {
-  getSafeResponseDelay,
-  coerceRuntimeOptions,
-  parseWebhookOptions,
-} from "../../src/utils/config.js";
-import {
+import { describe, test, expect } from "@jest/globals";
+import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
+import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
+
+// Mock logger before importing config module
+await setupCommonMocks({ logger: true });
+
+const { getSafeResponseDelay, coerceRuntimeOptions, parseWebhookOptions } =
+  await import("../../src/utils/config.js");
+
+const {
   MAX_SAFE_RESPONSE_DELAY_MS,
   MAX_ALLOWED_PAYLOAD_SIZE,
   MAX_SAFE_URL_COUNT,
@@ -17,7 +21,7 @@ import {
   DEFAULT_PAYLOAD_LIMIT,
   DEFAULT_RATE_LIMIT_PER_MINUTE,
   DEFAULT_RETENTION_HOURS,
-} from "../../src/consts.js";
+} = await import("../../src/consts.js");
 
 /**
  * @typedef {import('../../src/typedefs.js').SignatureProvider} SignatureProvider
@@ -25,6 +29,8 @@ import {
  */
 
 describe("Config Utils Coverage", () => {
+  useMockCleanup();
+
   describe("getSafeResponseDelay", () => {
     test("should return 0 for invalid inputs", () => {
       expect(getSafeResponseDelay(-1)).toBe(0);
@@ -33,15 +39,12 @@ describe("Config Utils Coverage", () => {
     });
 
     test("should cap delay at MAX_SAFE_RESPONSE_DELAY_MS", () => {
-      const consoleSpy = jest
-        .spyOn(console, "warn")
-        .mockImplementation(() => {});
       const capped = getSafeResponseDelay(999999);
       expect(capped).toBe(MAX_SAFE_RESPONSE_DELAY_MS);
-      expect(consoleSpy).toHaveBeenCalledWith(
+      expect(loggerMock.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ name: "responseDelayMs" }),
         expect.stringContaining("exceeds safe max"),
       );
-      consoleSpy.mockRestore();
     });
 
     test("should clamp maxForwardRetries", () => {
@@ -91,10 +94,6 @@ describe("Config Utils Coverage", () => {
     });
 
     test("should clamp and log warnings for values exceeding safe maximums", () => {
-      const consoleSpy = jest
-        .spyOn(console, "warn")
-        .mockImplementation(() => {});
-
       const opts = coerceRuntimeOptions({
         urlCount: 9999,
         retentionHours: 9999,
@@ -115,12 +114,12 @@ describe("Config Utils Coverage", () => {
       expect(opts.maxForwardRetries).toBe(MAX_SAFE_FORWARD_RETRIES);
       expect(opts.responseDelayMs).toBe(MAX_SAFE_RESPONSE_DELAY_MS);
 
-      expect(consoleSpy).toHaveBeenCalledTimes(8);
-      expect(consoleSpy).toHaveBeenCalledWith(
+      // All 8 fields exceed limits, so 8 warnings should be logged
+      expect(loggerMock.warn).toHaveBeenCalledTimes(8);
+      expect(loggerMock.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ name: expect.any(String) }),
         expect.stringContaining("exceeds safe max"),
       );
-
-      consoleSpy.mockRestore();
     });
 
     test("should trim authKey", () => {

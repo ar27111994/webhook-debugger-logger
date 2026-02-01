@@ -7,6 +7,7 @@ import {
   afterAll,
 } from "@jest/globals";
 import { getLastAxiosConfig, assertType } from "../setup/helpers/test-utils.js";
+
 /**
  * @typedef {import("../setup/helpers/shared-mocks.js").AxiosMock} AxiosMock
  * @typedef {import("../../src/typedefs.js").WebhookEvent} WebhookEvent
@@ -22,6 +23,7 @@ const { app, webhookManager, sseHeartbeat, initialize, shutdown } =
   await import("../../src/main.js");
 const { Actor } = await import("apify");
 const { createDatasetMock } = await import("../setup/helpers/shared-mocks.js");
+import { logRepository } from "../../src/repositories/LogRepository.js";
 
 describe("Production Readiness Tests (v2.6.0)", () => {
   /** @type {string} */
@@ -156,6 +158,19 @@ describe("Production Readiness Tests (v2.6.0)", () => {
       jest
         .mocked(Actor.openDataset)
         .mockResolvedValue(createDatasetMock([mockEvent]));
+
+      // Insert into DuckDB because Replay relies on hot storage (Deep Search via Dataset is not enabled)
+      await logRepository.insertLog({
+        ...mockEvent,
+        timestamp: new Date().toISOString(),
+        requestId: "req_test",
+        remoteIp: "127.0.0.1",
+        query: {},
+        contentType: "application/json",
+        size: mockEvent.body.length,
+        statusCode: 200,
+        processingTime: 10,
+      });
 
       const res = await request(app)
         .post(`/replay/${webhookId}/${eventId}?url=${targetUrl}`)

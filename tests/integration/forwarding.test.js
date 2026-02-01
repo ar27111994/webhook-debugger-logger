@@ -14,9 +14,15 @@ import {
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 import { createMiddlewareTestContext } from "../setup/helpers/middleware-test-utils.js";
 
-// Mock Apify and Axios
-import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
-await setupCommonMocks({ axios: true, apify: true, dns: true, ssrf: true });
+// Mock Apify, Axios, and Logger
+import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
+await setupCommonMocks({
+  axios: true,
+  apify: true,
+  dns: true,
+  ssrf: true,
+  logger: true,
+});
 import { ssrfMock } from "../setup/helpers/shared-mocks.js";
 const axios = (await import("axios")).default;
 const { Actor } = await import("apify");
@@ -155,10 +161,6 @@ describe("Forwarding Security", () => {
       error: SSRF_ERRORS.INTERNAL_IP,
     });
 
-    const consoleErrorSpy = jest
-      .spyOn(console, "error")
-      .mockImplementation(() => {});
-
     const ctx = await createMiddlewareTestContext({
       options: {
         forwardUrl: "http://127.0.0.1/admin",
@@ -176,25 +178,24 @@ describe("Forwarding Security", () => {
     // Trigger background tasks by simulating response finish
     ctx.res.emit("finish");
 
-    // Wait for the error to be logged
+    // Wait for the error to be logged via structured logger
     await waitForCondition(
-      () => consoleErrorSpy.mock.calls.length > 0,
+      () => loggerMock.error.mock.calls.length > 0,
       1000,
       10,
     );
 
     expect(axios.post).not.toHaveBeenCalled();
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining(
-        `[FORWARD-ERROR] SSRF blocked: ${SSRF_ERRORS.INTERNAL_IP}`,
-      ),
+    // Source uses structured pino logging via log.error
+    expect(loggerMock.error).toHaveBeenCalledWith(
+      expect.objectContaining({ error: SSRF_ERRORS.INTERNAL_IP }),
+      "SSRF blocked forward URL",
     );
-    consoleErrorSpy.mockRestore();
   });
 
   describe("Forwarding Retries & Error Handling", () => {
     beforeEach(() => {
-      jest.useFakeTimers();
+      jest.setTimeout(30000);
     });
 
     afterEach(() => {
@@ -219,12 +220,14 @@ describe("Forwarding Security", () => {
         },
       });
 
-      const p = ctx.middleware(ctx.req, ctx.res, ctx.next);
+      // No fake timers - rely on short axios-retry delay (1s, 2s)
+      await ctx.middleware(ctx.req, ctx.res, ctx.next);
 
-      // Advance timers to trigger retries
-      // We expect 3 attempts (initial + 2 retries) with delays 1s, 2s
-      await jest.runAllTimersAsync();
-      await p;
+      await waitForCondition(
+        () => jest.mocked(axios.post).mock.calls.length === 3,
+        4000,
+        100,
+      );
 
       // 3 calls total (1 initial + 2 retries)
       expect(axios.post).toHaveBeenCalledTimes(3);
@@ -237,7 +240,7 @@ describe("Forwarding Security", () => {
           assertType(c[0]).statusCode === 500,
       );
       expect(errorLog).toBeDefined();
-    });
+    }, 30000);
 
     test("should NOT retry non-transient errors", async () => {
       const error = new Error("Bad Request");
@@ -264,10 +267,6 @@ describe("Forwarding Security", () => {
 
   describe("Platform Limits Handling", () => {
     test("should catch and log platform limit errors", async () => {
-      const consoleErrorSpy = jest
-        .spyOn(console, "error")
-        .mockImplementation(() => {});
-
       // Logic that triggers Actor.pushData failure
       jest
         .mocked(Actor.pushData)
@@ -288,11 +287,14 @@ describe("Forwarding Security", () => {
       // Should not throw
       await ctx.middleware(ctx.req, ctx.res, ctx.next);
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining("PLATFORM-LIMIT"),
-        expect.stringContaining("Dataset quota exceeded"),
+      // Source uses structured pino logging via log.error
+      expect(loggerMock.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          isPlatformError: true,
+          err: expect.objectContaining({ message: "Dataset quota exceeded" }),
+        }),
+        "Platform limit error",
       );
-      consoleErrorSpy.mockRestore();
     });
   });
 });

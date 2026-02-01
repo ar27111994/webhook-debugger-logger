@@ -10,7 +10,7 @@ import {
 // Mock Apify
 // Mock Apify
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
-await setupCommonMocks({ apify: true });
+await setupCommonMocks({ apify: true, logger: true });
 
 const { setupTestApp } = await import("../setup/helpers/app-utils.js");
 const { webhookManager } = await import("../../src/main.js");
@@ -21,6 +21,7 @@ import {
   setupBasicApifyMock,
   apifyMock,
 } from "../setup/helpers/shared-mocks.js";
+import { MAX_SAFE_RESPONSE_DELAY_MS } from "../../src/consts.js";
 
 /**
  * @typedef {import("../setup/helpers/app-utils.js").App} App
@@ -76,7 +77,11 @@ describe("Edge Case Tests", () => {
       .send(largeBody);
 
     expect(res.statusCode).toBe(413);
-    expect(res.body.error).toBe("Payload Too Large");
+    if (res.body && res.body.error) {
+      expect(res.body.error).toMatch(/Payload Too Large|Entity Too Large/i);
+    } else {
+      expect(res.text).toMatch(/Too Large/i);
+    }
   });
 
   test("Should log but NOT crash on malformed JSON when parsing enabled", async () => {
@@ -99,35 +104,39 @@ describe("Edge Case Tests", () => {
     expect(typeof lastCall.body).toBe("string");
   });
 
-  test("Should enforce a maximum 10s cap on response delays", async () => {
-    // Generate 2 webhooks so we have ids[1]
-    const ids = await webhookManager.generateWebhooks(2, 1);
-    const slowWebhookId = ids[1];
+  test(
+    `Should enforce a maximum ${MAX_SAFE_RESPONSE_DELAY_MS / 1000}s cap on response delays`,
+    async () => {
+      // Generate 2 webhooks so we have ids[1]
+      const ids = await webhookManager.generateWebhooks(2, 1);
+      const slowWebhookId = ids[1];
 
-    // Set a very high delay directly in the Map
-    const data = webhookManager.getWebhookData(slowWebhookId);
-    /** @type {WebhookData} */
-    const modifiedData = {
-      ...data,
-      expiresAt: data?.expiresAt || new Date().toISOString(), // Ensure valid ISO string
-      responseDelayMs: 15000,
-    };
-    webhookManager.webhooks.set(slowWebhookId, modifiedData);
+      // Set a very high delay directly in the Map
+      const data = webhookManager.getWebhookData(slowWebhookId);
+      /** @type {WebhookData} */
+      const modifiedData = {
+        ...data,
+        expiresAt: data?.expiresAt || new Date().toISOString(), // Ensure valid ISO string
+        responseDelayMs: MAX_SAFE_RESPONSE_DELAY_MS + 5000,
+      };
+      webhookManager.addWebhookForTest(slowWebhookId, modifiedData);
 
-    const startTime = Date.now();
-    const res = await appClient
-      .post(`/webhook/${slowWebhookId}`)
-      .send({ test: "delay" });
+      const startTime = Date.now();
+      const res = await appClient
+        .post(`/webhook/${slowWebhookId}`)
+        .send({ test: "delay" });
 
-    const duration = Date.now() - startTime;
+      const duration = Date.now() - startTime;
 
-    expect(res.statusCode).toBe(200);
-    // Should be capped at 10s
-    expect(duration).toBeGreaterThanOrEqual(10000);
-    // Allow more overhead for test environment (was 13000)
-    // 15000 is the uncapped delay, so anything < 14500 proves clamping happened
-    expect(duration).toBeLessThan(14500);
-  }, 16000);
+      expect(res.statusCode).toBe(200);
+      // Should be capped at 10s (MAX_SAFE_RESPONSE_DELAY_MS)
+      expect(duration).toBeGreaterThanOrEqual(MAX_SAFE_RESPONSE_DELAY_MS);
+      // Allow more overhead for test environment (was 13000)
+      // 15000 is the uncapped delay, so anything < 14500 proves clamping happened
+      expect(duration).toBeLessThan(MAX_SAFE_RESPONSE_DELAY_MS + 4500);
+    },
+    MAX_SAFE_RESPONSE_DELAY_MS + 6000,
+  );
 
   test("Should reject unidentifiable IPs with 400 Bad Request", async () => {
     // We use our test hook to simulate a request where the IP cannot be identified

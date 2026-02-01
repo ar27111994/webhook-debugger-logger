@@ -99,13 +99,17 @@ export class LoggerMiddleware {
     this.#webhookManager = webhookManager;
     this.#onEvent = onEvent;
 
+    // Initialize private logger FIRST (required by #refreshCompilations)
+    this.#log = createChildLogger({ component: "LoggerMiddleware" });
+    this.#serializeError = serializeErrorUtil;
+
     // Bind methods where necessary (middleware is used as value)
     this.middleware = this.middleware.bind(this);
     this.ingestMiddleware = this.ingestMiddleware.bind(this);
     /** @type {any} */ (this.middleware).updateOptions =
       this.updateOptions.bind(this);
 
-    // Initial compilation
+    // Initial compilation (uses #log internally)
     const options = parseWebhookOptions(rawOptions);
     this.#refreshCompilations(options);
     /** @type {LoggerOptions} */
@@ -113,10 +117,6 @@ export class LoggerMiddleware {
 
     /** @type {ForwardingService} */
     this.#forwardingService = forwardingService || new ForwardingService();
-
-    // Initialize private logger
-    this.#log = createChildLogger({ component: "LoggerMiddleware" });
-    this.#serializeError = serializeErrorUtil;
   }
 
   /**

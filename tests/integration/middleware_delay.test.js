@@ -1,21 +1,24 @@
 import { jest, describe, test, expect, afterEach } from "@jest/globals";
-import { useConsoleSpy } from "../setup/helpers/test-lifecycle.js";
+import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
 import { createMiddlewareTestContext } from "../setup/helpers/middleware-test-utils.js";
-import { useFakeTimers } from "../setup/helpers/test-lifecycle.js";
+import {
+  useFakeTimers,
+  useMockCleanup,
+} from "../setup/helpers/test-lifecycle.js";
 
 /**
  * @typedef {import('../../src/webhook_manager.js').WebhookData} WebhookData
  */
 
-import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
-await setupCommonMocks({ axios: true, apify: true });
+// Mock logger and other dependencies before importing
+await setupCommonMocks({ axios: true, apify: true, logger: true });
 
 const { MAX_SAFE_RESPONSE_DELAY_MS: MAX_RESPONSE_DELAY_MS } =
   await import("../../src/consts.js");
 
 describe("Logger Middleware - Response Delay", () => {
   useFakeTimers();
-  useConsoleSpy("warn");
+  useMockCleanup();
 
   afterEach(() => {
     jest.useRealTimers();
@@ -37,7 +40,8 @@ describe("Logger Middleware - Response Delay", () => {
     await middlewarePromise;
 
     expect(ctx.res.statusCode).toBe(200);
-    expect(console.warn).not.toHaveBeenCalled();
+    // No warning should be logged for delay under limit
+    expect(loggerMock.warn).not.toHaveBeenCalled();
   });
 
   test("should cap delay and warn if requested amount exceeds limit (via override)", async () => {
@@ -64,10 +68,10 @@ describe("Logger Middleware - Response Delay", () => {
 
     expect(ctx.res.statusCode).toBe(200);
 
-    // With run-to-completion semantics for promises + fake timers,
-    // ensure all microtasks are flushed.
-    expect(console.warn).toHaveBeenCalledWith(
-      expect.stringContaining("Clamping to limit"),
+    // Source uses structured pino logging for clamping warnings
+    expect(loggerMock.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "responseDelayMs" }),
+      expect.stringContaining("exceeds safe max"),
     );
   });
 });

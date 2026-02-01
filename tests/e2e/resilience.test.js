@@ -7,14 +7,11 @@ import {
   afterAll,
 } from "@jest/globals";
 import { sleep, assertType } from "../setup/helpers/test-utils.js";
-import {
-  useMockCleanup,
-  useConsoleSpy,
-} from "../setup/helpers/test-lifecycle.js";
+import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 
 // Mock Apify and axios using shared components
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
-await setupCommonMocks({ axios: true, apify: true });
+await setupCommonMocks({ axios: true, apify: true, logger: true });
 
 const { createDatasetMock } = await import("../setup/helpers/shared-mocks.js");
 
@@ -22,6 +19,7 @@ const { setupTestApp } = await import("../setup/helpers/app-utils.js");
 const { webhookManager } = await import("../../src/main.js");
 const axios = (await import("axios")).default;
 const { Actor } = await import("apify");
+import { logRepository } from "../../src/repositories/LogRepository.js";
 
 /**
  * @typedef {import("../setup/helpers/app-utils.js").AppClient} AppClient
@@ -36,8 +34,6 @@ describe("Resilience & Retry Tests", () => {
   let appClient;
   /** @type {TeardownApp} */
   let teardownApp;
-
-  useConsoleSpy("log", "warn", "error");
 
   beforeAll(async () => {
     // Disable logs for cleaner output
@@ -66,6 +62,18 @@ describe("Resilience & Retry Tests", () => {
       jest
         .mocked(Actor.openDataset)
         .mockResolvedValue(createDatasetMock([mockItem]));
+
+      await logRepository.insertLog({
+        ...mockItem,
+        timestamp: new Date().toISOString(),
+        requestId: "req_retry",
+        remoteIp: "127.0.0.1",
+        query: {},
+        contentType: "application/json",
+        size: 2,
+        statusCode: 200,
+        processingTime: 10,
+      });
 
       // Mock axios to fail twice then succeed
       jest
@@ -99,6 +107,18 @@ describe("Resilience & Retry Tests", () => {
         .mocked(Actor.openDataset)
         .mockResolvedValue(createDatasetMock([mockItem]));
 
+      await logRepository.insertLog({
+        ...mockItem,
+        timestamp: new Date().toISOString(),
+        requestId: "req_fail",
+        remoteIp: "127.0.0.1",
+        query: {},
+        contentType: "application/json",
+        size: 2,
+        statusCode: 200,
+        processingTime: 10,
+      });
+
       // Always fail
       jest.mocked(axios).mockRejectedValue({ code: "ECONNABORTED" });
 
@@ -123,6 +143,18 @@ describe("Resilience & Retry Tests", () => {
       jest
         .mocked(Actor.openDataset)
         .mockResolvedValue(createDatasetMock([mockItem]));
+
+      await logRepository.insertLog({
+        ...mockItem,
+        timestamp: new Date().toISOString(),
+        requestId: "req_generic",
+        remoteIp: "127.0.0.1",
+        query: {},
+        contentType: "application/json",
+        size: 2,
+        statusCode: 200,
+        processingTime: 10,
+      });
 
       jest.mocked(axios).mockRejectedValueOnce(new Error("Generic Failure"));
 

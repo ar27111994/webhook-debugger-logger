@@ -10,17 +10,29 @@ import {
 import { OFFLOAD_MARKER_SYNC } from "../../src/utils/storage_helper.js";
 
 // Setup mocks before imports
-await import("../setup/helpers/mock-setup.js");
+import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
+await setupCommonMocks({ apify: true });
 
 // Use app helper which handles initialization
 const { setupTestApp } = await import("../setup/helpers/app-utils.js");
 const { webhookManager } = await import("../../src/main.js");
 const { Actor } = await import("apify");
+import { createKeyValueStoreMock } from "../setup/helpers/shared-mocks.js";
 import { logRepository } from "../../src/repositories/LogRepository.js";
+import { assertType } from "../setup/helpers/test-utils.js";
+
+/**
+ * @typedef {import('../setup/helpers/app-utils.js').AppClient} AppClient
+ * @typedef {import('../setup/helpers/app-utils.js').TeardownApp} TeardownApp
+ * @typedef {import('../setup/helpers/shared-mocks.js').KeyValueStoreMock} KeyValueStoreMock
+ */
 
 describe("GET /logs/:logId/payload", () => {
+  /** @type {AppClient} */
   let appClient;
+  /** @type {TeardownApp} */
   let teardownApp;
+  /** @type {KeyValueStoreMock} */
   let kvStoreMock;
 
   beforeAll(async () => {
@@ -30,15 +42,13 @@ describe("GET /logs/:logId/payload", () => {
     teardownApp = setup.teardownApp;
 
     // Setup KV Mock
-    kvStoreMock = {
-      setValue: jest.fn(),
-      getPublicUrl: jest.fn().mockReturnValue("https://example.com/kvs/mylog"),
-      getValue: jest.fn(),
-    };
+    kvStoreMock = createKeyValueStoreMock();
     // Mock Actor.openKeyValueStore to return our mock
     // We use spyOn if it's already defined/mocked, or just overwrite if it's a configurable mock
     // Since Actor is mocked via unstable_mockModule in mock-setup, it's a Jest mock object.
-    Actor.openKeyValueStore.mockResolvedValue(kvStoreMock);
+    jest
+      .mocked(Actor.openKeyValueStore)
+      .mockResolvedValue(assertType(kvStoreMock));
   });
 
   afterAll(async () => {
@@ -47,8 +57,6 @@ describe("GET /logs/:logId/payload", () => {
 
   afterEach(() => {
     jest.clearAllMocks();
-    // Reset specific mocks if needed, but clearAllMocks handles counts
-    // We need to ensure we don't break Actor mock for other tests if this was a suite, but it's isolated file.
   });
 
   it("should return 404 for non-existent log", async () => {
@@ -61,11 +69,18 @@ describe("GET /logs/:logId/payload", () => {
 
   it("should return 404 if log belongs to invalid webhook", async () => {
     jest.spyOn(webhookManager, "isValid").mockReturnValue(false);
-    jest.spyOn(logRepository, "getLogById").mockResolvedValue({
-      id: "123",
-      webhookId: "invalid-webhook",
-      body: "some body",
-    });
+    jest.spyOn(logRepository, "getLogById").mockResolvedValue(
+      assertType({
+        id: "123",
+        webhookId: "invalid-webhook",
+        body: "some body",
+        timestamp: new Date().toISOString(),
+        method: "POST",
+        headers: {},
+        query: {},
+        statusCode: 200,
+      }),
+    );
 
     const response = await appClient.get("/logs/123/payload");
     expect(response.status).toBe(404);
@@ -74,12 +89,19 @@ describe("GET /logs/:logId/payload", () => {
 
   it("should return direct payload if not offloaded", async () => {
     jest.spyOn(webhookManager, "isValid").mockReturnValue(true);
-    jest.spyOn(logRepository, "getLogById").mockResolvedValue({
-      id: "123",
-      webhookId: "valid-webhook",
-      body: { foo: "bar" },
-      contentType: "application/json",
-    });
+    jest.spyOn(logRepository, "getLogById").mockResolvedValue(
+      assertType({
+        id: "123",
+        webhookId: "valid-webhook",
+        body: { foo: "bar" },
+        contentType: "application/json",
+        timestamp: new Date().toISOString(),
+        method: "POST",
+        headers: {},
+        query: {},
+        statusCode: 200,
+      }),
+    );
 
     const response = await appClient.get("/logs/123/payload");
     expect(response.status).toBe(200);
@@ -93,16 +115,23 @@ describe("GET /logs/:logId/payload", () => {
     const kvsKey = "payload_key_123";
     const realPayload = { massive: "data" };
 
-    jest.spyOn(logRepository, "getLogById").mockResolvedValue({
-      id: "124",
-      webhookId: "valid-webhook",
-      body: {
-        data: OFFLOAD_MARKER_SYNC,
-        key: kvsKey,
-        kvsUrl: "http://example.com",
-      },
-      contentType: "application/json",
-    });
+    jest.spyOn(logRepository, "getLogById").mockResolvedValue(
+      assertType({
+        id: "124",
+        webhookId: "valid-webhook",
+        body: {
+          data: OFFLOAD_MARKER_SYNC,
+          key: kvsKey,
+          kvsUrl: "http://example.com",
+        },
+        contentType: "application/json",
+        timestamp: new Date().toISOString(),
+        method: "POST",
+        headers: {},
+        query: {},
+        statusCode: 200,
+      }),
+    );
 
     kvStoreMock.getValue.mockResolvedValue(realPayload);
 
