@@ -22,6 +22,26 @@ import { apifyMock } from "./shared-mocks.js";
  * @property {boolean} [dns=false] - Register dns/promises mock
  * @property {boolean} [ssrf=false] - Register SSRF utils mock
  * @property {boolean} [logger=false] - Register structured logger mock
+ * @property {boolean} [express=false] - Register Express mock
+ * @property {boolean} [db=false] - Register DuckDB mock
+ * @property {boolean} [sync=false] - Register SyncService mock
+ * @property {boolean} [loggerMiddleware=false] - Register LoggerMiddleware mock
+ * @property {boolean} [appState=false] - Register AppState mock
+ * @property {boolean} [hotReload=false] - Register HotReloadManager mock
+ * @property {boolean} [bootstrap=false] - Register Bootstrap utils mock
+ * @property {boolean} [routes=false] - Register Routes factories mock
+ * @property {boolean} [middleware=false] - Register Middleware factories mock
+ * @property {boolean} [consts=false] - Register Consts mock
+ * @property {boolean} [webhookManager=false] - Register WebhookManager mock
+ * @property {boolean} [auth=false] - Register Auth util mock
+ * @property {boolean} [signature=false] - Register Signature util mock
+ * @property {boolean} [rateLimit=false] - Register WebhookRateLimiter util mock
+ * @property {boolean} [storage=false] - Register Storage Helper util mock
+ * @property {boolean} [config=false] - Register Config util mock
+ * @property {boolean} [alerting=false] - Register Alerting util mock
+ * @property {boolean} [events=false] - Register Events util mock
+ * @property {boolean} [vm=false] - Register VM module mock
+ * @property {boolean} [repositories=false] - Register LogRepository mock
  */
 
 /**
@@ -72,6 +92,27 @@ export async function setupCommonMocks(options = {}) {
     dns = false,
     ssrf = false,
     logger = false,
+    express = false,
+    db = false,
+    sync = false,
+    // New Mocks
+    loggerMiddleware = false,
+    appState = false,
+    hotReload = false,
+    bootstrap = false,
+    routes = false,
+    middleware = false,
+    consts = false,
+    webhookManager = false,
+    auth = false,
+    signature = false,
+    rateLimit = false,
+    storage = false,
+    config = false,
+    alerting = false,
+    events = false,
+    vm = false,
+    repositories = false,
   } = options;
 
   if (axios) {
@@ -136,5 +177,162 @@ export async function setupCommonMocks(options = {}) {
         FATAL: "fatal",
       },
     }));
+  }
+
+  if (express) {
+    jest.unstable_mockModule("express", async () => {
+      const { expressMock } = await import("./shared-mocks.js");
+      return { default: expressMock };
+    });
+  }
+
+  if (db) {
+    jest.unstable_mockModule("../../../src/db/duckdb.js", async () => {
+      const { duckDbMock } = await import("./shared-mocks.js");
+      return duckDbMock;
+    });
+  }
+
+  if (sync) {
+    jest.unstable_mockModule(
+      "../../../src/services/SyncService.js",
+      async () => {
+        const { syncServiceMock } = await import("./shared-mocks.js");
+        return { SyncService: jest.fn(() => syncServiceMock) };
+      },
+    );
+  }
+
+  if (loggerMiddleware) {
+    jest.unstable_mockModule("../../../src/logger_middleware.js", async () => {
+      const { loggerMiddlewareMock } = await import("./shared-mocks.js");
+      return { LoggerMiddleware: jest.fn(() => loggerMiddlewareMock) };
+    });
+  }
+
+  if (appState) {
+    jest.unstable_mockModule("../../../src/utils/app_state.js", async () => {
+      const { appStateMock } = await import("./shared-mocks.js");
+      return { AppState: jest.fn(() => appStateMock) };
+    });
+  }
+
+  if (hotReload) {
+    jest.unstable_mockModule(
+      "../../../src/utils/hot_reload_manager.js",
+      async () => {
+        const { hotReloadManagerMock } = await import("./shared-mocks.js");
+        return {
+          HotReloadManager: jest.fn(() => hotReloadManagerMock),
+        };
+      },
+    );
+  }
+
+  if (bootstrap) {
+    jest.unstable_mockModule("../../../src/utils/bootstrap.js", async () => {
+      const { bootstrapMock } = await import("./shared-mocks.js");
+      return bootstrapMock;
+    });
+  }
+
+  if (routes) {
+    jest.unstable_mockModule("../../../src/routes/index.js", async () => {
+      const { routesMock } = await import("./shared-mocks.js");
+      return routesMock;
+    });
+  }
+
+  if (middleware) {
+    jest.unstable_mockModule("../../../src/middleware/index.js", async () => {
+      const { middlewareFactoriesMock } = await import("./shared-mocks.js");
+      return middlewareFactoriesMock;
+    });
+  }
+
+  if (consts) {
+    jest.unstable_mockModule("../../../src/consts.js", async () => {
+      const { constsMock } = await import("./shared-mocks.js");
+      return constsMock;
+    });
+  }
+
+  if (webhookManager) {
+    jest.unstable_mockModule("../../../src/webhook_manager.js", async () => {
+      const { webhookManagerMock } = await import("./shared-mocks.js");
+      return { WebhookManager: jest.fn(() => webhookManagerMock) };
+    });
+  }
+
+  if (auth) {
+    jest.unstable_mockModule("../../../src/utils/auth.js", async () => {
+      const { authMock } = await import("./shared-mocks.js");
+      return authMock;
+    });
+  }
+
+  if (signature) {
+    jest.unstable_mockModule("../../../src/utils/signature.js", async () => {
+      const { signatureMock } = await import("./shared-mocks.js");
+      return signatureMock;
+    });
+  }
+
+  if (rateLimit) {
+    jest.unstable_mockModule(
+      "../../../src/utils/webhook_rate_limiter.js",
+      async () => {
+        const { webhookRateLimiterMock } = await import("./shared-mocks.js");
+        return webhookRateLimiterMock;
+      },
+    );
+  }
+
+  if (storage) {
+    jest.unstable_mockModule(
+      "../../../src/utils/storage_helper.js",
+      async () => {
+        const { storageHelperMock } = await import("./shared-mocks.js");
+        return storageHelperMock;
+      },
+    );
+  }
+
+  if (config) {
+    jest.unstable_mockModule("../../../src/utils/config.js", async () => {
+      const { configMock } = await import("./shared-mocks.js");
+      return configMock;
+    });
+  }
+
+  if (alerting) {
+    jest.unstable_mockModule("../../../src/utils/alerting.js", async () => {
+      const { alertingMock } = await import("./shared-mocks.js");
+      return alertingMock;
+    });
+  }
+
+  if (events) {
+    jest.unstable_mockModule("../../../src/utils/events.js", async () => {
+      const { eventsMock } = await import("./shared-mocks.js");
+      return eventsMock;
+    });
+  }
+
+  if (vm) {
+    jest.unstable_mockModule("vm", async () => {
+      const { vmMock } = await import("./shared-mocks.js");
+      return vmMock;
+    });
+  }
+
+  if (repositories) {
+    jest.unstable_mockModule(
+      "../../../src/repositories/LogRepository.js",
+      async () => {
+        const { logRepositoryMock } = await import("./shared-mocks.js");
+        return { logRepository: logRepositoryMock };
+      },
+    );
   }
 }

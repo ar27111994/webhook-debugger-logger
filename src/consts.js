@@ -59,6 +59,7 @@ export const DNS_RESOLUTION_TIMEOUT_MS = getInt(
   5000,
 );
 export const MAX_SSE_CLIENTS = getInt("MAX_SSE_CLIENTS", 100);
+export const RETRY_BASE_DELAY_MS = getInt("RETRY_BASE_DELAY_MS", 1000);
 
 export const MAX_BULK_CREATE = getInt("MAX_BULK_CREATE", 1000);
 export const MAX_ITEMS_FOR_BATCH = getInt("MAX_ITEMS_FOR_BATCH", 1000);

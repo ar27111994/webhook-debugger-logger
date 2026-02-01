@@ -27,6 +27,7 @@ jest.unstable_mockModule("../../src/consts.js", () => ({
   DEFAULT_FORWARD_RETRIES: 3,
   MAX_SAFE_FORWARD_RETRIES: 10,
   TRANSIENT_ERROR_CODES: ["ECONNABORTED", "ETIMEDOUT", "ENETUNREACH"],
+  RETRY_BASE_DELAY_MS: 1, // Fast retries for testing
 }));
 
 // Import class under test

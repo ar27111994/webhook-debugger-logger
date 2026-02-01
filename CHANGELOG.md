@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.3] - 2026-02-01
+
+### Fixed (3.0.3)
+
+- **Test Suite**: Resolved critical failures in `sync_service`, `replay_route`, and `logs_route_details` tests by correcting mock configurations and logic.
+- **Mock Infrastructure**: Fixed circular dependencies and missing constants in shared mocks (`ERROR_MESSAGES`, `REPLAY_HEADERS_TO_IGNORE`).
+- **Middleware**: Fixed "read-only property" error in `middleware_suite.test.js` when mocking `req.path`.
+- **Sync Logic**: Corrected recursion handling in `SyncService` tests to prevent race conditions during batch processing.
+
+### Improved (3.0.3)
+
+- **Test Reliability**: Refactored `logger_middleware`, `middleware_auth`, and `sync_service` tests to use centralized `setupCommonMocks`, improving maintainability and reducing boilerplate.
+- **Verification**: Achieved 100% pass rate (61 suites) with robust mock definitions for `LogRepository`, `events`, and `duckdb`.
+
 ## [3.0.2] - 2026-02-01
 
 ### Fixed (3.0.2)

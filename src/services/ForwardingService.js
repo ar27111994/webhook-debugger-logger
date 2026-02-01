@@ -11,6 +11,7 @@ import {
   FORWARD_TIMEOUT_MS,
   DEFAULT_FORWARD_RETRIES,
   TRANSIENT_ERROR_CODES,
+  RETRY_BASE_DELAY_MS,
 } from "../consts.js";
 import { createChildLogger, serializeError } from "../utils/logger.js";
 
@@ -86,7 +87,7 @@ export class ForwardingService {
         const isTransient = TRANSIENT_ERROR_CODES.includes(
           axiosError.code || "",
         );
-        const delay = 1000 * Math.pow(2, attempt - 1);
+        const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
 
         log.error(
           {

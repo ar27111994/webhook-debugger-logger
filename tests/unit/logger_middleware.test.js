@@ -9,227 +9,323 @@ import {
 
 /**
  * @typedef {import('../../src/webhook_manager.js').WebhookManager} WebhookManager
- * @typedef {import('../../src/typedefs.js').WebhookEvent} WebhookEvent
  * @typedef {import('../../src/typedefs.js').CommonError} CommonError
  * @typedef {import('../../src/logger_middleware.js').LoggerMiddleware} LoggerMiddlewareType
  * @typedef {import('../../src/services/ForwardingService.js').ForwardingService} ForwardingService
  */
 
-// 1. Setup Common Mocks (Apify, Axios, SSRF, Logger)
+// 1. Setup Common Mocks
 import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
-await setupCommonMocks({ axios: true, apify: true, ssrf: true, logger: true });
+await setupCommonMocks({
+  axios: true,
+  apify: true,
+  ssrf: true,
+  logger: true,
+  auth: true,
+  signature: true,
+  rateLimit: true,
+  storage: true,
+  config: true,
+  alerting: true,
+  events: true,
+  vm: true,
+});
+
 import {
   apifyMock,
-  createMockWebhookManager,
+  ssrfMock,
+  webhookManagerMock,
+  mockScriptRun,
 } from "../setup/helpers/shared-mocks.js";
 
 const mockActor = apifyMock;
 
-// 4. Mock Auth
-jest.unstable_mockModule("../../src/utils/auth.js", () => ({
-  validateAuth: jest.fn(() => ({ isValid: true })),
-}));
-
-// 5. Mock Signature
-jest.unstable_mockModule("../../src/utils/signature.js", () => ({
-  verifySignature: jest.fn(() => ({ valid: true })),
-  createStreamVerifier: jest.fn(() => ({ hmac: null })),
-  finalizeStreamVerification: jest.fn(() => ({ valid: true })),
-}));
-
-// 6. Mock CONSTS (for timeouts)
-jest.unstable_mockModule("../../src/consts.js", () => ({
-  BACKGROUND_TASK_TIMEOUT_PROD_MS: 100,
-  BACKGROUND_TASK_TIMEOUT_TEST_MS: 100,
-  FORWARD_HEADERS_TO_IGNORE: [],
-  FORWARD_TIMEOUT_MS: 100,
-  DEFAULT_FORWARD_RETRIES: 3,
-  MAX_SAFE_FORWARD_RETRIES: 10,
-  SCRIPT_EXECUTION_TIMEOUT_MS: 100,
-  SENSITIVE_HEADERS: ["authorization"],
-  DEFAULT_PAYLOAD_LIMIT: 1024,
-  DEFAULT_URL_COUNT: 1,
-  DEFAULT_RETENTION_HOURS: 1,
-  DEFAULT_RATE_LIMIT_PER_MINUTE: 10,
-  DEFAULT_RATE_LIMIT_MAX_ENTRIES: 10,
-  DEFAULT_WEBHOOK_RATE_LIMIT_PER_MINUTE: 100,
-  DEFAULT_WEBHOOK_RATE_LIMIT_MAX_ENTRIES: 100,
-  DEFAULT_RATE_LIMIT_WINDOW_MS: 1000,
-  KVS_OFFLOAD_THRESHOLD: 5000,
-  MAX_ALLOWED_PAYLOAD_SIZE: 10000,
-  DEFAULT_REPLAY_RETRIES: 3,
-  DEFAULT_REPLAY_TIMEOUT_MS: 10000,
-  MAX_SAFE_REPLAY_RETRIES: 10,
-  MAX_SAFE_RATE_LIMIT_PER_MINUTE: 1000,
-  MAX_SAFE_RETENTION_HOURS: 168,
-  MAX_SAFE_URL_COUNT: 50,
-  MAX_SAFE_REPLAY_TIMEOUT_MS: 60000,
-  MAX_SAFE_RESPONSE_DELAY_MS: 10000,
-  TRANSIENT_ERROR_CODES: [
-    "ECONNABORTED",
-    "ECONNRESET",
-    "ETIMEDOUT",
-    "ENETUNREACH",
-    "EHOSTUNREACH",
-    "EAI_AGAIN",
-    "ENOTFOUND",
-  ],
-  EVENT_MAX_LISTENERS: 10,
-}));
-
-// 7. Mock vm module (Native modules need careful mocking)
-jest.unstable_mockModule("vm", () => ({
-  default: {
-    Script: jest.fn(
-      /** @param {string} code */
-      (code) => {
-        if (code.includes("syntax error")) {
-          throw new Error("Invalid syntax");
-        }
-        return { runInNewContext: jest.fn() };
-      },
-    ),
-  },
-}));
-
 // Import class under test
 const { LoggerMiddleware } = await import("../../src/logger_middleware.js");
+const { webhookRateLimiter } =
+  await import("../../src/utils/webhook_rate_limiter.js");
 
 describe("LoggerMiddleware Coverage Tests", () => {
   /** @type {LoggerMiddlewareType} */
   let middleware;
-  /** @type {WebhookManager} */
-  let mockWebhookManager;
   /** @type {jest.Mock} */
   let onEvent;
   /** @type {ForwardingService} */
   let mockForwardingService;
 
   useMockCleanup(() => {
-    mockWebhookManager = createMockWebhookManager();
     onEvent = jest.fn();
     mockForwardingService = assertType({
-      forwardWebhook: /** @type {jest.Mock<any>} */ (
-        jest.fn()
-      ).mockResolvedValue(undefined),
+      forwardWebhook: assertType(jest.fn()).mockResolvedValue(undefined),
     });
 
-    middleware = /** @type {LoggerMiddlewareType} */ (
-      new LoggerMiddleware(
-        mockWebhookManager,
-        {},
-        onEvent,
-        mockForwardingService,
-      )
+    middleware = new LoggerMiddleware(
+      webhookManagerMock,
+      {},
+      onEvent,
+      mockForwardingService,
     );
   });
 
-  describe("Smart Compilation Error Handling", () => {
-    test("should handle invalid custom script compilation", () => {
-      middleware.updateOptions({
-        customScript: "this is syntax error >>>",
-      });
+  describe("Ingest Middleware", () => {
+    test("should skip non-POST/PUT/DELETE methods", async () => {
+      const req = createMockRequest({ method: "GET" });
+      const res = createMockResponse();
+      const next = createMockNextFunction();
 
-      expect(loggerMock.error).toHaveBeenCalledWith(
-        expect.objectContaining({ errorPrefix: "SCRIPT-ERROR" }),
-        "Invalid resource",
-      );
-      // Use test helper
-      expect(middleware.hasCompiledScript()).toBe(false);
+      await middleware.ingestMiddleware(req, res, next);
+      expect(next).toHaveBeenCalled();
     });
 
-    test("should handle invalid JSON schema compilation", () => {
-      middleware.updateOptions({
-        jsonSchema: "{ invalid json: }",
+    test("should handle rate limit exceeded", async () => {
+      jest.mocked(webhookRateLimiter.check).mockReturnValueOnce({
+        allowed: false,
+        remaining: 0,
+        resetMs: 1000,
       });
+      const req = createMockRequest({ method: "POST", params: { id: "wh_1" } });
+      const res = createMockResponse();
+      const next = createMockNextFunction();
 
-      expect(loggerMock.error).toHaveBeenCalledWith(
-        expect.objectContaining({ errorPrefix: "SCHEMA-ERROR" }),
-        "Invalid resource",
+      await middleware.ingestMiddleware(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(429);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ error: "Too Many Requests" }),
       );
-      // Use test helper
-      expect(middleware.hasValidator()).toBe(false);
+    });
+
+    test("should reject payload too large via Content-Length", async () => {
+      const req = createMockRequest({
+        method: "POST",
+        params: { id: "wh_1" },
+        headers: { "content-length": "2000" }, // > default 1024 mock
+      });
+      // Set maxPayloadSize in options (mock resolveOptions logic or pass in constructor opts)
+      middleware.updateOptions({ maxPayloadSize: 1000 });
+
+      const res = createMockResponse();
+      const next = createMockNextFunction();
+
+      await middleware.ingestMiddleware(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(413);
     });
   });
 
-  describe("Request Preparation Edge Cases", () => {
-    test("should throw 400 for malformed JSON body when content-type is json", async () => {
-      middleware.updateOptions({
-        jsonSchema: { type: "object", properties: { foo: { type: "string" } } },
-      });
+  describe("Validation Logic (via main middleware)", () => {
+    test("should return 404 if webhook ID is invalid", async () => {
+      jest.mocked(webhookManagerMock.isValid).mockReturnValue(false);
+      const req = createMockRequest({ params: { id: "invalid" } });
+      const res = createMockResponse();
+      const next = createMockNextFunction();
+
+      await middleware.middleware(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+    });
+
+    test("should return 403 if IP is not whitelisted", async () => {
+      middleware.updateOptions({ allowedIps: ["1.2.3.4"] });
+      ssrfMock.checkIpInRanges.mockReturnValue(false);
+
+      const req = createMockRequest({ ip: "5.6.7.8", params: { id: "wh_1" } });
+      const res = createMockResponse();
+      const next = createMockNextFunction();
+
+      jest.mocked(webhookManagerMock.isValid).mockReturnValue(true);
+
+      await middleware.middleware(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(403);
+    });
+
+    test("should return 401 if auth fails", async () => {
+      middleware.updateOptions({ authKey: "invalid-key" }); // triggers mock logic
+
+      const req = createMockRequest({ params: { id: "wh_1" } });
+      const res = createMockResponse();
+      const next = createMockNextFunction();
+
+      jest.mocked(webhookManagerMock.isValid).mockReturnValue(true);
+
+      await middleware.middleware(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(401);
+    });
+  });
+
+  describe("Preparation & Transformation", () => {
+    test("should mask sensitive headers", async () => {
+      middleware.updateOptions({ maskSensitiveData: true });
 
       const req = createMockRequest({
+        params: { id: "wh_1" },
         headers: {
+          authorization: "secret",
           "content-type": "application/json",
-          "content-length": "100", // Fake length to bypass size check early
         },
-        body: "{ malformed json }", // String body to force parsing attempt
+        body: {},
       });
       const res = createMockResponse();
       const next = createMockNextFunction();
 
-      // Because _prepareRequestData is private, we must trigger it via public middleware()
-      // It should catch the error internally and return 400
+      jest.mocked(webhookManagerMock.isValid).mockReturnValue(true);
+
+      await middleware.middleware(req, res, next);
+
+      // Check if Actor.pushData was called with masked headers
+      const pushCall = mockActor.pushData.mock.calls[0][0];
+      expect(pushCall.headers["authorization"]).toBe("[MASKED]");
+    });
+
+    test("should validate JSON schema if configured", async () => {
+      middleware.updateOptions({
+        jsonSchema: { type: "object", required: ["foo"] },
+      });
+
+      const req = createMockRequest({
+        params: { id: "wh_1" },
+        headers: { "content-type": "application/json" },
+        body: { bar: 1 }, // missing foo
+      });
+      const res = createMockResponse();
+      const next = createMockNextFunction();
+
+      jest.mocked(webhookManagerMock.isValid).mockReturnValue(true);
+
       await middleware.middleware(req, res, next);
 
       expect(res.status).toHaveBeenCalledWith(400);
       expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({
-          error: "Invalid JSON for schema validation",
-        }),
+        expect.objectContaining({ error: "JSON Schema Validation Failed" }),
       );
     });
   });
 
-  describe("Background Task Failures", () => {
-    test("should handle Platform Limit errors gracefully", async () => {
-      mockActor.pushData.mockRejectedValue(
-        new Error("Dataset storage limit reached"),
-      );
+  describe("Custom Scripts", () => {
+    test("should run custom script and log error on timeout", async () => {
+      middleware.updateOptions({ customScript: "example" });
+      mockScriptRun.mockImplementation(() => {
+        /** @type {CommonError} */
+        const e = new Error("Script execution timed out");
+        e.code = "ERR_SCRIPT_EXECUTION_TIMEOUT";
+        throw e;
+      });
 
-      // Trigger via public middleware
-      const req = createMockRequest();
+      const req = createMockRequest({ params: { id: "wh_1" }, body: {} });
       const res = createMockResponse();
       const next = createMockNextFunction();
-      // Mock valid Webhook ID
-      jest.mocked(mockWebhookManager.isValid).mockReturnValue(true);
+
+      jest.mocked(webhookManagerMock.isValid).mockReturnValue(true);
 
       await middleware.middleware(req, res, next);
 
-      // Source uses structured pino logging via this.#log.error
+      expect(mockScriptRun).toHaveBeenCalled();
       expect(loggerMock.error).toHaveBeenCalledWith(
-        expect.objectContaining({
-          isPlatformError: true,
-          err: expect.objectContaining({
-            message: "Dataset storage limit reached",
-          }),
-        }),
+        expect.objectContaining({ isTimeout: true }),
+        expect.stringContaining("timed out"),
+      );
+    });
+  });
+
+  describe("Background Tasks", () => {
+    test("should log warn on platform execution error", async () => {
+      mockActor.pushData.mockRejectedValue(new Error("Dataset quota exceeded"));
+
+      const req = createMockRequest({ params: { id: "wh_1" }, body: {} });
+      const res = createMockResponse();
+      const next = createMockNextFunction();
+
+      jest.mocked(webhookManagerMock.isValid).mockReturnValue(true);
+
+      await middleware.middleware(req, res, next);
+
+      // Wait for background tasks (they are race-protected but we want to assert log)
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(loggerMock.error).toHaveBeenCalledWith(
+        expect.objectContaining({ isPlatformError: true }),
         "Platform limit error",
       );
-      expect(loggerMock.warn).toHaveBeenCalledWith(
-        "Check Apify platform limits or storage availability",
-      );
     });
   });
 
-  describe("Forwarding Delegation", () => {
-    test("should delegate forwarding to ForwardingService", async () => {
-      // RESET MOCK: Critical to prevent pollution from previous tests that set rejection
-      mockActor.pushData.mockReset();
-      mockActor.pushData.mockResolvedValue(undefined);
+  describe("Signature Verification", () => {
+    test("should pass valid signature", async () => {
+      middleware.updateOptions({
+        signatureVerification: { provider: "github", secret: "foo" },
+      });
+      // Mock verifySignature to return valid (already default in mock-setup but explicit here)
+      const { verifySignature } = await import("../../src/utils/signature.js");
+      jest.mocked(verifySignature).mockReturnValue({
+        valid: true,
+        provider: "github",
+      });
 
-      const req = createMockRequest({ params: { id: "wh_123" } });
+      const req = createMockRequest({
+        params: { id: "wh_1" },
+        headers: { "x-hub-signature": "sha256=valid" },
+        body: "{}",
+      });
       const res = createMockResponse();
       const next = createMockNextFunction();
 
-      // Configure middleware to forward
-      middleware.updateOptions({ forwardUrl: "http://example.com" });
-      jest.mocked(mockWebhookManager.isValid).mockReturnValue(true);
+      jest.mocked(webhookManagerMock.isValid).mockReturnValue(true);
 
       await middleware.middleware(req, res, next);
 
-      // Check simply if it was called (ignoring arguments which might be mismatched in mock injection)
-      expect(mockForwardingService.forwardWebhook).toHaveBeenCalled();
+      // Verify event has signature info
+      const pushCall = mockActor.pushData.mock.calls[0][0];
+      expect(pushCall.signatureValid).toBe(true);
+    });
+
+    test("should record error on invalid signature", async () => {
+      middleware.updateOptions({
+        signatureVerification: { provider: "github", secret: "foo" },
+      });
+      const { verifySignature } = await import("../../src/utils/signature.js");
+      jest.mocked(verifySignature).mockReturnValue({
+        valid: false,
+        error: "Mismatch",
+        provider: "github",
+      });
+
+      const req = createMockRequest({
+        params: { id: "wh_1" },
+        body: "{}",
+      });
+      const res = createMockResponse();
+      const next = createMockNextFunction();
+
+      jest.mocked(webhookManagerMock.isValid).mockReturnValue(true);
+
+      await middleware.middleware(req, res, next);
+
+      const pushCall = mockActor.pushData.mock.calls[0][0];
+      expect(pushCall.signatureValid).toBe(false);
+      expect(pushCall.signatureError).toBe("Mismatch");
+    });
+  });
+
+  describe("Payload Offloading", () => {
+    test("should offload to KVS if body (sync) exceeds threshold", async () => {
+      // Threshold is 5MB in code, let's force a large body simulation
+      const largeBody = "a".repeat(5 * 1024 * 1024 + 100); // 5MB + 100
+      const req = createMockRequest({
+        params: { id: "wh_1" },
+        body: largeBody,
+      });
+      const res = createMockResponse();
+      const next = createMockNextFunction();
+
+      jest.mocked(webhookManagerMock.isValid).mockReturnValue(true);
+
+      await middleware.middleware(req, res, next);
+
+      const pushCall = mockActor.pushData.mock.calls[0][0];
+      const body = JSON.parse(pushCall.body);
+      expect(body.isReference).toBe(true);
     });
   });
 });

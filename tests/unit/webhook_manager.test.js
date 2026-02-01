@@ -6,23 +6,29 @@ import { jest, describe, test, expect, beforeEach } from "@jest/globals";
  */
 
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
+import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
+
 await setupCommonMocks({ apify: true });
 
 const { Actor } = await import("apify");
 const { WebhookManager } = await import("../../src/webhook_manager.js");
 
 describe("WebhookManager", () => {
+  useMockCleanup();
+
   /** @type {WebhookManager} */
   let webhookManager;
   /** @type {KeyValueStore} */
   let mockKvStore;
 
-  beforeEach(() => {
-    mockKvStore = /** @type {KeyValueStore} */ ({
-      getValue: /** @type {KeyValueStore['getValue']} */ (jest.fn()),
-      setValue: /** @type {KeyValueStore['setValue']} */ (jest.fn()),
-    });
-    jest.mocked(Actor.openKeyValueStore).mockResolvedValue(mockKvStore);
+  beforeEach(async () => {
+    // Reuse the global mock store provided by apifyMock
+    mockKvStore = await Actor.openKeyValueStore();
+
+    // Reset default implementations
+    jest.mocked(mockKvStore.getValue).mockReset().mockResolvedValue(null);
+    jest.mocked(mockKvStore.setValue).mockReset().mockResolvedValue(undefined);
+
     webhookManager = new WebhookManager();
   });
 
@@ -32,14 +38,11 @@ describe("WebhookManager", () => {
 
     await webhookManager.init();
 
-    await webhookManager.init();
-
     expect(webhookManager.webhookCount).toBe(1);
     expect(webhookManager.getWebhookData("wh_123")).toEqual(savedState.wh_123);
   });
 
   test("init() should handle corrupted or missing state gracefully", async () => {
-    jest.mocked(mockKvStore.getValue).mockResolvedValue(null);
     jest.mocked(mockKvStore.getValue).mockResolvedValue(null);
     await webhookManager.init();
     expect(webhookManager.webhookCount).toBe(0);
@@ -90,8 +93,6 @@ describe("WebhookManager", () => {
     });
 
     await webhookManager.init();
-    await webhookManager.cleanup();
-
     await webhookManager.cleanup();
 
     expect(webhookManager.hasWebhook("wh_past")).toBe(false);
@@ -205,6 +206,7 @@ describe("WebhookManager", () => {
     });
     // Should not throw
     await webhookManager.persist();
+    expect(jest.mocked(mockKvStore.setValue)).toHaveBeenCalled();
   });
 
   test("getWebhookData() should return undefined for non-existent ID", () => {
