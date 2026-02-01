@@ -3,9 +3,13 @@ import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 import { assertType, createMockRequest } from "../setup/helpers/test-utils.js";
 
 // 1. Setup Common Mocks (including logger for ForwardingService)
-import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
+import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
 await setupCommonMocks({ axios: true, apify: true, ssrf: true, logger: true });
-import { apifyMock, axiosMock } from "../setup/helpers/shared-mocks.js";
+import {
+  apifyMock,
+  axiosMock,
+  ssrfMock,
+} from "../setup/helpers/shared-mocks.js";
 
 const mockActor = apifyMock;
 const mockAxios = axiosMock;
@@ -18,7 +22,7 @@ const mockAxios = axiosMock;
 
 // Mock CONSTS
 jest.unstable_mockModule("../../src/consts.js", () => ({
-  FORWARD_HEADERS_TO_IGNORE: [],
+  FORWARD_HEADERS_TO_IGNORE: ["host", "content-length"],
   FORWARD_TIMEOUT_MS: 100,
   DEFAULT_FORWARD_RETRIES: 3,
   MAX_SAFE_FORWARD_RETRIES: 10,
@@ -35,6 +39,112 @@ describe("ForwardingService Tests", () => {
 
   useMockCleanup(() => {
     forwardingService = new ForwardingService();
+    mockAxios.post.mockResolvedValue({ status: 200 });
+    ssrfMock.validateUrlForSsrf.mockResolvedValue({
+      safe: true,
+      href: "http://target.com",
+      host: "target.com",
+    });
+  });
+
+  describe("Forwarding Logic", () => {
+    test("should validate URL via SSRF check", async () => {
+      /** @type {WebhookEvent} */
+      const event = assertType({ webhookId: "fw-1", id: "evt-1" });
+      const request = createMockRequest();
+
+      await forwardingService.forwardWebhook(
+        event,
+        request,
+        {},
+        "http://target.com",
+      );
+
+      expect(ssrfMock.validateUrlForSsrf).toHaveBeenCalledWith(
+        "http://target.com",
+      );
+    });
+
+    test("should abort if SSRF validation fails", async () => {
+      ssrfMock.validateUrlForSsrf.mockResolvedValue({
+        safe: false,
+        error: "Blocked IP",
+      });
+      /** @type {WebhookEvent} */
+      const event = assertType({ webhookId: "fw-2", id: "evt-2" });
+      const request = createMockRequest();
+
+      await forwardingService.forwardWebhook(
+        event,
+        request,
+        {},
+        "http://unsafe.com",
+      );
+
+      expect(mockAxios.post).not.toHaveBeenCalled();
+      expect(loggerMock.error).toHaveBeenCalledWith(
+        expect.objectContaining({ error: "Blocked IP" }),
+        "SSRF blocked forward URL",
+      );
+    });
+
+    test("should forward headers but ignore sensitive ones", async () => {
+      const request = createMockRequest({
+        headers: {
+          "content-type": "application/json",
+          "x-custom": "value",
+          host: "localhost", // Should be ignored
+          "content-length": "123", // Should be ignored
+        },
+        body: { data: 123 },
+      });
+      /** @type {WebhookEvent} */
+      const event = assertType({ webhookId: "fw-3", id: "evt-3" });
+
+      await forwardingService.forwardWebhook(
+        event,
+        request,
+        {},
+        "http://target.com",
+      );
+
+      expect(mockAxios.post).toHaveBeenCalledWith(
+        "http://target.com",
+        request.body,
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            "content-type": "application/json",
+            "x-custom": "value",
+            "X-Forwarded-By": "Apify-Webhook-Debugger",
+            host: "target.com", // Injected from SSRF result
+          }),
+        }),
+      );
+
+      const headers = assertType(mockAxios.post.mock.calls[0][2]).headers;
+      expect(headers).not.toHaveProperty("content-length");
+    });
+
+    test("should only send content-type if forwardHeaders is false", async () => {
+      const request = createMockRequest({
+        headers: {
+          "content-type": "application/json",
+          "x-custom": "value",
+        },
+      });
+      const event = assertType({ webhookId: "fw-4", id: "evt-4" });
+
+      await forwardingService.forwardWebhook(
+        event,
+        request,
+        { forwardHeaders: false },
+        "http://target.com",
+      );
+
+      const headers = assertType(mockAxios.post.mock.calls[0][2]).headers;
+      expect(headers).toHaveProperty("content-type", "application/json");
+      expect(headers).not.toHaveProperty("x-custom");
+    });
   });
 
   describe("Forwarding Retries & Failures", () => {

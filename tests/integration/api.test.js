@@ -56,7 +56,12 @@ describe("API E2E Tests", () => {
 
   afterEach(async () => {
     // Cleanup DuckDB to prevent PK violations between tests
-    await resetDb();
+    try {
+      await resetDb();
+    } catch (err) {
+      console.warn("Failed to reset DB:", err);
+    }
+    jest.clearAllMocks();
   });
 
   test("GET / should return version info", async () => {

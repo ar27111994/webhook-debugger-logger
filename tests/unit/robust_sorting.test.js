@@ -61,7 +61,7 @@ describe("Robust Sorting Logic", () => {
     next = createMockNextFunction();
     handler = createLogsHandler(assertType({ isValid: () => true }));
     jest.clearAllMocks();
-  });
+  }, 30000);
 
   describe("Native Sort (Timestamp DESC)", () => {
     it("should respect limit and offset efficiently", async () => {

@@ -125,40 +125,30 @@ describe("LoggerMiddleware Coverage Tests", () => {
   });
 
   describe("Smart Compilation Error Handling", () => {
-    test.skip("should handle invalid custom script compilation", () => {
-      const consoleSpy = jest
-        .spyOn(console, "error")
-        .mockImplementation(() => {});
-
+    test("should handle invalid custom script compilation", () => {
       middleware.updateOptions({
         customScript: "this is syntax error >>>",
       });
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining("[SCRIPT-ERROR] Invalid Custom Script:"),
-        expect.any(String),
+      expect(loggerMock.error).toHaveBeenCalledWith(
+        expect.objectContaining({ errorPrefix: "SCRIPT-ERROR" }),
+        "Invalid resource",
       );
       // Use test helper
       expect(middleware.hasCompiledScript()).toBe(false);
-      consoleSpy.mockRestore();
     });
 
-    test.skip("should handle invalid JSON schema compilation", () => {
-      const consoleSpy = jest
-        .spyOn(console, "error")
-        .mockImplementation(() => {});
-
+    test("should handle invalid JSON schema compilation", () => {
       middleware.updateOptions({
         jsonSchema: "{ invalid json: }",
       });
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining("[SCHEMA-ERROR] Invalid JSON Schema:"),
-        expect.any(String),
+      expect(loggerMock.error).toHaveBeenCalledWith(
+        expect.objectContaining({ errorPrefix: "SCHEMA-ERROR" }),
+        "Invalid resource",
       );
       // Use test helper
       expect(middleware.hasValidator()).toBe(false);
-      consoleSpy.mockRestore();
     });
   });
 
@@ -223,8 +213,12 @@ describe("LoggerMiddleware Coverage Tests", () => {
   });
 
   describe("Forwarding Delegation", () => {
-    test.skip("should delegate forwarding to ForwardingService", async () => {
-      const req = createMockRequest();
+    test("should delegate forwarding to ForwardingService", async () => {
+      // RESET MOCK: Critical to prevent pollution from previous tests that set rejection
+      mockActor.pushData.mockReset();
+      mockActor.pushData.mockResolvedValue(undefined);
+
+      const req = createMockRequest({ params: { id: "wh_123" } });
       const res = createMockResponse();
       const next = createMockNextFunction();
 

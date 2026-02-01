@@ -1,13 +1,13 @@
 import { describe, test, expect, beforeEach } from "@jest/globals";
+import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
 import { axiosMock } from "../setup/helpers/shared-mocks.js";
 
 /**
  * @typedef {import("../../src/utils/alerting.js").AlertTrigger} AlertTrigger
  */
 
-// Mock axios before importing the module
-import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
-await setupCommonMocks({ axios: true });
+// Mock axios and logger before importing the module
+await setupCommonMocks({ axios: true, logger: true });
 
 const { shouldAlert, sendAlert, triggerAlertIfNeeded } =
   await import("../../src/utils/alerting.js");
@@ -15,6 +15,7 @@ const { shouldAlert, sendAlert, triggerAlertIfNeeded } =
 describe("Alerting", () => {
   beforeEach(() => {
     axiosMock.post.mockClear();
+    loggerMock.error.mockClear();
   });
 
   describe("shouldAlert", () => {
@@ -153,8 +154,9 @@ describe("Alerting", () => {
       );
     });
 
-    test("should handle Slack failure gracefully", async () => {
-      axiosMock.post.mockRejectedValueOnce(new Error("Network error"));
+    test("should handle Slack failure gracefully and log specific error", async () => {
+      const networkError = new Error("Network error");
+      axiosMock.post.mockRejectedValueOnce(networkError);
 
       const config = { slack: { webhookUrl: "https://hooks.slack.com/test" } };
       const context = {
@@ -167,6 +169,13 @@ describe("Alerting", () => {
       const result = await sendAlert(config, context);
 
       expect(result.slack).toBe(false);
+      // Verify logger was called with the error
+      expect(loggerMock.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          err: expect.objectContaining({ message: "Network error" }),
+        }),
+        "Slack notification failed",
+      );
     });
 
     test("should send to multiple channels", async () => {

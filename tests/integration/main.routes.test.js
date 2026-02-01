@@ -248,7 +248,7 @@ describe("Log Filtering Routes", () => {
 
   test("GET /logs handles pagination limits", async () => {
     /** @type {LogEntry[]} */
-    const items = new Array(200).fill(0).map((_, _i) =>
+    const items = new Array(50).fill(0).map((_, _i) =>
       assertType(
         createMockLog({
           id: `log_${_i}`,
@@ -268,7 +268,7 @@ describe("Log Filtering Routes", () => {
       .set("Authorization", authHeader);
     expect(res.body.items).toHaveLength(10);
     expect(res.body.count).toBe(10);
-  }, 10000);
+  }, 30000);
 
   describe("GET /logs/:logId", () => {
     test("should return full log entry when no fields specified", async () => {

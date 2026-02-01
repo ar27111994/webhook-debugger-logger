@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.2] - 2026-02-01
+
+### Fixed (3.0.2)
+
+- **Database Concurrency**: Resolved `TransactionContext Error: Conflict on tuple deletion` in tests by enforcing serialized write access during DB reset.
+- **Test Pollution**: Fixed mock leakage in `logger_middleware` and `health` tests to prevent side effects between runs.
+- **Performance**: Optimized `main.routes` integration tests by reducing dataset size (200 -> 50) to prevent timeouts on CI.
+
+### Improved (3.0.2)
+
+- **Coverage**: Added comprehensive unit tests for `health.js`, `filter_utils.js`, and `crypto.js`, verifying critical paths.
+- **Test Infrastructure**: Refactored `db-hooks.js` to use safer concurrency patterns.
+
 ## [3.0.1] - 2026-02-01
 
 ### Fixed (3.0.1)

@@ -1,17 +1,11 @@
-import { getDbInstance } from "../../../src/db/duckdb.js";
+import { executeWrite } from "../../../src/db/duckdb.js";
 
 /**
  * Resets the DuckDB logs table by deleting all rows.
- * Uses a fresh connection to avoid side effects.
+ * Uses the serialized write queue to avoid concurrency conflicts.
  *
  * @returns {Promise<void>}
  */
 export async function resetDb() {
-  const db = await getDbInstance();
-  const conn = await db.connect();
-  try {
-    await conn.run("DELETE FROM logs");
-  } finally {
-    conn.closeSync();
-  }
+  await executeWrite("DELETE FROM logs");
 }

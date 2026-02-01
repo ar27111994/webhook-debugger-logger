@@ -19,7 +19,18 @@ const {
   DEFAULT_RETENTION_HOURS,
   DEFAULT_RATE_LIMIT_PER_MINUTE,
   MAX_SAFE_RESPONSE_DELAY_MS,
+  MAX_SAFE_URL_COUNT,
+  MAX_SAFE_RETENTION_HOURS,
+  MAX_SAFE_RATE_LIMIT_PER_MINUTE,
+  MAX_SAFE_REPLAY_RETRIES,
+  MAX_SAFE_REPLAY_TIMEOUT_MS,
+  MAX_SAFE_FORWARD_RETRIES,
 } = await import("../../src/consts.js");
+
+/**
+ * @typedef {import('../../src/typedefs.js').SignatureProvider} SignatureProvider
+ * @typedef {import('../../src/typedefs.js').AlertTrigger} AlertTrigger
+ */
 
 describe("Config Utils", () => {
   useMockCleanup();
@@ -61,98 +72,123 @@ describe("Config Utils", () => {
     });
   });
 
-  test("parseWebhookOptions should clamp maxPayloadSize to default maximum", () => {
-    // Test capping at default
-    const huge = MAX_ALLOWED_PAYLOAD_SIZE + 10000;
-    const opts = parseWebhookOptions({ maxPayloadSize: huge });
-    expect(opts.maxPayloadSize).toBe(MAX_ALLOWED_PAYLOAD_SIZE);
-
-    // Test valid small size
-    const small = 1024;
-    const opts2 = parseWebhookOptions({ maxPayloadSize: small });
-    expect(opts2.maxPayloadSize).toBe(small);
-
-    // Test invalid input (non-number)
-    // @ts-expect-error - Invalid input type for maxPayloadSize
-    const opts3 = parseWebhookOptions({ maxPayloadSize: "invalid" });
-    expect(opts3.maxPayloadSize).toBe(DEFAULT_PAYLOAD_LIMIT);
-
-    // Test negative input
-    const opts4 = parseWebhookOptions({ maxPayloadSize: -100 });
-    expect(opts4.maxPayloadSize).toBe(DEFAULT_PAYLOAD_LIMIT);
-  });
-});
-
-describe("coerceRuntimeOptions", () => {
-  useMockCleanup();
-
-  test("should return defaults for empty input", () => {
-    const result = coerceRuntimeOptions({});
-    expect(result.urlCount).toBe(DEFAULT_URL_COUNT);
-    expect(result.retentionHours).toBe(DEFAULT_RETENTION_HOURS);
-    expect(result.rateLimitPerMinute).toBe(DEFAULT_RATE_LIMIT_PER_MINUTE);
-    expect(result.authKey).toBe("");
-  });
-
-  test("should fail safe to defaults for invalid types", () => {
-    const result = coerceRuntimeOptions({
-      urlCount: "invalid",
-      retentionHours: null,
-      rateLimitPerMinute: -50,
+  describe("getSafeResponseDelay", () => {
+    test("should return 0 for invalid or negative inputs", () => {
+      expect(getSafeResponseDelay(-1)).toBe(0);
+      expect(getSafeResponseDelay(NaN)).toBe(0);
+      expect(getSafeResponseDelay(undefined)).toBe(0);
+      expect(getSafeResponseDelay(Infinity)).toBe(0);
     });
-    expect(result.urlCount).toBe(DEFAULT_URL_COUNT);
-    expect(result.retentionHours).toBe(DEFAULT_RETENTION_HOURS);
-    expect(result.rateLimitPerMinute).toBe(DEFAULT_RATE_LIMIT_PER_MINUTE);
-  });
 
-  test("should respect valid inputs", () => {
-    const result = coerceRuntimeOptions({
-      urlCount: 10,
-      retentionHours: 48,
-      rateLimitPerMinute: 120,
-      authKey: " secret ",
+    test("should return valid delay unchanged", () => {
+      expect(getSafeResponseDelay(100)).toBe(100);
+      expect(getSafeResponseDelay(MAX_SAFE_RESPONSE_DELAY_MS)).toBe(
+        MAX_SAFE_RESPONSE_DELAY_MS,
+      );
+      expect(loggerMock.warn).not.toHaveBeenCalled();
     });
-    expect(result.urlCount).toBe(10);
-    expect(result.retentionHours).toBe(48);
-    expect(result.rateLimitPerMinute).toBe(120);
-    expect(result.authKey).toBe("secret"); // Trims whitespace
+
+    test("should cap huge delay and warn via structured logger", () => {
+      const huge = MAX_SAFE_RESPONSE_DELAY_MS + 5000;
+      expect(getSafeResponseDelay(huge)).toBe(MAX_SAFE_RESPONSE_DELAY_MS);
+      expect(loggerMock.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ name: "responseDelayMs" }),
+        expect.stringContaining("exceeds safe max"),
+      );
+    });
   });
 
-  test("should cap maxPayloadSize correctly", () => {
-    const result = coerceRuntimeOptions({ maxPayloadSize: 999999999 });
-    expect(result.maxPayloadSize).toBe(MAX_ALLOWED_PAYLOAD_SIZE);
+  describe("coerceRuntimeOptions", () => {
+    test("should return defaults for empty/invalid input", () => {
+      const result = coerceRuntimeOptions({});
+      expect(result.urlCount).toBe(DEFAULT_URL_COUNT);
+      expect(result.retentionHours).toBe(DEFAULT_RETENTION_HOURS);
+      expect(result.rateLimitPerMinute).toBe(DEFAULT_RATE_LIMIT_PER_MINUTE);
+      expect(result.authKey).toBe("");
+    });
+
+    test("should handle string inputs and convert to numbers", () => {
+      const result = coerceRuntimeOptions({
+        urlCount: "10",
+        retentionHours: "48",
+        rateLimitPerMinute: "120",
+        maxPayloadSize: "2048",
+        responseDelayMs: "500",
+      });
+      expect(result.urlCount).toBe(10);
+      expect(result.retentionHours).toBe(48);
+      expect(result.rateLimitPerMinute).toBe(120);
+      expect(result.maxPayloadSize).toBe(2048);
+      expect(result.responseDelayMs).toBe(500);
+    });
+
+    test("should trim authKey", () => {
+      const result = coerceRuntimeOptions({
+        authKey: " secret ",
+      });
+      expect(result.authKey).toBe("secret");
+    });
+
+    test("should cap values exceeding safe maximums and log warnings", () => {
+      const result = coerceRuntimeOptions({
+        urlCount: 9999,
+        retentionHours: 9999,
+        rateLimitPerMinute: 9999,
+        maxPayloadSize: 999999999,
+        replayMaxRetries: 9999,
+        replayTimeoutMs: 999999,
+        maxForwardRetries: 9999,
+        responseDelayMs: 999999,
+      });
+
+      expect(result.urlCount).toBe(MAX_SAFE_URL_COUNT);
+      expect(result.retentionHours).toBe(MAX_SAFE_RETENTION_HOURS);
+      expect(result.rateLimitPerMinute).toBe(MAX_SAFE_RATE_LIMIT_PER_MINUTE);
+      expect(result.maxPayloadSize).toBe(MAX_ALLOWED_PAYLOAD_SIZE);
+      expect(result.replayMaxRetries).toBe(MAX_SAFE_REPLAY_RETRIES);
+      expect(result.replayTimeoutMs).toBe(MAX_SAFE_REPLAY_TIMEOUT_MS);
+      expect(result.maxForwardRetries).toBe(MAX_SAFE_FORWARD_RETRIES);
+      expect(result.responseDelayMs).toBe(MAX_SAFE_RESPONSE_DELAY_MS);
+
+      // Verify warnings logged for clamped values
+      expect(loggerMock.warn).toHaveBeenCalledTimes(8);
+      expect(loggerMock.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ name: expect.any(String) }),
+        expect.stringContaining("exceeds safe max"),
+      );
+    });
   });
 
-  test("should clamp responseDelayMs", () => {
-    const huge = MAX_SAFE_RESPONSE_DELAY_MS + 5000;
-    const result = coerceRuntimeOptions({ responseDelayMs: huge });
-    expect(result.responseDelayMs).toBe(MAX_SAFE_RESPONSE_DELAY_MS);
-  });
-});
+  describe("parseWebhookOptions", () => {
+    test("should clamp maxPayloadSize to default maximum", () => {
+      const huge = MAX_ALLOWED_PAYLOAD_SIZE + 10000;
+      const opts = parseWebhookOptions({ maxPayloadSize: huge });
+      expect(opts.maxPayloadSize).toBe(MAX_ALLOWED_PAYLOAD_SIZE);
 
-describe("getSafeResponseDelay", () => {
-  useMockCleanup();
+      // @ts-expect-error - Invalid input type
+      const opts3 = parseWebhookOptions({ maxPayloadSize: "invalid" });
+      expect(opts3.maxPayloadSize).toBe(DEFAULT_PAYLOAD_LIMIT);
+    });
 
-  test("should return 0 for invalid or negative inputs", () => {
-    expect(getSafeResponseDelay(-1)).toBe(0);
-    expect(getSafeResponseDelay(NaN)).toBe(0);
-    expect(getSafeResponseDelay(undefined)).toBe(0);
-  });
+    test("should use defaults when options are undefined", () => {
+      const result = parseWebhookOptions(undefined);
+      expect(result.defaultResponseCode).toBe(200);
+      expect(result.maskSensitiveData).toBe(true);
+    });
 
-  test("should return valid delay unchanged", () => {
-    expect(getSafeResponseDelay(100)).toBe(100);
-    expect(getSafeResponseDelay(MAX_SAFE_RESPONSE_DELAY_MS)).toBe(
-      MAX_SAFE_RESPONSE_DELAY_MS,
-    );
-    expect(loggerMock.warn).not.toHaveBeenCalled();
-  });
-
-  test("should cap huge delay and warn via structured logger", () => {
-    const huge = MAX_SAFE_RESPONSE_DELAY_MS + 1;
-    expect(getSafeResponseDelay(huge)).toBe(MAX_SAFE_RESPONSE_DELAY_MS);
-    expect(loggerMock.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ name: "responseDelayMs" }),
-      expect.stringContaining("exceeds safe max"),
-    );
+    test("should pass through structured options (signature, alerts)", () => {
+      const input = {
+        signatureVerification: {
+          provider: /** @type {SignatureProvider} */ ("stripe"),
+          secret: "test",
+        },
+        alerts: { slack: { webhookUrl: "https://slack..." } },
+        alertOn: /** @type {AlertTrigger[]} */ (["error"]),
+      };
+      const result = parseWebhookOptions(input);
+      expect(result.signatureVerification).toEqual(input.signatureVerification);
+      expect(result.alerts).toEqual(input.alerts);
+      expect(result.alertOn).toEqual(input.alertOn);
+    });
   });
 });
