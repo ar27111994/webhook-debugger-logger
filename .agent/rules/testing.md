@@ -79,6 +79,54 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 - `db-hooks.js`: `resetDb()` - Clear DuckDB logs table
 - `signature-utils.js`: `createStripeSignature()`, `createShopifySignature()`, `createGitHubSignature()`, `createSlackSignature()`
 
+## ESM Mock Mutation
+
+When mocking constants or modules that use `export const`, standard assignments might fail because exports are read-only. Use the following patterns:
+
+### Pattern A: Object.defineProperty (Recommended)
+
+```javascript
+import { constsMock } from "../setup/helpers/shared-mocks.js";
+
+Object.defineProperty(constsMock, "DUCKDB_FILENAME", {
+  value: ":memory:",
+  writable: true,
+});
+```
+
+### Pattern B: unstable_mockModule Override
+
+Use this for full module behavior override before a fresh import.
+
+```javascript
+jest.unstable_mockModule("../../src/consts.js", () => ({
+  ...constsMock,
+  DUCKDB_FILENAME: ":memory:",
+}));
+
+jest.resetModules();
+const DuckDB = await import("../../src/db/duckdb.js");
+```
+
+## DuckDB Test Isolation
+
+**CRITICAL**: Always close the database in `afterEach` to prevent file locks or memory leaks between tests.
+
+```javascript
+describe("DuckDB Tests", () => {
+  let DuckDB;
+
+  beforeEach(async () => {
+    DuckDB = await import("../../src/db/duckdb.js");
+  });
+
+  afterEach(async () => {
+    if (DuckDB) await DuckDB.closeDb();
+    jest.resetModules();
+  });
+});
+```
+
 ## Module Mocking Pattern
 
 ```javascript
@@ -227,9 +275,20 @@ await expect(fn()).rejects.toThrow("Specific error");
 expect(consoleSpy.error).toHaveBeenCalledWith(expect.stringContaining("Error"));
 
 // Test error code matching
-const err = /** @type {NodeJS.ErrnoException} */ (new Error("File not found"));
+const err = /** @type {CommonError} */ (new Error("File not found"));
 err.code = "ENOENT";
 mockAccess.mockRejectedValue(err);
+```
+
+### Mocking node: Prefix
+
+Always mock the `node:` prefixed version of built-ins if the source code uses them.
+
+```javascript
+jest.unstable_mockModule("node:fs/promises", () => ({
+  ...fsPromisesMock,
+  default: fsPromisesMock,
+}));
 ```
 
 ## Assertions

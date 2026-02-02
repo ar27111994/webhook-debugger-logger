@@ -20,8 +20,14 @@ The test suite is organized into the following categories:
 Centralized mock registration. Import BEFORE any source code:
 
 ```javascript
-import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
-await setupCommonMocks({ axios: true, apify: true, dns: true });
+import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
+await setupCommonMocks({
+  axios: true,
+  apify: true,
+  dns: true,
+  db: true,
+  consts: true,
+});
 ```
 
 ### Shared Mocks (`setup/helpers/shared-mocks.js`)
@@ -30,8 +36,12 @@ await setupCommonMocks({ axios: true, apify: true, dns: true });
 - `axiosMock` - Mock axios
 - `dnsPromisesMock` - Mock DNS resolution
 - `ssrfMock` - Mock SSRF validation
+- `duckDbMock` - Mock DuckDB instance/connection
+- `constsMock` - Mocked application constants
+- `webhookManagerMock` - Mock for WebhookManager
 - `createMockWebhookManager()` - WebhookManager mock factory
 - `createDatasetMock()` - Dataset mock factory
+- `fsPromisesMock` - Mock for `node:fs/promises`
 
 ### Test Utilities (`setup/helpers/test-utils.js`)
 
@@ -41,6 +51,7 @@ await setupCommonMocks({ axios: true, apify: true, dns: true });
 - `assertType<T>()` - Type-safe casting helper
 - `getLastAxiosCall(axios, method)` - Get arguments of last axios call
 - `getLastAxiosConfig(axios, method)` - Get config object of last axios call
+- `waitForCondition(condition, timeout, interval)` - Poll for a condition (better than sleep)
 
 ### Lifecycle Helpers (`setup/helpers/test-lifecycle.js`)
 
@@ -48,14 +59,12 @@ await setupCommonMocks({ axios: true, apify: true, dns: true });
 - `useFakeTimers()` - Auto-manage fake timers
 - `useConsoleSpy()` - Auto-manage console spies
 
-### Middleware Utilities (`setup/helpers/middleware-test-utils.js`)
+### Specialized Helpers
 
-- `createMiddlewareTestContext()` - Complete middleware test setup
-- `runMiddlewareWithTimers()` - Run middleware with timer support
-
-### Application Utils (`setup/helpers/app-utils.js`)
-
-- `setupTestApp()` - Initialize app and supertest client for integration/E2E tests
+- `setupTestApp()` (`app-utils.js`) - Initialize app and supertest client
+- `resetDb()` (`db-hooks.js`) - Clear DuckDB logs table
+- `createStripeSignature()`, etc. (`signature-utils.js`) - Webhook signature generators
+- `createMiddlewareTestContext()` (`middleware-test-utils.js`) - Middleware test setup
 
 ## Best Practices
 

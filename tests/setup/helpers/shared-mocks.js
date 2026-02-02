@@ -343,11 +343,20 @@ export const expressMock = Object.assign(
  * Shared DuckDB Mock.
  */
 /**
- * @type {jest.Mocked<{getDbInstance: jest.Mock<() => Promise<DuckDBInstance>>, executeQuery: jest.Mock<(query: string) => Promise<(Record<string, DuckDBValue>)[]>>}>}
+ * @type {jest.Mocked<{getDbInstance: jest.Mock<() => Promise<DuckDBInstance>>, executeQuery: jest.Mock<(query: string, params?: Record<string, any>) => Promise<(Record<string, DuckDBValue>)[]>>, executeWrite: jest.Mock<(query: string, params?: Record<string, any>) => Promise<void>>, executeTransaction: jest.Mock<(cb: (conn: {run: jest.Mock<any>}) => void) => void>}>}
  */
 export const duckDbMock = {
   getDbInstance: assertType(jest.fn()).mockResolvedValue({}),
   executeQuery: assertType(jest.fn().mockResolvedValue(assertType([]))),
+  executeWrite: assertType(jest.fn().mockResolvedValue(assertType(undefined))),
+  executeTransaction: assertType(
+    jest.fn(
+      /**
+       * @param {(conn: {run: jest.Mock<any>}) => void} cb
+       */
+      (cb) => cb({ run: jest.fn() }),
+    ),
+  ),
 };
 
 /**
@@ -470,6 +479,12 @@ export const constsMock = assertType({
   SHUTDOWN_TIMEOUT_MS: 100,
   SSE_HEARTBEAT_INTERVAL_MS: 100,
   STARTUP_TEST_EXIT_DELAY_MS: 100,
+  // DuckDB Defaults
+  DUCKDB_FILENAME: "test.db",
+  DUCKDB_STORAGE_DIR: "/tmp/test",
+  DUCKDB_MEMORY_LIMIT: "1GB",
+  DUCKDB_THREADS: 4,
+  DUCKDB_POOL_SIZE: 2,
   DEFAULT_URL_COUNT: 1,
   DEFAULT_RETENTION_HOURS: 24,
   DEFAULT_PAYLOAD_LIMIT: 1000,
@@ -652,3 +667,25 @@ export const logRepositoryMock = assertType({
   getLogById: jest.fn(),
   findLogs: jest.fn(),
 });
+
+/**
+ * Shared FS Promises Mock.
+ */
+export const fsPromisesMock = {
+  access: jest.fn(),
+  readFile: jest.fn(),
+  writeFile: jest.fn(),
+  rename: jest.fn(),
+  mkdir: jest.fn(),
+  rm: jest.fn(),
+  unlink: jest.fn(),
+  watch: jest.fn(),
+};
+
+/**
+ * Shared FS Mock.
+ */
+export const fsMock = {
+  existsSync: jest.fn(),
+  ...fsPromisesMock,
+};

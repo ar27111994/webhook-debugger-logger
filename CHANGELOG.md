@@ -2,7 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
-## [3.0.4] - 2026-02-02
+## [3.0.5] - 2026-02-02
+
+### Added (3.0.5)
+
+- **Unit Tests**: Added comprehensive internal unit tests for `duckdb_internal.test.js`, `log_repository.test.js`, and `dashboard.test.js`.
+- **Mock Helpers**: Added `duckDbMock`, `constsMock`, and `fsPromisesMock` to shared mocks for precise dependency control.
+
+### Improved (3.0.5)
+
+- **Test Standardization**: Standardized 60+ test suites around the `setupCommonMocks` architecture for better reliability and lower boilerplate.
+- **Assertion Rigor**: Implemented strict assertions for DuckDB connection pooling logic, including lease/release cycles, pool eviction, and schema initialization.
+- **Database Isolation**: Enforced mandatory `closeDb()` pattern in DuckDB tests to prevent file locking and memory leaks.
+- **Documentation**: Overhauled `tests/README.md` and `.agent/rules/testing.md` with modern patterns for ESM mock mutation and shared lifecycle management.
+- **Type Safety**: Enhanced test-time type safety using `assertType<T>()` and JSDoc casting for complex mocks.
+
+### Refactored (3.0.5)
+
+- **Consolidation**: Merged redundant test files and removed deprecated `tests/setup/bootstrap.js` in favor of declarative shared mocks.
+- **Hygiene**: Cleaned up magic numbers and redundant assignments in alerting and hot-reload tests.
+
+### Fixed (3.0.5)
+
+- **Resource Leaks**: Resolved "failed to exit gracefully" warnings by ensuring all database connections and timers are explicitly closed in tests.
+- **ESM Mocking**: Fixed read-only export errors by implementing `Object.defineProperty` and `unstable_mockModule` patterns.
 
 ### Improved (3.0.4)
 

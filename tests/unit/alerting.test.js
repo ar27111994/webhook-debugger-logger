@@ -4,6 +4,7 @@ import { axiosMock } from "../setup/helpers/shared-mocks.js";
 
 /**
  * @typedef {import("../../src/utils/alerting.js").AlertTrigger} AlertTrigger
+ * @typedef {import("../../src/utils/alerting.js").AlertPayload} AlertPayload
  */
 
 // Mock axios and logger before importing the module
@@ -197,6 +198,110 @@ describe("Alerting", () => {
       expect(result.slack).toBe(true);
       expect(result.discord).toBe(true);
       expect(axiosMock.post).toHaveBeenCalledTimes(2);
+    });
+
+    test("should include sourceIp in Slack payload when provided", async () => {
+      axiosMock.post.mockResolvedValueOnce({ status: 200 });
+
+      const config = { slack: { webhookUrl: "https://hooks.slack.com/test" } };
+      const context = {
+        webhookId: "wh_123",
+        method: "POST",
+        statusCode: 200, // Just to have a status
+        timestamp: "2023-01-01T00:00:00Z",
+        sourceIp: "1.2.3.4",
+        alertOn: ["error"], // irrelevant for sendAlert but good for context
+      };
+
+      await sendAlert(config, context);
+
+      const callArgs = axiosMock.post.mock.calls[0];
+      /** @type {AlertPayload} */
+      const payload = callArgs[1];
+
+      const contextBlock = payload.blocks?.find((b) => b.type === "context");
+      expect(contextBlock).toBeDefined();
+      expect(contextBlock?.elements?.[0].text).toContain("1.2.3.4");
+    });
+
+    test("should include sourceIp in Discord payload when provided", async () => {
+      axiosMock.post.mockResolvedValueOnce({ status: 200 });
+
+      const config = {
+        discord: { webhookUrl: "https://discord.com/api/webhooks/test" },
+      };
+      const context = {
+        webhookId: "wh_123",
+        method: "POST",
+        statusCode: 200,
+        timestamp: "2023-01-01T00:00:00Z",
+        sourceIp: "1.2.3.4",
+      };
+
+      await sendAlert(config, context);
+
+      const callArgs = axiosMock.post.mock.calls[0];
+      /** @type {AlertPayload} */
+      const payload = callArgs[1];
+      const embed = payload.embeds?.[0];
+
+      const ipField = embed?.fields?.find((f) => f.name === "Source IP");
+      expect(ipField).toBeDefined();
+      expect(ipField?.value).toBe("1.2.3.4");
+    });
+
+    test("should format payload correctly for signature invalid error", async () => {
+      axiosMock.post.mockResolvedValue({ status: 200 });
+
+      const config = {
+        slack: { webhookUrl: "https://slack" },
+        discord: { webhookUrl: "https://discord" },
+      };
+      const context = {
+        webhookId: "wh_123",
+        method: "POST",
+        signatureValid: false,
+        signatureError: "Bad sig",
+        timestamp: "2023-01-01T00:00:00Z",
+      };
+
+      await sendAlert(config, context);
+
+      // Check Slack
+      /** @type {AlertPayload} */
+      const slackPayload = axiosMock.post.mock.calls[0][1];
+      const slackHeader = slackPayload.blocks?.find(
+        (b) => b.type === "header",
+      )?.text;
+      expect(slackHeader?.text).toContain("⚠️"); // Warning emoji
+      const slackFields = slackPayload.blocks?.find(
+        (b) => b.type === "section",
+      )?.fields;
+      expect(
+        slackFields?.some((f) => f.text.includes("Signature Invalid")),
+      ).toBe(true);
+
+      // Check Discord
+      /** @type {AlertPayload} */
+      const discordPayload = axiosMock.post.mock.calls[1][1];
+      const embed = discordPayload.embeds?.[0];
+      expect(embed?.color).toBe(0xffa500); // Orange
+      expect(embed?.fields?.some((f) => f.value.includes("Bad sig"))).toBe(
+        true,
+      );
+    });
+
+    test("should treat empty alertOn array as no alerts", () => {
+      const config = {
+        alertOn: [],
+      };
+      const context = {
+        webhookId: "test",
+        method: "POST",
+        error: "Test",
+        timestamp: new Date().toISOString(),
+      };
+      expect(shouldAlert(config, context)).toBe(false);
     });
   });
 

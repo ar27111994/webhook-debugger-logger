@@ -1,30 +1,14 @@
 import { jest, describe, test, expect, beforeEach } from "@jest/globals";
 import { assertType } from "../setup/helpers/test-utils.js";
 
-// 1. Mock fs/promises BEFORE other imports
-const mockFs = {
-  access: jest.fn(),
-  readFile: jest.fn(),
-  writeFile: jest.fn(),
-  rename: jest.fn(),
-  mkdir: jest.fn(),
-  rm: jest.fn(),
-  unlink: jest.fn(), // Just in case
-};
-
-jest.unstable_mockModule("fs/promises", () => ({
-  __esModule: true,
-  ...mockFs,
-  default: mockFs,
-}));
+import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
+import { fsPromisesMock as mockFs } from "../setup/helpers/shared-mocks.js";
 
 // 2. Setup Common Mocks
 // Ensure we import mock setup AFTER mocking fs
-const { setupCommonMocks, loggerMock } =
-  await import("../setup/helpers/mock-setup.js");
 const { useMockCleanup } = await import("../setup/helpers/test-lifecycle.js");
 
-await setupCommonMocks({ logger: true });
+await setupCommonMocks({ logger: true, fs: true });
 
 // Import module under test
 const bootstrap = await import("../../src/utils/bootstrap.js");

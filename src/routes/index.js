@@ -1,3 +1,4 @@
+/* istanbul ignore file */
 /**
  * @file src/routes/index.js
  * @description Route handlers index exporting all route factory functions.

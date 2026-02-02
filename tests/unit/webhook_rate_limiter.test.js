@@ -114,4 +114,43 @@ describe("WebhookRateLimiter", () => {
     expect(() => new WebhookRateLimiter(10, -1)).toThrow();
     expect(() => new WebhookRateLimiter(10, 1000, 0)).toThrow();
   });
+
+  test("should prune expired entries", () => {
+    jest.useFakeTimers();
+    // Re-create instance with fake timers active
+    rateLimiter.destroy();
+    rateLimiter = new WebhookRateLimiter(5, 1000, 10); // 1s window
+
+    rateLimiter.check("wh_old");
+    expect(rateLimiter.entryCount).toBe(1);
+
+    // Advance time past window (1000ms)
+    jest.advanceTimersByTime(1100);
+
+    // Advance time to trigger cleanup interval (1000ms)
+    jest.advanceTimersByTime(1100);
+
+    // Should be removed
+    expect(rateLimiter.entryCount).toBe(0);
+
+    jest.useRealTimers();
+  });
+
+  test("should get and set limit", () => {
+    expect(rateLimiter.limit).toBe(5);
+    rateLimiter.limit = 20;
+    expect(rateLimiter.limit).toBe(20);
+
+    // Validation
+    expect(() => {
+      rateLimiter.limit = -5;
+    }).toThrow("finite positive integer");
+    expect(() => {
+      rateLimiter.limit = 0;
+    }).toThrow();
+    expect(() => {
+      // @ts-expect-error - testing invalid type
+      rateLimiter.limit = "string";
+    }).toThrow();
+  });
 });

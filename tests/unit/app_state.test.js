@@ -172,6 +172,28 @@ describe("AppState", () => {
       expect(appState.retentionHours).toBe(48);
       expect(webhookManagerMock.updateRetention).toHaveBeenCalledWith(48);
     });
+
+    test("should update replay max retries", async () => {
+      const update = createUpdateConfig({ replayMaxRetries: 5 });
+      await appState.applyConfigUpdate({}, update);
+
+      expect(appState.replayMaxRetries).toBe(5);
+      expect(loggerMock.info).toHaveBeenCalledWith(
+        expect.objectContaining({ replayMaxRetries: 5 }),
+        "Updating replay max retries",
+      );
+    });
+
+    test("should update replay timeout", async () => {
+      const update = createUpdateConfig({ replayTimeoutMs: 5000 });
+      await appState.applyConfigUpdate({}, update);
+
+      expect(appState.replayTimeoutMs).toBe(5000);
+      expect(loggerMock.info).toHaveBeenCalledWith(
+        expect.objectContaining({ replayTimeoutMs: 5000 }),
+        "Updating replay timeout",
+      );
+    });
   });
 
   describe("destroy", () => {

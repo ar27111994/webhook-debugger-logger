@@ -15,27 +15,17 @@ import { INPUT_POLL_INTERVAL_TEST_MS } from "../../src/consts.js";
  * @typedef {import('../setup/helpers/apify-mock.js').KeyValueStoreMock} KeyValueStoreMock
  */
 
-// 1. Mock Apify and Logger
+// 1. Mock Apify, Logger, and FS
 import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
-await setupCommonMocks({ apify: true, logger: true });
+await setupCommonMocks({ apify: true, logger: true, fs: true });
 import {
   apifyMock,
   createKeyValueStoreMock,
+  fsPromisesMock as mockFsPromises,
+  fsMock,
 } from "../setup/helpers/shared-mocks.js";
 const mockActor = apifyMock;
-
-// 2. Mock fs/promises & fs & path
-const mockFsPromises = {
-  watch: jest.fn(),
-};
-jest.unstable_mockModule("fs/promises", () => ({
-  watch: mockFsPromises.watch,
-}));
-
-const mockFs = {
-  existsSync: jest.fn(),
-};
-jest.unstable_mockModule("fs", () => mockFs);
+const mockFs = fsMock;
 
 // 3. Import the class under test
 const { HotReloadManager } =
@@ -254,16 +244,10 @@ describe("HotReloadManager Unit Tests", () => {
       mockWatcher.end();
     });
 
-    test.skip("should handle fs.watch errors", async () => {
-      // NOTE: fs.watch error handling in HotReloadManager logs to console.error
-      // Since it's fire-and-forget in async iterator loop, valid verification is console spy.
+    test("should handle fs.watch errors", async () => {
       mockActor.isAtHome.mockReturnValue(false);
       mockFs.existsSync.mockReturnValue(true);
-      jest.useRealTimers(); // Use real timers for waitForCondition if needed, OR explicit promises
-
-      const consoleSpy = jest
-        .spyOn(console, "error")
-        .mockImplementation(() => {});
+      jest.useRealTimers();
 
       const mockWatcher = createControllableIterator();
       mockFsPromises.watch.mockReturnValue(mockWatcher);
@@ -273,14 +257,19 @@ describe("HotReloadManager Unit Tests", () => {
       // Simulate watcher error
       mockWatcher.error(new Error("Watcher Error"));
 
-      // Wait for error log
-      await waitForCondition(() => consoleSpy.mock.calls.length > 0, 500, 50);
-
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining("[SYSTEM-ERROR] fs.watch failed:"),
-        "Watcher Error",
+      // Wait for logger error
+      await waitForCondition(
+        () => loggerMock.error.mock.calls.length > 0,
+        500,
+        50,
       );
-      consoleSpy.mockRestore();
+
+      expect(loggerMock.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          err: expect.objectContaining({ message: "Watcher Error" }),
+        }),
+        "fs.watch failed",
+      );
     });
   });
 });

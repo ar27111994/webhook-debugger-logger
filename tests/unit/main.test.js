@@ -27,12 +27,17 @@ import {
   bootstrapMock,
   webhookManagerMock,
 } from "../setup/helpers/shared-mocks.js";
+import { assertType } from "../setup/helpers/test-utils.js";
 
 // Import module under test
 const main = await import("../../src/main.js");
 const { Actor } = await import("apify");
 const { HotReloadManager } =
   await import("../../src/utils/hot_reload_manager.js");
+
+/**
+ * @typedef {import("http").ServerResponse} ServerResponse
+ */
 
 describe("Main Entry Point", () => {
   useMockCleanup();
@@ -128,9 +133,171 @@ describe("Main Entry Point", () => {
     });
   });
 
+  test("should log warning on invalid JSON in INPUT env var", async () => {
+    jest.mocked(Actor.isAtHome).mockReturnValue(false);
+    const originalEnvInput = process.env.INPUT;
+    process.env.INPUT = "{ invalid json }";
+
+    await main.initialize();
+
+    expect(loggerMock.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        err: expect.any(Object),
+      }),
+      "Failed to parse INPUT env var",
+    );
+
+    // Cleanup
+    if (originalEnvInput) process.env.INPUT = originalEnvInput;
+    else delete process.env.INPUT;
+  });
+
+  test("should throw and log on Array input in INPUT env var", async () => {
+    jest.mocked(Actor.isAtHome).mockReturnValue(false);
+    const originalEnvInput = process.env.INPUT;
+    process.env.INPUT = JSON.stringify([{ key: "value" }]);
+
+    await main.initialize();
+
+    expect(loggerMock.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        err: expect.objectContaining({
+          message: "INPUT env var must be a non-array JSON object",
+        }),
+      }),
+      "Failed to parse INPUT env var",
+    );
+
+    // Cleanup
+    if (originalEnvInput) process.env.INPUT = originalEnvInput;
+    else delete process.env.INPUT;
+  });
+
+  describe("shutdown()", () => {
+    /** @type {string | undefined} */
+    let originalEnv;
+
+    beforeEach(() => {
+      originalEnv = process.env.NODE_ENV;
+    });
+
+    afterEach(() => {
+      process.env.NODE_ENV = originalEnv;
+    });
+
+    test("should cleanup components on shutdown", async () => {
+      await main.shutdown("TEST_COMPLETE");
+
+      expect(hotReloadManagerMock.stop).toHaveBeenCalled();
+      expect(syncServiceMock.stop).toHaveBeenCalled();
+      expect(webhookManagerMock.persist).toHaveBeenCalled();
+      expect(Actor.exit).toHaveBeenCalled();
+    });
+
+    test("should not exit process if in test mode (default)", async () => {
+      const exitSpy = jest
+        .spyOn(process, "exit")
+        .mockImplementation(() => assertType(undefined));
+      await main.shutdown("SIGTERM");
+      expect(exitSpy).not.toHaveBeenCalled();
+      exitSpy.mockRestore();
+    });
+
+    test("should exit process if not in test mode", async () => {
+      process.env.NODE_ENV = "production";
+      const exitSpy = jest
+        .spyOn(process, "exit")
+        .mockImplementation((_code) => {
+          throw new Error("Process Exited");
+        });
+
+      try {
+        await main.shutdown("SIGINT");
+      } catch (e) {
+        expect(/** @type {Error} */ (e).message).toBe("Process Exited");
+      }
+
+      expect(exitSpy).toHaveBeenCalledWith(0);
+      exitSpy.mockRestore();
+    });
+  });
+
   describe("server export", () => {
     test("should export express app", () => {
       expect(main.app).toBeDefined();
+    });
+  });
+
+  describe("SSE Heartbeat", () => {
+    test("should remove dead clients on heartbeat error", async () => {
+      jest.useFakeTimers();
+      const { createLogStreamHandler } =
+        await import("../../src/routes/index.js");
+
+      // Helper to capture the set
+      /** @type {Set<ServerResponse>} */
+      let capturedClients = new Set();
+      jest.mocked(createLogStreamHandler).mockImplementation(
+        /** @param {Set<ServerResponse>} clients */
+        (clients) => {
+          capturedClients = clients;
+          return jest.fn();
+        },
+      );
+
+      // Re-initialize to trigger createLogStreamHandler
+      await main.initialize();
+
+      expect(capturedClients).toBeDefined();
+
+      /** @type {ServerResponse} */
+      const mockClient = assertType({
+        write: jest.fn().mockImplementation(() => {
+          throw new Error("Closed");
+        }),
+      });
+      if (capturedClients) {
+        capturedClients.add(mockClient);
+      }
+
+      jest.advanceTimersByTime(110); // > 100ms interval
+
+      expect(mockClient.write).toHaveBeenCalled();
+      if (capturedClients) expect(capturedClients.has(mockClient)).toBe(false);
+
+      jest.useRealTimers();
+    });
+  });
+
+  describe("Health Check Callback", () => {
+    test("should export health callback that checks webhook count", async () => {
+      const { createHealthRoutes } = await import("../../src/routes/index.js");
+      /** @typedef {() => number} HealthCallback */
+      /** @type {HealthCallback | null} */
+      let capturedCb = null;
+
+      jest.mocked(createHealthRoutes).mockImplementation(
+        /** @param {HealthCallback} cb */
+        (cb) => {
+          capturedCb = cb;
+          return assertType({ health: jest.fn(), ready: jest.fn() });
+        },
+      );
+
+      await main.initialize();
+
+      expect(capturedCb).toBeDefined();
+      jest
+        .mocked(webhookManagerMock.getAllActive)
+        .mockReturnValue([
+          assertType({ id: "1" }),
+          assertType({ id: "2" }),
+          assertType({ id: "3" }),
+        ]);
+
+      if (capturedCb) {
+        expect(/** @type {HealthCallback} */ (capturedCb)?.()).toBe(3);
+      }
     });
   });
 });

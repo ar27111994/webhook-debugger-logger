@@ -12,6 +12,26 @@ const log = createChildLogger({ component: "Alerting" });
  */
 
 /**
+ * @typedef {object} PayloadText
+ * @property {string} type
+ * @property {string} text
+ * @property {boolean} [emoji]
+ */
+
+/**
+ * @typedef {object} PayloadEmbed
+ * @property {string} name
+ * @property {string} value
+ * @property {boolean} [inline]
+ */
+
+/**
+ * @typedef {object} AlertPayload
+ * @property {{type: string, text?: PayloadText, fields?: PayloadText[], elements?: PayloadText[]}[]} [blocks]
+ * @property {{title: string, color: number, fields?: PayloadEmbed[], timestamp: string}[]} [embeds]
+ */
+
+/**
  * @type {Readonly<AlertTrigger[]>}
  */
 const DEFAULT_ALERT_ON = Object.freeze(["error", "5xx"]);
@@ -102,6 +122,7 @@ export async function sendAlert(config, context) {
  * Sends a Slack webhook notification.
  * @param {string} webhookUrl
  * @param {AlertContext} context
+ * @returns {Promise<void>}
  */
 async function sendSlackAlert(webhookUrl, context) {
   const emoji = context.error
@@ -115,8 +136,9 @@ async function sendSlackAlert(webhookUrl, context) {
       ? `Signature Invalid: ${context.signatureError}`
       : `Status: ${context.statusCode}`;
 
+  /** @type {AlertPayload} */
   const payload = {
-    blocks: /** @type {any[]} */ ([
+    blocks: [
       {
         type: "header",
         text: {
@@ -134,11 +156,11 @@ async function sendSlackAlert(webhookUrl, context) {
           { type: "mrkdwn", text: `*Time:*\n${context.timestamp}` },
         ],
       },
-    ]),
+    ],
   };
 
   if (context.sourceIp) {
-    payload.blocks.push({
+    payload.blocks?.push({
       type: "context",
       elements: [{ type: "mrkdwn", text: `Source IP: ${context.sourceIp}` }],
     });
@@ -154,6 +176,7 @@ async function sendSlackAlert(webhookUrl, context) {
  * Sends a Discord webhook notification.
  * @param {string} webhookUrl
  * @param {AlertContext} context
+ * @returns {Promise<void>}
  */
 async function sendDiscordAlert(webhookUrl, context) {
   const color = context.error

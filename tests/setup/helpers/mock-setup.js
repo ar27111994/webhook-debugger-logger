@@ -42,6 +42,7 @@ import { apifyMock } from "./shared-mocks.js";
  * @property {boolean} [events=false] - Register Events util mock
  * @property {boolean} [vm=false] - Register VM module mock
  * @property {boolean} [repositories=false] - Register LogRepository mock
+ * @property {boolean} [fs=false] - Register fs/promises and fs mock
  */
 
 /**
@@ -113,7 +114,28 @@ export async function setupCommonMocks(options = {}) {
     events = false,
     vm = false,
     repositories = false,
+    fs = false,
   } = options;
+
+  if (fs) {
+    jest.unstable_mockModule("fs/promises", async () => {
+      const { fsPromisesMock } = await import("./shared-mocks.js");
+      return {
+        __esModule: true,
+        ...fsPromisesMock,
+        default: fsPromisesMock,
+      };
+    });
+
+    jest.unstable_mockModule("fs", async () => {
+      const { fsMock } = await import("./shared-mocks.js");
+      return {
+        __esModule: true,
+        ...fsMock,
+        default: fsMock,
+      };
+    });
+  }
 
   if (axios) {
     jest.unstable_mockModule("axios", async () => {

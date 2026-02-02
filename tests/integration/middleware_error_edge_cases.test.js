@@ -101,6 +101,23 @@ describe("Error Middleware - Edge Cases", () => {
 
       expect(res.status).toHaveBeenCalledWith(400);
     });
+
+    test("should use 'unknown' when requestId is missing", () => {
+      const err = /** @type {CommonError} */ (new Error("Test error"));
+      err.statusCode = 500;
+
+      const reqNoId = createMockRequest();
+      // @ts-expect-error - testing missing property
+      reqNoId.requestId = undefined;
+
+      errorHandler(err, reqNoId, res, next);
+
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestId: "unknown",
+        }),
+      );
+    });
   });
 
   describe("Server Error Sanitization (5xx)", () => {
