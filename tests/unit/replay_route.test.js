@@ -225,4 +225,65 @@ describe("Replay Route", () => {
       }),
     );
   });
+
+  test("should handle array url parameter (take first)", async () => {
+    req = createMockRequest({
+      query: { url: ["http://first.com", "http://second.com"] },
+    });
+    await handler()(req, res, next);
+
+    // Should validate the first URL
+    expect(ssrfMock.validateUrlForSsrf).toHaveBeenCalledTimes(1);
+    expect(ssrfMock.validateUrlForSsrf).toHaveBeenCalledWith(
+      "http://first.com",
+    );
+  });
+
+  test("should return specific error for hostname resolution failure", async () => {
+    const { SSRF_ERRORS } = await import("../../src/utils/ssrf.js");
+    ssrfMock.validateUrlForSsrf.mockResolvedValue({
+      safe: false,
+      error: SSRF_ERRORS.HOSTNAME_RESOLUTION_FAILED,
+    });
+
+    req = createMockRequest({ query: { url: "http://bad-host.com" } });
+    await handler()(req, res, next);
+
+    const { ERROR_MESSAGES } = await import("../../src/consts.js");
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      error: ERROR_MESSAGES.HOSTNAME_RESOLUTION_FAILED,
+    });
+  });
+
+  test("should fallback to timestamp lookup if ID not found", async () => {
+    logRepositoryMock.getLogById.mockResolvedValue(null);
+
+    // Simulate finding by timestamp
+    /** @type {LogEntry} */
+    const mockItem = assertType({
+      id: "log_timestamp_match",
+      webhookId: "wh_1",
+    });
+    logRepositoryMock.findLogs.mockResolvedValue(
+      assertType({ items: [mockItem] }),
+    );
+
+    const timestampId = new Date().toISOString();
+    req = createMockRequest({
+      params: { itemId: timestampId, webhookId: "wh_1" },
+      query: { url: "http://example.com" },
+    });
+
+    await handler()(req, res, next);
+
+    expect(logRepositoryMock.findLogs).toHaveBeenCalledWith(
+      expect.objectContaining({
+        timestamp: [{ operator: "eq", value: timestampId }],
+        webhookId: "wh_1",
+      }),
+    );
+    // Should proceed to replay
+    expect(axiosMock).toHaveBeenCalled();
+  });
 });

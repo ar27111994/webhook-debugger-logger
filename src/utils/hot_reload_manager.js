@@ -59,6 +59,11 @@ export class HotReloadManager {
    * Start polling and watching for updates.
    */
   start() {
+    if (!this.#store) {
+      log.warn("HotReloadManager not initialized, skipping start");
+      return;
+    }
+
     // 1. Fallback to interval polling (works on platform and as backup for local)
     // Can be disabled via env var for efficiency in production
     if (process.env.DISABLE_HOT_RELOAD !== "true") {
@@ -98,8 +103,6 @@ export class HotReloadManager {
 
     this.#activePollPromise = (async () => {
       try {
-        if (!this.#store) return; // Should not happen if init() is called
-
         const newInput = /** @type {Record<string, any> | null} */ (
           await this.#store.getValue("INPUT")
         );
@@ -121,8 +124,6 @@ export class HotReloadManager {
         await this.#onConfigChange(normalizedInput, validated);
 
         log.info("Hot-reload complete, new settings active");
-      } catch (err) {
-        log.error({ err: serializeError(err) }, "Failed to apply new settings");
       } finally {
         this.#activePollPromise = null;
       }
@@ -154,7 +155,12 @@ export class HotReloadManager {
             signal: this.#fileWatcherAbortController?.signal,
           });
           for await (const event of watcher) {
-            if (event.eventType === "change") {
+            if (event.eventType === "change" || event.eventType === "rename") {
+              if (event.eventType === "rename") {
+                log.warn(
+                  "Input file renamed/replaced, potential watcher break",
+                );
+              }
               // Debounce rapid file changes (editors often write multiple times)
               if (debounceTimer) clearTimeout(debounceTimer);
               debounceTimer = setTimeout(() => {

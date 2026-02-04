@@ -6,9 +6,9 @@ import { DuckDBInstance } from "@duckdb/node-api";
 import fs from "node:fs/promises";
 import path from "node:path";
 import {
-  DUCKDB_FILENAME,
+  DUCKDB_FILENAME_DEFAULT,
   DUCKDB_MEMORY_LIMIT,
-  DUCKDB_STORAGE_DIR,
+  DUCKDB_STORAGE_DIR_DEFAULT,
   DUCKDB_THREADS,
   DUCKDB_POOL_SIZE,
 } from "../consts.js";
@@ -31,6 +31,8 @@ const writeQueue = new Bottleneck({
 
 /** @type {DuckDBInstance | null} */
 let dbInstance = null;
+/** @type {Promise<DuckDBInstance> | null} */
+let initPromise = null;
 
 /** @type {DuckDBConnection[]} */
 const connectionPool = [];
@@ -39,10 +41,17 @@ const connectionPool = [];
 const inUseConnections = [];
 
 const IN_MEM_DB = ":memory:";
-const DB_PATH =
-  DUCKDB_FILENAME === IN_MEM_DB
-    ? IN_MEM_DB
-    : path.join(DUCKDB_STORAGE_DIR, DUCKDB_FILENAME);
+
+/**
+ * Gets the current database path based on environment variables.
+ * @returns {string}
+ */
+function getDbPath() {
+  const storageDir =
+    process.env.DUCKDB_STORAGE_DIR || DUCKDB_STORAGE_DIR_DEFAULT;
+  const filename = process.env.DUCKDB_FILENAME || DUCKDB_FILENAME_DEFAULT;
+  return filename === IN_MEM_DB ? IN_MEM_DB : path.join(storageDir, filename);
+}
 
 /**
  * Validates and gets the DuckDB instance.
@@ -51,31 +60,52 @@ const DB_PATH =
 export async function getDbInstance() {
   if (dbInstance) return dbInstance;
 
-  if (DB_PATH !== IN_MEM_DB) {
-    try {
-      await fs.mkdir(DUCKDB_STORAGE_DIR, { recursive: true });
-    } catch (err) {
-      // Ignore if exists
-      if (/** @type {CommonError} */ (err).code !== "EEXIST") {
-        throw err;
+  if (!initPromise) {
+    initPromise = (async () => {
+      const dbPath = getDbPath();
+      const storageDir =
+        process.env.DUCKDB_STORAGE_DIR || DUCKDB_STORAGE_DIR_DEFAULT;
+
+      if (dbPath !== IN_MEM_DB) {
+        try {
+          await fs.mkdir(storageDir, { recursive: true });
+        } catch (err) {
+          // Ignore if exists
+          if (/** @type {CommonError} */ (err).code !== "EEXIST") {
+            throw err;
+          }
+        }
       }
-    }
+
+      // Use Instance Cache pattern
+      const instance = await DuckDBInstance.fromCache(dbPath);
+
+      // Configure
+      const conn = await instance.connect();
+      try {
+        await conn.run(`SET memory_limit='${DUCKDB_MEMORY_LIMIT}'`);
+        await conn.run(`SET threads=${DUCKDB_THREADS}`);
+        await initSchema(conn);
+      } finally {
+        conn.closeSync();
+      }
+
+      dbInstance = instance;
+      return instance;
+    })();
   }
 
-  // Use Instance Cache pattern
-  dbInstance = await DuckDBInstance.fromCache(DB_PATH);
+  return initPromise;
+}
 
-  // Configure
-  const conn = await dbInstance.connect();
-  try {
-    await conn.run(`SET memory_limit='${DUCKDB_MEMORY_LIMIT}'`);
-    await conn.run(`SET threads=${DUCKDB_THREADS}`);
-    await initSchema(conn);
-  } finally {
-    conn.closeSync();
-  }
-
-  return dbInstance;
+/**
+ * Resets the DuckDB singleton instance (primarily for tests).
+ */
+export async function resetDbInstance() {
+  dbInstance = null;
+  initPromise = null;
+  connectionPool.length = 0;
+  inUseConnections.length = 0;
 }
 
 /**
@@ -259,14 +289,13 @@ async function initSchema(conn) {
 export async function closeDb() {
   // Drain connection pool
   while (connectionPool.length > 0) {
-    const conn = connectionPool.pop();
-    if (conn) conn.closeSync();
+    connectionPool.pop()?.closeSync();
   }
   while (inUseConnections.length > 0) {
-    const conn = inUseConnections.pop();
-    if (conn) conn.closeSync();
+    inUseConnections.pop()?.closeSync();
   }
   dbInstance = null;
+  initPromise = null;
 }
 
 /**

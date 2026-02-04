@@ -57,7 +57,7 @@ describe("SyncService", () => {
 
   /** @type {SyncService} */
   let service;
-  /** @type {any} */
+  /** @type {jest.Mocked<Dataset>} */
   let mockDataset;
 
   beforeEach(() => {
@@ -66,12 +66,15 @@ describe("SyncService", () => {
 
     // Explicit resets
     duckDbMock.executeQuery.mockReset();
+    logRepositoryMock.insertLog.mockReset();
     logRepositoryMock.batchInsertLogs.mockReset();
     mockLimiter.schedule.mockClear();
 
-    mockDataset = createDatasetMock(new Array(100).fill({}), {
-      autoRegister: true,
-    });
+    mockDataset = assertType(
+      createDatasetMock(new Array(100).fill({}), {
+        autoRegister: true,
+      }),
+    );
 
     // Default DB state: no offset
     duckDbMock.executeQuery.mockResolvedValue([{ maxOffset: null }]);
@@ -105,6 +108,20 @@ describe("SyncService", () => {
       );
       expect(mockLimiter.stop).toHaveBeenCalled();
       expect(loggerMock.info).toHaveBeenCalledWith("SyncService stopped");
+    });
+  });
+
+  describe("Metrics", () => {
+    test("should return initial metrics", () => {
+      const metrics = service.getMetrics();
+      expect(metrics).toEqual({
+        syncCount: 0,
+        errorCount: 0,
+        itemsSynced: 0,
+        lastSyncTime: undefined,
+        lastErrorTime: undefined,
+        isRunning: false,
+      });
     });
   });
 
@@ -154,10 +171,12 @@ describe("SyncService", () => {
     test("should fetch and sync new items from Dataset", async () => {
       // Setup
       duckDbMock.executeQuery.mockResolvedValue([{ maxOffset: 9 }]); // Next is 10
-      mockDataset.getInfo.mockResolvedValue({ itemCount: 20 });
-      mockDataset.getData.mockResolvedValue({
-        items: [{ id: "log_10" }, { id: "log_11" }], // 2 items
-      });
+      mockDataset.getInfo.mockResolvedValue(assertType({ itemCount: 20 }));
+      mockDataset.getData.mockResolvedValue(
+        assertType({
+          items: [{ id: "log_10" }, { id: "log_11" }], // 2 items
+        }),
+      );
 
       await service.start(); // triggers initial sync
       await pendingSyncPromise; // Wait for it
@@ -187,7 +206,7 @@ describe("SyncService", () => {
 
     test("should handle empty dataset or up-to-date state", async () => {
       duckDbMock.executeQuery.mockResolvedValue([{ maxOffset: 19 }]); // Next 20
-      mockDataset.getInfo.mockResolvedValue({ itemCount: 20 }); // No new items
+      mockDataset.getInfo.mockResolvedValue(assertType({ itemCount: 20 })); // No new items
 
       await service.start();
       await pendingSyncPromise;
@@ -197,8 +216,10 @@ describe("SyncService", () => {
 
     test("should handle batch insert errors", async () => {
       duckDbMock.executeQuery.mockResolvedValue([{ maxOffset: null }]);
-      mockDataset.getInfo.mockResolvedValue({ itemCount: 10 });
-      mockDataset.getData.mockResolvedValue({ items: [{ id: "log_0" }] });
+      mockDataset.getInfo.mockResolvedValue(assertType({ itemCount: 10 }));
+      mockDataset.getData.mockResolvedValue(
+        assertType({ items: [{ id: "log_0" }] }),
+      );
 
       logRepositoryMock.batchInsertLogs.mockRejectedValue(
         new Error("Insert Failed"),
@@ -228,8 +249,10 @@ describe("SyncService", () => {
       // Mock chain directly on the instance we created in beforeEach
       mockDataset.getData.mockReset(); // Clear previous
       mockDataset.getData
-        .mockResolvedValueOnce({ items: batch, count: 10, limit: 10 }) // Call 1 (Start) -> returns batch
-        .mockResolvedValueOnce({ items: [], count: 0, limit: 10 }); // Call 2 (Recursive) -> returns empty
+        .mockResolvedValueOnce(
+          assertType({ items: batch, count: 10, limit: 10 }),
+        ) // Call 1 (Start) -> returns batch
+        .mockResolvedValueOnce(assertType({ items: [], count: 0, limit: 10 })); // Call 2 (Recursive) -> returns empty
 
       duckDbMock.executeQuery.mockResolvedValue([{ maxOffset: null }]);
 
@@ -243,6 +266,64 @@ describe("SyncService", () => {
       expect(mockLimiter.schedule).toHaveBeenCalledTimes(2);
       expect(mockDataset.getData).toHaveBeenCalledTimes(2);
       expect(logRepositoryMock.batchInsertLogs).toHaveBeenCalledTimes(1);
+    });
+
+    test("should map items and generate UUIDs if missing", async () => {
+      duckDbMock.executeQuery.mockResolvedValue([{ maxOffset: null }]);
+      mockDataset.getInfo.mockResolvedValue(assertType({ itemCount: 1 }));
+      mockDataset.getData.mockResolvedValue(
+        assertType({ items: [{ method: "GET" }] }),
+      );
+
+      await service.start();
+      await pendingSyncPromise;
+
+      expect(logRepositoryMock.batchInsertLogs).toHaveBeenCalledWith([
+        expect.objectContaining({
+          id: expect.stringMatching(/^[0-9a-f-]{36}$/),
+          method: "GET",
+          sourceOffset: 0,
+        }),
+      ]);
+    });
+
+    test("should invalidate cache and update error metrics on failure", async () => {
+      duckDbMock.executeQuery.mockResolvedValue([{ maxOffset: 10 }]);
+      mockDataset.getInfo.mockRejectedValue(new Error("Network Error"));
+
+      // Trigger sync via start
+      await service.start();
+      await pendingSyncPromise;
+
+      const metrics = service.getMetrics();
+      expect(metrics.errorCount).toBe(1);
+      expect(metrics.lastErrorTime).toBeDefined();
+
+      // Verify cache invalidation by checking if next sync queries DB again
+      mockDataset.getInfo.mockResolvedValue(assertType({ itemCount: 0 }));
+      duckDbMock.executeQuery.mockClear();
+
+      // Trigger another sync via event
+      const handler = appEvents.on.mock.calls[0][1];
+      await handler({ id: "log_trigger" });
+      await pendingSyncPromise;
+
+      expect(duckDbMock.executeQuery).toHaveBeenCalledWith(
+        expect.stringContaining("SELECT MAX(source_offset)"),
+      );
+    });
+
+    test("should handle limiter schedule errors", async () => {
+      await service.start();
+      mockLimiter.schedule.mockRejectedValue(new Error("Limiter Error"));
+
+      const handler = appEvents.on.mock.calls[0][1];
+      await handler({ id: "log_trigger" });
+
+      expect(loggerMock.error).toHaveBeenCalledWith(
+        expect.objectContaining({ err: expect.anything() }),
+        "Sync scheduling error",
+      );
     });
   });
 });

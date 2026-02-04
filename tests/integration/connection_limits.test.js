@@ -1,0 +1,81 @@
+import { describe, test, expect, beforeAll, afterAll } from "@jest/globals";
+import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
+import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
+import { sleep } from "../setup/helpers/test-utils.js";
+
+// Setup mocks - Use defaults so we use REAL DUCKDB
+await setupCommonMocks({
+  apify: true,
+  logger: true,
+  // Ensure we do NOT mock db or repositories
+  db: false,
+  repositories: false,
+});
+
+const { setupTestApp } = await import("../setup/helpers/app-utils.js");
+const { webhookManager } = await import("../../src/main.js");
+
+/**
+ * @typedef {import("../setup/helpers/app-utils.js").AppClient} AppClient
+ * @typedef {import("../setup/helpers/app-utils.js").TeardownApp} TeardownApp
+ */
+
+describe("Connection Pool Limits", () => {
+  /** @type {AppClient} */
+  let appClient;
+  /** @type {TeardownApp} */
+  let teardownApp;
+  /** @type {string} */
+  let webhookId;
+
+  useMockCleanup();
+
+  beforeAll(async () => {
+    // Set high rate limit to allow stress testing the DB pool
+    ({ appClient, teardownApp } = await setupTestApp({
+      rateLimitPerMinute: 1000,
+    }));
+    const ids = await webhookManager.generateWebhooks(1, 1);
+    webhookId = ids[0];
+
+    // Seed some data
+    await appClient
+      .post(`/webhook/${webhookId}`)
+      .send({ message: "Seed Data" });
+    await sleep(500); // Allow write to settle
+  });
+
+  afterAll(async () => {
+    await teardownApp();
+  });
+
+  test("should handle high concurrency reads without exhausting resources", async () => {
+    // 200 concurrent reads
+    // If the DB logic was "one connection per request" without release, this would eventually crash or timeout.
+    // We want to verify it handles the load.
+    const READ_COUNT = 200;
+    const promises = [];
+
+    for (let i = 0; i < READ_COUNT; i++) {
+      promises.push(
+        appClient.get(`/logs?webhookId=${webhookId}&limit=1`).then((res) => {
+          if (res.status !== 200) {
+            console.error(`Request ${i} failed: ${res.status}`, res.body);
+          }
+          return res.status;
+        }),
+      );
+    }
+
+    const statuses = await Promise.all(promises);
+
+    // Check for 200s
+    // Since we raised the rate limit, we expect the DB to handle this.
+    // If connection pool exhausts, we'll see 500s.
+    const errors = statuses.filter((s) => s !== 200);
+    expect(errors.length).toBe(0);
+
+    // Check health after
+    await appClient.get("/health").expect(200);
+  }, 30000);
+});

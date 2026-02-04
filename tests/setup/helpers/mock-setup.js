@@ -118,23 +118,25 @@ export async function setupCommonMocks(options = {}) {
   } = options;
 
   if (fs) {
-    jest.unstable_mockModule("fs/promises", async () => {
+    const fsPromisesFactory = async () => {
+      /** @type {any} */
       const { fsPromisesMock } = await import("./shared-mocks.js");
-      return {
-        __esModule: true,
-        ...fsPromisesMock,
-        default: fsPromisesMock,
-      };
-    });
+      fsPromisesMock.default = fsPromisesMock;
+      fsPromisesMock.__esModule = true;
+      return fsPromisesMock;
+    };
+    jest.unstable_mockModule("fs/promises", fsPromisesFactory);
+    jest.unstable_mockModule("node:fs/promises", fsPromisesFactory);
 
-    jest.unstable_mockModule("fs", async () => {
+    const fsFactory = async () => {
+      /** @type {any} */
       const { fsMock } = await import("./shared-mocks.js");
-      return {
-        __esModule: true,
-        ...fsMock,
-        default: fsMock,
-      };
-    });
+      fsMock.default = fsMock;
+      fsMock.__esModule = true;
+      return fsMock;
+    };
+    jest.unstable_mockModule("fs", fsFactory);
+    jest.unstable_mockModule("node:fs", fsFactory);
   }
 
   if (axios) {

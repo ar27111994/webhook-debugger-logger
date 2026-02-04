@@ -119,13 +119,16 @@ const shutdown = async (signal) => {
 
   const finalCleanup = async () => {
     await webhookManager.persist();
-    await Actor.exit();
+    if (process.env.NODE_ENV !== "test") await Actor.exit();
     clearTimeout(forceExitTimer);
     if (process.env.NODE_ENV !== "test") process.exit(0);
   };
 
   if (server && server.listening) {
-    server.close(finalCleanup);
+    await new Promise((resolve) => {
+      server?.close(() => resolve(undefined));
+    });
+    await finalCleanup();
   } else {
     await finalCleanup();
   }

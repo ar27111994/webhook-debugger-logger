@@ -49,7 +49,7 @@ export const createErrorHandler =
       );
     }
 
-    res.status(status).json({
+    const responseBody = {
       status,
       requestId,
       error:
@@ -65,5 +65,6 @@ export const createErrorHandler =
                   ? "Client Error"
                   : "Error",
       message: isServerError ? "Internal Server Error" : err.message,
-    });
+    };
+    res.status(status).json(responseBody);
   };

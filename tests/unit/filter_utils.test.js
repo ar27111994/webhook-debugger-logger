@@ -55,6 +55,10 @@ describe("Filter Utils Tests", () => {
         { operator: "eq", value: "123" },
       ]);
     });
+
+    test("should return empty array for non-numeric direct value when type is number", () => {
+      expect(parseRangeQuery("not-a-number", "number")).toEqual([]);
+    });
   });
 
   describe("matchesRange", () => {
@@ -94,6 +98,10 @@ describe("Filter Utils Tests", () => {
         false,
       );
       expect(matchesRange(NaN, [{ operator: "eq", value: 1 }])).toBe(false);
+    });
+
+    test("should return true for unknown operators (safety fallback)", () => {
+      expect(matchesRange(10, [{ operator: "unknown", value: 10 }])).toBe(true);
     });
   });
 

@@ -38,18 +38,29 @@ describe("Stress Tests", () => {
     await teardownApp();
   });
 
-  test("Memory usage should remain stable under high load", async () => {
+  test("Memory usage should remain stable under concurrent high load", async () => {
     const initialMemory = process.memoryUsage().heapUsed;
-    const ITERATIONS = 1000; // Simulate 1000 requests
+    const TOTAL_REQUESTS = 1000;
+    const CONCURRENCY = 50; // 50 requests in parallel
 
-    for (let i = 0; i < ITERATIONS; i++) {
-      await appClient
-        .post(`/webhook/${webhookId}`)
-        .send({ data: `payload-${i}`, timestamp: Date.now() })
-        .expect(200);
+    // Process in batches to control concurrency
+    for (let i = 0; i < TOTAL_REQUESTS; i += CONCURRENCY) {
+      const batchPromises = [];
+
+      for (let j = 0; j < CONCURRENCY; j++) {
+        if (i + j >= TOTAL_REQUESTS) break;
+
+        const p = appClient
+          .post(`/webhook/${webhookId}`)
+          .send({ data: `payload-${i + j}`, timestamp: Date.now() })
+          .expect(200);
+        batchPromises.push(p);
+      }
+
+      await Promise.all(batchPromises);
 
       // Clear mocks periodically to avoid memory leaks from accumulated calls
-      if (i % 100 === 0) {
+      if (i % 200 === 0) {
         jest.mocked(apifyMock.pushData).mockClear();
       }
     }
@@ -63,13 +74,12 @@ describe("Stress Tests", () => {
     const memoryDiffMB = (finalMemory - initialMemory) / 1024 / 1024;
 
     console.log(
-      `Memory growth after ${ITERATIONS} requests: ${memoryDiffMB.toFixed(
+      `Memory growth after ${TOTAL_REQUESTS} concurrent requests: ${memoryDiffMB.toFixed(
         2,
       )} MB`,
     );
 
     // Expect memory growth to be reasonable (e.g., < 100MB for 1000 requests including overhead)
-    // Note: This is an observation test; precise assertion depends on the environment
     expect(memoryDiffMB).toBeLessThan(100);
-  }, 45000); // Increased timeout
+  }, 60000); // Increased timeout for load
 });

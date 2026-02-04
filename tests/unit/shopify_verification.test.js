@@ -157,6 +157,10 @@ describe("Shopify Signature Verification (Raw Body)", () => {
     );
     expect(event.signatureValid).toBe(false);
     expect(event.signatureError).toBe("Signature mismatch");
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ error: "Invalid signature" }),
+    );
   });
 
   test("should fail Shopify signature if timestamp is too old", async () => {
@@ -206,6 +210,10 @@ describe("Shopify Signature Verification (Raw Body)", () => {
     expect(event.signatureValid).toBe(false);
     expect(event.signatureError).toEqual(
       expect.stringContaining("Timestamp outside tolerance"),
+    );
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ error: "Invalid signature" }),
     );
   });
 

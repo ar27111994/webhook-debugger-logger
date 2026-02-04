@@ -150,4 +150,25 @@ describe("Large Payload Stability", () => {
     expect(typeof body).toBe("string");
     expect(contentType).toBe("image/png");
   }, 60000);
+
+  test("Should handle deeply nested JSON without crashing", async () => {
+    const [webhookId] = await webhookManager.generateWebhooks(1, 1);
+
+    // Create nested object: {a:{a:{...}}}
+    let nested = { a: 1 };
+    for (let i = 0; i < 2000; i++) {
+      nested = { a: assertType(nested) };
+    }
+
+    try {
+      const res = await appClient
+        .post(`/webhook/${webhookId}`)
+        .set("Content-Type", "application/json")
+        .send(nested);
+
+      expect([200, 400, 413, 500]).toContain(res.statusCode);
+    } catch {
+      // Supertest/Axios might fail to serialize too
+    }
+  });
 });

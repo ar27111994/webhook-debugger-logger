@@ -108,6 +108,26 @@ describe("Alerting", () => {
       };
       expect(shouldAlert(config, context)).toBe(true); // Default includes 5xx
     });
+
+    test("should cover break statements when triggers present but conditions not met", () => {
+      const config = {
+        alertOn: /** @type {AlertTrigger[]} */ ([
+          "4xx",
+          "5xx",
+          "timeout",
+          "signature_invalid",
+        ]),
+      };
+      const context = {
+        webhookId: "test",
+        method: "POST",
+        statusCode: 200, // Not 4xx or 5xx
+        error: "Not a tim-e-out", // Not timeout
+        signatureValid: true, // Not invalid
+        timestamp: new Date().toISOString(),
+      };
+      expect(shouldAlert(config, context)).toBe(false);
+    });
   });
 
   describe("sendAlert", () => {
@@ -156,7 +176,7 @@ describe("Alerting", () => {
     });
 
     test("should handle Slack failure gracefully and log specific error", async () => {
-      const networkError = new Error("Network error");
+      const networkError = new Error("Slack Network error");
       axiosMock.post.mockRejectedValueOnce(networkError);
 
       const config = { slack: { webhookUrl: "https://hooks.slack.com/test" } };
@@ -170,12 +190,36 @@ describe("Alerting", () => {
       const result = await sendAlert(config, context);
 
       expect(result.slack).toBe(false);
-      // Verify logger was called with the error
       expect(loggerMock.error).toHaveBeenCalledWith(
         expect.objectContaining({
-          err: expect.objectContaining({ message: "Network error" }),
+          err: expect.objectContaining({ message: "Slack Network error" }),
         }),
         "Slack notification failed",
+      );
+    });
+
+    test("should handle Discord failure gracefully and log specific error", async () => {
+      const networkError = new Error("Discord Network error");
+      axiosMock.post.mockRejectedValueOnce(networkError);
+
+      const config = {
+        discord: { webhookUrl: "https://discord.com/api/webhooks/test" },
+      };
+      const context = {
+        webhookId: "wh_123",
+        method: "POST",
+        error: "Test error",
+        timestamp: new Date().toISOString(),
+      };
+
+      const result = await sendAlert(config, context);
+
+      expect(result.discord).toBe(false);
+      expect(loggerMock.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          err: expect.objectContaining({ message: "Discord Network error" }),
+        }),
+        "Discord notification failed",
       );
     });
 

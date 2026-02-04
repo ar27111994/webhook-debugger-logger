@@ -5,6 +5,7 @@ import {
   DEFAULT_PAYLOAD_LIMIT,
   DEFAULT_RATE_LIMIT_PER_MINUTE,
 } from "../../src/consts.js";
+import { assertType } from "../setup/helpers/test-utils.js";
 
 // 1. Setup Common Mocks
 await setupCommonMocks({
@@ -146,6 +147,19 @@ describe("AppState", () => {
       );
     });
 
+    test("should use default retention (24h) if retentionHours is missing", async () => {
+      appState.retentionHours = undefined;
+      jest.mocked(webhookManagerMock.getAllActive).mockReturnValue([]);
+      const update = createUpdateConfig({
+        urlCount: 1,
+        retentionHours: undefined,
+      });
+
+      await appState.applyConfigUpdate({}, update);
+
+      expect(webhookManagerMock.generateWebhooks).toHaveBeenCalledWith(1, 24);
+    });
+
     test("should NOT trigger generation if urlCount is sufficient", async () => {
       jest.mocked(webhookManagerMock.getAllActive).mockReturnValue([
         { id: "wh_1", expiresAt: "2026-01-01T00:00:00.000Z" },
@@ -201,6 +215,11 @@ describe("AppState", () => {
       const destroySpy = jest.spyOn(appState.rateLimiter, "destroy");
       appState.destroy();
       expect(destroySpy).toHaveBeenCalled();
+    });
+
+    test("should handle destroy when rate limiter is missing", () => {
+      appState.rateLimiter = assertType(null);
+      expect(() => appState.destroy()).not.toThrow();
     });
   });
 });

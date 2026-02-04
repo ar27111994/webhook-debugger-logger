@@ -59,7 +59,7 @@ export async function getKvsUrl(key) {
  * @param {number} options.originalSize - The original size of the payload in bytes.
  * @param {string} [options.note] - Optional note explaining the offload.
  * @param {string} [options.data] - Optional short code for the data field.
- * @returns {object}
+ * @returns {Object.<string, string|number>}
  */
 export function createReferenceBody({
   key,

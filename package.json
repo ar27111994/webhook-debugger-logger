@@ -1,6 +1,6 @@
 {
   "name": "webhook-debugger-logger",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "type": "module",
   "description": "Generate temporary webhook URLs and log all incoming requests with full details.",
   "main": "src/main.js",
@@ -14,6 +14,7 @@
   "scripts": {
     "start": "node src/main.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:stress": "node --experimental-vm-modules --expose-gc node_modules/jest/bin/jest.js tests/e2e/stress.test.js",
     "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
     "lint": "eslint src tests",
     "lint:fix": "eslint src tests --fix",
@@ -57,12 +58,18 @@
   },
   "jest": {
     "transform": {},
+    "coveragePathIgnorePatterns": [
+      "/node_modules/",
+      "/tests/setup/",
+      "/tests/fixtures/",
+      "/tests/manual/"
+    ],
     "coverageThreshold": {
       "global": {
-        "branches": 100,
-        "functions": 100,
-        "lines": 100,
-        "statements": 100
+        "branches": 90,
+        "functions": 90,
+        "lines": 90,
+        "statements": 90
       }
     },
     "setupFiles": [

@@ -42,8 +42,8 @@ export class SyncService {
   #cachedMaxOffset;
   /** @type {boolean} */
   #isRunning;
-  /** @type {AppEvents['logReceived'] | null} */
-  #boundOnLogReceived = null;
+  /** @type {AppEvents['logReceived']} */
+  #boundOnLogReceived;
 
   // Metrics
   /** @type {number} */
@@ -117,9 +117,7 @@ export class SyncService {
     this.#triggerSync();
 
     // Listen for new logs
-    if (this.#boundOnLogReceived) {
-      appEvents.on("log:received", this.#boundOnLogReceived);
-    }
+    appEvents.on("log:received", this.#boundOnLogReceived);
   }
 
   /**
@@ -128,9 +126,7 @@ export class SyncService {
   stop() {
     log.info("SyncService stopped");
     this.#isRunning = false;
-    if (this.#boundOnLogReceived) {
-      appEvents.off("log:received", this.#boundOnLogReceived);
-    }
+    appEvents.off("log:received", this.#boundOnLogReceived);
     this.#limiter.stop({ dropWaitingJobs: true });
   }
 

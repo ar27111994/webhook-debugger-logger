@@ -140,6 +140,49 @@ describe("RateLimiter Unit Tests", () => {
     expect(rateLimiter.entryCount).toBe(0);
   });
 
+  test("should log pruning when not in test environment", () => {
+    const originalEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    try {
+      rateLimiter = new RateLimiter(10, 1000, 100);
+      const mw = rateLimiter.middleware();
+      const next = createMockNextFunction();
+      const res = createMockResponse();
+
+      mw(createMockRequest({ ip: "userA", headers: {} }), res, next);
+
+      // Advance past window so it's PRUNABLE
+      jest.advanceTimersByTime(1100);
+      // Background interval check
+      jest.advanceTimersByTime(DEFAULT_RATE_LIMIT_WINDOW_MS);
+
+      expect(loggerMock.info).toHaveBeenCalledWith(
+        expect.objectContaining({ prunedCount: 1 }),
+        "RateLimiter pruned expired entries",
+      );
+    } finally {
+      process.env.NODE_ENV = originalEnv;
+    }
+  });
+
+  test("should return false for hasIp in non-test environment", () => {
+    const originalEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    try {
+      rateLimiter = new RateLimiter(10, 1000, 100);
+      const mw = rateLimiter.middleware();
+      mw(
+        createMockRequest({ ip: "1.2.3.4", headers: {} }),
+        createMockResponse(),
+        createMockNextFunction(),
+      );
+
+      expect(rateLimiter.hasIp("1.2.3.4")).toBe(false);
+    } finally {
+      process.env.NODE_ENV = originalEnv;
+    }
+  });
+
   test("should reject requests without identifiable IP", () => {
     rateLimiter = new RateLimiter(10, 1000);
     const mw = rateLimiter.middleware();
@@ -188,9 +231,23 @@ describe("RateLimiter Unit Tests", () => {
     const next = createMockNextFunction();
 
     mw(req, res, next);
-    expect(next).toHaveBeenCalled();
-    expect(next).toHaveBeenCalled();
+    expect(next).toHaveBeenCalledTimes(1);
     expect(rateLimiter.hasIp("10.0.0.1")).toBe(true);
+  });
+
+  test("should handle x-forwarded-for with multiple IPs and extract the first one", () => {
+    rateLimiter = new RateLimiter(1, 1000, 100, true);
+    const mw = rateLimiter.middleware();
+    const req = createMockRequest({
+      headers: { "x-forwarded-for": "1.1.1.1, 2.2.2.2, 3.3.3.3" },
+    });
+    const res = createMockResponse();
+    const next = createMockNextFunction();
+
+    mw(req, res, next);
+    expect(next).toHaveBeenCalled();
+    expect(rateLimiter.hasIp("1.1.1.1")).toBe(true);
+    expect(rateLimiter.hasIp("2.2.2.2")).toBe(false);
   });
 
   test("should use x-real-ip when trustProxy is enabled and req.ip is absent", () => {
@@ -422,5 +479,20 @@ describe("RateLimiter Unit Tests", () => {
     } finally {
       process.env.NODE_ENV = originalEnv;
     }
+  });
+
+  test("should extract first valid IP from array header value", () => {
+    // Tests the utility method extractFirstValidIp directly
+    rateLimiter = new RateLimiter(10, 1000);
+    const arrayHeader = ["10.0.0.1", "192.168.1.1"];
+
+    const result = rateLimiter.extractFirstValidIp(arrayHeader);
+    expect(result).toBe("10.0.0.1");
+
+    // Also test single value behavior
+    expect(rateLimiter.extractFirstValidIp("1.1.1.1")).toBe("1.1.1.1");
+    // Test empty
+    expect(rateLimiter.extractFirstValidIp([])).toBeUndefined();
+    expect(rateLimiter.extractFirstValidIp(undefined)).toBeUndefined();
   });
 });

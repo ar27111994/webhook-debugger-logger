@@ -303,9 +303,11 @@ describe("LoggerMiddleware Coverage Tests", () => {
 
       await middleware.middleware(req, res, next);
 
-      const pushCall = mockActor.pushData.mock.calls[0][0];
-      expect(pushCall.signatureValid).toBe(false);
-      expect(pushCall.signatureError).toBe("Mismatch");
+      expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ error: "Invalid signature" }),
+      );
+      expect(mockActor.pushData).toHaveBeenCalled();
     });
   });
 

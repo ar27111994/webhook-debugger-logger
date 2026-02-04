@@ -5,12 +5,23 @@ import { jest, describe, test, expect, beforeEach } from "@jest/globals";
  * @typedef {import('../../src/webhook_manager.js').WebhookManager} WebhookManager
  */
 
-import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
+import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 
-import { apifyMock } from "../setup/helpers/shared-mocks.js";
+import {
+  apifyMock,
+  logRepositoryMock,
+  constsMock,
+  duckDbMock,
+} from "../setup/helpers/shared-mocks.js";
 
-await setupCommonMocks({ apify: true });
+await setupCommonMocks({
+  apify: true,
+  repositories: true,
+  consts: true,
+  logger: true,
+  db: true,
+});
 
 const Actor = apifyMock;
 const { WebhookManager } = await import("../../src/webhook_manager.js");
@@ -101,6 +112,109 @@ describe("WebhookManager", () => {
     expect(webhookManager.hasWebhook("wh_active")).toBe(true);
   });
 
+  test("generateWebhooks() should throw if count exceeds MAX_BULK_CREATE", async () => {
+    await webhookManager.init();
+    await expect(webhookManager.generateWebhooks(999, 24)).rejects.toThrow(
+      "Invalid count: 999. Max allowed is 10.",
+    );
+  });
+
+  test("cleanup() should initialize kvStore if null", async () => {
+    // Manually set past webhook and DON'T call init()
+    webhookManager.addWebhookForTest("wh_uninit", {
+      expiresAt: "2000-01-01T00:00:00Z",
+    });
+
+    await webhookManager.cleanup();
+    expect(Actor.openKeyValueStore).toHaveBeenCalled();
+  });
+
+  test("cleanup() should delete offloaded payloads and handle errors", async () => {
+    const past = new Date(Date.now() - 10000).toISOString();
+    webhookManager.addWebhookForTest("wh_cleanup", { expiresAt: past });
+
+    logRepositoryMock.findOffloadedPayloads.mockResolvedValue([
+      { key: "key_1" },
+      { key: "key_2" },
+    ]);
+
+    // Simulate one failure, one success
+    jest
+      .mocked(mockKvStore.setValue)
+      .mockRejectedValueOnce(new Error("KVS Delete Fail"))
+      .mockResolvedValueOnce(undefined);
+
+    await webhookManager.init();
+    await webhookManager.cleanup();
+
+    expect(mockKvStore.setValue).toHaveBeenCalledWith("key_1", null);
+    expect(mockKvStore.setValue).toHaveBeenCalledWith("key_2", null);
+    expect(webhookManager.hasWebhook("wh_cleanup")).toBe(false);
+  });
+
+  test("cleanup() should handle log deletion errors", async () => {
+    const past = new Date(Date.now() - 10000).toISOString();
+    webhookManager.addWebhookForTest("wh_err", { expiresAt: past });
+    logRepositoryMock.deleteLogsByWebhookId.mockRejectedValue(
+      new Error("DB Delete Fail"),
+    );
+
+    await webhookManager.init();
+    await webhookManager.cleanup(); // Should not throw
+
+    expect(webhookManager.hasWebhook("wh_err")).toBe(false);
+  });
+
+  test("cleanup() should trigger vacuum if enabled", async () => {
+    const past = new Date(Date.now() - 10000).toISOString();
+    webhookManager.addWebhookForTest("wh_past", { expiresAt: past });
+
+    // Enable vacuum via mock
+    Object.defineProperty(constsMock, "DUCKDB_VACUUM_ENABLED", {
+      value: true,
+    });
+    Object.defineProperty(constsMock, "DUCKDB_VACUUM_INTERVAL_MS", {
+      value: 0,
+    });
+
+    duckDbMock.vacuumDb.mockResolvedValue(undefined);
+
+    await webhookManager.init();
+    await webhookManager.cleanup();
+
+    expect(duckDbMock.vacuumDb).toHaveBeenCalled();
+
+    // Reset consts for other tests
+    Object.defineProperty(constsMock, "DUCKDB_VACUUM_ENABLED", {
+      value: false,
+    });
+  });
+
+  test("cleanup() should handle vacuum failures", async () => {
+    const past = new Date(Date.now() - 10000).toISOString();
+    webhookManager.addWebhookForTest("wh_past", { expiresAt: past });
+
+    Object.defineProperty(constsMock, "DUCKDB_VACUUM_ENABLED", {
+      value: true,
+    });
+    Object.defineProperty(constsMock, "DUCKDB_VACUUM_INTERVAL_MS", {
+      value: -1,
+    });
+    duckDbMock.vacuumDb.mockRejectedValue(new Error("Vacuum Fail"));
+
+    await webhookManager.init();
+    await webhookManager.cleanup();
+
+    expect(loggerMock.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ err: expect.anything() }),
+      "DuckDB vacuum failed",
+    );
+
+    Object.defineProperty(constsMock, "DUCKDB_VACUUM_ENABLED", {
+      value: false,
+    });
+  });
+
   test("generateWebhooks() should throw on invalid count (negative)", async () => {
     await webhookManager.init();
     await expect(webhookManager.generateWebhooks(-1, 24)).rejects.toThrow(
@@ -187,6 +301,49 @@ describe("WebhookManager", () => {
     jest.useRealTimers();
   });
 
+  test("updateRetention() should NOT extend if new expiry is earlier", async () => {
+    const now = Date.now();
+    await webhookManager.init();
+    const expiry = new Date(now + 3600 * 1000).toISOString(); // 1 hour
+    webhookManager.addWebhookForTest("wh_test", { expiresAt: expiry });
+
+    // Try to update to 0.5 hours (should be ignored)
+    await webhookManager.updateRetention(0.5);
+
+    const data = webhookManager.getWebhookData("wh_test");
+    expect(data?.expiresAt).toBe(expiry);
+  });
+
+  test("updateRetention() should skip invalid/past expiries", async () => {
+    await webhookManager.init();
+    webhookManager.addWebhookForTest("wh_past", {
+      expiresAt: "2000-01-01T00:00:00Z",
+    });
+    webhookManager.addWebhookForTest("wh_invalid", { expiresAt: "invalid" });
+
+    await webhookManager.updateRetention(24);
+
+    expect(webhookManager.getWebhookData("wh_past")?.expiresAt).toBe(
+      "2000-01-01T00:00:00Z",
+    );
+  });
+
+  test("updateRetention() should log significant updates", async () => {
+    const now = Date.now();
+    await webhookManager.init();
+    // Expiry in 1 second
+    webhookManager.addWebhookForTest("wh_test", {
+      expiresAt: new Date(now + 1000).toISOString(),
+    });
+
+    await webhookManager.updateRetention(1); // 1 hour
+
+    expect(loggerMock.info).toHaveBeenCalledWith(
+      expect.objectContaining({ retentionHours: 1 }),
+      "Refreshed webhook retention",
+    );
+  });
+
   test("persist() should handle setValue errors gracefully", async () => {
     jest
       .mocked(mockKvStore.setValue)
@@ -237,5 +394,15 @@ describe("WebhookManager", () => {
     const active = webhookManager.getAllActive();
     expect(active).toHaveLength(1);
     expect(active[0].id).toBe("wh_valid");
+  });
+
+  test("hasWebhook and addWebhookForTest behavior in non-test env", () => {
+    const originalEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+
+    webhookManager.addWebhookForTest("prod_test", { expiresAt: "..." });
+    expect(webhookManager.hasWebhook("prod_test")).toBe(false);
+
+    process.env.NODE_ENV = originalEnv;
   });
 });

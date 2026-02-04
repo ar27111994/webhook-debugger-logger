@@ -12,6 +12,8 @@ import {
   DEFAULT_FORWARD_RETRIES,
   TRANSIENT_ERROR_CODES,
   RETRY_BASE_DELAY_MS,
+  RECURSION_HEADER_NAME,
+  RECURSION_HEADER_VALUE,
 } from "../consts.js";
 import { createChildLogger, serializeError } from "../utils/logger.js";
 
@@ -75,7 +77,7 @@ export class ForwardingService {
         await axios.post(validatedUrl, req.body, {
           headers: {
             ...forwardingHeaders,
-            "X-Forwarded-By": "Apify-Webhook-Debugger",
+            [RECURSION_HEADER_NAME]: RECURSION_HEADER_VALUE,
             host: hostHeader,
           },
           timeout: FORWARD_TIMEOUT_MS,

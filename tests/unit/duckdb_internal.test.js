@@ -79,13 +79,14 @@ describe("DuckDB Internal Unit Tests", () => {
     );
 
     // Reset consts defaults via shared mock
-    Object.defineProperty(constsMock, "DUCKDB_FILENAME", {
+    Object.defineProperty(constsMock, "DUCKDB_FILENAME_DEFAULT", {
       value: "test.db",
       writable: true,
     });
 
     // Import fresh module for each test
     DuckDB = await import("../../src/db/duckdb.js");
+    await DuckDB.resetDbInstance();
   });
 
   afterEach(async () => {
@@ -95,6 +96,7 @@ describe("DuckDB Internal Unit Tests", () => {
 
   describe("getDbInstance", () => {
     test("should handle fs.mkdir errors strictly (not EEXIST)", async () => {
+      delete process.env.DUCKDB_FILENAME;
       /** @type {CommonError} */
       const error = new Error("Permission denied");
       error.code = "EACCES";
@@ -116,7 +118,7 @@ describe("DuckDB Internal Unit Tests", () => {
       // Override the mock specifically for this test
       jest.unstable_mockModule("../../src/consts.js", () => ({
         ...constsMock,
-        DUCKDB_FILENAME: ":memory:",
+        DUCKDB_FILENAME_DEFAULT: ":memory:",
       }));
 
       jest.resetModules();
@@ -275,9 +277,23 @@ describe("DuckDB Internal Unit Tests", () => {
     });
 
     test("closeDb should close all pool connections", async () => {
-      await DuckDB.executeQuery("SELECT 1");
+      // Warm up to ensure singleton and schema are initialized
+      await DuckDB.getDbInstance();
+
+      // Clear calls from getDbInstance/initSchema
+      mockDuckDBConnection.closeSync.mockClear();
+
+      // Execute 2 queries CONCURRENTLY. This forces 2 connections to be created and then pooled.
+      await Promise.all([
+        DuckDB.executeQuery("SELECT 1"),
+        DuckDB.executeQuery("SELECT 2"),
+      ]);
+
+      // closeDb should drain the pool and close each connection
       await DuckDB.closeDb();
-      expect(mockDuckDBConnection.closeSync).toHaveBeenCalled();
+
+      // Should be exactly 2 (for the 2 pooled connections)
+      expect(mockDuckDBConnection.closeSync).toHaveBeenCalledTimes(2);
     });
 
     test("closeDb should close in-use connections", async () => {

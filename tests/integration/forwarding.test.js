@@ -17,6 +17,10 @@ await setupCommonMocks({
   logger: true,
 });
 import { ssrfMock } from "../setup/helpers/shared-mocks.js";
+import {
+  RECURSION_HEADER_NAME,
+  RECURSION_HEADER_VALUE,
+} from "../../src/consts.js";
 const axios = (await import("axios")).default;
 const { Actor } = await import("apify");
 
@@ -58,7 +62,7 @@ describe("Forwarding Security", () => {
     expect(sentHeaders["cookie"]).toBeUndefined();
     expect(sentHeaders["x-api-key"]).toBeUndefined();
     expect(sentHeaders["user-agent"]).toBe("test-agent");
-    expect(sentHeaders["X-Forwarded-By"]).toBe("Apify-Webhook-Debugger");
+    expect(sentHeaders[RECURSION_HEADER_NAME]).toBe(RECURSION_HEADER_VALUE);
   });
 
   test("should strip almost all headers if forwardHeaders is false", async () => {
@@ -90,7 +94,7 @@ describe("Forwarding Security", () => {
     expect(sentHeaders["content-length"]).toBeUndefined();
     expect(sentHeaders["user-agent"]).toBeUndefined();
     expect(sentHeaders["x-custom"]).toBeUndefined();
-    expect(sentHeaders["X-Forwarded-By"]).toBe("Apify-Webhook-Debugger");
+    expect(sentHeaders[RECURSION_HEADER_NAME]).toBe(RECURSION_HEADER_VALUE);
   });
 
   test("should mask sensitive headers in captured event if maskSensitiveData is true", async () => {

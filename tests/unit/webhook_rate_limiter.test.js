@@ -136,6 +136,25 @@ describe("WebhookRateLimiter", () => {
     jest.useRealTimers();
   });
 
+  test("should partially prune entries (mixed expiration)", () => {
+    jest.useFakeTimers();
+    // Use larger window to make gaps obvious
+    rateLimiter = new WebhookRateLimiter(5, 2000, 10);
+
+    rateLimiter.check("wh_early"); // t=0
+
+    // Advance 1000ms. t=1000.
+    jest.advanceTimersByTime(1000);
+
+    rateLimiter.check("wh_late"); // t=1000.
+
+    jest.advanceTimersByTime(1500);
+
+    expect(rateLimiter.entryCount).toBe(1);
+
+    jest.useRealTimers();
+  });
+
   test("should get and set limit", () => {
     expect(rateLimiter.limit).toBe(5);
     rateLimiter.limit = 20;
@@ -152,5 +171,38 @@ describe("WebhookRateLimiter", () => {
       // @ts-expect-error - testing invalid type
       rateLimiter.limit = "string";
     }).toThrow();
+  });
+
+  test("should log pruned count when entries expire (partial pruning)", () => {
+    jest.useFakeTimers();
+    // Use a fresh instance
+    rateLimiter = new WebhookRateLimiter(5, 1000, 10);
+    rateLimiter.check("wh_keep");
+    jest.advanceTimersByTime(500);
+    rateLimiter.check("wh_prune");
+
+    // t=0: check(wh_keep). Expires at t=1000.
+    // t=500: check(wh_prune). Expires at t=1500.
+    // t=1100: wh_keep expired. wh_prune valid.
+
+    // rateLimiter._cleanup() is called via interval.
+    jest.advanceTimersByTime(700); // t=1200.
+
+    // wh_keep should be gone. wh_prune should be there.
+    expect(rateLimiter.entryCount).toBe(1);
+
+    // Check specific entry survival
+    const remaining = rateLimiter.check("wh_prune");
+    expect(remaining.allowed).toBe(true);
+    expect(remaining.remaining).toBe(3); // 2 checks done = 2 hits = 3 remaining
+    expect(rateLimiter.entryCount).toBe(1);
+
+    // wh_keep should be re-initialized if checked again (resetMs = 0 or close to new window)
+    // But since we can't inspect private map easily without exposing, we trust entryCount + specific check logic.
+    // However, checking "wh_keep" should create a NEW entry if it was pruned.
+    rateLimiter.check("wh_keep");
+    expect(rateLimiter.entryCount).toBe(2);
+
+    jest.useRealTimers();
   });
 });

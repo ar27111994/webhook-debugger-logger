@@ -1,4 +1,4 @@
-import { describe, test, expect } from "@jest/globals";
+import { describe, test, expect, jest } from "@jest/globals";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 import { assertType, createMockRequest } from "../setup/helpers/test-utils.js";
 
@@ -57,6 +57,15 @@ describe("ForwardingService Tests", () => {
         "http://target.com",
       );
 
+      expect(ssrfMock.validateUrlForSsrf).toHaveBeenCalledWith(
+        "http://target.com",
+      );
+    });
+
+    test("should normalize URL without protocol", async () => {
+      const event = assertType({ webhookId: "fw-1", id: "evt-1" });
+      const request = createMockRequest();
+      await forwardingService.forwardWebhook(event, request, {}, "target.com");
       expect(ssrfMock.validateUrlForSsrf).toHaveBeenCalledWith(
         "http://target.com",
       );
@@ -142,6 +151,27 @@ describe("ForwardingService Tests", () => {
       expect(headers).toHaveProperty("content-type", "application/json");
       expect(headers).not.toHaveProperty("x-custom");
     });
+
+    test("should handle ECONNABORTED error logging", async () => {
+      /** @type {CommonError} */
+      const error = new Error("timeout");
+      error.code = "ECONNABORTED";
+      mockAxios.post.mockRejectedValue(error);
+      const event = assertType({ webhookId: "fw-5", id: "evt-5" });
+      const request = createMockRequest();
+
+      await forwardingService.forwardWebhook(
+        event,
+        request,
+        { maxForwardRetries: 1 },
+        "http://target.com",
+      );
+
+      expect(loggerMock.error).toHaveBeenCalledWith(
+        expect.anything(),
+        "Forward attempt timed out",
+      );
+    });
   });
 
   describe("Forwarding Retries & Failures", () => {
@@ -225,6 +255,66 @@ describe("ForwardingService Tests", () => {
           body: expect.stringContaining("after 2 attempts"),
         }),
       );
+    });
+
+    test("should log error if Actor.pushData fails", async () => {
+      /** @type {CommonError} */
+      const error = new Error("Fatal");
+      error.code = "FATAL";
+      mockAxios.post.mockRejectedValue(error);
+      mockActor.pushData.mockRejectedValue(new Error("Storage Error"));
+
+      const event = assertType({ webhookId: "fw-fail", id: "evt-6" });
+      const request = createMockRequest();
+
+      await forwardingService.forwardWebhook(
+        event,
+        request,
+        { maxForwardRetries: 1 },
+        "http://target.com",
+      );
+
+      expect(loggerMock.error).toHaveBeenCalledWith(
+        expect.objectContaining({ err: expect.anything() }),
+        "Failed to log forward error",
+      );
+    });
+
+    test("should handle setTimeout unref branch", async () => {
+      /** @type {CommonError} */
+      const error = new Error("Retryable");
+      error.code = "ENOTFOUND"; // transient
+      mockAxios.post
+        .mockRejectedValueOnce(error)
+        .mockResolvedValueOnce({ status: 200 });
+
+      const event = assertType({ webhookId: "fw-ref", id: "evt-7" });
+      const request = createMockRequest();
+
+      // Mock setTimeout to check unref
+      const mockTimer = { unref: jest.fn() };
+      const originalSetTimeout = global.setTimeout;
+      global.setTimeout = assertType(
+        /**
+         * @param {Function} cb
+         * @returns {typeof setTimeout}
+         */
+        (cb) => {
+          cb();
+          return assertType(mockTimer);
+        },
+      );
+
+      await forwardingService.forwardWebhook(
+        event,
+        request,
+        { maxForwardRetries: 2 },
+        "http://target.com",
+      );
+
+      expect(mockTimer.unref).toHaveBeenCalled();
+
+      global.setTimeout = originalSetTimeout;
     });
   });
 });

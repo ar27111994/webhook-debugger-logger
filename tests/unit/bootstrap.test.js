@@ -1,17 +1,17 @@
 import { jest, describe, test, expect, beforeEach } from "@jest/globals";
 import { assertType } from "../setup/helpers/test-utils.js";
 
+// 1. Setup Common Mocks FIRST
 import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
 import { fsPromisesMock as mockFs } from "../setup/helpers/shared-mocks.js";
 
-// 2. Setup Common Mocks
-// Ensure we import mock setup AFTER mocking fs
-const { useMockCleanup } = await import("../setup/helpers/test-lifecycle.js");
-
 await setupCommonMocks({ logger: true, fs: true });
 
-// Import module under test
-const bootstrap = await import("../../src/utils/bootstrap.js");
+// 2. Import module under test dynamically
+const bootstrap = await import(`../../src/utils/bootstrap.js?t=${Date.now()}`);
+
+// 3. Import lifecycle helpers
+const { useMockCleanup } = await import("../setup/helpers/test-lifecycle.js");
 
 /**
  * @typedef {import("../../src/typedefs.js").CommonError} CommonError
@@ -121,7 +121,9 @@ describe("Bootstrap Utilities", () => {
       error.code = "ENOENT";
       mockFs.access.mockRejectedValue(assertType(error));
       mockFs.readFile.mockResolvedValue(assertType(JSON.stringify(mockSchema)));
-      mockFs.writeFile.mockRejectedValue(assertType(new Error("Write failed")));
+      mockFs.writeFile.mockRejectedValueOnce(
+        assertType(new Error("Write failed")),
+      );
 
       await bootstrap.ensureLocalInputExists(mockInput);
 
@@ -132,27 +134,85 @@ describe("Bootstrap Utilities", () => {
     });
 
     test("should cleanup temp file if rename fails during creation", async () => {
+      // Force individual implementation to ensure it rejects as expected
+      mockFs.rename.mockImplementationOnce(() =>
+        Promise.reject(new Error("Rename failed")),
+      );
+
+      // Re-import to ensure fresh binding
+      const bootstrapRe = await import(
+        `../../src/utils/bootstrap.js?t=${Date.now()}_reimport`
+      );
+
       /** @type {CommonError} */
       const error = new Error("ENOENT");
       error.code = "ENOENT";
       mockFs.access.mockRejectedValue(assertType(error));
       mockFs.readFile.mockResolvedValue(assertType(JSON.stringify(mockSchema)));
-      mockFs.rename.mockRejectedValue(assertType(new Error("Rename failed")));
+
+      // Logic expects it to swallow the error and log a warning
+      await bootstrapRe.ensureLocalInputExists(mockInput);
+
+      // Verify rm was called for cleanup (twice: once for target, once for tmp on error)
+      expect(mockFs.rm).toHaveBeenCalledTimes(2);
+      expect(mockFs.rm).toHaveBeenCalledWith(
+        expect.stringContaining(".tmp"),
+        expect.any(Object),
+      );
+
+      // Verify it logged the warning about failing to write
+      expect(loggerMock.warn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          err: expect.objectContaining({ message: "Rename failed" }),
+        }),
+        "Failed to write default input file",
+      );
+    });
+
+    test("should log warning if access fails with unexpected non-ENOENT error", async () => {
+      mockFs.access.mockRejectedValue(assertType(new Error("EPERM")));
 
       await bootstrap.ensureLocalInputExists(mockInput);
 
-      // Check if rm was called (it handles temp cleanup)
-      // The code calls fs.rm twice: once for target before rename, once for tmp on error.
-      // We skip verifying fs.rm calls due to mocking flakiness, but verify operation result via logging.
-
       expect(loggerMock.warn).toHaveBeenCalledWith(
         expect.objectContaining({ err: expect.any(Object) }),
-        "Failed to write default input file",
+        "Unexpected error accessing INPUT.json",
       );
     });
   });
 
   describe("getDefaultsFromSchema", () => {
+    test("should return empty object if no schema file exists", async () => {
+      mockFs.readFile.mockRejectedValue(assertType(new Error("ENOENT"))); // Simulate file not found
+      const defaults = await bootstrap.getDefaultsFromSchema();
+      expect(defaults).toEqual({});
+    });
+
+    test("should use APIFY_ACTOR_DIR for schema path if set", async () => {
+      process.env.APIFY_ACTOR_DIR = "/custom/actor/dir";
+      const mockSchema = {
+        title: "Custom Path Schema",
+        type: "object",
+        properties: {},
+      };
+
+      mockFs.readFile.mockResolvedValue(assertType(JSON.stringify(mockSchema)));
+
+      // Re-import to trigger the path logic again (though usually only needed if it was top-level)
+      // Here we just testing the function behavior which reads the env var inside.
+      const bootstrapRe = await import(
+        `../../src/utils/bootstrap.js?t=${Date.now()}_custom_path`
+      );
+
+      await bootstrapRe.getDefaultsFromSchema();
+
+      expect(mockFs.readFile).toHaveBeenCalledWith(
+        expect.stringContaining("/custom/actor/dir/.actor/input_schema.json"),
+        "utf-8",
+      );
+      delete process.env.APIFY_ACTOR_DIR;
+    });
+
     test("should handle schema read failure gracefully", async () => {
       /** @type {CommonError} */
       const error = new Error("ENOENT");

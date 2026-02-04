@@ -20,13 +20,21 @@ import {
  */
 
 // Mock Apify and Axios
-import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
-await setupCommonMocks({ axios: true, apify: true, ssrf: true, dns: true });
+import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
+await setupCommonMocks({
+  axios: true,
+  apify: true,
+  ssrf: true,
+  dns: true,
+  logger: true,
+});
 
 import { axiosMock } from "../setup/helpers/shared-mocks.js";
 
 // Mock Dataset
-import { logRepository } from "../../src/repositories/LogRepository.js";
+const { Actor } = await import("apify");
+const { logRepository } =
+  await import("../../src/repositories/LogRepository.js");
 const mockItem = {
   id: "log_recent",
   webhookId: "wh_1",
@@ -133,6 +141,83 @@ describe("Replay Optimization Tests", () => {
         expect.objectContaining({
           message: expect.stringContaining("1.234s timeout per attempt"),
         }),
+      );
+    });
+  });
+
+  describe("KVS Hydration Edge Cases", () => {
+    const offloadedItem = {
+      ...mockItem,
+      body: { data: "[OFFLOADED_TO_KVS]", key: "k123" },
+    };
+
+    test("should log warn and send metadata if hydration returns null", async () => {
+      jest
+        .spyOn(logRepository, "getLogById")
+        .mockResolvedValue(assertType(offloadedItem));
+      Actor.getValue = assertType(
+        jest.fn().mockResolvedValue(assertType(null)),
+      );
+
+      const handler = createReplayHandler();
+      const req = createMockRequest({
+        params: { webhookId: "wh_1", itemId: "log_recent" },
+        query: { url: "https://example.com" },
+      });
+      const res = createMockResponse();
+
+      await handler(req, res, jest.fn());
+
+      const config = getLastAxiosConfig(axiosMock, null);
+      // If hydration fails, it sends the metadata (initial body)
+      expect(config.data).toEqual(offloadedItem.body);
+      expect(loggerMock.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ kvsKey: "k123" }),
+        "Failed to find KVS key, sending metadata instead",
+      );
+    });
+
+    test("should log error if hydration throws", async () => {
+      jest
+        .spyOn(logRepository, "getLogById")
+        .mockResolvedValue(assertType(offloadedItem));
+      Actor.getValue = assertType(
+        jest.fn().mockRejectedValue(assertType(new Error("KVS Crash"))),
+      );
+
+      const handler = createReplayHandler();
+      const req = createMockRequest({
+        params: { webhookId: "wh_1", itemId: "log_recent" },
+        query: { url: "https://example.com" },
+      });
+      const res = createMockResponse();
+
+      await handler(req, res, jest.fn());
+
+      expect(loggerMock.error).toHaveBeenCalledWith(
+        expect.objectContaining({ kvsKey: "k123" }),
+        "Error fetching KVS key",
+      );
+    });
+  });
+
+  describe("Retry Logic Edge Cases", () => {
+    test("should throw early on non-transient errors", async () => {
+      axiosMock.mockRejectedValue({ code: "ECONNREFUSED", message: "Refused" });
+
+      const handler = createReplayHandler();
+      const req = createMockRequest({
+        params: { webhookId: "wh_1", itemId: "log_recent" },
+        query: { url: "https://example.com" },
+      });
+      const res = createMockResponse();
+
+      await handler(req, res, jest.fn());
+
+      expect(axiosMock).toHaveBeenCalledTimes(1);
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ message: "Refused" }),
       );
     });
   });

@@ -24,14 +24,20 @@ import {
  * @typedef {import("express").Request} Request
  * @typedef {import("express").Response} Response
  * @typedef {import("express").RequestHandler} RequestHandler
+ * @typedef {import("../repositories/LogRepository.js").LogRepository} LogRepository
  */
 
 /**
  * Creates the logs route handler.
  * @param {WebhookManager} _webhookManager
+ * @param {object} [deps]
+ * @param {LogRepository} [deps.logRepo]
  * @returns {RequestHandler}
  */
-export const createLogsHandler = (_webhookManager) =>
+export const createLogsHandler = (
+  _webhookManager,
+  { logRepo = logRepository } = {},
+) =>
   asyncHandler(
     /** @param {Request} req @param {Response} res */
     async (req, res) => {
@@ -152,8 +158,7 @@ export const createLogsHandler = (_webhookManager) =>
 
         // Cursor-based pagination (more efficient for large datasets)
         if (cursor) {
-          const { items, nextCursor } =
-            await logRepository.findLogsCursor(filters);
+          const { items, nextCursor } = await logRepo.findLogsCursor(filters);
 
           const enrichedItems = items.map((item) => ({
             ...item,
@@ -183,7 +188,7 @@ export const createLogsHandler = (_webhookManager) =>
         }
 
         // Offset-based pagination (traditional)
-        const { items, total } = await logRepository.findLogs(filters);
+        const { items, total } = await logRepo.findLogs(filters);
 
         const enrichedItems = items.map((item) => ({
           ...item,

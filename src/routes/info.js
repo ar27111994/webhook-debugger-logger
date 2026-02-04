@@ -4,6 +4,8 @@
  * @module routes/info
  */
 
+import { APIFY_HOMEPAGE_URL } from "../consts.js";
+
 /**
  * @typedef {import("express").Request} Request
  * @typedef {import("express").Response} Response
@@ -62,6 +64,6 @@ export const createInfoHandler =
         replay: `${baseUrl}/replay/:webhookId/:itemId?url=http://your-goal.com`,
         info: `${baseUrl}/info`,
       },
-      docs: "https://apify.com/ar27111994/webhook-debugger-logger",
+      docs: APIFY_HOMEPAGE_URL,
     });
   };

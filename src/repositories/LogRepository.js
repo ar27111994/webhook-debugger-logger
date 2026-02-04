@@ -544,10 +544,14 @@ export class LogRepository {
     if (filters.cursor) {
       try {
         const decoded = Buffer.from(filters.cursor, "base64").toString("utf-8");
-        const [cursorTs, cursorId] = decoded.split(":");
-        if (cursorTs && cursorId) {
-          params.cursorTs = cursorTs;
-          params.cursorId = cursorId;
+        const lastColonIndex = decoded.lastIndexOf(":");
+        if (lastColonIndex !== -1) {
+          const cursorTs = decoded.substring(0, lastColonIndex);
+          const cursorId = decoded.substring(lastColonIndex + 1);
+          if (cursorTs && cursorId) {
+            params.cursorTs = cursorTs;
+            params.cursorId = cursorId;
+          }
         }
       } catch {
         // Invalid cursor, ignore

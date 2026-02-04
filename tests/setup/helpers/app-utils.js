@@ -1,5 +1,4 @@
 import request from "supertest";
-import { app, initialize, shutdown } from "../../../src/main.js";
 
 /**
  * @typedef {import("express").Express} App
@@ -11,6 +10,8 @@ import { app, initialize, shutdown } from "../../../src/main.js";
  * Initializes the application for testing.
  * Wraps common boilerplate: initialize(), supertest(app), and exposes a teardown function.
  *
+ * @param {Object} [options]
+ 
  * @example
  * const { appClient, teardownApp } = await setupTestApp();
  * afterAll(teardownApp);
@@ -21,11 +22,15 @@ import { app, initialize, shutdown } from "../../../src/main.js";
  *   teardownApp: TeardownApp
  * }>}
  */
-export const setupTestApp = async () => {
-  await initialize();
+export const setupTestApp = async (options = {}) => {
+  const { app, initialize } = await import("../../../src/main.js");
+  await initialize(options);
   return {
     app,
     appClient: request(app),
-    teardownApp: async () => shutdown("TEST_COMPLETE"),
+    teardownApp: async () => {
+      const { shutdown } = await import("../../../src/main.js");
+      await shutdown("TEST_COMPLETE");
+    },
   };
 };

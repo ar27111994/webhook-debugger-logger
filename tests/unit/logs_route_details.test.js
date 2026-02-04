@@ -134,6 +134,30 @@ describe("Logs Route Details & Payload", () => {
       // Response should NOT include webhookId since it wasn't requested
       expect(res.json).toHaveBeenCalledWith({ id: "log_1", method: "POST" });
     });
+
+    test("should handle race condition where item is deleted between checks", async () => {
+      /** @type {LogEntry} */
+      const mockLog = assertType({
+        id: "log_1",
+        webhookId: "wh_1",
+      });
+
+      logRepositoryMock.getLogById
+        .mockResolvedValueOnce(mockLog) // Existence check passes
+        .mockResolvedValueOnce(null); // Security check fails (deleted)
+
+      req = createMockRequest({
+        params: { logId: "log_1" },
+        query: { fields: "method" },
+      });
+
+      await handler()(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ error: "Log entry not found" }),
+      );
+    });
   });
 
   describe("Log Payload Handler", () => {
@@ -211,6 +235,18 @@ describe("Logs Route Details & Payload", () => {
       expect(res.status).toHaveBeenCalledWith(404);
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({ error: "Payload not found in KVS" }),
+      );
+    });
+
+    test("should return 500 on repository error", async () => {
+      logRepositoryMock.getLogById.mockRejectedValue(new Error("DB Error"));
+      req = createMockRequest({ params: { logId: "log_error" } });
+
+      await handler()(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ error: "Failed to fetch log payload" }),
       );
     });
   });

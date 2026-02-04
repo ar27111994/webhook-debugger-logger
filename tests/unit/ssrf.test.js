@@ -32,6 +32,11 @@ describe("SSRF Coverage Tests", () => {
       expect(checkIpInRanges("1.2.3.4", ["5.6.7.8"])).toBe(false);
     });
 
+    test("should handle single IPv6 address (hits 128 prefix branch)", () => {
+      expect(checkIpInRanges("2001:db8::1", ["2001:db8::1"])).toBe(true);
+      expect(checkIpInRanges("2001:db8::1", ["2001:db8::2"])).toBe(false);
+    });
+
     test("should match CIDR ranges", () => {
       expect(checkIpInRanges("192.168.1.5", ["192.168.0.0/16"])).toBe(true);
       expect(checkIpInRanges("10.0.0.5", ["192.168.0.0/16"])).toBe(false);
@@ -118,6 +123,21 @@ describe("SSRF Coverage Tests", () => {
       // Source uses structured pino logger
       expect(loggerMock.error).toHaveBeenCalledWith(
         expect.objectContaining({ error: SSRF_LOG_MESSAGES.DNS_TIMEOUT }),
+        "SSRF validation error",
+      );
+    });
+
+    test("should log generic resolution failure for other errors", async () => {
+      // Mock resolve4 to throw synchronously to hit the catch block
+      dnsPromisesMock.resolve4.mockImplementation(() => {
+        throw new Error("Generic Failure");
+      });
+
+      const result = await validateUrlForSsrf("http://generic-fail.com");
+      expect(result.safe).toBe(false);
+
+      expect(loggerMock.error).toHaveBeenCalledWith(
+        expect.objectContaining({ error: SSRF_LOG_MESSAGES.RESOLUTION_FAILED }),
         "SSRF validation error",
       );
     });

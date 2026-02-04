@@ -15,6 +15,7 @@
     "keyValueStore": "./key_value_store_schema.json"
   },
   "environmentVariables": {
-    "ACTOR_WEB_SERVER_PORT": "8080"
+    "ACTOR_WEB_SERVER_PORT": "8080",
+    "PRETTY_LOGS": "true"
   }
 }

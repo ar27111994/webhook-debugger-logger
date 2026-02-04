@@ -22,6 +22,8 @@
  * @property {number} [defaultResponseCode]
  * @property {string} [defaultResponseBody]
  * @property {Object.<string, string>} [defaultResponseHeaders]
+ * @property {string} [forwardUrl]
+ * @property {boolean} [forwardHeaders]
  */
 
 /**

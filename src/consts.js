@@ -5,6 +5,10 @@
  */
 import { Actor } from "apify";
 import { getInt } from "./utils/common.js";
+import { createRequire } from "module";
+
+const require = createRequire(import.meta.url);
+const { homepageUrl } = require("../.actor/actor.json");
 
 export const SSE_HEARTBEAT_INTERVAL_MS = getInt(
   "SSE_HEARTBEAT_INTERVAL_MS",
@@ -45,6 +49,12 @@ export const BACKGROUND_TASK_TIMEOUT_PROD_MS = getInt(
   "BACKGROUND_TASK_TIMEOUT_PROD_MS",
   10000,
 );
+export const RECURSION_HEADER_NAME = "X-Forwarded-By";
+// Use the unique Actor Run ID to distinguish between instances.
+// This allows Instance A to forward to Instance B (valid), but blocks Instance A -> Instance A (loop).
+const env = Actor.getEnv();
+export const RECURSION_HEADER_VALUE =
+  env.actorRunId || `local-${process.env.APIFY_LOCAL_STORAGE_DIR || "dev"}`;
 export const BACKGROUND_TASK_TIMEOUT_TEST_MS = getInt(
   "BACKGROUND_TASK_TIMEOUT_TEST_MS",
   100,
@@ -121,11 +131,12 @@ export const MAX_ALLOWED_PAYLOAD_SIZE = getInt(
 export const MAX_SAFE_FORWARD_RETRIES = getInt("MAX_SAFE_FORWARD_RETRIES", 10);
 
 // DuckDB Configuration
-export const DUCKDB_STORAGE_DIR =
+export const DUCKDB_STORAGE_DIR_DEFAULT =
   process.env.DUCKDB_STORAGE_DIR ||
   process.env.APIFY_LOCAL_STORAGE_DIR ||
   "./storage";
-export const DUCKDB_FILENAME = process.env.DUCKDB_FILENAME || "logs.duckdb";
+export const DUCKDB_FILENAME_DEFAULT =
+  process.env.DUCKDB_FILENAME || "logs.duckdb";
 export const DUCKDB_MEMORY_LIMIT = process.env.DUCKDB_MEMORY_LIMIT || "512MB";
 export const DUCKDB_THREADS = getInt("DUCKDB_THREADS", 4);
 export const DUCKDB_VACUUM_ENABLED =
@@ -204,3 +215,5 @@ export const MAX_PAGE_LIMIT = getInt("MAX_PAGE_LIMIT", 10000);
 export const DEFAULT_PAGE_OFFSET = getInt("DEFAULT_PAGE_OFFSET", 0);
 
 export const EVENT_MAX_LISTENERS = getInt("EVENT_MAX_LISTENERS", 20);
+
+export const APIFY_HOMEPAGE_URL = homepageUrl;

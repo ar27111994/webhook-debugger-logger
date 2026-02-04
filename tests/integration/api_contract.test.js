@@ -25,6 +25,7 @@ await setupCommonMocks({ axios: true, apify: true, dns: true, ssrf: true });
 const { resetNetworkMocks } = await import("../setup/helpers/shared-mocks.js");
 
 import { createRequire } from "module";
+import { APIFY_HOMEPAGE_URL } from "../../src/consts.js";
 
 const require = createRequire(import.meta.url);
 const { version } = require("../../package.json");
@@ -99,9 +100,7 @@ describe("API Contract & Regression Tests", () => {
       expect(body.endpoints.replay).toMatch(/\/replay\/:webhookId\/:itemId/);
 
       // Docs
-      expect(body.docs).toBe(
-        "https://apify.com/ar27111994/webhook-debugger-logger",
-      );
+      expect(body.docs).toBe(APIFY_HOMEPAGE_URL);
     });
   });
 

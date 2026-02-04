@@ -20,6 +20,10 @@ import { assertType } from "./test-utils.js";
  * @typedef {import("../../../src/repositories/LogRepository.js").LogRepository} LogRepository
  * @typedef {import('../../../src/consts.js')} ConstsMock
  * @typedef {import('../../../src/webhook_manager.js').WebhookManager} WebhookManager
+ * @typedef {import('../../../src/utils/signature.js').VerificationResult} VerificationResult
+ * @typedef {import('../../../src/utils/signature.js').VerificationContext} VerificationContext
+ * @typedef {import('../../../src/services/SyncService.js').SyncService} SyncService
+ 
  */
 
 /**
@@ -343,7 +347,7 @@ export const expressMock = Object.assign(
  * Shared DuckDB Mock.
  */
 /**
- * @type {jest.Mocked<{getDbInstance: jest.Mock<() => Promise<DuckDBInstance>>, executeQuery: jest.Mock<(query: string, params?: Record<string, any>) => Promise<(Record<string, DuckDBValue>)[]>>, executeWrite: jest.Mock<(query: string, params?: Record<string, any>) => Promise<void>>, executeTransaction: jest.Mock<(cb: (conn: {run: jest.Mock<any>}) => void) => void>}>}
+ * @type {jest.Mocked<{getDbInstance: jest.Mock<() => Promise<DuckDBInstance>>, executeQuery: jest.Mock<(query: string, params?: Record<string, any>) => Promise<(Record<string, DuckDBValue>)[]>>, executeWrite: jest.Mock<(query: string, params?: Record<string, any>) => Promise<void>>, executeTransaction: jest.Mock<(cb: (conn: {run: jest.Mock<any>}) => void) => void>, vacuumDb: jest.Mock<() => Promise<void>>}>}
  */
 export const duckDbMock = {
   getDbInstance: assertType(jest.fn()).mockResolvedValue({}),
@@ -357,24 +361,20 @@ export const duckDbMock = {
       (cb) => cb({ run: jest.fn() }),
     ),
   ),
+  vacuumDb: assertType(jest.fn()).mockResolvedValue(undefined),
 };
-
-/**
- * @typedef {Object} SyncServiceMock
- * @property {jest.Mock<() => Promise<void>>} start
- * @property {jest.Mock<() => void>} stop
- */
 
 /**
  * Shared SyncService Mock.
  */
 /**
- * @type {SyncServiceMock}
+ * @type {jest.Mocked<SyncService>}
  */
-export const syncServiceMock = {
+export const syncServiceMock = assertType({
   start: jest.fn(),
   stop: jest.fn(),
-};
+  getMetrics: jest.fn(),
+});
 
 /**
  * Shared WebhookManager Mock.
@@ -478,10 +478,16 @@ export const constsMock = assertType({
   INPUT_POLL_INTERVAL_TEST_MS: 100,
   SHUTDOWN_TIMEOUT_MS: 100,
   SSE_HEARTBEAT_INTERVAL_MS: 100,
+  RECURSION_HEADER_NAME: "X-Forwarded-By",
+  RECURSION_HEADER_VALUE: "Apify-Webhook-Debugger",
   STARTUP_TEST_EXIT_DELAY_MS: 100,
+  MAX_BULK_CREATE: 10,
+  DUCKDB_VACUUM_ENABLED: true,
+  DUCKDB_VACUUM_INTERVAL_MS: 0,
+  KVS_OFFLOAD_THRESHOLD: 1024 * 1024,
   // DuckDB Defaults
-  DUCKDB_FILENAME: "test.db",
-  DUCKDB_STORAGE_DIR: "/tmp/test",
+  DUCKDB_FILENAME_DEFAULT: "test.db",
+  DUCKDB_STORAGE_DIR_DEFAULT: "/tmp/test",
   DUCKDB_MEMORY_LIMIT: "1GB",
   DUCKDB_THREADS: 4,
   DUCKDB_POOL_SIZE: 2,
@@ -533,6 +539,32 @@ export const constsMock = assertType({
     "proxy-connection",
     "upgrade",
   ],
+  DNS_RESOLUTION_TIMEOUT_MS: 1000,
+  SSRF_INTERNAL_ERRORS: {
+    DNS_TIMEOUT: "DNS Timeout",
+  },
+  SSRF_LOG_MESSAGES: {
+    DNS_TIMEOUT: "DNS Timeout",
+    RESOLUTION_FAILED: "Resolution Failed",
+  },
+  DEFAULT_TOLERANCE_SECONDS: 300,
+  REPLAY_SCAN_MAX_DEPTH_MS: 3600000,
+  BACKGROUND_TASK_TIMEOUT_PROD_MS: 1000,
+  BACKGROUND_TASK_TIMEOUT_TEST_MS: 100,
+  SCRIPT_EXECUTION_TIMEOUT_MS: 1000,
+  MAX_ITEMS_FOR_BATCH: 100,
+  DEFAULT_RATE_LIMIT_MAX_ENTRIES: 100,
+  DEFAULT_WEBHOOK_RATE_LIMIT_PER_MINUTE: 100,
+  DEFAULT_WEBHOOK_RATE_LIMIT_MAX_ENTRIES: 100,
+  DEFAULT_RATE_LIMIT_WINDOW_MS: 60000,
+  DEFAULT_PAGE_LIMIT: 20,
+  MAX_PAGE_LIMIT: 100,
+  DEFAULT_PAGE_OFFSET: 0,
+  EVENT_MAX_LISTENERS: 20,
+  HOT_RELOAD_DEBOUNCE_MS: 100,
+  HOT_RELOAD_ENABLED: true,
+  DUCKDB_POOL_MAX_WAIT_MS: 100,
+  APIFY_HOMEPAGE_URL: "https://mock-docs.com",
 });
 
 /**
@@ -552,11 +584,13 @@ export const authMock = {
  * Shared Signature Mock.
  */
 /**
- * @type {jest.Mocked<{verifySignature: (data: any, signature: string) => {valid: boolean, provider: SignatureProvider}, createStreamVerifier: (stream: any) => {hmac: {update: jest.Mock}}, finalizeStreamVerification: (stream: any) => boolean}>}}
+ * @type {jest.Mocked<{verifySignature: (data: any, signature: string) => {valid: boolean, provider: SignatureProvider}, createStreamVerifier: (stream: any) => VerificationResult, finalizeStreamVerification: (stream: any) => boolean}>}}
  */
 export const signatureMock = {
   verifySignature: jest.fn(() => ({ valid: true, provider: "github" })),
-  createStreamVerifier: jest.fn(() => ({ hmac: { update: jest.fn() } })),
+  createStreamVerifier: jest.fn(() =>
+    assertType({ hmac: { update: jest.fn() } }),
+  ),
   finalizeStreamVerification: jest.fn(() => true),
 };
 
@@ -577,16 +611,11 @@ export const webhookRateLimiterMock = {
  * Shared Storage Helper Mock.
  */
 /**
- * @type {jest.Mocked<{generateKvsKey: (key: string) => string, offloadToKvs: (body: any) => Promise<{isReference: boolean, key: string}>, getKvsUrl: (key: string) => Promise<string>, createReferenceBody: (opts: any) => any, OFFLOAD_MARKER_STREAM: string, OFFLOAD_MARKER_SYNC: string}>}}
+ * @type {jest.Mocked<{generateKvsKey: () => string, offloadToKvs: (key: string, value: any, contentType: string) => Promise<void>, getKvsUrl: (key: string) => Promise<string>, createReferenceBody: (opts: any) => any, OFFLOAD_MARKER_STREAM: string, OFFLOAD_MARKER_SYNC: string}>}}
  */
 export const storageHelperMock = {
   generateKvsKey: jest.fn(() => "mock-kvs-key"),
-  offloadToKvs: assertType(jest.fn()).mockResolvedValue(
-    assertType({
-      isReference: true,
-      key: "mock-kvs-key",
-    }),
-  ),
+  offloadToKvs: assertType(jest.fn()).mockResolvedValue(undefined),
   getKvsUrl: assertType(jest.fn()).mockResolvedValue(
     assertType("http://mock-kvs-url"),
   ),
@@ -601,11 +630,21 @@ export const storageHelperMock = {
  * Shared Config Mock.
  */
 /**
- * @type {jest.Mocked<{getSafeResponseDelay: (opts: any) => any, parseWebhookOptions: (opts: any) => any}>}
+ * @type {jest.Mocked<{getSafeResponseDelay: (opts: any) => any, parseWebhookOptions: (opts: any) => any, normalizeInput: (i: any) => any, coerceRuntimeOptions: (o: any) => any}>}
  */
 export const configMock = {
   getSafeResponseDelay: jest.fn(() => 0),
-  parseWebhookOptions: jest.fn((opts) => opts || {}),
+  parseWebhookOptions: jest.fn((opts) => ({
+    allowedIps: [],
+    defaultResponseCode: 200,
+    defaultResponseBody: "OK",
+    defaultResponseHeaders: {},
+    maskSensitiveData: true,
+    enableJSONParsing: true,
+    ...(opts || {}),
+  })),
+  normalizeInput: jest.fn((i) => i),
+  coerceRuntimeOptions: jest.fn((o) => o),
 };
 
 /**
@@ -666,6 +705,9 @@ export const logRepositoryMock = assertType({
   batchInsertLogs: jest.fn(),
   getLogById: jest.fn(),
   findLogs: jest.fn(),
+  findLogsCursor: jest.fn(),
+  findOffloadedPayloads: jest.fn(),
+  deleteLogsByWebhookId: jest.fn(),
 });
 
 /**

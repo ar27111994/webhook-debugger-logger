@@ -79,7 +79,7 @@ describe("Main Entry Point", () => {
 
       await main.initialize();
 
-      expect(jest.mocked(main.webhookManager.init)).toHaveBeenCalled();
+      expect(webhookManagerMock.init).toHaveBeenCalled();
 
       // Cleanup
       if (originalEnvInput) process.env.INPUT = originalEnvInput;
@@ -186,18 +186,58 @@ describe("Main Entry Point", () => {
     });
 
     test("should cleanup components on shutdown", async () => {
+      const exitSpy = jest
+        .spyOn(process, "exit")
+        .mockImplementation(() => assertType(undefined));
+      process.env.NODE_ENV = "production";
       await main.shutdown("TEST_COMPLETE");
 
       expect(hotReloadManagerMock.stop).toHaveBeenCalled();
       expect(syncServiceMock.stop).toHaveBeenCalled();
       expect(webhookManagerMock.persist).toHaveBeenCalled();
-      expect(Actor.exit).toHaveBeenCalled();
+      expect(Actor.exit).toHaveBeenCalled(); // Called without args in main.js
+      expect(exitSpy).toHaveBeenCalledWith(0);
+      exitSpy.mockRestore();
+    });
+
+    test("should log warning if startup event push fails", async () => {
+      // Mock successful run but pushData failure
+      jest.mocked(Actor.pushData).mockRejectedValue(new Error("Push Failed"));
+      jest.mocked(Actor.isAtHome).mockReturnValue(true);
+      process.env.APIFY_IS_AT_HOME = "true";
+
+      // Force logic to run (skip "test" guard)
+      const oldEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = "production";
+
+      // Prevent exit so we can assert
+      jest.spyOn(Actor, "exit").mockImplementation(async () => {
+        throw new Error("EXIT_0");
+      });
+
+      try {
+        await main.initialize();
+      } catch (e) {
+        if (!(/** @type {Error} */ (e).message.includes("EXIT"))) throw e;
+      }
+
+      expect(loggerMock.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ err: expect.any(Object) }),
+        "Startup log failed",
+      );
+
+      // Cleanup
+      process.env.NODE_ENV = oldEnv;
     });
 
     test("should not exit process if in test mode (default)", async () => {
       const exitSpy = jest
         .spyOn(process, "exit")
         .mockImplementation(() => assertType(undefined));
+
+      // Ensure Actor.exit resolves (restoring from previous test override)
+      jest.spyOn(Actor, "exit").mockResolvedValue(undefined);
+
       await main.shutdown("SIGTERM");
       expect(exitSpy).not.toHaveBeenCalled();
       exitSpy.mockRestore();
@@ -205,6 +245,10 @@ describe("Main Entry Point", () => {
 
     test("should exit process if not in test mode", async () => {
       process.env.NODE_ENV = "production";
+
+      // FIX LEAK: Override Actor.exit to resolve, masking previous test's throw
+      jest.spyOn(Actor, "exit").mockResolvedValue(undefined);
+
       const exitSpy = jest
         .spyOn(process, "exit")
         .mockImplementation((_code) => {

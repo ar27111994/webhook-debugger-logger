@@ -25,6 +25,9 @@ import {
   SENSITIVE_HEADERS,
   DEFAULT_PAYLOAD_LIMIT,
   KVS_OFFLOAD_THRESHOLD,
+  APIFY_HOMEPAGE_URL,
+  RECURSION_HEADER_NAME,
+  RECURSION_HEADER_VALUE,
 } from "./consts.js";
 import {
   createStreamVerifier,
@@ -231,6 +234,9 @@ export class LoggerMiddleware {
       "defaultResponseBody",
       "defaultResponseHeaders",
       "responseDelayMs",
+      "forwardUrl",
+      "forwardHeaders",
+      "maxForwardRetries",
     ];
     const webhookOverrides = Object.fromEntries(
       Object.entries(webhookData).filter(([key]) =>
@@ -256,6 +262,26 @@ export class LoggerMiddleware {
 
     const webhookId = String(req.params.id);
     const clientIp = req.ip || req.socket?.remoteAddress;
+
+    // 0. Recursion Protection (Loop Detection)
+    // If we receive a request that We ourselves forwarded, block it to prevent infinite loops.
+    // We check if the incoming header matches THIS specific instance's Run ID.
+    const forwardedBy = req.headers[RECURSION_HEADER_NAME.toLowerCase()];
+    if (
+      forwardedBy === RECURSION_HEADER_VALUE ||
+      forwardedBy === `${RECURSION_HEADER_VALUE}-Loop-Check`
+    ) {
+      this.#log.warn(
+        { webhookId, clientIp, headers: req.headers },
+        "Recursive forwarding loop detected and blocked (Self-Reference).",
+      );
+      return res.status(422).json({
+        status: 422,
+        error: "Unprocessable Entity",
+        message:
+          "Recursive forwarding detected. The forwarding target appears to be the Actor itself.",
+      });
+    }
 
     // Per-webhook rate limiting (DDoS protection)
     const rateLimitResult = webhookRateLimiter.check(webhookId, clientIp);
@@ -387,31 +413,31 @@ export class LoggerMiddleware {
    * Main Middleware: Logic for logging, processing, and responding.
    * @param {Request} req
    * @param {Response} res
-   * @param {NextFunction} [_next]
+   * @param {NextFunction} next
    */
-  async middleware(req, res, _next) {
+  async middleware(req, res, next) {
     const startTime = Date.now();
     const webhookId = String(req.params.id);
 
     // 1. Resolve Options
-    const mergedOptions = this.#resolveOptions(webhookId);
-
-    const validation = this.#validateWebhookRequest(
-      req,
-      webhookId,
-      mergedOptions,
-    );
-    if (!validation.isValid) {
-      return res.status(validation.statusCode || 400).json({
-        error: validation.error,
-        ip: validation.remoteIp,
-        received: validation.contentLength,
-        id: webhookId,
-        docs: "https://apify.com/ar27111994/webhook-debugger-logger",
-      });
-    }
-
     try {
+      const mergedOptions = this.#resolveOptions(webhookId);
+
+      const validation = this.#validateWebhookRequest(
+        req,
+        webhookId,
+        mergedOptions,
+      );
+      if (!validation.isValid) {
+        return res.status(validation.statusCode || 400).json({
+          error: validation.error,
+          ip: validation.remoteIp,
+          received: validation.contentLength,
+          id: webhookId,
+          docs: APIFY_HOMEPAGE_URL,
+        });
+      }
+
       // 2. Prepare
       const isOffloaded = /** @type {any} */ (req).isOffloaded;
       let preparedData;
@@ -464,17 +490,25 @@ export class LoggerMiddleware {
 
       // 3a. Signature Verification (if configured)
       if (
+        mergedOptions.signatureVerification &&
         mergedOptions.signatureVerification?.provider &&
         mergedOptions.signatureVerification?.secret
       ) {
         const ingestResult = /** @type {any} */ (req).ingestSignatureResult;
 
         if (ingestResult) {
+          // Use pre-validated result if available (from raw-body parser)
           // Use pre-calculated result from streaming offload
           event.signatureValid = ingestResult.valid;
           event.signatureProvider = ingestResult.provider;
           if (!ingestResult.valid) {
             event.signatureError = ingestResult.error;
+            event.statusCode = 401;
+            event.responseBody = {
+              error: "Invalid signature",
+              details: ingestResult.error,
+              docs: APIFY_HOMEPAGE_URL,
+            };
           }
         } else {
           // Standard Sync Verification
@@ -500,6 +534,14 @@ export class LoggerMiddleware {
           event.signatureProvider = sigResult.provider;
           if (!sigResult.valid) {
             event.signatureError = sigResult.error;
+            event.statusCode = 401;
+            // Set delayed response body for #sendResponse to use
+            event.responseBody = {
+              error: "Invalid signature",
+              details: sigResult.error,
+              docs: APIFY_HOMEPAGE_URL,
+            };
+            // Do NOT return here; let it proceed to logging
           }
         }
       }
@@ -584,11 +626,15 @@ export class LoggerMiddleware {
           details: middlewareError.details,
         });
       }
+
+      if (!res.headersSent) {
+        return next(err);
+      }
+      // If headers are sent, we can't do much but log it
       this.#log.error(
         { err: this.#serializeError(middlewareError) },
-        "Internal middleware error",
+        "Internal middleware error after headers sent",
       );
-      res.status(500).json({ error: "Internal Server Error" });
     }
   }
 
@@ -714,12 +760,6 @@ export class LoggerMiddleware {
             statusCode: 400,
             error: "Invalid JSON for schema validation",
           };
-        }
-      } else if (Buffer.isBuffer(bodyToValidate)) {
-        try {
-          bodyToValidate = JSON.parse(bodyToValidate.toString());
-        } catch (_) {
-          throw { statusCode: 400, error: "Invalid JSON" };
         }
       }
 
@@ -899,7 +939,7 @@ export class LoggerMiddleware {
         message: `Webhook received with status ${event.statusCode}`,
         webhookId: event.webhookId,
       });
-    } else if (typeof responseBody === "object") {
+    } else if (typeof responseBody === "object" && responseBody !== null) {
       res.json(responseBody);
     } else {
       res.send(responseBody);
@@ -932,11 +972,12 @@ export class LoggerMiddleware {
       }
     } catch (error) {
       const errorMessage = /** @type {Error} */ (error).message;
+      const msg = errorMessage ? errorMessage.toLowerCase() : "";
       const isPlatformError =
-        errorMessage &&
-        (errorMessage.includes("Dataset") ||
-          errorMessage.includes("quota") ||
-          errorMessage.includes("limit"));
+        msg.includes("dataset") ||
+        msg.includes("quota") ||
+        msg.includes("limit") ||
+        msg.includes("rate");
 
       this.#log.error(
         {

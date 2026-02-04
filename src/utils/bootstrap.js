@@ -3,7 +3,7 @@
  * @description Local development bootstrap utilities.
  * Creates default INPUT.json from schema for hot-reload workflows.
  */
-import * as fs from "fs/promises";
+import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createChildLogger, serializeError } from "./logger.js";
@@ -92,7 +92,7 @@ export async function ensureLocalInputExists(defaultInput) {
         );
 
         try {
-          // On some platforms rename() won't overwrite an existing file
+          // Platforms like Windows might need explicit removal before rename
           await fs.rm(inputPath, { force: true });
           await fs.rename(tmpPath, inputPath);
         } catch (e) {
@@ -122,7 +122,7 @@ export async function ensureLocalInputExists(defaultInput) {
  * Reads .actor/input_schema.json and extracts default/prefill values.
  * @returns {Promise<Record<string, any>>}
  */
-async function getDefaultsFromSchema() {
+export async function getDefaultsFromSchema() {
   try {
     const schemaPath = process.env.APIFY_ACTOR_DIR
       ? path.join(process.env.APIFY_ACTOR_DIR, ".actor", "input_schema.json")
