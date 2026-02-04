@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.1.2] - 2026-02-04
+
+### Added (3.1.2)
+
+- **Platform Feature**: Integrated **Apify Dynamic Actor Memory**.
+  - Optimized resource costs by automatically calculating RAM based on `urlCount` and `maxPayloadSize`.
+  - Implemented a 512MB safety floor to provide headroom for moderate runtime scaling via hot-reloading.
+  - Documented the behavior and limitations of fixed system memory during hot-reload events in the README.
+
 ## [3.1.0] - 2026-02-04
 
 ### Added (3.1.0)

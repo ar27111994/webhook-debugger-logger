@@ -164,6 +164,9 @@ Updates to the following settings are applied immediately without restarting the
 - `responseDelayMs`
 
 > **Note for Platform Users**: The Apify Console "Input" tab only applies changes to _future_ runs. To hot-reload a **running** Actor, you must update the "INPUT" key in the running Actor's **Default Key-Value Store** directly (e.g., via Apify API or Client), as the Console UI does not support editing Key-Value entries for running actors.
+>
+> [!CAUTION]
+> **Memory is Fixed at Startup**: While limits like `maxPayloadSize` hot-reload instantly, the system memory assigned to the Actor (RAM) is determined **only at the start of the run** using a [Dynamic Expression](#dynamic-memory-scaling). If you plan to significantly increase traffic or payload sizes via hot-reload, start the Actor with a manual memory override or perform a full restart to ensure the new system limits are applied.
 
 ### 🔒 Enterprise Security (New in v2.0)
 
@@ -450,6 +453,17 @@ Standard tools like ngrok or dedicated SaaS webhooks charge fixed monthly fees. 
 | **Latency**       | <10ms     | Sub-5ms in Standby              | Internal processing time  |
 | **SSE Heartbeat** | 30s       | -                               | Global efficient interval |
 | **URL Validity**  | 24h       | 1-72h (**Unlimited** Self-Host) | Auto-expiry active        |
+
+### 🧠 Dynamic Memory Scaling (New in v3.1)
+
+To optimize costs and performance, this Actor uses **Apify Dynamic Memory**. System RAM is automatically calculated at startup based on your configuration:
+
+- **Default**: 512 MB
+- **Scaling Formula**: `Base (256MB) + (urlCount * 32MB) + (maxPayloadSize MB * 4MB)`
+- **Result**: Rounded to the nearest power of two (e.g., a 100MB payload limit will automatically request ~1GB RAM).
+
+> [!TIP]
+> If you are using **Hot-Reloading** to scale your infrastructure up, the system RAM remains fixed at the startup value. For major capacity changes, we recommend a full restart.
 
 ## FAQ
 

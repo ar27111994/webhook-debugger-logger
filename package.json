@@ -1,6 +1,6 @@
 {
   "name": "webhook-debugger-logger",
-  "version": "3.1.0",
+  "version": "3.1.2",
   "type": "module",
   "description": "Generate temporary webhook URLs and log all incoming requests with full details.",
   "main": "src/main.js",
