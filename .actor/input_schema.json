@@ -77,6 +77,23 @@
       "default": true,
       "editor": "checkbox"
     },
+    "useFixedMemory": {
+      "type": "boolean",
+      "title": "Use Fixed Memory (Opt-out)",
+      "description": "If enabled, the Actor will bypass dynamic RAM calculation and use the manual value specified below.",
+      "default": false,
+      "editor": "checkbox"
+    },
+    "fixedMemoryMbytes": {
+      "type": "integer",
+      "title": "Manual Memory Allocation (MB)",
+      "description": "Specify the exact RAM (MB) to use when 'Use Fixed Memory' is enabled (e.g., 1024, 2048, 4096). Rounded to nearest power of 2.",
+      "minimum": 256,
+      "maximum": 32768,
+      "default": 2048,
+      "prefill": 2048,
+      "editor": "number"
+    },
     "section_v2_security": {
       "title": "🔑 Enterprise-Grade Security",
       "type": "string",

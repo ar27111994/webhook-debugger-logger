@@ -19,6 +19,8 @@ import {
   MAX_SAFE_REPLAY_TIMEOUT_MS,
   DEFAULT_FORWARD_RETRIES,
   MAX_SAFE_FORWARD_RETRIES,
+  DEFAULT_FIXED_MEMORY_MBYTES,
+  MAX_SAFE_FIXED_MEMORY_MBYTES,
 } from "../consts.js";
 import { createChildLogger } from "./logger.js";
 
@@ -49,6 +51,8 @@ import { createChildLogger } from "./logger.js";
  * @property {number} [replayMaxRetries]
  * @property {number} [replayTimeoutMs]
  * @property {number} [maxForwardRetries]
+ * @property {boolean} [useFixedMemory]
+ * @property {number} [fixedMemoryMbytes]
  * @property {SignatureConfig} [signatureVerification]
  * @property {AlertConfig} [alerts]
  * @property {AlertTrigger[]} [alertOn]
@@ -90,6 +94,8 @@ export function parseWebhookOptions(options = {}) {
  * @property {number} replayMaxRetries
  * @property {number} replayTimeoutMs
  * @property {number} maxForwardRetries
+ * @property {boolean} useFixedMemory
+ * @property {number} fixedMemoryMbytes
  */
 
 /**
@@ -173,6 +179,17 @@ export function coerceRuntimeOptions(input) {
         )
       : DEFAULT_FORWARD_RETRIES;
 
+  const useFixedMemory = Boolean(input.useFixedMemory);
+  const fixedMemoryRaw = Number(input.fixedMemoryMbytes);
+  const fixedMemoryMbytes =
+    Number.isFinite(fixedMemoryRaw) && fixedMemoryRaw >= 256
+      ? clampWithWarning(
+          fixedMemoryRaw,
+          MAX_SAFE_FIXED_MEMORY_MBYTES,
+          "fixedMemoryMbytes",
+        )
+      : DEFAULT_FIXED_MEMORY_MBYTES;
+
   return {
     urlCount,
     retentionHours,
@@ -183,6 +200,8 @@ export function coerceRuntimeOptions(input) {
     replayMaxRetries,
     replayTimeoutMs,
     maxForwardRetries,
+    useFixedMemory,
+    fixedMemoryMbytes,
   };
 }
 

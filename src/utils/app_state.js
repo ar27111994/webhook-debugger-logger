@@ -9,6 +9,7 @@ import {
   DEFAULT_RATE_LIMIT_PER_MINUTE,
   DEFAULT_REPLAY_RETRIES,
   DEFAULT_REPLAY_TIMEOUT_MS,
+  DEFAULT_FIXED_MEMORY_MBYTES,
 } from "../consts.js";
 import { RateLimiter } from "./rate_limiter.js";
 import { createChildLogger } from "./logger.js";
@@ -44,6 +45,9 @@ export class AppState {
     this.urlCount = config.urlCount;
     this.replayMaxRetries = config.replayMaxRetries || DEFAULT_REPLAY_RETRIES;
     this.replayTimeoutMs = config.replayTimeoutMs || DEFAULT_REPLAY_TIMEOUT_MS;
+    this.useFixedMemory = config.useFixedMemory ?? false;
+    this.fixedMemoryMbytes =
+      config.fixedMemoryMbytes ?? DEFAULT_FIXED_MEMORY_MBYTES;
 
     // Rate Limiter
     this.rateLimiter = new RateLimiter(
@@ -157,6 +161,22 @@ export class AppState {
         "Updating replay timeout",
       );
       this.replayTimeoutMs = validated.replayTimeoutMs;
+    }
+
+    if (validated.useFixedMemory !== this.useFixedMemory) {
+      log.info(
+        { useFixedMemory: validated.useFixedMemory },
+        "Updating fixed memory toggle",
+      );
+      this.useFixedMemory = validated.useFixedMemory;
+    }
+
+    if (validated.fixedMemoryMbytes !== this.fixedMemoryMbytes) {
+      log.info(
+        { fixedMemoryMbytes: validated.fixedMemoryMbytes },
+        "Updating manual memory target",
+      );
+      this.fixedMemoryMbytes = validated.fixedMemoryMbytes;
     }
   }
 

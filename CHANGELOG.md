@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.1.3] - 2026-02-04
+
+### Added (3.1.3)
+
+- **Dynamic Memory Enhancement**: Added `fixedMemoryMbytes` user override.
+  - Users can now specify a custom RAM allocation (MB) when opting out of dynamic scaling.
+  - Updated the conditional expression in `actor.json` to respect the manual input.
+  - Improved README documentation with a dedicated section on predictable manual memory.
+
 ## [3.1.2] - 2026-02-04
 
 ### Added (3.1.2)

@@ -1,6 +1,6 @@
 {
   "name": "webhook-debugger-logger",
-  "version": "3.1.2",
+  "version": "3.1.3",
   "type": "module",
   "description": "Generate temporary webhook URLs and log all incoming requests with full details.",
   "main": "src/main.js",
@@ -42,6 +42,7 @@
     "node": ">=18"
   },
   "devDependencies": {
+    "@apify/actor-memory-expression": "^0.1.6",
     "@eslint/js": "^9.39.2",
     "@types/compression": "^1.8.1",
     "@types/cors": "^2.8.19",

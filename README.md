@@ -458,12 +458,15 @@ Standard tools like ngrok or dedicated SaaS webhooks charge fixed monthly fees. 
 
 To optimize costs and performance, this Actor uses **Apify Dynamic Memory**. System RAM is automatically calculated at startup based on your configuration:
 
-- **Default**: 512 MB
 - **Scaling Formula**: `Base (256MB) + (urlCount * 32MB) + (maxPayloadSize MB * 4MB)`
 - **Result**: Rounded to the nearest power of two (e.g., a 100MB payload limit will automatically request ~1GB RAM).
 
+#### 🛡️ Manual Memory (Opt-out)
+
+If you require strict RAM predictability, enable **"Use Fixed Memory"** and specify your desired **"Manual Memory Allocation (MB)"**. This bypasses the formula and uses your exact value (rounded to the nearest power of 2).
+
 > [!TIP]
-> If you are using **Hot-Reloading** to scale your infrastructure up, the system RAM remains fixed at the startup value. For major capacity changes, we recommend a full restart.
+> If you are using **Hot-Reloading** to scale your infrastructure up, the system RAM remains fixed at the startup value. For major capacity changes, we recommend a full restart (or using the Manual Memory override from the start).
 
 ## FAQ
 

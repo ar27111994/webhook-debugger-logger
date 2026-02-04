@@ -42,6 +42,8 @@ describe("AppState", () => {
       retentionHours: 24,
       urlCount: 1,
       rateLimitPerMinute: 60,
+      useFixedMemory: true,
+      fixedMemoryMbytes: 4096,
     };
 
     appState = new AppState(config, webhookManagerMock, loggerMiddlewareMock);
@@ -70,6 +72,8 @@ describe("AppState", () => {
       // Rate limiter initialization check
       expect(appState.rateLimiter).toBeDefined();
       expect(appState.rateLimiter.limit).toBe(60);
+      expect(appState.useFixedMemory).toBe(true);
+      expect(appState.fixedMemoryMbytes).toBe(4096);
     });
 
     test("should use defaults if config values missing", () => {
@@ -82,6 +86,8 @@ describe("AppState", () => {
 
       expect(emptyState.maxPayloadSize).toBe(DEFAULT_PAYLOAD_LIMIT);
       expect(emptyState.rateLimiter.limit).toBe(DEFAULT_RATE_LIMIT_PER_MINUTE);
+      expect(emptyState.useFixedMemory).toBe(false);
+      expect(emptyState.fixedMemoryMbytes).toBe(2048);
     });
   });
 
@@ -206,6 +212,30 @@ describe("AppState", () => {
       expect(loggerMock.info).toHaveBeenCalledWith(
         expect.objectContaining({ replayTimeoutMs: 5000 }),
         "Updating replay timeout",
+      );
+    });
+
+    test("should update useFixedMemory", async () => {
+      appState.useFixedMemory = false;
+      const update = createUpdateConfig({ useFixedMemory: true });
+      await appState.applyConfigUpdate({}, update);
+
+      expect(appState.useFixedMemory).toBe(true);
+      expect(loggerMock.info).toHaveBeenCalledWith(
+        expect.objectContaining({ useFixedMemory: true }),
+        "Updating fixed memory toggle",
+      );
+    });
+
+    test("should update fixedMemoryMbytes", async () => {
+      appState.fixedMemoryMbytes = 2048;
+      const update = createUpdateConfig({ fixedMemoryMbytes: 8192 });
+      await appState.applyConfigUpdate({}, update);
+
+      expect(appState.fixedMemoryMbytes).toBe(8192);
+      expect(loggerMock.info).toHaveBeenCalledWith(
+        expect.objectContaining({ fixedMemoryMbytes: 8192 }),
+        "Updating manual memory target",
       );
     });
   });
