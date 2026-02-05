@@ -17,8 +17,8 @@ import {
 } from "../setup/helpers/shared-mocks.js";
 const { sleep } = await import("../setup/helpers/test-utils.js");
 const request = (await import("supertest")).default;
-const { SSRF_ERRORS } = await import("../../src/utils/ssrf.js");
-const { ERROR_MESSAGES } = await import("../../src/consts.js");
+const { HTTP_STATUS, SSRF_ERRORS, ERROR_MESSAGES } =
+  await import("../../src/consts.js");
 const { app, initialize, shutdown, webhookManager } =
   await import("../../src/main.js");
 const { Actor } = await import("apify");
@@ -51,7 +51,7 @@ describe("SSRF Protection Tests", () => {
       headers: { "content-type": "application/json" },
       body: '{"test": "data"}',
       timestamp: new Date().toISOString(),
-      statusCode: 200,
+      statusCode: HTTP_STATUS.OK,
     };
     jest
       .mocked(Actor.openDataset)
@@ -67,7 +67,7 @@ describe("SSRF Protection Tests", () => {
         .query({ url: "ftp://example.com" })
         .set("Authorization", validAuth);
 
-      expect(res.statusCode).toBe(400);
+      expect(res.statusCode).toBe(HTTP_STATUS.BAD_REQUEST);
       expect(res.body.error).toBe(SSRF_ERRORS.PROTOCOL_NOT_ALLOWED);
     });
 
@@ -77,7 +77,7 @@ describe("SSRF Protection Tests", () => {
         .query({ url: "file:///etc/passwd" })
         .set("Authorization", validAuth);
 
-      expect(res.statusCode).toBe(400);
+      expect(res.statusCode).toBe(HTTP_STATUS.BAD_REQUEST);
       expect(res.body.error).toBe(SSRF_ERRORS.PROTOCOL_NOT_ALLOWED);
     });
 
@@ -87,7 +87,7 @@ describe("SSRF Protection Tests", () => {
         .query({ url: "http://127.0.0.1/admin" })
         .set("Authorization", validAuth);
 
-      expect(res.statusCode).toBe(400);
+      expect(res.statusCode).toBe(HTTP_STATUS.BAD_REQUEST);
       expect(res.body.error).toBe(SSRF_ERRORS.INTERNAL_IP);
     });
 
@@ -97,7 +97,7 @@ describe("SSRF Protection Tests", () => {
         .query({ url: "http://192.168.1.1/config" })
         .set("Authorization", validAuth);
 
-      expect(res.statusCode).toBe(400);
+      expect(res.statusCode).toBe(HTTP_STATUS.BAD_REQUEST);
       expect(res.body.error).toBe(SSRF_ERRORS.INTERNAL_IP);
     });
 
@@ -107,7 +107,7 @@ describe("SSRF Protection Tests", () => {
         .query({ url: "http://169.254.169.254/latest/meta-data" })
         .set("Authorization", validAuth);
 
-      expect(res.statusCode).toBe(400);
+      expect(res.statusCode).toBe(HTTP_STATUS.BAD_REQUEST);
       expect(res.body.error).toBe(SSRF_ERRORS.INTERNAL_IP);
     });
 
@@ -120,7 +120,7 @@ describe("SSRF Protection Tests", () => {
         .query({ url: "http://internal.corp.example/" })
         .set("Authorization", validAuth);
 
-      expect(res.statusCode).toBe(400);
+      expect(res.statusCode).toBe(HTTP_STATUS.BAD_REQUEST);
       expect(res.body.error).toBe(SSRF_ERRORS.INTERNAL_IP);
     });
 
@@ -133,7 +133,7 @@ describe("SSRF Protection Tests", () => {
         .query({ url: "http://nonexistent.invalid/" })
         .set("Authorization", validAuth);
 
-      expect(res.statusCode).toBe(400);
+      expect(res.statusCode).toBe(HTTP_STATUS.BAD_REQUEST);
       expect(res.body.error).toBe(ERROR_MESSAGES.HOSTNAME_RESOLUTION_FAILED);
     });
 
@@ -143,7 +143,7 @@ describe("SSRF Protection Tests", () => {
         .query({ url: "not-a-valid-url" })
         .set("Authorization", validAuth);
 
-      expect(res.statusCode).toBe(400);
+      expect(res.statusCode).toBe(HTTP_STATUS.BAD_REQUEST);
       expect(res.body.error).toBe(SSRF_ERRORS.INVALID_URL);
     });
 
@@ -153,7 +153,7 @@ describe("SSRF Protection Tests", () => {
         .query({ url: "http://[::1]/admin" })
         .set("Authorization", validAuth);
 
-      expect(res.statusCode).toBe(400);
+      expect(res.statusCode).toBe(HTTP_STATUS.BAD_REQUEST);
       expect(res.body.error).toBe(SSRF_ERRORS.INTERNAL_IP);
     });
 
@@ -173,7 +173,7 @@ describe("SSRF Protection Tests", () => {
         .query({ url: "http://example.com/slow" })
         .set("Authorization", validAuth);
 
-      expect(res.statusCode).toBe(400);
+      expect(res.statusCode).toBe(HTTP_STATUS.BAD_REQUEST);
       expect(res.body.error).toBe(SSRF_ERRORS.VALIDATION_FAILED);
     }, 10000); // Increase timeout for this specific test
   });

@@ -12,6 +12,7 @@ import {
 } from "../setup/helpers/test-utils.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 import { resetDb } from "../setup/helpers/db-hooks.js";
+import { HTTP_STATUS } from "../../src/consts.js";
 
 // Initialize mocks BEFORE imports
 await setupCommonMocks({ apify: true, axios: false });
@@ -48,7 +49,7 @@ describe("Log Sorting Logic", () => {
       id: "item1",
       webhookId: "wh_1",
       timestamp: "2023-01-01T10:00:00Z",
-      statusCode: 200,
+      statusCode: HTTP_STATUS.OK,
       processingTime: 100,
       method: "GET",
       requestId: "REQ-A",
@@ -58,7 +59,7 @@ describe("Log Sorting Logic", () => {
       id: "item2",
       webhookId: "wh_1",
       timestamp: "2023-01-01T10:00:02Z",
-      statusCode: 500,
+      statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
       processingTime: 50,
       method: "POST",
       requestId: "REQ-C",
@@ -68,7 +69,7 @@ describe("Log Sorting Logic", () => {
       id: "item3",
       webhookId: "wh_1",
       timestamp: "2023-01-01T10:00:01Z",
-      statusCode: 404,
+      statusCode: HTTP_STATUS.NOT_FOUND,
       processingTime: 200,
       method: "PUT",
       requestId: "REQ-B",
@@ -125,7 +126,11 @@ describe("Log Sorting Logic", () => {
     const codes = response.items.map(
       (/** @type {WebhookEvent} */ i) => i.statusCode,
     );
-    expect(codes).toEqual([500, 404, 200]);
+    expect(codes).toEqual([
+      HTTP_STATUS.INTERNAL_SERVER_ERROR,
+      HTTP_STATUS.NOT_FOUND,
+      HTTP_STATUS.OK,
+    ]);
   });
 
   it("should sort by processingTime desc", async () => {
@@ -175,19 +180,19 @@ describe("Log Sorting Logic", () => {
     const multiItems = assertType([
       {
         id: "A",
-        statusCode: 200,
+        statusCode: HTTP_STATUS.OK,
         timestamp: "2023-01-01T10:00:00Z",
         webhookId: "wh_1",
       },
       {
         id: "B",
-        statusCode: 200,
+        statusCode: HTTP_STATUS.OK,
         timestamp: "2023-01-01T10:00:02Z",
         webhookId: "wh_1",
       },
       {
         id: "C",
-        statusCode: 500,
+        statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
         timestamp: "2023-01-01T10:00:01Z",
         webhookId: "wh_1",
       },

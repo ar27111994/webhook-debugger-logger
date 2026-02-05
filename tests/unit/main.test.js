@@ -1,5 +1,5 @@
 import { jest, describe, test, expect } from "@jest/globals";
-import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
+import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 import { INPUT_POLL_INTERVAL_TEST_MS } from "../../src/consts.js";
 
@@ -26,6 +26,7 @@ import {
   hotReloadManagerMock,
   bootstrapMock,
   webhookManagerMock,
+  loggerMock,
 } from "../setup/helpers/shared-mocks.js";
 import { assertType } from "../setup/helpers/test-utils.js";
 

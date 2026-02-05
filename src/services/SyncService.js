@@ -7,6 +7,8 @@ import {
   SYNC_BATCH_SIZE,
   SYNC_MAX_CONCURRENT,
   SYNC_MIN_TIME_MS,
+  EVENT_NAMES,
+  DB_MISSING_OFFSET_MARKER,
 } from "../consts.js";
 import Bottleneck from "bottleneck";
 import { executeQuery } from "../db/duckdb.js";
@@ -117,7 +119,7 @@ export class SyncService {
     this.#triggerSync();
 
     // Listen for new logs
-    appEvents.on("log:received", this.#boundOnLogReceived);
+    appEvents.on(EVENT_NAMES.LOG_RECEIVED, this.#boundOnLogReceived);
   }
 
   /**
@@ -126,7 +128,7 @@ export class SyncService {
   stop() {
     log.info("SyncService stopped");
     this.#isRunning = false;
-    appEvents.off("log:received", this.#boundOnLogReceived);
+    appEvents.off(EVENT_NAMES.LOG_RECEIVED, this.#boundOnLogReceived);
     this.#limiter.stop({ dropWaitingJobs: true });
   }
 
@@ -163,7 +165,7 @@ export class SyncService {
     const lastOffset =
       maxOffsetVal !== null && maxOffsetVal !== undefined
         ? Number(maxOffsetVal)
-        : -1;
+        : DB_MISSING_OFFSET_MARKER;
 
     this.#cachedMaxOffset = lastOffset;
     return lastOffset + 1;

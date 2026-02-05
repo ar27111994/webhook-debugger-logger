@@ -2,6 +2,7 @@ import { describe, test, expect, beforeAll, afterAll } from "@jest/globals";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 import { sleep } from "../setup/helpers/test-utils.js";
+import { HTTP_STATUS } from "../../src/consts.js";
 
 // Setup mocks - Use defaults so we use REAL DUCKDB
 await setupCommonMocks({
@@ -59,7 +60,7 @@ describe("Connection Pool Limits", () => {
     for (let i = 0; i < READ_COUNT; i++) {
       promises.push(
         appClient.get(`/logs?webhookId=${webhookId}&limit=1`).then((res) => {
-          if (res.status !== 200) {
+          if (res.status !== HTTP_STATUS.OK) {
             console.error(`Request ${i} failed: ${res.status}`, res.body);
           }
           return res.status;
@@ -72,10 +73,10 @@ describe("Connection Pool Limits", () => {
     // Check for 200s
     // Since we raised the rate limit, we expect the DB to handle this.
     // If connection pool exhausts, we'll see 500s.
-    const errors = statuses.filter((s) => s !== 200);
+    const errors = statuses.filter((s) => s !== HTTP_STATUS.OK);
     expect(errors.length).toBe(0);
 
     // Check health after
-    await appClient.get("/health").expect(200);
+    await appClient.get("/health").expect(HTTP_STATUS.OK);
   }, 30000);
 });

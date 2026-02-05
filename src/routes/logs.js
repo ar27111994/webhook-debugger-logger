@@ -15,6 +15,9 @@ import {
   DEFAULT_PAGE_LIMIT,
   DEFAULT_PAGE_OFFSET,
   MAX_PAGE_LIMIT,
+  HTTP_STATUS,
+  DELIMITERS,
+  SORT_DIRECTIONS,
 } from "../consts.js";
 
 /**
@@ -42,7 +45,7 @@ export const createLogsHandler = (
     /** @param {Request} req @param {Response} res */
     async (req, res) => {
       try {
-        const DEFAULT_SORT = ["timestamp", "desc"];
+        const DEFAULT_SORT = ["timestamp", SORT_DIRECTIONS.DESC.toLowerCase()];
 
         let {
           id,
@@ -68,7 +71,7 @@ export const createLogsHandler = (
           limit = MAX_PAGE_LIMIT,
           offset = DEFAULT_PAGE_OFFSET,
           cursor,
-          sort = DEFAULT_SORT.join(":"),
+          sort = DEFAULT_SORT.join(DELIMITERS.QUERY_SORT),
           timestamp,
         } = req.query;
 
@@ -103,16 +106,20 @@ export const createLogsHandler = (
         const sortRules = [];
 
         if (sortParam) {
-          const parts = sortParam.split(",");
+          const parts = sortParam.split(DELIMITERS.QUERY_LIST);
           for (const part of parts) {
-            const [field, dir] = part.split(":");
+            const [field, dir] = part.split(DELIMITERS.QUERY_SORT);
+            if (!field) continue;
             sortRules.push({
               field: field.trim(),
-              dir: (dir || "desc").toLowerCase() === "asc" ? "asc" : "desc",
+              dir: (dir || "").toLowerCase() === "asc" ? "asc" : "desc",
             });
           }
         } else {
-          sortRules.push({ field: "timestamp", dir: "desc" });
+          sortRules.push({
+            field: "timestamp",
+            dir: "desc",
+          });
         }
 
         // Parse other filters
@@ -221,7 +228,7 @@ export const createLogsHandler = (
           }),
         );
       } catch (e) {
-        res.status(500).json({
+        res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
           error: "Logs failed",
           message: /** @type {Error} */ (e).message,
         });
@@ -257,7 +264,9 @@ export const createLogDetailHandler = (webhookManager) =>
         const foundItem = await logRepository.getLogById(logId, fieldList);
 
         if (!foundItem) {
-          res.status(404).json({ error: "Log entry not found" });
+          res
+            .status(HTTP_STATUS.NOT_FOUND)
+            .json({ error: "Log entry not found" });
           return;
         }
 
@@ -273,13 +282,15 @@ export const createLogDetailHandler = (webhookManager) =>
         );
 
         if (!validatedItem) {
-          res.status(404).json({ error: "Log entry not found" });
+          res
+            .status(HTTP_STATUS.NOT_FOUND)
+            .json({ error: "Log entry not found" });
           return;
         }
 
         if (!webhookManager.isValid(validatedItem.webhookId)) {
           res
-            .status(404)
+            .status(HTTP_STATUS.NOT_FOUND)
             .json({ error: "Log entry belongs to invalid webhook" });
           return;
         }
@@ -294,7 +305,7 @@ export const createLogDetailHandler = (webhookManager) =>
 
         res.json(validatedItem);
       } catch (e) {
-        res.status(500).json({
+        res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
           error: "Failed to fetch log detail",
           message: /** @type {Error} */ (e).message,
         });
@@ -317,13 +328,15 @@ export const createLogPayloadHandler = (webhookManager) =>
         const item = await logRepository.getLogById(String(logId));
 
         if (!item) {
-          res.status(404).json({ error: "Log entry not found" });
+          res
+            .status(HTTP_STATUS.NOT_FOUND)
+            .json({ error: "Log entry not found" });
           return;
         }
 
         if (!webhookManager.isValid(item.webhookId)) {
           res
-            .status(404)
+            .status(HTTP_STATUS.NOT_FOUND)
             .json({ error: "Log entry belongs to invalid webhook" });
           return;
         }
@@ -352,7 +365,9 @@ export const createLogPayloadHandler = (webhookManager) =>
           const value = await store.getValue(kvsKey);
 
           if (!value) {
-            res.status(404).json({ error: "Payload not found in KVS" });
+            res
+              .status(HTTP_STATUS.NOT_FOUND)
+              .json({ error: "Payload not found in KVS" });
             return;
           }
 
@@ -379,7 +394,7 @@ export const createLogPayloadHandler = (webhookManager) =>
           }
         }
       } catch (e) {
-        res.status(500).json({
+        res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
           error: "Failed to fetch log payload",
           message: /** @type {Error} */ (e).message,
         });

@@ -4,6 +4,7 @@
  * @module middleware/error
  */
 import { createChildLogger, serializeError } from "../utils/logger.js";
+import { HTTP_STATUS, ERROR_LABELS } from "../consts.js";
 
 const log = createChildLogger({ component: "ErrorHandler" });
 
@@ -29,9 +30,10 @@ export const createErrorHandler =
    */
   (err, req, res, next) => {
     if (res.headersSent) return next(err);
-    const status = err.statusCode || err.status || 500;
+    const status =
+      err.statusCode || err.status || HTTP_STATUS.INTERNAL_SERVER_ERROR;
     // Sanitize: don't leak internal error details for 500-level errors
-    const isServerError = status >= 500;
+    const isServerError = status >= HTTP_STATUS.INTERNAL_SERVER_ERROR;
 
     // Extract request ID for correlation
     const requestId = /** @type {any} */ (req).requestId || "unknown";
@@ -53,18 +55,18 @@ export const createErrorHandler =
       status,
       requestId,
       error:
-        status >= 500
-          ? "Internal Server Error"
-          : status === 413
-            ? "Payload Too Large"
-            : status === 400
-              ? "Bad Request"
-              : status === 404
-                ? "Not Found"
-                : status >= 400
-                  ? "Client Error"
+        status >= HTTP_STATUS.INTERNAL_SERVER_ERROR
+          ? ERROR_LABELS.INTERNAL_SERVER_ERROR
+          : status === HTTP_STATUS.PAYLOAD_TOO_LARGE
+            ? ERROR_LABELS.PAYLOAD_TOO_LARGE
+            : status === HTTP_STATUS.BAD_REQUEST
+              ? ERROR_LABELS.BAD_REQUEST
+              : status === HTTP_STATUS.NOT_FOUND
+                ? ERROR_LABELS.NOT_FOUND
+                : status >= HTTP_STATUS.BAD_REQUEST
+                  ? ERROR_LABELS.CLIENT_ERROR
                   : "Error",
-      message: isServerError ? "Internal Server Error" : err.message,
+      message: isServerError ? ERROR_LABELS.INTERNAL_SERVER_ERROR : err.message,
     };
     res.status(status).json(responseBody);
   };

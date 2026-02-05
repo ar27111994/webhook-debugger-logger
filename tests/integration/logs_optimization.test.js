@@ -5,7 +5,11 @@ import {
   createMockRequest,
   createMockResponse,
 } from "../setup/helpers/test-utils.js";
-import { MAX_ITEMS_FOR_BATCH } from "../../src/consts.js";
+import {
+  HTTP_STATUS,
+  MAX_ITEMS_FOR_BATCH,
+  REQUEST_ID_PREFIX,
+} from "../../src/consts.js";
 
 /**
  * @typedef {import("apify").DatasetDataOptions} DatasetDataOptions
@@ -44,7 +48,7 @@ describe("Log Optimization Tests", () => {
         webhookId: "wh_1",
         timestamp: "2023-01-01T10:00:00Z",
         method: "POST",
-        statusCode: 200,
+        statusCode: HTTP_STATUS.OK,
         headers: { "content-type": "application/json" },
         body: '{"foo":"bar"}',
         remoteIp: "1.2.3.4",
@@ -54,14 +58,14 @@ describe("Log Optimization Tests", () => {
         query: {},
         size: 100,
         contentType: "application/json",
-        requestId: "req_1",
+        requestId: `${REQUEST_ID_PREFIX}1`,
       },
       {
         id: "log_2",
         webhookId: "wh_1",
         timestamp: "2023-01-01T11:00:00Z", // LOG_2 IS NEWER (11:00 vs 10:00)
         method: "POST",
-        statusCode: 400,
+        statusCode: HTTP_STATUS.BAD_REQUEST,
         headers: { "content-type": "application/json" },
         body: '{"error":"bad_request"}',
         remoteIp: "5.6.7.8",
@@ -71,7 +75,7 @@ describe("Log Optimization Tests", () => {
         query: {},
         size: 100,
         contentType: "application/json",
-        requestId: "req_2",
+        requestId: `${REQUEST_ID_PREFIX}2`,
       },
     ]);
   });
@@ -159,7 +163,7 @@ describe("Log Optimization Tests", () => {
       expect(data.id).toBe("log_1");
     });
 
-    test("should return 404 for non-existent ID", async () => {
+    test("should return HTTP_STATUS.NOT_FOUND for non-existent ID", async () => {
       if (!createLogDetailHandler) return;
 
       const handler = createLogDetailHandler(webhookManagerMock);
@@ -169,7 +173,7 @@ describe("Log Optimization Tests", () => {
 
       await handler(req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.NOT_FOUND);
       expect(jest.mocked(res.json).mock.calls[0][0]).toHaveProperty("error");
     });
   });

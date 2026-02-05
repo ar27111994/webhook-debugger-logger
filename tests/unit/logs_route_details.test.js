@@ -7,6 +7,7 @@ import {
   createMockNextFunction,
   assertType,
 } from "../setup/helpers/test-utils.js";
+import { HTTP_STATUS } from "../../src/consts.js";
 import {
   apifyMock,
   webhookManagerMock,
@@ -56,19 +57,19 @@ describe("Logs Route Details & Payload", () => {
   describe("Log Detail Handler", () => {
     const handler = () => createLogDetailHandler(webhookManagerMock);
 
-    test("should return 404 if log not found", async () => {
+    test("should return HTTP_STATUS.NOT_FOUND if log not found", async () => {
       logRepositoryMock.getLogById.mockResolvedValue(null);
       req = createMockRequest({ params: { logId: "missing" } });
 
       await handler()(req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.NOT_FOUND);
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({ error: "Log entry not found" }),
       );
     });
 
-    test("should return 404 if webhook ID is invalid", async () => {
+    test("should return HTTP_STATUS.NOT_FOUND if webhook ID is invalid", async () => {
       logRepositoryMock.getLogById.mockResolvedValue(
         assertType({
           id: "log_1",
@@ -80,7 +81,7 @@ describe("Logs Route Details & Payload", () => {
 
       await handler()(req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.NOT_FOUND);
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
           error: "Log entry belongs to invalid webhook",
@@ -153,7 +154,7 @@ describe("Logs Route Details & Payload", () => {
 
       await handler()(req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.NOT_FOUND);
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({ error: "Log entry not found" }),
       );
@@ -211,7 +212,7 @@ describe("Logs Route Details & Payload", () => {
       expect(res.send).toHaveBeenCalledWith("Hydrated Content");
     });
 
-    test("should return 404 if KVS payload missing", async () => {
+    test("should return HTTP_STATUS.NOT_FOUND if KVS payload missing", async () => {
       /** @type {LogEntry} */
       const mockLog = assertType({
         id: "log_1",
@@ -232,19 +233,21 @@ describe("Logs Route Details & Payload", () => {
 
       await handler()(req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.NOT_FOUND);
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({ error: "Payload not found in KVS" }),
       );
     });
 
-    test("should return 500 on repository error", async () => {
+    test("should return HTTP_STATUS.INTERNAL_SERVER_ERROR on repository error", async () => {
       logRepositoryMock.getLogById.mockRejectedValue(new Error("DB Error"));
       req = createMockRequest({ params: { logId: "log_error" } });
 
       await handler()(req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.status).toHaveBeenCalledWith(
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+      );
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({ error: "Failed to fetch log payload" }),
       );

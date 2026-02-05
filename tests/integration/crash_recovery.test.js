@@ -4,6 +4,8 @@ import path from "path";
 import fs from "fs/promises";
 import { fileURLToPath } from "url";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
+import { HTTP_STATUS } from "../../src/consts.js";
+import { setupTestApp } from "../setup/helpers/app-utils.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TEMP_DIR_PARENT = path.join(__dirname, "../temp");
@@ -83,11 +85,10 @@ describe("Crash Recovery (Zombie Process)", () => {
     // 2. Start the main application using the SAME DB file
     // setupTestApp calls initialize(), which calls getDbInstance()
     // This should recover the WAL/checkpoint
-    const { setupTestApp } = await import("../setup/helpers/app-utils.js");
     ({ appClient, teardownApp } = await setupTestApp());
 
     // 3. Query the data
-    const res = await appClient.get("/logs").expect(200);
+    const res = await appClient.get("/logs").expect(HTTP_STATUS.OK);
 
     // 4. Verify the ID exists
     const item = res.body.items.find(

@@ -4,6 +4,7 @@
  * @module middleware/security
  */
 import { nanoid } from "nanoid";
+import { REQUEST_ID_PREFIX } from "../consts.js";
 
 /**
  * @typedef {import("express").Request} Request
@@ -22,7 +23,8 @@ export const createRequestIdMiddleware =
   /** @param {Request} req @param {Response} res @param {NextFunction} next */
   (req, res, next) => {
     const requestId =
-      req.headers["x-request-id"]?.toString() || `req_${nanoid()}`;
+      req.headers["x-request-id"]?.toString() ||
+      `${REQUEST_ID_PREFIX}${nanoid()}`;
     /** @type {any} */ (req).requestId = requestId;
     res.setHeader("X-Request-ID", requestId);
     next();

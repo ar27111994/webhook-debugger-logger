@@ -28,6 +28,11 @@ import {
   APIFY_HOMEPAGE_URL,
   RECURSION_HEADER_NAME,
   RECURSION_HEADER_VALUE,
+  RECURSION_HEADER_LOOP_SUFFIX,
+  HTTP_STATUS,
+  MIME_TYPES,
+  DEFAULT_ID_LENGTH,
+  MAX_DATASET_ITEM_BYTES,
 } from "./consts.js";
 import {
   createStreamVerifier,
@@ -81,10 +86,10 @@ export class LoggerMiddleware {
   /**
    * Validates and coerces a forced status code.
    * @param {any} forcedStatus
-   * @param {number} [defaultCode=200]
+   * @param {number} [defaultCode=HTTP_STATUS.OK]
    * @returns {number}
    */
-  static getValidStatusCode(forcedStatus, defaultCode = 200) {
+  static getValidStatusCode(forcedStatus, defaultCode = HTTP_STATUS.OK) {
     const forced = Number(forcedStatus);
     if (Number.isFinite(forced) && forced >= 100 && forced < 600) {
       return forced;
@@ -269,14 +274,14 @@ export class LoggerMiddleware {
     const forwardedBy = req.headers[RECURSION_HEADER_NAME.toLowerCase()];
     if (
       forwardedBy === RECURSION_HEADER_VALUE ||
-      forwardedBy === `${RECURSION_HEADER_VALUE}-Loop-Check`
+      forwardedBy === `${RECURSION_HEADER_VALUE}${RECURSION_HEADER_LOOP_SUFFIX}`
     ) {
       this.#log.warn(
         { webhookId, clientIp, headers: req.headers },
         "Recursive forwarding loop detected and blocked (Self-Reference).",
       );
-      return res.status(422).json({
-        status: 422,
+      return res.status(HTTP_STATUS.UNPROCESSABLE_ENTITY).json({
+        status: HTTP_STATUS.UNPROCESSABLE_ENTITY,
         error: "Unprocessable Entity",
         message:
           "Recursive forwarding detected. The forwarding target appears to be the Actor itself.",
@@ -290,8 +295,8 @@ export class LoggerMiddleware {
       res.setHeader("X-RateLimit-Limit", webhookRateLimiter.limit);
       res.setHeader("X-RateLimit-Remaining", rateLimitResult.remaining);
 
-      return res.status(429).json({
-        status: 429,
+      return res.status(HTTP_STATUS.TOO_MANY_REQUESTS).json({
+        status: HTTP_STATUS.TOO_MANY_REQUESTS,
         error: "Too Many Requests",
         message: `Webhook rate limit exceeded. Max ${webhookRateLimiter.limit} requests per minute per webhook.`,
         retryAfterSeconds: Math.ceil(rateLimitResult.resetMs / 1000),
@@ -308,7 +313,7 @@ export class LoggerMiddleware {
 
     // 1. Hard Security Limit Check
     if (contentLength > maxSize) {
-      return res.status(413).json({
+      return res.status(HTTP_STATUS.PAYLOAD_TOO_LARGE).json({
         error: `Payload too large. Limit is ${maxSize} bytes.`,
         received: contentLength,
       });
@@ -319,7 +324,7 @@ export class LoggerMiddleware {
     if (contentLength > KVS_OFFLOAD_THRESHOLD) {
       const kvsKey = generateKvsKey();
       const rawContentType =
-        req.headers["content-type"] || "application/octet-stream";
+        req.headers["content-type"] || MIME_TYPES.OCTET_STREAM;
 
       this.#log.info(
         { contentLength, kvsKey },
@@ -399,7 +404,7 @@ export class LoggerMiddleware {
           { err: this.#serializeError(err) },
           "Streaming offload failed",
         );
-        return res.status(500).json({
+        return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
           error: "Failed to process large upload",
           details: /** @type {Error} */ (err).message,
         });
@@ -429,13 +434,15 @@ export class LoggerMiddleware {
         mergedOptions,
       );
       if (!validation.isValid) {
-        return res.status(validation.statusCode || 400).json({
-          error: validation.error,
-          ip: validation.remoteIp,
-          received: validation.contentLength,
-          id: webhookId,
-          docs: APIFY_HOMEPAGE_URL,
-        });
+        return res
+          .status(validation.statusCode || HTTP_STATUS.BAD_REQUEST)
+          .json({
+            error: validation.error,
+            ip: validation.remoteIp,
+            received: validation.contentLength,
+            id: webhookId,
+            docs: APIFY_HOMEPAGE_URL,
+          });
       }
 
       // 2. Prepare
@@ -451,7 +458,7 @@ export class LoggerMiddleware {
             : req.headers,
           contentType:
             req.headers["content-type"]?.split(";")[0].trim().toLowerCase() ||
-            "application/octet-stream",
+            MIME_TYPES.OCTET_STREAM,
           bodyEncoding: undefined,
         };
       } else {
@@ -465,7 +472,7 @@ export class LoggerMiddleware {
       // 3. Transform
       /** @type {WebhookEvent} */
       const event = {
-        id: nanoid(10),
+        id: nanoid(DEFAULT_ID_LENGTH),
         timestamp: new Date().toISOString(),
         webhookId,
         method: req.method,
@@ -477,7 +484,7 @@ export class LoggerMiddleware {
         size: validation.contentLength,
         statusCode: LoggerMiddleware.getValidStatusCode(
           /** @type {any} */ (req).forcedStatus,
-          mergedOptions.defaultResponseCode ?? 200,
+          mergedOptions.defaultResponseCode ?? HTTP_STATUS.OK,
         ),
         responseBody: undefined, // Custom scripts can set this
         responseHeaders: {}, // Custom scripts can add headers
@@ -503,7 +510,7 @@ export class LoggerMiddleware {
           event.signatureProvider = ingestResult.provider;
           if (!ingestResult.valid) {
             event.signatureError = ingestResult.error;
-            event.statusCode = 401;
+            event.statusCode = HTTP_STATUS.UNAUTHORIZED;
             event.responseBody = {
               error: "Invalid signature",
               details: ingestResult.error,
@@ -534,7 +541,7 @@ export class LoggerMiddleware {
           event.signatureProvider = sigResult.provider;
           if (!sigResult.valid) {
             event.signatureError = sigResult.error;
-            event.statusCode = 401;
+            event.statusCode = HTTP_STATUS.UNAUTHORIZED;
             // Set delayed response body for #sendResponse to use
             event.responseBody = {
               error: "Invalid signature",
@@ -652,7 +659,7 @@ export class LoggerMiddleware {
     if (!this.#webhookManager.isValid(webhookId)) {
       return {
         isValid: false,
-        statusCode: 404,
+        statusCode: HTTP_STATUS.NOT_FOUND,
         error: "Webhook ID not found or expired",
       };
     }
@@ -664,7 +671,7 @@ export class LoggerMiddleware {
       if (!isAllowed) {
         return {
           isValid: false,
-          statusCode: 403,
+          statusCode: HTTP_STATUS.FORBIDDEN,
           error: "Forbidden: IP not in whitelist",
           remoteIp,
         };
@@ -676,7 +683,7 @@ export class LoggerMiddleware {
     if (!authResult.isValid) {
       return {
         isValid: false,
-        statusCode: 401,
+        statusCode: HTTP_STATUS.UNAUTHORIZED,
         error: authResult.error,
       };
     }
@@ -705,7 +712,7 @@ export class LoggerMiddleware {
     if (contentLength > maxSize) {
       return {
         isValid: false,
-        statusCode: 413,
+        statusCode: HTTP_STATUS.PAYLOAD_TOO_LARGE,
         error: `Payload too large. Limit is ${maxSize} bytes.`,
         remoteIp,
         contentLength,
@@ -723,7 +730,7 @@ export class LoggerMiddleware {
   async #prepareRequestData(req, options) {
     const { maskSensitiveData } = options;
     const rawContentType =
-      req.headers["content-type"] || "application/octet-stream";
+      req.headers["content-type"] || MIME_TYPES.OCTET_STREAM;
     const contentType = rawContentType.split(";")[0].trim().toLowerCase();
 
     // Heuristic for text-based content types
@@ -757,7 +764,7 @@ export class LoggerMiddleware {
           bodyToValidate = JSON.parse(bodyToValidate);
         } catch (_) {
           throw {
-            statusCode: 400,
+            statusCode: HTTP_STATUS.BAD_REQUEST,
             error: "Invalid JSON for schema validation",
           };
         }
@@ -766,7 +773,7 @@ export class LoggerMiddleware {
       const isValid = this.#validate(bodyToValidate);
       if (!isValid) {
         throw {
-          statusCode: 400,
+          statusCode: HTTP_STATUS.BAD_REQUEST,
           error: "JSON Schema Validation Failed",
           details: this.#validate.errors,
         };
@@ -830,7 +837,7 @@ export class LoggerMiddleware {
           "Failed to offload large payload to KVS",
         );
         // Fallback to truncation if KVS fails
-        const MAX_FALLBACK_SIZE = 9 * 1024 * 1024; // Hard limit for dataset
+        const MAX_FALLBACK_SIZE = MAX_DATASET_ITEM_BYTES; // Hard limit for dataset
         if (typeof loggedBody === "string") {
           loggedBody =
             loggedBody.substring(0, MAX_FALLBACK_SIZE) +
@@ -885,7 +892,7 @@ export class LoggerMiddleware {
   #transformRequestData(event, req) {
     if (this.#compiledScript) {
       try {
-        const sandbox = { event, req, console };
+        const sandbox = { event, req, console, HTTP_STATUS };
         this.#compiledScript.runInNewContext(sandbox, {
           timeout: SCRIPT_EXECUTION_TIMEOUT_MS,
         });

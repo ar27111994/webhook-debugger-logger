@@ -1,5 +1,6 @@
 import { describe, test, expect, afterEach } from "@jest/globals";
-import { getInt, tryParse, parseIfPresent } from "../../src/utils/common.js";
+import { tryParse, parseIfPresent } from "../../src/utils/common.js";
+import { getInt } from "../../src/utils/env.js";
 
 describe("Common Utils", () => {
   const ORIGINAL_ENV = process.env;

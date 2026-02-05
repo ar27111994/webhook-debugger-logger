@@ -1,7 +1,8 @@
 import { jest, describe, test, expect, beforeEach } from "@jest/globals";
-import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
+import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 import {
+  DEFAULT_FIXED_MEMORY_MBYTES,
   DEFAULT_PAYLOAD_LIMIT,
   DEFAULT_RATE_LIMIT_PER_MINUTE,
 } from "../../src/consts.js";
@@ -20,6 +21,7 @@ const { AppState } = await import("../../src/utils/app_state.js");
 import {
   webhookManagerMock,
   loggerMiddlewareMock,
+  loggerMock,
 } from "../setup/helpers/shared-mocks.js";
 
 /**
@@ -60,6 +62,8 @@ describe("AppState", () => {
     replayTimeoutMs: 1000,
     responseDelayMs: 0,
     maxForwardRetries: 3,
+    useFixedMemory: true,
+    fixedMemoryMbytes: 4096,
     ...overrides,
   });
 
@@ -87,7 +91,7 @@ describe("AppState", () => {
       expect(emptyState.maxPayloadSize).toBe(DEFAULT_PAYLOAD_LIMIT);
       expect(emptyState.rateLimiter.limit).toBe(DEFAULT_RATE_LIMIT_PER_MINUTE);
       expect(emptyState.useFixedMemory).toBe(false);
-      expect(emptyState.fixedMemoryMbytes).toBe(2048);
+      expect(emptyState.fixedMemoryMbytes).toBe(DEFAULT_FIXED_MEMORY_MBYTES);
     });
   });
 
@@ -228,7 +232,7 @@ describe("AppState", () => {
     });
 
     test("should update fixedMemoryMbytes", async () => {
-      appState.fixedMemoryMbytes = 2048;
+      appState.fixedMemoryMbytes = DEFAULT_FIXED_MEMORY_MBYTES;
       const update = createUpdateConfig({ fixedMemoryMbytes: 8192 });
       await appState.applyConfigUpdate({}, update);
 

@@ -5,8 +5,8 @@ import {
   createMockNextFunction,
   assertType,
 } from "../setup/helpers/test-utils.js";
-import { loggerMock, setupCommonMocks } from "../setup/helpers/mock-setup.js";
-import { syncServiceMock } from "../setup/helpers/shared-mocks.js";
+import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
+import { syncServiceMock, loggerMock } from "../setup/helpers/shared-mocks.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 
 await setupCommonMocks({ logger: true, sync: true });

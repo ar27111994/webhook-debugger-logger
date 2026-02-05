@@ -21,7 +21,7 @@ let INPUT_POLL_INTERVAL_TEST_MS;
  */
 
 // 1. Mock Apify, Logger, and Consts
-import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
+import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 await setupCommonMocks({ apify: true, logger: true, fs: true });
 const consts = await import("../../src/consts.js");
 INPUT_POLL_INTERVAL_TEST_MS = consts.INPUT_POLL_INTERVAL_TEST_MS;
@@ -32,6 +32,7 @@ import {
   createKeyValueStoreMock,
   fsPromisesMock as mockFsPromises,
   fsMock,
+  loggerMock,
 } from "../setup/helpers/shared-mocks.js";
 const mockActor = apifyMock;
 const mockFs = fsMock;

@@ -1,5 +1,6 @@
-import { executeQuery, closeDb } from "../../src/db/duckdb.js";
 import assert from "node:assert";
+import { HTTP_STATUS } from "../../src/consts.js";
+import { executeQuery, closeDb } from "../../src/db/duckdb.js";
 
 async function testDatabase() {
   console.log("🛠️ Testing DuckDB Connection (Native Node-API)...");
@@ -19,7 +20,7 @@ async function testDatabase() {
         id: testId,
         timestamp: timestamp.toISOString(), // Neo client needs primitives: string for timestamp usually works via cast
         method: "GET",
-        statusCode: 200,
+        statusCode: HTTP_STATUS.OK,
         requestUrl: "http://test.com",
         headers: JSON.stringify({ "x-test": "true" }), // JSON column
       },
@@ -33,7 +34,7 @@ async function testDatabase() {
     });
 
     assert.strictEqual(rows.length, 1);
-    assert.strictEqual(rows[0].statusCode, 200);
+    assert.strictEqual(rows[0].statusCode, HTTP_STATUS.OK);
 
     // Check JSON handling
     console.log("Row Headers Type:", typeof rows[0].headers);

@@ -1,5 +1,6 @@
 import { describe, test, expect, beforeEach } from "@jest/globals";
-import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
+import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
+import { loggerMock } from "../setup/helpers/shared-mocks.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 import {
   createMockRequest,
@@ -7,6 +8,7 @@ import {
   createMockNextFunction,
   assertType,
 } from "../setup/helpers/test-utils.js";
+import { HTTP_STATUS } from "../../src/consts.js";
 
 // Setup mocks
 await setupCommonMocks({ logger: true });
@@ -52,11 +54,13 @@ describe("Middleware Suite", () => {
       expect(next).toHaveBeenCalledWith(err);
     });
 
-    test("should sanitize 500 errors", () => {
+    test("should sanitize HTTP_STATUS.INTERNAL_SERVER_ERROR errors", () => {
       const err = new Error("Database connection failed");
       handler(err, req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.status).toHaveBeenCalledWith(
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+      );
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
           error: "Internal Server Error",
@@ -70,13 +74,13 @@ describe("Middleware Suite", () => {
       );
     });
 
-    test("should pass through client errors (400)", () => {
+    test("should pass through client errors (HTTP_STATUS.BAD_REQUEST)", () => {
       /** @type {CommonError} */
       const err = new Error("Invalid Input");
-      err.statusCode = 400;
+      err.statusCode = HTTP_STATUS.BAD_REQUEST;
       handler(err, req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.BAD_REQUEST);
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
           error: "Bad Request",

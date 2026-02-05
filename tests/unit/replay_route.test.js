@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from "@jest/globals";
-import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
+import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 import {
   createMockRequest,
@@ -7,12 +7,14 @@ import {
   createMockNextFunction,
   assertType,
 } from "../setup/helpers/test-utils.js";
+import { HTTP_STATUS, REPLAY_STATUS_LABELS } from "../../src/consts.js";
 import {
   apifyMock,
   axiosMock,
   ssrfMock,
   logRepositoryMock,
   storageHelperMock,
+  loggerMock,
 } from "../setup/helpers/shared-mocks.js";
 
 // 1. Setup Common Mocks
@@ -63,32 +65,32 @@ describe("Replay Route", () => {
 
   const handler = () => createReplayHandler();
 
-  test("should return 400 if url is missing", async () => {
+  test("should return HTTP_STATUS.BAD_REQUEST if url is missing", async () => {
     req = createMockRequest({ query: {} }); // no url
     await handler()(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.BAD_REQUEST);
     expect(res.json).toHaveBeenCalledWith({ error: "Missing 'url' parameter" });
   });
 
-  test("should return 400 on SSRF failure", async () => {
+  test("should return HTTP_STATUS.BAD_REQUEST on SSRF failure", async () => {
     ssrfMock.validateUrlForSsrf.mockResolvedValue({
       safe: false,
       error: "Blocked IP",
     });
     req = createMockRequest({ query: { url: "http://bad.com" } });
     await handler()(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.BAD_REQUEST);
     expect(res.json).toHaveBeenCalledWith({ error: "Blocked IP" });
   });
 
-  test("should return 404 if log not found", async () => {
+  test("should return HTTP_STATUS.NOT_FOUND if log not found", async () => {
     logRepositoryMock.getLogById.mockResolvedValue(null);
     req = createMockRequest({
       params: { itemId: "missing" },
       query: { url: "http://example.com" },
     });
     await handler()(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.NOT_FOUND);
   });
 
   test("should strip sensitive headers and replay successfully", async () => {
@@ -105,7 +107,7 @@ describe("Replay Route", () => {
     });
     logRepositoryMock.getLogById.mockResolvedValue(mockLog);
 
-    axiosMock.mockResolvedValue({ status: 200, data: "OK" });
+    axiosMock.mockResolvedValue({ status: HTTP_STATUS.OK, data: "OK" });
 
     req = createMockRequest({
       params: { itemId: "log_1", webhookId: "wh_1" },
@@ -132,7 +134,7 @@ describe("Replay Route", () => {
     expect(callArgs.headers).not.toHaveProperty("ignored-header");
 
     expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ status: "Replayed" }),
+      expect.objectContaining({ status: REPLAY_STATUS_LABELS.REPLAYED }),
     );
   });
 
@@ -150,7 +152,7 @@ describe("Replay Route", () => {
 
     axiosMock
       .mockRejectedValueOnce(error)
-      .mockResolvedValueOnce({ status: 200, data: "OK" });
+      .mockResolvedValueOnce({ status: HTTP_STATUS.OK, data: "OK" });
 
     req = createMockRequest({
       params: { itemId: "log_1" },
@@ -161,7 +163,7 @@ describe("Replay Route", () => {
 
     expect(axiosMock).toHaveBeenCalledTimes(2); // Initial + 1 retry
     expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ status: "Replayed" }),
+      expect.objectContaining({ status: REPLAY_STATUS_LABELS.REPLAYED }),
     );
     expect(loggerMock.warn).toHaveBeenCalledWith(
       expect.objectContaining({ attempt: 1 }),
@@ -192,8 +194,8 @@ describe("Replay Route", () => {
 
     // Default retries mocked as 3
     expect(axiosMock).toHaveBeenCalledTimes(3);
-    // ECONNRESET fails to catch block which returns 500 (unless timeout)
-    expect(res.status).toHaveBeenCalledWith(500);
+    // ECONNRESET fails to catch block which returns HTTP_STATUS.INTERNAL_SERVER_ERROR (unless timeout)
+    expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.INTERNAL_SERVER_ERROR);
   });
 
   test("should hydrate offloaded payload from KVS", async () => {
@@ -209,7 +211,7 @@ describe("Replay Route", () => {
         hydrated: true,
       }),
     );
-    axiosMock.mockResolvedValue({ status: 200 });
+    axiosMock.mockResolvedValue({ status: HTTP_STATUS.OK });
 
     req = createMockRequest({
       params: { itemId: "log_1" },
@@ -250,7 +252,7 @@ describe("Replay Route", () => {
     await handler()(req, res, next);
 
     const { ERROR_MESSAGES } = await import("../../src/consts.js");
-    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.BAD_REQUEST);
     expect(res.json).toHaveBeenCalledWith({
       error: ERROR_MESSAGES.HOSTNAME_RESOLUTION_FAILED,
     });

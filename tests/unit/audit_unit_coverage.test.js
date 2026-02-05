@@ -7,6 +7,7 @@ import {
   afterEach,
 } from "@jest/globals";
 import path from "node:path";
+import { HTTP_STATUS, MIME_TYPES } from "../../src/consts.js";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import {
   apifyMock,
@@ -137,7 +138,7 @@ describe("Audit Unit Coverage", () => {
       const req = createMockRequest({
         params: { id: "wh_1" },
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": MIME_TYPES.JSON },
         body: { test: true },
       });
       const res = createMockResponse();
@@ -147,7 +148,7 @@ describe("Audit Unit Coverage", () => {
       await middleware.middleware(req, res, next);
 
       // Background tasks are async, wait for them to finish (they are raced with 100ms timeout in test)
-      await sleep(200);
+      await sleep(HTTP_STATUS.OK);
 
       expect(mockForwardingService.forwardWebhook).toHaveBeenCalledWith(
         expect.anything(),
@@ -252,8 +253,8 @@ describe("Audit Unit Coverage", () => {
         );
       });
 
-      // Verify 413 Payload Too Large
-      expect(res.status).toHaveBeenCalledWith(413);
+      // Verify HTTP_STATUS.PAYLOAD_TOO_LARGE Payload Too Large
+      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.PAYLOAD_TOO_LARGE);
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
           error: expect.stringMatching(/too large/i),

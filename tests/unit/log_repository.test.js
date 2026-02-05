@@ -2,6 +2,7 @@ import { jest, describe, test, expect, beforeEach } from "@jest/globals";
 import { assertType } from "../setup/helpers/test-utils.js";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import { duckDbMock } from "../setup/helpers/shared-mocks.js";
+import { HTTP_STATUS } from "../../src/consts.js";
 
 await setupCommonMocks({ db: true });
 
@@ -63,7 +64,7 @@ describe("LogRepository Unit Tests", () => {
       duckDbMock.executeQuery.mockResolvedValue([]);
       await repo.findLogs({
         method: "POST",
-        statusCode: 200,
+        statusCode: HTTP_STATUS.OK,
         webhookId: "wh_1",
         requestId: "req_1",
         signatureValid: true,
@@ -77,7 +78,7 @@ describe("LogRepository Unit Tests", () => {
       const callParams = duckDbMock.executeQuery.mock.calls[0][1];
       expect(callParams).toMatchObject({
         method: "POST",
-        statusCode: 200,
+        statusCode: HTTP_STATUS.OK,
         webhookId: "wh_1",
         requestId: "req_1",
         signatureValid: true,
@@ -91,10 +92,10 @@ describe("LogRepository Unit Tests", () => {
 
     test("should filter by simple statusCode", async () => {
       duckDbMock.executeQuery.mockResolvedValue([]);
-      await repo.findLogs({ statusCode: 201 });
+      await repo.findLogs({ statusCode: HTTP_STATUS.CREATED });
       expect(duckDbMock.executeQuery).toHaveBeenCalledWith(
         expect.stringContaining("statusCode = $statusCode"),
-        expect.objectContaining({ statusCode: 201 }),
+        expect.objectContaining({ statusCode: HTTP_STATUS.CREATED }),
       );
     });
 
@@ -142,15 +143,18 @@ describe("LogRepository Unit Tests", () => {
       duckDbMock.executeQuery.mockResolvedValue([]);
       await repo.findLogs({
         statusCode: [
-          { operator: "gte", value: 400 },
-          { operator: "lt", value: 500 },
+          { operator: "gte", value: HTTP_STATUS.BAD_REQUEST },
+          { operator: "lt", value: HTTP_STATUS.INTERNAL_SERVER_ERROR },
         ],
       });
       expect(duckDbMock.executeQuery).toHaveBeenCalledWith(
         expect.stringContaining(
           "statusCode >= $statusCode_0 AND statusCode < $statusCode_1",
         ),
-        expect.objectContaining({ statusCode_0: 400, statusCode_1: 500 }),
+        expect.objectContaining({
+          statusCode_0: HTTP_STATUS.BAD_REQUEST,
+          statusCode_1: HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        }),
       );
     });
 

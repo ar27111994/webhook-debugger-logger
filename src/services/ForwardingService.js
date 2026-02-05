@@ -7,6 +7,9 @@ import axios from "axios";
 import { nanoid } from "nanoid";
 import { validateUrlForSsrf } from "../utils/ssrf.js";
 import {
+  DEFAULT_ID_LENGTH,
+  SYNC_ENTITY_SYSTEM,
+  ERROR_LABELS,
   FORWARD_HEADERS_TO_IGNORE,
   FORWARD_TIMEOUT_MS,
   DEFAULT_FORWARD_RETRIES,
@@ -14,6 +17,7 @@ import {
   RETRY_BASE_DELAY_MS,
   RECURSION_HEADER_NAME,
   RECURSION_HEADER_VALUE,
+  PROTOCOL_PREFIXES,
 } from "../consts.js";
 import { createChildLogger, serializeError } from "../utils/logger.js";
 
@@ -38,7 +42,7 @@ export class ForwardingService {
   async forwardWebhook(event, req, options, forwardUrl) {
     let validatedUrl = forwardUrl.startsWith("http")
       ? forwardUrl
-      : `http://${forwardUrl}`;
+      : `${PROTOCOL_PREFIXES.HTTP}${forwardUrl}`;
 
     let attempt = 0;
     let success = false;
@@ -107,11 +111,11 @@ export class ForwardingService {
         if (attempt >= maxRetries || !isTransient) {
           try {
             await Actor.pushData({
-              id: nanoid(10),
+              id: nanoid(DEFAULT_ID_LENGTH),
               timestamp: new Date().toISOString(),
               webhookId: event.webhookId,
-              method: "SYSTEM",
-              type: "forward_error",
+              method: SYNC_ENTITY_SYSTEM,
+              type: ERROR_LABELS.FORWARD_ERROR,
               body: `Forwarding to ${validatedUrl} failed${
                 !isTransient ? " (Non-transient error)" : ""
               } after ${attempt} attempts. Last error: ${axiosError.message}`,

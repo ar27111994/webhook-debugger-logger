@@ -3,13 +3,6 @@
  * @description Unit tests for app lifecycle management (SIGINT, SIGTERM, migration) in main.js.
  */
 import { jest } from "@jest/globals";
-import {
-  assertType,
-  createMockNextFunction,
-  createMockRequest,
-  createMockResponse,
-} from "../setup/helpers/test-utils.js";
-
 describe("Main.js Lifecycle Limits", () => {
   const originalEnv = process.env;
 
@@ -27,13 +20,18 @@ describe("Main.js Lifecycle Limits", () => {
   const runWrappedImport =
     /**
      * @param {function({
-     *   Actor: any,
-     *   listeners: any[],
-     *   exitSpy: any,
-     *   loggerMock: any,
-     *   expressAppMock: any,
-     *   webhookManagerMock: any,
-     *   sseHeartbeat: any
+     *   Actor?: any,
+     *   listeners?: any[],
+     *   exitSpy?: any,
+     *   loggerMock?: any,
+     *   expressAppMock?: any,
+     *   webhookManagerMock?: any,
+     *   sseHeartbeat?: any,
+     *   HTTP_STATUS?: any,
+     *   STARTUP_TEST_EXIT_DELAY_MS?: any,
+     *   createMockRequest?: any,
+     *   createMockResponse?: any,
+     *   createMockNextFunction?: any,
      * }): Promise<void>} fn
      * @param {function(): Promise<void>} [testSetup]
      */
@@ -56,6 +54,15 @@ describe("Main.js Lifecycle Limits", () => {
             listeners.push({ event, handler });
             return process;
           };
+
+        const {
+          assertType,
+          createMockRequest,
+          createMockResponse,
+          createMockNextFunction,
+        } = await import("../setup/helpers/test-utils.js");
+        const { expressAppMock, webhookManagerMock, loggerMock } =
+          await import("../setup/helpers/shared-mocks.js");
 
         const originalExit = process.exit;
         const manualExit = jest.fn();
@@ -96,19 +103,23 @@ describe("Main.js Lifecycle Limits", () => {
           // Import main with cache bursting
           const cacheBust = Date.now();
           const main = await import(`../../src/main.js?t=${cacheBust}`);
+          const { HTTP_STATUS, STARTUP_TEST_EXIT_DELAY_MS } = await import(
+            `../../src/consts.js?t=${cacheBust}`
+          );
 
           await fn({
             Actor: (await import("apify")).Actor,
             listeners,
             exitSpy: manualExit,
-            loggerMock: (await import("../setup/helpers/mock-setup.js"))
-              .loggerMock,
-            expressAppMock: (await import("../setup/helpers/shared-mocks.js"))
-              .expressAppMock,
-            webhookManagerMock: (
-              await import("../setup/helpers/shared-mocks.js")
-            ).webhookManagerMock,
+            loggerMock,
+            expressAppMock,
+            webhookManagerMock,
             sseHeartbeat: main.sseHeartbeat,
+            HTTP_STATUS,
+            STARTUP_TEST_EXIT_DELAY_MS,
+            createMockRequest,
+            createMockResponse,
+            createMockNextFunction,
           });
         } catch (e) {
           if (
@@ -129,7 +140,9 @@ describe("Main.js Lifecycle Limits", () => {
 
   test("should handle SIGTERM shutdown", async () => {
     await runWrappedImport(async ({ Actor, listeners, loggerMock }) => {
-      const listener = listeners.find((l) => l.event === "SIGTERM");
+      const listener = Array.isArray(listeners)
+        ? listeners.find((l) => l.event === "SIGTERM")
+        : undefined;
       expect(listener).toBeDefined();
 
       const handler = listener.handler;
@@ -145,7 +158,9 @@ describe("Main.js Lifecycle Limits", () => {
 
   test("should handle SIGINT shutdown", async () => {
     await runWrappedImport(async ({ Actor, listeners, loggerMock }) => {
-      const listener = listeners.find((l) => l.event === "SIGINT");
+      const listener = Array.isArray(listeners)
+        ? listeners.find((l) => l.event === "SIGINT")
+        : undefined;
       expect(listener).toBeDefined();
 
       const handler = listener.handler;
@@ -250,7 +265,9 @@ describe("Main.js Lifecycle Limits", () => {
           .mocked(webhookManagerMock.persist)
           .mockImplementation(() => new Promise(() => {}));
 
-        const listener = listeners.find((l) => l.event === "SIGTERM");
+        const listener = Array.isArray(listeners)
+          ? listeners.find((l) => l.event === "SIGTERM")
+          : undefined;
         const handler = listener.handler;
 
         // Trigger shutdown but don't await it yet (it waits for finalCleanup or force exit)
@@ -277,9 +294,9 @@ describe("Main.js Lifecycle Limits", () => {
 
   test("should handle testAndExit mode", async () => {
     await runWrappedImport(
-      async ({ loggerMock }) => {
+      async ({ STARTUP_TEST_EXIT_DELAY_MS, loggerMock }) => {
         // Advancing timers should trigger TESTANDEXIT shutdown
-        await jest.advanceTimersByTimeAsync(10000);
+        await jest.advanceTimersByTimeAsync(STARTUP_TEST_EXIT_DELAY_MS * 2);
         // Trigger microtasks
         await jest.runAllTicks();
         // Since shutdown is async, advance one more bit if needed
@@ -317,36 +334,48 @@ describe("Main.js Lifecycle Limits", () => {
 
   describe("Helper Callbacks & Middleware", () => {
     test("should implement status override middleware", async () => {
-      await runWrappedImport(async ({ expressAppMock }) => {
-        // There are two calls to app.all("/webhook/:id")
-        // 1. app.all(..., ingestMiddleware) -> 2 args
-        // 2. app.all(..., statusMiddleware, loggingMiddleware) -> 3 args
-        const call = expressAppMock.all.mock.calls.find(
-          /**
-           * @param {Array<string | function(): void>} args
-           * @returns {boolean}
-           */
-          (args) => args[0] === "/webhook/:id" && args.length === 3,
-        );
-        expect(call).toBeDefined();
+      await runWrappedImport(
+        async ({
+          expressAppMock,
+          createMockRequest,
+          createMockResponse,
+          createMockNextFunction,
+          HTTP_STATUS,
+        }) => {
+          // There are two calls to app.all("/webhook/:id")
+          // 1. app.all(..., ingestMiddleware) -> 2 args
+          // 2. app.all(..., statusMiddleware, loggingMiddleware) -> 3 args
+          const call = expressAppMock.all.mock.calls.find(
+            /**
+             * @param {Array<string | function(): void>} args
+             * @returns {boolean}
+             */
+            (args) => args[0] === "/webhook/:id" && args.length === 3,
+          );
+          expect(call).toBeDefined();
 
-        const middleware = call[1];
-        expect(typeof middleware).toBe("function");
+          const middleware = call[1];
+          expect(typeof middleware).toBe("function");
 
-        const req = createMockRequest({ query: { __status: "201" } });
-        const res = createMockResponse();
-        const next = createMockNextFunction();
-        middleware(req, res, next);
+          const req = createMockRequest({
+            query: { __status: HTTP_STATUS.CREATED.toString() },
+          });
+          const res = createMockResponse();
+          const next = createMockNextFunction();
+          middleware(req, res, next);
 
-        expect(/** @type {any} */ (req).forcedStatus).toBe(201);
-        expect(next).toHaveBeenCalled();
+          expect(/** @type {any} */ (req).forcedStatus).toBe(
+            HTTP_STATUS.CREATED,
+          );
+          expect(next).toHaveBeenCalled();
 
-        // Test invalid status
-        /** @type {any} */ (req).forcedStatus = undefined;
-        req.query.__status = "999";
-        middleware(req, res, next);
-        expect(/** @type {any} */ (req).forcedStatus).toBeUndefined();
-      });
+          // Test invalid status
+          /** @type {any} */ (req).forcedStatus = undefined;
+          req.query.__status = "999";
+          middleware(req, res, next);
+          expect(/** @type {any} */ (req).forcedStatus).toBeUndefined();
+        },
+      );
     });
 
     test("should pass correct callbacks to route factories", async () => {

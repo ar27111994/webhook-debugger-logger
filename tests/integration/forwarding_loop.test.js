@@ -1,9 +1,11 @@
 import { describe, test, expect, beforeAll, afterAll } from "@jest/globals";
-import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
+import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
+import { loggerMock } from "../setup/helpers/shared-mocks.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 import {
   RECURSION_HEADER_NAME,
   RECURSION_HEADER_VALUE,
+  HTTP_STATUS,
 } from "../../src/consts.js";
 
 // Setup mocks first
@@ -65,7 +67,7 @@ describe("Forwarding Loop Protection (Recursion)", () => {
       .post(`/webhook/${webhookId}`)
       .send({ data: "normal" });
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(HTTP_STATUS.OK);
   });
 
   test("should block alternate check header if defined", async () => {
@@ -86,6 +88,6 @@ describe("Forwarding Loop Protection (Recursion)", () => {
       .set(RECURSION_HEADER_NAME, otherRunId)
       .send({ data: "valid-cross-instance-forward" });
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(HTTP_STATUS.OK);
   });
 });

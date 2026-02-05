@@ -6,7 +6,8 @@ import {
   beforeEach,
   afterEach,
 } from "@jest/globals";
-import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
+import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
+import { loggerMock } from "../setup/helpers/shared-mocks.js";
 import {
   createMockRequest,
   createMockResponse,
@@ -19,7 +20,8 @@ import {
 } from "../setup/helpers/test-lifecycle.js";
 
 // Mock logger before importing RateLimiter
-await setupCommonMocks({ logger: true });
+await setupCommonMocks({ logger: true, consts: true });
+import { HTTP_STATUS } from "../../src/consts.js";
 
 const { RateLimiter } = await import("../../src/utils/rate_limiter.js");
 const { DEFAULT_RATE_LIMIT_WINDOW_MS } = await import("../../src/consts.js");
@@ -58,7 +60,7 @@ describe("RateLimiter Unit Tests", () => {
     expect(next).toHaveBeenCalledTimes(2);
 
     mw(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(429);
+    expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.TOO_MANY_REQUESTS);
     expect(next).toHaveBeenCalledTimes(2);
   });
 
@@ -195,7 +197,7 @@ describe("RateLimiter Unit Tests", () => {
 
     mw(req, res, next);
 
-    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.BAD_REQUEST);
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
         error: "Bad Request",
@@ -275,7 +277,7 @@ describe("RateLimiter Unit Tests", () => {
     mw(createMockRequest({ ip: "userA", headers: {} }), res, next);
     expect(next).toHaveBeenCalledTimes(1);
     mw(createMockRequest({ ip: "userA", headers: {} }), res, next);
-    expect(res.status).toHaveBeenCalledWith(429);
+    expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.TOO_MANY_REQUESTS);
 
     // User B should still be allowed (independent counter)
     mw(createMockRequest({ ip: "userB", headers: {} }), res, next);
@@ -290,7 +292,7 @@ describe("RateLimiter Unit Tests", () => {
     const next = createMockNextFunction();
 
     mw(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(429);
+    expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.TOO_MANY_REQUESTS);
     expect(next).not.toHaveBeenCalled();
   });
 
@@ -326,7 +328,7 @@ describe("RateLimiter Unit Tests", () => {
     const almostThere = 10000;
     jest.advanceTimersByTime(windowMs - almostThere);
     mw(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(429);
+    expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.TOO_MANY_REQUESTS);
 
     jest.advanceTimersByTime(almostThere + 1); // Expired
     mw(req, res, next);
@@ -424,9 +426,9 @@ describe("RateLimiter Unit Tests", () => {
     expect(() => new RateLimiter(10, 0)).toThrow(
       "RateLimiter: windowMs must be a finite number > 0",
     );
-    expect(() => new RateLimiter(10, -500)).toThrow(
-      "RateLimiter: windowMs must be a finite number > 0",
-    );
+    expect(
+      () => new RateLimiter(10, -HTTP_STATUS.INTERNAL_SERVER_ERROR),
+    ).toThrow("RateLimiter: windowMs must be a finite number > 0");
     expect(() => new RateLimiter(10, Infinity)).toThrow(
       "RateLimiter: windowMs must be a finite number > 0",
     );

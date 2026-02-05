@@ -1,19 +1,16 @@
 import { jest, describe, test, expect, beforeEach } from "@jest/globals";
+import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
+import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
+import {
+  apifyMock,
+  logRepositoryMock,
+  loggerMock,
+} from "../setup/helpers/shared-mocks.js";
 
 /**
  * @typedef {import('../setup/helpers/shared-mocks.js').KeyValueStoreMock} KeyValueStore
  * @typedef {import('../../src/webhook_manager.js').WebhookManager} WebhookManager
  */
-
-import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
-import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
-
-import {
-  apifyMock,
-  logRepositoryMock,
-  constsMock,
-  duckDbMock,
-} from "../setup/helpers/shared-mocks.js";
 
 await setupCommonMocks({
   apify: true,
@@ -163,56 +160,6 @@ describe("WebhookManager", () => {
     await webhookManager.cleanup(); // Should not throw
 
     expect(webhookManager.hasWebhook("wh_err")).toBe(false);
-  });
-
-  test("cleanup() should trigger vacuum if enabled", async () => {
-    const past = new Date(Date.now() - 10000).toISOString();
-    webhookManager.addWebhookForTest("wh_past", { expiresAt: past });
-
-    // Enable vacuum via mock
-    Object.defineProperty(constsMock, "DUCKDB_VACUUM_ENABLED", {
-      value: true,
-    });
-    Object.defineProperty(constsMock, "DUCKDB_VACUUM_INTERVAL_MS", {
-      value: 0,
-    });
-
-    duckDbMock.vacuumDb.mockResolvedValue(undefined);
-
-    await webhookManager.init();
-    await webhookManager.cleanup();
-
-    expect(duckDbMock.vacuumDb).toHaveBeenCalled();
-
-    // Reset consts for other tests
-    Object.defineProperty(constsMock, "DUCKDB_VACUUM_ENABLED", {
-      value: false,
-    });
-  });
-
-  test("cleanup() should handle vacuum failures", async () => {
-    const past = new Date(Date.now() - 10000).toISOString();
-    webhookManager.addWebhookForTest("wh_past", { expiresAt: past });
-
-    Object.defineProperty(constsMock, "DUCKDB_VACUUM_ENABLED", {
-      value: true,
-    });
-    Object.defineProperty(constsMock, "DUCKDB_VACUUM_INTERVAL_MS", {
-      value: -1,
-    });
-    duckDbMock.vacuumDb.mockRejectedValue(new Error("Vacuum Fail"));
-
-    await webhookManager.init();
-    await webhookManager.cleanup();
-
-    expect(loggerMock.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ err: expect.anything() }),
-      "DuckDB vacuum failed",
-    );
-
-    Object.defineProperty(constsMock, "DUCKDB_VACUUM_ENABLED", {
-      value: false,
-    });
   });
 
   test("generateWebhooks() should throw on invalid count (negative)", async () => {

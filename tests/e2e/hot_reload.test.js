@@ -11,6 +11,7 @@ import {
   waitForCondition,
   assertType,
 } from "../setup/helpers/test-utils.js";
+import { HTTP_STATUS } from "../../src/consts.js";
 
 /**
  * @typedef {import('../setup/helpers/apify-mock.js').ApifyMock} Actor
@@ -20,7 +21,9 @@ import {
  */
 
 // 1. Setup mocks
-import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
+import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
+import { loggerMock } from "../setup/helpers/shared-mocks.js";
+
 await setupCommonMocks({ apify: true, logger: true });
 
 // 2. Import modules
@@ -56,7 +59,7 @@ describe("Hot-Reloading Configuration Tests", () => {
     const res1 = await appClient
       .get("/info")
       .set("Authorization", "Bearer original-key");
-    expect(res1.statusCode).toBe(200);
+    expect(res1.statusCode).toBe(HTTP_STATUS.OK);
 
     // 2. Emit new input
     const apifyMock = Actor;
@@ -71,20 +74,20 @@ describe("Hot-Reloading Configuration Tests", () => {
       const res = await appClient
         .get("/info")
         .set("Authorization", "Bearer new-secret-key");
-      return res.statusCode === 200;
+      return res.statusCode === HTTP_STATUS.OK;
     });
 
     // Verify old key fails
     const res2 = await appClient
       .get("/info")
       .set("Authorization", "Bearer original-key");
-    expect(res2.statusCode).toBe(401);
+    expect(res2.statusCode).toBe(HTTP_STATUS.UNAUTHORIZED);
 
     // Verify new key works
     const res3 = await appClient
       .get("/info")
       .set("Authorization", "Bearer new-secret-key");
-    expect(res3.statusCode).toBe(200);
+    expect(res3.statusCode).toBe(HTTP_STATUS.OK);
   });
 
   test("should detect input change and update components", async () => {
@@ -123,7 +126,7 @@ describe("Hot-Reloading Configuration Tests", () => {
     });
 
     // Wait briefly to ensure no change happens (since it's not supported)
-    await sleep(200);
+    await sleep(HTTP_STATUS.OK);
 
     const zeroActive = webhookManager.getAllActive().length;
     // Scale down is not currently implemented/supported, so it should remain 3
@@ -146,8 +149,7 @@ describe("Hot-Reloading Configuration Tests", () => {
       authKey: "new-super-secret",
       urlCount: 3,
       retentionHours: 1,
-      customScript:
-        "event.statusCode = 201; event.responseBody = 'Transformed!';",
+      customScript: `event.statusCode = ${HTTP_STATUS.CREATED}; event.responseBody = 'Transformed!';`,
     });
 
     // Wait for script to take effect
@@ -156,7 +158,9 @@ describe("Hot-Reloading Configuration Tests", () => {
         .post(`/webhook/${whId}`)
         .set("Authorization", "Bearer new-super-secret")
         .send({ data: "test" });
-      return res.statusCode === 201 && res.text === "Transformed!";
+      return (
+        res.statusCode === HTTP_STATUS.CREATED && res.text === "Transformed!"
+      );
     });
 
     // 3. Verify transformation applies immediately
@@ -164,7 +168,7 @@ describe("Hot-Reloading Configuration Tests", () => {
       .post(`/webhook/${whId}`)
       .set("Authorization", "Bearer new-super-secret")
       .send({ data: "test" });
-    expect(res2.statusCode).toBe(201);
+    expect(res2.statusCode).toBe(HTTP_STATUS.CREATED);
     expect(res2.text).toBe("Transformed!");
   });
 
@@ -191,7 +195,7 @@ describe("Hot-Reloading Configuration Tests", () => {
       .set("Authorization", "Bearer new-super-secret");
 
     // Ensure we got a response (not a connection refused/crash)
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(HTTP_STATUS.OK);
   });
 
   test("should update maxPayloadSize in real-time", async () => {
@@ -212,7 +216,7 @@ describe("Hot-Reloading Configuration Tests", () => {
         .set("Authorization", "Bearer new-super-secret")
         .set("Content-Type", "text/plain")
         .send(largePayload);
-      return res.statusCode === 200;
+      return res.statusCode === HTTP_STATUS.OK;
     });
 
     const res1 = await appClient
@@ -220,7 +224,7 @@ describe("Hot-Reloading Configuration Tests", () => {
       .set("Authorization", "Bearer new-super-secret")
       .set("Content-Type", "text/plain")
       .send(largePayload);
-    expect(res1.statusCode).toBe(200);
+    expect(res1.statusCode).toBe(HTTP_STATUS.OK);
 
     // 2. Set limit to 1MB (block 5MB)
     await Actor.emitInput({
@@ -235,7 +239,7 @@ describe("Hot-Reloading Configuration Tests", () => {
         .set("Authorization", "Bearer new-super-secret")
         .set("Content-Type", "text/plain")
         .send(largePayload);
-      return res.statusCode === 413;
+      return res.statusCode === HTTP_STATUS.PAYLOAD_TOO_LARGE;
     });
 
     const res2 = await appClient
@@ -244,8 +248,8 @@ describe("Hot-Reloading Configuration Tests", () => {
       .set("Content-Type", "text/plain")
       .send(largePayload);
 
-    // Should be blocked by middleware (413) or bodyParser (413)
-    expect(res2.statusCode).toBe(413);
+    // Should be blocked by middleware (HTTP_STATUS.PAYLOAD_TOO_LARGE) or bodyParser (HTTP_STATUS.PAYLOAD_TOO_LARGE)
+    expect(res2.statusCode).toBe(HTTP_STATUS.PAYLOAD_TOO_LARGE);
   }, 30000);
 
   test("should disable schema validation when input is cleared", async () => {
@@ -269,7 +273,7 @@ describe("Hot-Reloading Configuration Tests", () => {
         .set("Content-Type", "application/json")
         .send({ bar: "baz" });
       return (
-        res.statusCode === 400 &&
+        res.statusCode === HTTP_STATUS.BAD_REQUEST &&
         res.body.error === "JSON Schema Validation Failed"
       );
     });
@@ -287,7 +291,7 @@ describe("Hot-Reloading Configuration Tests", () => {
         .set("Authorization", "Bearer new-super-secret")
         .set("Content-Type", "application/json")
         .send({ bar: "baz" });
-      return res.statusCode === 200;
+      return res.statusCode === HTTP_STATUS.OK;
     });
 
     const res = await appClient
@@ -296,7 +300,7 @@ describe("Hot-Reloading Configuration Tests", () => {
       .set("Content-Type", "application/json")
       .send({ bar: "baz" });
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(HTTP_STATUS.OK);
   });
 
   test("should handle stringified input from KV store", async () => {

@@ -5,6 +5,7 @@ import {
   createMockNextFunction,
   assertType,
 } from "../setup/helpers/test-utils.js";
+import { HTTP_STATUS } from "../../src/consts.js";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import { createKeyValueStoreMock } from "../setup/helpers/shared-mocks.js";
 
@@ -170,7 +171,7 @@ describe("Logs Route Coverage", () => {
   });
 
   describe("createLogPayloadHandler", () => {
-    test("should return 404 if KVS offloaded value is missing", async () => {
+    test("should return HTTP_STATUS.NOT_FOUND if KVS offloaded value is missing", async () => {
       /** @type {LogEntry} */
       const mockLog = assertType({
         id: "1",
@@ -194,7 +195,7 @@ describe("Logs Route Coverage", () => {
       const handler = createLogPayloadHandler(webhookManagerMock);
       await handler(req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.NOT_FOUND);
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({ error: "Payload not found in KVS" }),
       );

@@ -8,6 +8,7 @@ import {
 } from "@jest/globals";
 
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
+import { HTTP_STATUS } from "../../src/consts.js";
 await setupCommonMocks({ apify: true });
 
 const { setupTestApp } = await import("../setup/helpers/app-utils.js");
@@ -43,22 +44,22 @@ describe("Auth UI Hardening Tests", () => {
       .get("/")
       .set("x-apify-container-server-readiness-probe", "true");
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(HTTP_STATUS.OK);
     expect(res.text).toBe("OK");
   });
 
   test("should show 'Locked' HTML for browser unauthorized access", async () => {
     const res = await appClient.get("/").set("Accept", "text/html");
 
-    expect(res.statusCode).toBe(401);
+    expect(res.statusCode).toBe(HTTP_STATUS.UNAUTHORIZED);
     expect(res.text).toContain("Access Restricted");
     expect(res.text).toContain("Strict Mode");
   });
 
-  test("should return JSON 401 for non-browser unauthorized access", async () => {
+  test("should return JSON HTTP_STATUS.UNAUTHORIZED for non-browser unauthorized access", async () => {
     const res = await appClient.get("/");
 
-    expect(res.statusCode).toBe(401);
+    expect(res.statusCode).toBe(HTTP_STATUS.UNAUTHORIZED);
     expect(res.body.error).toBe("Unauthorized");
   });
 
@@ -68,7 +69,7 @@ describe("Auth UI Hardening Tests", () => {
       .query({ key: authKey })
       .set("Accept", "text/html");
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(HTTP_STATUS.OK);
     expect(res.text).toContain("Webhook Debugger");
     // Verify NO link propagation (Security requirement)
     expect(res.text).not.toContain(`?key=${authKey}`);
@@ -81,7 +82,7 @@ describe("Auth UI Hardening Tests", () => {
       .set("Authorization", `Bearer ${authKey}`)
       .set("Accept", "text/html");
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(HTTP_STATUS.OK);
     expect(res.text).toContain("Webhook Debugger");
     expect(res.text).not.toContain(authKey);
     expect(res.text).toContain('href="/info"');
@@ -92,7 +93,7 @@ describe("Auth UI Hardening Tests", () => {
       .get("/info")
       .set("Authorization", `Bearer ${authKey}`);
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(HTTP_STATUS.OK);
     expect(res.body.endpoints.logs).not.toContain("key=");
     expect(res.body.endpoints.info).not.toContain("key=");
     expect(res.body.endpoints.webhook).not.toContain("key=");
@@ -101,7 +102,7 @@ describe("Auth UI Hardening Tests", () => {
   test("should NOT leak key in /info JSON response when authed via query", async () => {
     const res = await appClient.get("/info").query({ key: authKey });
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(HTTP_STATUS.OK);
     expect(res.body.endpoints.logs).not.toContain("key=");
     expect(res.body.endpoints.webhook).not.toContain("key=");
     expect(res.body.endpoints.info).not.toContain("key=");
@@ -109,13 +110,13 @@ describe("Auth UI Hardening Tests", () => {
 
   test("should reject /info access without any auth", async () => {
     const res = await appClient.get("/info");
-    expect(res.statusCode).toBe(401);
+    expect(res.statusCode).toBe(HTTP_STATUS.UNAUTHORIZED);
     expect(res.body.error).toBe("Unauthorized");
   });
 
   test("should reject /info access with invalid key", async () => {
     const res = await appClient.get("/info").query({ key: "wrong-key" });
-    expect(res.statusCode).toBe(401);
+    expect(res.statusCode).toBe(HTTP_STATUS.UNAUTHORIZED);
     expect(res.body.error).toBe("Unauthorized");
   });
 
@@ -125,7 +126,7 @@ describe("Auth UI Hardening Tests", () => {
       .query({ key: "malformed-key" })
       .set("Accept", "text/html");
 
-    expect(res.statusCode).toBe(401);
+    expect(res.statusCode).toBe(HTTP_STATUS.UNAUTHORIZED);
     expect(res.text).toContain("Access Restricted");
     expect(res.text).toContain("Strict Mode");
     expect(res.text).toContain("Unauthorized: Invalid API key");

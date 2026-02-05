@@ -7,7 +7,7 @@ import {
   afterAll,
   afterEach,
 } from "@jest/globals";
-import { OFFLOAD_MARKER_SYNC } from "../../src/utils/storage_helper.js";
+import { HTTP_STATUS, OFFLOAD_MARKER_SYNC } from "../../src/consts.js";
 
 // Setup mocks before imports
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
@@ -59,15 +59,15 @@ describe("GET /logs/:logId/payload", () => {
     jest.clearAllMocks();
   });
 
-  it("should return 404 for non-existent log", async () => {
+  it("should return HTTP_STATUS.NOT_FOUND for non-existent log", async () => {
     jest.spyOn(logRepository, "getLogById").mockResolvedValue(null);
 
     const response = await appClient.get("/logs/non-existent-id/payload");
-    expect(response.status).toBe(404);
+    expect(response.status).toBe(HTTP_STATUS.NOT_FOUND);
     expect(response.body.error).toBe("Log entry not found");
   });
 
-  it("should return 404 if log belongs to invalid webhook", async () => {
+  it("should return HTTP_STATUS.NOT_FOUND if log belongs to invalid webhook", async () => {
     jest.spyOn(webhookManager, "isValid").mockReturnValue(false);
     jest.spyOn(logRepository, "getLogById").mockResolvedValue(
       assertType({
@@ -78,12 +78,12 @@ describe("GET /logs/:logId/payload", () => {
         method: "POST",
         headers: {},
         query: {},
-        statusCode: 200,
+        statusCode: HTTP_STATUS.OK,
       }),
     );
 
     const response = await appClient.get("/logs/123/payload");
-    expect(response.status).toBe(404);
+    expect(response.status).toBe(HTTP_STATUS.NOT_FOUND);
     expect(response.body.error).toBe("Log entry belongs to invalid webhook");
   });
 
@@ -99,12 +99,12 @@ describe("GET /logs/:logId/payload", () => {
         method: "POST",
         headers: {},
         query: {},
-        statusCode: 200,
+        statusCode: HTTP_STATUS.OK,
       }),
     );
 
     const response = await appClient.get("/logs/123/payload");
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(HTTP_STATUS.OK);
     expect(response.body).toEqual({ foo: "bar" });
     expect(response.headers["content-type"]).toMatch(/application\/json/);
   });
@@ -129,7 +129,7 @@ describe("GET /logs/:logId/payload", () => {
         method: "POST",
         headers: {},
         query: {},
-        statusCode: 200,
+        statusCode: HTTP_STATUS.OK,
       }),
     );
 
@@ -139,7 +139,7 @@ describe("GET /logs/:logId/payload", () => {
 
     expect(Actor.openKeyValueStore).toHaveBeenCalled();
     expect(kvStoreMock.getValue).toHaveBeenCalledWith(kvsKey);
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(HTTP_STATUS.OK);
     expect(response.body).toEqual(realPayload);
   });
 });

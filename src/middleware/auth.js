@@ -5,6 +5,7 @@
  */
 import { validateAuth } from "../utils/auth.js";
 import { escapeHtml } from "../routes/utils.js";
+import { HTTP_STATUS, UNAUTHORIZED_HTML_TEMPLATE } from "../consts.js";
 
 /**
  * @typedef {import("express").Request} Request
@@ -24,7 +25,7 @@ export const createAuthMiddleware =
   (req, res, next) => {
     // Bypass for readiness probe
     if (req.headers["x-apify-container-server-readiness-probe"]) {
-      res.status(200).send("OK");
+      res.status(HTTP_STATUS.OK).send("OK");
       return;
     }
 
@@ -33,22 +34,19 @@ export const createAuthMiddleware =
     if (!authResult.isValid) {
       // Return HTML for browsers
       if (req.headers["accept"]?.includes("text/html")) {
-        res.status(401).send(`
-          <!DOCTYPE html>
-          <html>
-            <head><title>Access Restricted</title></head>
-            <body>
-              <h1>Access Restricted</h1>
-              <p>Strict Mode enabled.</p>
-              <p>${escapeHtml(authResult.error || "Unauthorized")}</p>
-            </body>
-          </html>
-        `);
+        res
+          .status(HTTP_STATUS.UNAUTHORIZED)
+          .send(
+            UNAUTHORIZED_HTML_TEMPLATE.replaceAll(
+              "{{ERROR_MESSAGE}}",
+              escapeHtml(authResult.error || "Unauthorized"),
+            ),
+          );
         return;
       }
 
-      return res.status(401).json({
-        status: 401,
+      return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+        status: HTTP_STATUS.UNAUTHORIZED,
         error: "Unauthorized",
         message: authResult.error,
       });

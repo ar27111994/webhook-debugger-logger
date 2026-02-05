@@ -8,6 +8,7 @@ import {
 } from "@jest/globals";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
+import { HTTP_STATUS } from "../../src/consts.js";
 
 // Setup mocks
 await setupCommonMocks({ apify: true, logger: true });
@@ -58,7 +59,7 @@ describe("Distributed Rate Limiting (X-Forwarded-For)", () => {
       .post(`/webhook/${webhookId}`)
       .set("X-Forwarded-For", ipA)
       .send({ data: "A" })
-      .expect(200);
+      .expect(HTTP_STATUS.OK);
 
     // Verify check called with IP A
     expect(checkSpy).toHaveBeenCalledWith(webhookId, ipA);
@@ -68,7 +69,7 @@ describe("Distributed Rate Limiting (X-Forwarded-For)", () => {
       .post(`/webhook/${webhookId}`)
       .set("X-Forwarded-For", ipB)
       .send({ data: "B" })
-      .expect(200);
+      .expect(HTTP_STATUS.OK);
 
     // Verify check called with IP B
     expect(checkSpy).toHaveBeenCalledWith(webhookId, ipB);
@@ -90,7 +91,7 @@ describe("Distributed Rate Limiting (X-Forwarded-For)", () => {
       .post(`/webhook/${webhookId}`)
       .set("X-Forwarded-For", proxyChain)
       .send({ data: "proxy-chain" })
-      .expect(200);
+      .expect(HTTP_STATUS.OK);
 
     // Verify correct IP was extracted
     expect(checkSpy).toHaveBeenCalledWith(webhookId, clientIp);

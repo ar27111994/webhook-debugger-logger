@@ -48,7 +48,6 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 ### mock-setup.js
 
 - `setupCommonMocks({ axios, apify, dns, ssrf, logger })` - Register mocks BEFORE imports
-- `loggerMock` - Shared logger mock for assertions
 
 ### shared-mocks.js
 
@@ -58,6 +57,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 - `createMockWebhookManager(overrides)` - WebhookManager mock
 - `setupBasicApifyMock(mockInstance, options)` - Configure apifyMock
 - `resetNetworkMocks()` - Reset SSRF, DNS, Axios to defaults
+- `loggerMock` - Shared logger mock for assertions
 
 ### test-utils.js
 

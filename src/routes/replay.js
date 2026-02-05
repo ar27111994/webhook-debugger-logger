@@ -14,6 +14,9 @@ import {
   DEFAULT_REPLAY_TIMEOUT_MS as REPLAY_TIMEOUT_MS,
   ERROR_MESSAGES,
   TRANSIENT_ERROR_CODES,
+  HTTP_STATUS,
+  REPLAY_STATUS_LABELS,
+  RETRY_BASE_DELAY_MS,
 } from "../consts.js";
 import {
   OFFLOAD_MARKER_SYNC,
@@ -61,7 +64,9 @@ export const createReplayHandler = (getReplayMaxRetries, getReplayTimeoutMs) =>
           targetUrl = targetUrl[0];
         }
         if (!targetUrl) {
-          res.status(400).json({ error: "Missing 'url' parameter" });
+          res
+            .status(HTTP_STATUS.BAD_REQUEST)
+            .json({ error: "Missing 'url' parameter" });
           return;
         }
 
@@ -70,11 +75,11 @@ export const createReplayHandler = (getReplayMaxRetries, getReplayTimeoutMs) =>
         if (!ssrfResult.safe) {
           if (ssrfResult.error === SSRF_ERRORS.HOSTNAME_RESOLUTION_FAILED) {
             res
-              .status(400)
+              .status(HTTP_STATUS.BAD_REQUEST)
               .json({ error: ERROR_MESSAGES.HOSTNAME_RESOLUTION_FAILED });
             return;
           }
-          res.status(400).json({ error: ssrfResult.error });
+          res.status(HTTP_STATUS.BAD_REQUEST).json({ error: ssrfResult.error });
           return;
         }
 
@@ -98,7 +103,7 @@ export const createReplayHandler = (getReplayMaxRetries, getReplayTimeoutMs) =>
         }
 
         if (!item) {
-          res.status(404).json({ error: "Event not found" });
+          res.status(HTTP_STATUS.NOT_FOUND).json({ error: "Event not found" });
           return;
         }
 
@@ -186,7 +191,7 @@ export const createReplayHandler = (getReplayMaxRetries, getReplayTimeoutMs) =>
             ) {
               throw err;
             }
-            const delay = 1000 * Math.pow(2, attempt - 1);
+            const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
             log.warn(
               {
                 attempt,
@@ -202,7 +207,7 @@ export const createReplayHandler = (getReplayMaxRetries, getReplayTimeoutMs) =>
         }
 
         if (!response) {
-          res.status(504).json({
+          res.status(HTTP_STATUS.GATEWAY_TIMEOUT).json({
             error: "Replay failed",
             message: `All ${maxRetries} retry attempts exhausted`,
           });
@@ -219,7 +224,7 @@ export const createReplayHandler = (getReplayMaxRetries, getReplayTimeoutMs) =>
         }
 
         res.json({
-          status: "Replayed",
+          status: REPLAY_STATUS_LABELS.REPLAYED,
           targetUrl,
           targetResponseCode: response?.status,
           targetResponseBody: response?.data,
@@ -230,15 +235,21 @@ export const createReplayHandler = (getReplayMaxRetries, getReplayTimeoutMs) =>
         const axiosError = /** @type {CommonError} */ (error);
         const isTimeout =
           axiosError.code === "ECONNABORTED" || axiosError.code === "ETIMEDOUT";
-        res.status(isTimeout ? 504 : 500).json({
-          error: "Replay failed",
-          message: isTimeout
-            ? `Target destination timed out after ${maxRetries} attempts (${
-                replayTimeout / 1000
-              }s timeout per attempt)`
-            : axiosError.message,
-          code: axiosError.code,
-        });
+        res
+          .status(
+            isTimeout
+              ? HTTP_STATUS.GATEWAY_TIMEOUT
+              : HTTP_STATUS.INTERNAL_SERVER_ERROR,
+          )
+          .json({
+            error: "Replay failed",
+            message: isTimeout
+              ? `Target destination timed out after ${maxRetries} attempts (${
+                  replayTimeout / 1000
+                }s timeout per attempt)`
+              : axiosError.message,
+            code: axiosError.code,
+          });
       }
     },
   );

@@ -8,7 +8,7 @@ import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 import { createMiddlewareTestContext } from "../setup/helpers/middleware-test-utils.js";
 
 // Mock Apify, Axios, and Logger
-import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
+import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 await setupCommonMocks({
   axios: true,
   apify: true,
@@ -16,10 +16,12 @@ await setupCommonMocks({
   ssrf: true,
   logger: true,
 });
-import { ssrfMock } from "../setup/helpers/shared-mocks.js";
+import { ssrfMock, loggerMock } from "../setup/helpers/shared-mocks.js";
 import {
   RECURSION_HEADER_NAME,
   RECURSION_HEADER_VALUE,
+  HTTP_STATUS,
+  ERROR_LABELS,
 } from "../../src/consts.js";
 const axios = (await import("axios")).default;
 const { Actor } = await import("apify");
@@ -119,7 +121,7 @@ describe("Forwarding Security", () => {
 
     await ctx.middleware(ctx.req, ctx.res, ctx.next);
 
-    expect(ctx.res.statusCode).toBe(200);
+    expect(ctx.res.statusCode).toBe(HTTP_STATUS.OK);
     // Explicitly assert that pushData was invoked before accessing mock.calls
     expect(Actor.pushData).toHaveBeenCalled();
 
@@ -229,15 +231,17 @@ describe("Forwarding Security", () => {
       const calls = jest.mocked(Actor.pushData).mock.calls;
       const errorLog = calls.find(
         (c) =>
-          assertType(c[0]).type === "forward_error" &&
-          assertType(c[0]).statusCode === 500,
+          assertType(c[0]).type === ERROR_LABELS.FORWARD_ERROR &&
+          assertType(c[0]).statusCode === HTTP_STATUS.INTERNAL_SERVER_ERROR,
       );
       expect(errorLog).toBeDefined();
     }, 30000);
 
     test("should NOT retry non-transient errors", async () => {
       const error = new Error("Bad Request");
-      /** @type {CommonError} */ (error).response = { status: 400 };
+      /** @type {CommonError} */ (error).response = {
+        status: HTTP_STATUS.BAD_REQUEST,
+      };
       jest.mocked(axios.post).mockRejectedValue(error);
 
       const ctx = await createMiddlewareTestContext({

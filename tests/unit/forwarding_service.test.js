@@ -3,7 +3,7 @@ import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 import { assertType, createMockRequest } from "../setup/helpers/test-utils.js";
 
 // 1. Setup Common Mocks (including logger for ForwardingService)
-import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
+import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 await setupCommonMocks({
   axios: true,
   apify: true,
@@ -15,6 +15,7 @@ import {
   apifyMock,
   axiosMock,
   ssrfMock,
+  loggerMock,
 } from "../setup/helpers/shared-mocks.js";
 
 const mockActor = apifyMock;

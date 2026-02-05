@@ -1,6 +1,9 @@
 import { describe, test, expect, beforeEach } from "@jest/globals";
-import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
-import { createMockWebhookManager } from "../setup/helpers/shared-mocks.js";
+import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
+import {
+  createMockWebhookManager,
+  loggerMock,
+} from "../setup/helpers/shared-mocks.js";
 
 // Setup dependencies
 await setupCommonMocks({
@@ -11,6 +14,7 @@ await setupCommonMocks({
 
 // Import the class after mocking
 const { LoggerMiddleware } = await import("../../src/logger_middleware.js");
+import { HTTP_STATUS } from "../../src/consts.js";
 
 /**
  * @typedef {import("../../src/webhook_manager.js").WebhookManager} WebhookManager
@@ -19,24 +23,34 @@ const { LoggerMiddleware } = await import("../../src/logger_middleware.js");
 describe("LoggerMiddleware Coverage", () => {
   describe("getValidStatusCode (Static)", () => {
     test("should return default code for invalid inputs", () => {
-      expect(LoggerMiddleware.getValidStatusCode(undefined)).toBe(200);
-      expect(LoggerMiddleware.getValidStatusCode(null)).toBe(200);
-      expect(LoggerMiddleware.getValidStatusCode("invalid")).toBe(200);
-      expect(LoggerMiddleware.getValidStatusCode(NaN)).toBe(200);
+      expect(LoggerMiddleware.getValidStatusCode(undefined)).toBe(
+        HTTP_STATUS.OK,
+      );
+      expect(LoggerMiddleware.getValidStatusCode(null)).toBe(HTTP_STATUS.OK);
+      expect(LoggerMiddleware.getValidStatusCode("invalid")).toBe(
+        HTTP_STATUS.OK,
+      );
+      expect(LoggerMiddleware.getValidStatusCode(NaN)).toBe(HTTP_STATUS.OK);
     });
 
     test("should return default code for out-of-bounds inputs", () => {
-      expect(LoggerMiddleware.getValidStatusCode(99)).toBe(200);
-      expect(LoggerMiddleware.getValidStatusCode(600)).toBe(200);
+      expect(LoggerMiddleware.getValidStatusCode(99)).toBe(HTTP_STATUS.OK);
+      expect(LoggerMiddleware.getValidStatusCode(600)).toBe(HTTP_STATUS.OK);
     });
 
     test("should return custom default code if provided", () => {
-      expect(LoggerMiddleware.getValidStatusCode("bad", 404)).toBe(404);
+      expect(
+        LoggerMiddleware.getValidStatusCode("bad", HTTP_STATUS.NOT_FOUND),
+      ).toBe(HTTP_STATUS.NOT_FOUND);
     });
 
     test("should return valid status code", () => {
-      expect(LoggerMiddleware.getValidStatusCode(201)).toBe(201);
-      expect(LoggerMiddleware.getValidStatusCode("404")).toBe(404);
+      expect(LoggerMiddleware.getValidStatusCode(HTTP_STATUS.CREATED)).toBe(
+        HTTP_STATUS.CREATED,
+      );
+      expect(
+        LoggerMiddleware.getValidStatusCode(HTTP_STATUS.NOT_FOUND.toString()),
+      ).toBe(HTTP_STATUS.NOT_FOUND);
     });
   });
 

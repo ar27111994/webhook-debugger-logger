@@ -4,6 +4,8 @@ import {
   SSRF_INTERNAL_ERRORS,
   SSRF_LOG_MESSAGES,
   DNS_RESOLUTION_TIMEOUT_MS,
+  SSRF_BLOCKED_RANGES,
+  ALLOWED_PROTOCOLS,
 } from "../consts.js";
 import { createChildLogger } from "./logger.js";
 
@@ -13,34 +15,6 @@ const log = createChildLogger({ component: "SSRF" });
  * @typedef {import('ipaddr.js').IPv6} IP
  * @typedef {import('../typedefs.js').SsrfValidationResult} SsrfValidationResult
  */
-
-/**
- * IP ranges to block for SSRF prevention.
- * Includes loopback, private, link-local, and cloud metadata IPs.
- */
-export const SSRF_BLOCKED_RANGES = Object.freeze([
-  // IPv4 private/reserved ranges
-  "0.0.0.0/8", // Current network
-  "10.0.0.0/8", // Private Class A
-  "100.64.0.0/10", // Carrier-grade NAT
-  "127.0.0.0/8", // Loopback
-  "169.254.0.0/16", // Link-local
-  "172.16.0.0/12", // Private Class B
-  "192.168.0.0/16", // Private Class C
-  "224.0.0.0/4", // Multicast
-  "240.0.0.0/4", // Reserved
-  "255.255.255.255/32", // Broadcast
-
-  // Cloud metadata endpoints
-  "169.254.169.254/32", // AWS/GCP/Azure metadata
-  "100.100.100.200/32", // Alibaba Cloud metadata
-
-  // IPv6 equivalents
-  "::1/128", // Loopback
-  "fc00::/7", // Unique local
-  "fe80::/10", // Link-local
-  "ff00::/8", // Multicast
-]);
 
 /**
  * Error messages for SSRF validation.
@@ -126,7 +100,7 @@ export async function validateUrlForSsrf(urlString) {
   }
 
   // Validate protocol
-  if (!["http:", "https:"].includes(target.protocol)) {
+  if (!ALLOWED_PROTOCOLS.includes(target.protocol)) {
     return { safe: false, error: SSRF_ERRORS.PROTOCOL_NOT_ALLOWED };
   }
 

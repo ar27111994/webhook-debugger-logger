@@ -19,7 +19,12 @@ import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import { assertType } from "../setup/helpers/test-utils.js";
 import { resetDb } from "../setup/helpers/db-hooks.js";
-await setupCommonMocks({ axios: true, apify: true, dns: true, ssrf: true });
+await setupCommonMocks({
+  axios: true,
+  apify: true,
+  dns: true,
+  ssrf: true,
+});
 const { createDatasetMock, resetNetworkMocks } =
   await import("../setup/helpers/shared-mocks.js");
 
@@ -28,6 +33,8 @@ const { webhookManager } = await import("../../src/main.js");
 const { Actor } = await import("apify");
 const { logRepository } =
   await import("../../src/repositories/LogRepository.js");
+const { HTTP_STATUS, REPLAY_STATUS_LABELS } =
+  await import("../../src/consts.js");
 
 describe("API E2E Tests", () => {
   useMockCleanup(async () => {
@@ -66,13 +73,13 @@ describe("API E2E Tests", () => {
 
   test("GET / should return version info", async () => {
     const res = await appClient.get("/");
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(HTTP_STATUS.OK);
     expect(res.text).toContain(`v${version}`);
   });
 
   test("GET /info should return status and webhooks", async () => {
     const res = await appClient.get("/info");
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(HTTP_STATUS.OK);
     expect(res.body.version).toBeDefined();
     expect(res.body.system.activeWebhooks.length).toBeGreaterThanOrEqual(1);
     expect(res.body.endpoints).toBeDefined();
@@ -83,7 +90,7 @@ describe("API E2E Tests", () => {
       .post(`/webhook/${webhookId}`)
       .send({ test: "data" });
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(HTTP_STATUS.OK);
     expect(res.text).toBe("OK");
   });
 
@@ -93,7 +100,7 @@ describe("API E2E Tests", () => {
       .set("Content-Type", "text/plain")
       .send("raw data string");
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(HTTP_STATUS.OK);
     expect(res.text).toBe("OK");
   });
 
@@ -113,7 +120,7 @@ describe("API E2E Tests", () => {
     await logRepository.batchInsertLogs([mockItem]);
 
     const res = await appClient.get("/logs").query({ webhookId });
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(HTTP_STATUS.OK);
     expect(res.body.filters).toBeDefined();
     // Use finding logic instead of exact length check to be robust against test pollution
     expect(res.body.items).toContainEqual(
@@ -142,15 +149,15 @@ describe("API E2E Tests", () => {
       .post(`/replay/${webhookId}/evt_789`)
       .query({ url: "http://example.com/target" });
 
-    expect(res.statusCode).toBe(200);
-    expect(res.body.status).toBe("Replayed");
+    expect(res.statusCode).toBe(HTTP_STATUS.OK);
+    expect(res.body.status).toBe(REPLAY_STATUS_LABELS.REPLAYED);
   });
 
   test("GET / with readiness probe header", async () => {
     const res = await appClient
       .get("/")
       .set("x-apify-container-server-readiness-probe", "true");
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(HTTP_STATUS.OK);
   });
 
   test("GET /log-stream should set SSE headers and be connectable", async () => {
@@ -208,13 +215,13 @@ describe("API E2E Tests", () => {
   });
 
   test("POST /webhook/:id with __status should set forcedStatus", async () => {
-    const forcedStatus = 201;
+    const forcedStatus = HTTP_STATUS.CREATED;
     const res = await appClient
       .post(`/webhook/${webhookId}`)
       .query({ __status: forcedStatus.toString() })
       .send({ test: "data" });
 
-    // forcedStatus is validated and coerced - 201 is valid
+    // forcedStatus is validated and coerced - HTTP_STATUS.CREATED is valid
     expect(res.statusCode).toBe(forcedStatus);
   });
 
@@ -224,25 +231,25 @@ describe("API E2E Tests", () => {
       .query({ __status: "invalid" })
       .send({ test: "data" });
 
-    // Invalid status should fall back to default (200)
-    expect(res.statusCode).toBe(200);
+    // Invalid status should fall back to default (HTTP_STATUS.OK)
+    expect(res.statusCode).toBe(HTTP_STATUS.OK);
   });
 
-  test("GET /replay/:webhookId/:itemId without url should return 400", async () => {
+  test("GET /replay/:webhookId/:itemId without url should return HTTP_STATUS.BAD_REQUEST", async () => {
     jest.mocked(Actor.openDataset).mockResolvedValue(createDatasetMock([]));
 
     const res = await appClient.get(`/replay/${webhookId}/evt_123`);
 
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(HTTP_STATUS.BAD_REQUEST);
     expect(res.body.error).toBe("Missing 'url' parameter");
   });
 
-  test("GET /replay/:webhookId/:itemId with non-existent event should return 404", async () => {
+  test("GET /replay/:webhookId/:itemId with non-existent event should return HTTP_STATUS.NOT_FOUND", async () => {
     jest.mocked(Actor.openDataset).mockResolvedValue(createDatasetMock([]));
 
     /** @type {AxiosMock} */
     const axios = assertType((await import("axios")).default);
-    axios.mockResolvedValue({ status: 200 });
+    axios.mockResolvedValue({ status: HTTP_STATUS.OK });
 
     const res = await appClient
       .get(`/replay/${webhookId}/evt_nonexistent`)
@@ -274,7 +281,7 @@ describe("API E2E Tests", () => {
     /** @type {AxiosMock} */
     const axios = assertType((await import("axios")).default);
     axios.mockResolvedValue({
-      status: 200,
+      status: HTTP_STATUS.OK,
       data: "OK",
     });
 
@@ -288,8 +295,8 @@ describe("API E2E Tests", () => {
       .query({ url: ["http://example.com/1", "http://example.com/2"] })
       .set("Authorization", "Bearer TEST_KEY");
 
-    expect(res.statusCode).toBe(200);
-    expect(res.body.status).toBe("Replayed");
+    expect(res.statusCode).toBe(HTTP_STATUS.OK);
+    expect(res.body.status).toBe(REPLAY_STATUS_LABELS.REPLAYED);
     expect(res.body.targetUrl).toBe("http://example.com/1");
   });
 
@@ -315,7 +322,7 @@ describe("API E2E Tests", () => {
     /** @type {AxiosMock} */
     const axios = assertType((await import("axios")).default);
     axios.mockResolvedValue({
-      status: 200,
+      status: HTTP_STATUS.OK,
       data: "OK",
     });
 
@@ -329,8 +336,8 @@ describe("API E2E Tests", () => {
       .query({ url: "http://example.com" })
       .set("Authorization", "Bearer TEST_KEY");
 
-    expect(res.statusCode).toBe(200);
-    expect(res.body.status).toBe("Replayed");
+    expect(res.statusCode).toBe(HTTP_STATUS.OK);
+    expect(res.body.status).toBe(REPLAY_STATUS_LABELS.REPLAYED);
   });
 
   test("POST /replay should handle DNS resolution failure in SSRF check", async () => {
@@ -351,7 +358,7 @@ describe("API E2E Tests", () => {
       .query({ url: "http://dangerous.com" })
       .set("Authorization", "Bearer TEST_KEY");
 
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(HTTP_STATUS.BAD_REQUEST);
     expect(res.body.error).toBe(ERROR_MESSAGES.HOSTNAME_RESOLUTION_FAILED);
   });
 
@@ -361,7 +368,7 @@ describe("API E2E Tests", () => {
       .set("Accept", "text/plain")
       .set("Authorization", "Bearer TEST_KEY");
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(HTTP_STATUS.OK);
     expect(res.text).toContain("Webhook Debugger & Logger");
     expect(res.text).toContain("Enterprise Suite");
   });

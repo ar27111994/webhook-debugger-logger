@@ -7,8 +7,12 @@ import { Actor } from "apify";
 import { nanoid } from "nanoid";
 import {
   MAX_BULK_CREATE,
+  WEBHOOK_ID_PREFIX,
+  DEFAULT_ID_LENGTH,
+  RETENTION_LOG_SUPPRESSION_MS,
   DUCKDB_VACUUM_ENABLED,
   DUCKDB_VACUUM_INTERVAL_MS,
+  KVS_STATE_KEY,
 } from "./consts.js";
 import { logRepository } from "./repositories/LogRepository.js";
 import { vacuumDb } from "./db/duckdb.js";
@@ -27,14 +31,14 @@ export class WebhookManager {
   /** @type {KeyValueStore} */
   #kvStore = null;
   /** @type {string} */
-  #STATE_KEY = "WEBHOOK_STATE";
+  #STATE_KEY = KVS_STATE_KEY;
   /** @type {number} */
   #lastVacuumTime = 0;
 
   constructor() {
     this.#webhooks = new Map();
     this.#kvStore = null;
-    this.#STATE_KEY = "WEBHOOK_STATE";
+    this.#STATE_KEY = KVS_STATE_KEY;
   }
 
   /**
@@ -116,7 +120,7 @@ export class WebhookManager {
     const newIds = [];
 
     for (let i = 0; i < count; i++) {
-      const id = `wh_${nanoid(10)}`;
+      const id = `${WEBHOOK_ID_PREFIX}${nanoid(DEFAULT_ID_LENGTH)}`;
       this.#webhooks.set(id, { expiresAt });
       newIds.push(id);
     }
@@ -304,7 +308,7 @@ export class WebhookManager {
 
     if (updatedCount > 0) {
       // Suppress log for insignificant updates (< 5 minutes)
-      if (maxExtensionMs > 5 * 60 * 1000) {
+      if (maxExtensionMs > RETENTION_LOG_SUPPRESSION_MS) {
         log.info(
           { count: updatedCount, total: this.#webhooks.size, retentionHours },
           "Refreshed webhook retention",

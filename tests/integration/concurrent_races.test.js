@@ -1,6 +1,7 @@
 import { describe, test, expect, beforeAll, afterAll } from "@jest/globals";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
+import { HTTP_STATUS } from "../../src/consts.js";
 import { sleep } from "../setup/helpers/test-utils.js";
 
 // Setup mocks
@@ -43,12 +44,14 @@ describe("Concurrent Read/Write Races", () => {
         appClient
           .post(`/webhook/${webhookId}`)
           .send({ op: "write", i })
-          .expect(200),
+          .expect(HTTP_STATUS.OK),
       );
 
       if (i % 5 === 0) {
         operations.push(
-          appClient.get(`/logs?webhookId=${webhookId}&limit=10`).expect(200),
+          appClient
+            .get(`/logs?webhookId=${webhookId}&limit=10`)
+            .expect(HTTP_STATUS.OK),
         );
       }
     }
@@ -59,7 +62,7 @@ describe("Concurrent Read/Write Races", () => {
 
     const logsRes = await appClient
       .get(`/logs?webhookId=${webhookId}`)
-      .expect(200);
+      .expect(HTTP_STATUS.OK);
 
     expect(Array.isArray(logsRes.body.items)).toBe(true);
   });

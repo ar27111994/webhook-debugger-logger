@@ -7,6 +7,12 @@ import { readFile } from "fs/promises";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { createChildLogger, serializeError } from "../utils/logger.js";
+import {
+  HTTP_STATUS,
+  MIME_TYPES,
+  DASHBOARD_PLACEHOLDERS,
+  DASHBOARD_TEMPLATE_PATH,
+} from "../consts.js";
 
 const log = createChildLogger({ component: "Dashboard" });
 
@@ -48,9 +54,9 @@ export const createDashboardHandler =
     const activeCount = webhookManager.getAllActive().length;
     const signatureProvider = getSignatureStatus ? getSignatureStatus() : null;
 
-    if (req.headers["accept"]?.includes("text/plain")) {
+    if (req.headers["accept"]?.includes(MIME_TYPES.PLAIN)) {
       return res
-        .type("text/plain")
+        .type(MIME_TYPES.PLAIN)
         .send(
           `Webhook Debugger & Logger - Enterprise Suite (v${version})\n` +
             `Active Webhooks: ${activeCount}\n` +
@@ -62,7 +68,7 @@ export const createDashboardHandler =
       let template = getTemplate();
       if (!template) {
         template = await readFile(
-          join(__dirname, "..", "..", "public", "index.html"),
+          join(__dirname, "..", "..", DASHBOARD_TEMPLATE_PATH),
           "utf-8",
         );
         setTemplate(template);
@@ -73,14 +79,14 @@ export const createDashboardHandler =
         : `<div class="status-badge signature-inactive">🔓 No Verification</div>`;
 
       const html = template
-        .replaceAll("{{VERSION}}", `v${version}`)
-        .replaceAll("{{ACTIVE_COUNT}}", String(activeCount))
-        .replaceAll("{{SIGNATURE_BADGE}}", sigBadge);
+        .replaceAll(DASHBOARD_PLACEHOLDERS.VERSION, `v${version}`)
+        .replaceAll(DASHBOARD_PLACEHOLDERS.ACTIVE_COUNT, String(activeCount))
+        .replaceAll(DASHBOARD_PLACEHOLDERS.SIGNATURE_BADGE, sigBadge);
 
       res.send(html);
     } catch (err) {
       log.error({ err: serializeError(err) }, "Failed to load index.html");
-      res.status(500).send("Internal Server Error");
+      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).send("Internal Server Error");
     }
   };
 
@@ -91,7 +97,7 @@ export const createDashboardHandler =
 export const preloadTemplate = async () => {
   try {
     return await readFile(
-      join(__dirname, "..", "..", "public", "index.html"),
+      join(__dirname, "..", "..", DASHBOARD_TEMPLATE_PATH),
       "utf-8",
     );
   } catch (err) {

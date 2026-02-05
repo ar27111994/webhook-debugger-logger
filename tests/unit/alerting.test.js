@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach } from "@jest/globals";
-import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
-import { axiosMock } from "../setup/helpers/shared-mocks.js";
+import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
+import { axiosMock, loggerMock } from "../setup/helpers/shared-mocks.js";
 
 /**
  * @typedef {import("../../src/utils/alerting.js").AlertTrigger} AlertTrigger

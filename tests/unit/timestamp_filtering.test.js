@@ -9,6 +9,7 @@ import {
   assertType,
 } from "../setup/helpers/test-utils.js";
 import { resetDb } from "../setup/helpers/db-hooks.js";
+import { HTTP_STATUS } from "../../src/consts.js";
 
 // Initialize mocks BEFORE imports
 await setupCommonMocks({ apify: true, axios: false });
@@ -45,21 +46,21 @@ describe("Unified Timestamp Filtering", () => {
       timestamp: "2023-01-01T10:00:00.000Z",
       webhookId: "w1",
       method: "POST",
-      statusCode: 200,
+      statusCode: HTTP_STATUS.OK,
     },
     {
       id: "B",
       timestamp: "2023-01-02T10:00:00.000Z",
       webhookId: "w1",
       method: "POST",
-      statusCode: 200,
+      statusCode: HTTP_STATUS.OK,
     },
     {
       id: "C",
       timestamp: "2023-01-03T10:00:00.000Z",
       webhookId: "w1",
       method: "POST",
-      statusCode: 200,
+      statusCode: HTTP_STATUS.OK,
     },
   ]);
 

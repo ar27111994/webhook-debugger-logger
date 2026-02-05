@@ -1,15 +1,17 @@
 import { jest, describe, test, expect, beforeEach } from "@jest/globals";
-import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
+import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import {
   createMockRequest,
   createMockResponse,
   createMockNextFunction,
   assertType,
 } from "../setup/helpers/test-utils.js";
-import { createMockWebhookManager } from "../setup/helpers/shared-mocks.js";
-
-// Mock fs/promises via shared mocks
-import { fsPromisesMock as mockFs } from "../setup/helpers/shared-mocks.js";
+import { HTTP_STATUS } from "../../src/consts.js";
+import {
+  createMockWebhookManager,
+  loggerMock,
+  fsPromisesMock as mockFs,
+} from "../setup/helpers/shared-mocks.js";
 
 // Setup common mocks (logger, fs)
 await setupCommonMocks({ logger: true, fs: true });
@@ -199,7 +201,9 @@ describe("Dashboard Handler", () => {
       await handler(req, res, next);
 
       expect(loggerMock.error).toHaveBeenCalled();
-      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.status).toHaveBeenCalledWith(
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+      );
       expect(res.send).toHaveBeenCalledWith("Internal Server Error");
     });
   });

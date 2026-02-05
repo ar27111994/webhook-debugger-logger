@@ -1,6 +1,7 @@
 import { describe, test, expect } from "@jest/globals";
-import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
+import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
+import { loggerMock } from "../setup/helpers/shared-mocks.js";
 
 // Mock logger before importing config module
 await setupCommonMocks({ logger: true });
@@ -25,6 +26,7 @@ const {
   MAX_SAFE_REPLAY_RETRIES,
   MAX_SAFE_REPLAY_TIMEOUT_MS,
   MAX_SAFE_FORWARD_RETRIES,
+  HTTP_STATUS,
 } = await import("../../src/consts.js");
 
 /**
@@ -172,7 +174,7 @@ describe("Config Utils", () => {
 
     test("should use defaults when options are undefined", () => {
       const result = parseWebhookOptions(undefined);
-      expect(result.defaultResponseCode).toBe(200);
+      expect(result.defaultResponseCode).toBe(HTTP_STATUS.OK);
       expect(result.maskSensitiveData).toBe(true);
     });
 

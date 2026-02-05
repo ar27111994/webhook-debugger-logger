@@ -8,6 +8,7 @@ import {
 } from "@jest/globals";
 
 import { sleep } from "../setup/helpers/test-utils.js";
+import { HTTP_STATUS } from "../../src/consts.js";
 import { setupBasicApifyMock } from "../setup/helpers/shared-mocks.js";
 
 /**
@@ -68,7 +69,7 @@ describe("Main Application - Integration Tests", () => {
 
     // Get actual webhook IDs from info endpoint
     const infoResponse = await appClient.get("/info");
-    if (infoResponse.status === 200) {
+    if (infoResponse.status === HTTP_STATUS.OK) {
       const activeWebhooks = /** @type {Array<{id: string}>} */ (
         infoResponse.body.system?.activeWebhooks || []
       );
@@ -112,7 +113,7 @@ describe("Main Application - Integration Tests", () => {
     test("should return dashboard HTML on GET /", async () => {
       const response = await appClient.get("/");
 
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(HTTP_STATUS.OK);
       expect(response.type).toMatch(/html/);
     });
 
@@ -120,13 +121,13 @@ describe("Main Application - Integration Tests", () => {
       const response = await appClient.get("/");
 
       // Should work without auth key when auth is disabled
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(HTTP_STATUS.OK);
     });
 
     test("should return plain text when Accept header is text/plain", async () => {
       const response = await appClient.get("/").set("Accept", "text/plain");
 
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(HTTP_STATUS.OK);
       expect(response.type).toMatch(/text\/plain/);
       expect(response.text).toContain("Webhook Debugger");
       expect(response.text).toContain("Active Webhooks:");
@@ -137,7 +138,7 @@ describe("Main Application - Integration Tests", () => {
     test("should return system info on GET /info without auth", async () => {
       const response = await appClient.get("/info");
 
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(HTTP_STATUS.OK);
       expect(response.body).toHaveProperty("version");
       expect(response.body).toHaveProperty("system");
       expect(response.body.system).toHaveProperty("activeWebhooks");
@@ -149,7 +150,7 @@ describe("Main Application - Integration Tests", () => {
     test("should return empty logs initially on GET /logs", async () => {
       const response = await appClient.get("/logs");
 
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(HTTP_STATUS.OK);
       expect(response.body).toHaveProperty("items");
       expect(Array.isArray(response.body.items)).toBe(true);
     });
@@ -157,7 +158,7 @@ describe("Main Application - Integration Tests", () => {
     test("should support pagination parameters", async () => {
       const response = await appClient.get("/logs?page=1&limit=10");
 
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(HTTP_STATUS.OK);
       expect(response.body).toHaveProperty("items");
     });
   });
@@ -178,7 +179,7 @@ describe("Main Application - Integration Tests", () => {
         .send({ test: "data" })
         .set("Content-Type", "application/json");
 
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(HTTP_STATUS.OK);
       expect(response.text).toBe("OK");
     });
 
@@ -190,7 +191,11 @@ describe("Main Application - Integration Tests", () => {
         .set("Content-Type", "application/json");
 
       // Should accept it - middleware handles malformed JSON
-      expect([200, 400, 404]).toContain(response.status);
+      expect([
+        HTTP_STATUS.OK,
+        HTTP_STATUS.BAD_REQUEST,
+        HTTP_STATUS.NOT_FOUND,
+      ]).toContain(response.status);
     });
 
     test("should accept large payloads within limit", async () => {
@@ -201,7 +206,7 @@ describe("Main Application - Integration Tests", () => {
         .post(`/webhook/${webhookId}`)
         .send(largePayload);
 
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(HTTP_STATUS.OK);
     });
   });
 
@@ -209,29 +214,29 @@ describe("Main Application - Integration Tests", () => {
     test("should allow access when auth is disabled", async () => {
       const response = await appClient.get("/logs");
 
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(HTTP_STATUS.OK);
       expect(response.body).toHaveProperty("items");
     });
 
     test("should accept requests without auth header", async () => {
       const response = await appClient.get("/logs");
 
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(HTTP_STATUS.OK);
     });
   });
 
   describe("Error Handling Integration", () => {
-    test("should handle 404 for unknown routes", async () => {
+    test("should handle HTTP_STATUS.NOT_FOUND for unknown routes", async () => {
       const response = await appClient.get("/unknown-route");
 
-      expect(response.status).toBe(404);
+      expect(response.status).toBe(HTTP_STATUS.NOT_FOUND);
     });
 
     test("should return HTML for unknown routes", async () => {
       const response = await appClient.get("/invalid");
 
-      // Express default 404 returns HTML
-      expect(response.status).toBe(404);
+      // Express default HTTP_STATUS.NOT_FOUND returns HTML
+      expect(response.status).toBe(HTTP_STATUS.NOT_FOUND);
     });
   });
 
@@ -263,7 +268,7 @@ describe("Main Application - Integration Tests", () => {
         .set("Accept-Encoding", "gzip, deflate");
 
       // Supertest automatically decompresses, so we check it succeeded
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(HTTP_STATUS.OK);
     });
   });
 
@@ -282,7 +287,7 @@ describe("Main Application - Integration Tests", () => {
       // Verify it appears in logs
       const logsResponse = await appClient.get("/logs");
 
-      expect(logsResponse.status).toBe(200);
+      expect(logsResponse.status).toBe(HTTP_STATUS.OK);
       // Logs endpoint returns items array
       expect(Array.isArray(logsResponse.body.items)).toBe(true);
     });

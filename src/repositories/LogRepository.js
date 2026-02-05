@@ -13,6 +13,8 @@ import {
   DEFAULT_PAGE_LIMIT,
   MAX_PAGE_LIMIT,
   DEFAULT_PAGE_OFFSET,
+  SQL_FRAGMENTS,
+  SORT_DIRECTIONS,
 } from "../consts.js";
 import {
   OFFLOAD_MARKER_SYNC,
@@ -108,7 +110,7 @@ export class LogRepository {
       signatureProvider: "signatureProvider",
       signatureError: "signatureError",
     };
-    const defaultClause = "timestamp DESC";
+    const defaultClause = `timestamp ${SORT_DIRECTIONS.DESC}`;
 
     if (!sortRules || sortRules.length === 0) {
       return defaultClause;
@@ -118,7 +120,10 @@ export class LogRepository {
       .map((rule) => {
         const col = validSorts[rule.field];
         if (!col) return null;
-        const dir = rule.dir.toUpperCase() === "ASC" ? "ASC" : "DESC";
+        const dir =
+          rule.dir.toUpperCase() === SORT_DIRECTIONS.ASC
+            ? SORT_DIRECTIONS.ASC
+            : SORT_DIRECTIONS.DESC;
         return `${col} ${dir}`;
       })
       .filter(Boolean);
@@ -199,7 +204,8 @@ export class LogRepository {
   #buildWhereClause(conditions) {
     /** @type {Clauses['params']} */
     let params = {};
-    const where = ["1=1"];
+    /** @type {string[]} */
+    const where = [SQL_FRAGMENTS.TRUE_CONDITION];
 
     /**
      * Helper to merge partial results

@@ -1,6 +1,8 @@
 import { jest, describe, test, expect, afterEach } from "@jest/globals";
-import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
+import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
+import { loggerMock } from "../setup/helpers/shared-mocks.js";
 import { createMiddlewareTestContext } from "../setup/helpers/middleware-test-utils.js";
+import { HTTP_STATUS } from "../../src/consts.js";
 import {
   useFakeTimers,
   useMockCleanup,
@@ -39,7 +41,7 @@ describe("Logger Middleware - Response Delay", () => {
 
     await middlewarePromise;
 
-    expect(ctx.res.statusCode).toBe(200);
+    expect(ctx.res.statusCode).toBe(HTTP_STATUS.OK);
     // No warning should be logged for delay under limit
     expect(loggerMock.warn).not.toHaveBeenCalled();
   });
@@ -66,7 +68,7 @@ describe("Logger Middleware - Response Delay", () => {
 
     await middlewarePromise;
 
-    expect(ctx.res.statusCode).toBe(200);
+    expect(ctx.res.statusCode).toBe(HTTP_STATUS.OK);
 
     // Source uses structured pino logging for clamping warnings
     expect(loggerMock.warn).toHaveBeenCalledWith(

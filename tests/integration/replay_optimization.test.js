@@ -10,6 +10,7 @@ import {
   useFakeTimers,
   useMockCleanup,
 } from "../setup/helpers/test-lifecycle.js";
+import { HTTP_STATUS } from "../../src/consts.js";
 
 /**
  * @typedef {import('../../src/webhook_manager.js').WebhookManager} WebhookManager
@@ -20,7 +21,8 @@ import {
  */
 
 // Mock Apify and Axios
-import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
+import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
+import { loggerMock } from "../setup/helpers/shared-mocks.js";
 await setupCommonMocks({
   axios: true,
   apify: true,
@@ -40,7 +42,7 @@ const mockItem = {
   webhookId: "wh_1",
   timestamp: new Date("2023-01-02T12:00:00Z").toISOString(),
   method: "POST",
-  statusCode: 200,
+  statusCode: HTTP_STATUS.OK,
   headers: { "content-type": "application/json" },
   body: '{"foo":"bar"}',
   remoteIp: "1.2.3.4",
@@ -50,7 +52,7 @@ const { createReplayHandler } = await import("../../src/routes/replay.js");
 
 describe("Replay Optimization Tests", () => {
   useMockCleanup(() => {
-    axiosMock.mockResolvedValue({ status: 200, data: "OK" });
+    axiosMock.mockResolvedValue({ status: HTTP_STATUS.OK, data: "OK" });
     jest
       .spyOn(logRepository, "getLogById")
       .mockResolvedValue(assertType(mockItem));
@@ -94,7 +96,7 @@ describe("Replay Optimization Tests", () => {
 
     // Verify it tried 2 times
     expect(axiosMock).toHaveBeenCalledTimes(2);
-    expect(res.status).toHaveBeenCalledWith(504);
+    expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.GATEWAY_TIMEOUT);
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
         message: expect.stringContaining(
@@ -136,7 +138,7 @@ describe("Replay Optimization Tests", () => {
       const config = getLastAxiosConfig(axiosMock, null);
       expect(config.timeout).toBe(1234);
 
-      expect(res.status).toHaveBeenCalledWith(504);
+      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.GATEWAY_TIMEOUT);
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
           message: expect.stringContaining("1.234s timeout per attempt"),
@@ -215,7 +217,9 @@ describe("Replay Optimization Tests", () => {
       await handler(req, res, jest.fn());
 
       expect(axiosMock).toHaveBeenCalledTimes(1);
-      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.status).toHaveBeenCalledWith(
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+      );
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({ message: "Refused" }),
       );

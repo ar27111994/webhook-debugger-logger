@@ -2,8 +2,11 @@ import { jest, describe, test, expect, beforeEach } from "@jest/globals";
 import { assertType } from "../setup/helpers/test-utils.js";
 
 // 1. Setup Common Mocks FIRST
-import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
-import { fsPromisesMock as mockFs } from "../setup/helpers/shared-mocks.js";
+import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
+import {
+  fsPromisesMock as mockFs,
+  loggerMock,
+} from "../setup/helpers/shared-mocks.js";
 
 await setupCommonMocks({ logger: true, fs: true });
 

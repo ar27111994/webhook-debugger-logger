@@ -1,4 +1,5 @@
 import { jest } from "@jest/globals";
+import { HTTP_STATUS } from "../../../src/consts.js";
 
 /**
  * @typedef {import("express").Request} Request
@@ -80,14 +81,14 @@ export const createMockRequest = (overrides = {}) =>
  * @example
  * const res = createMockResponse();
  * await middleware(req, res, next);
- * expect(res.status).toHaveBeenCalledWith(200);
+ * expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
  * expect(res.json).toHaveBeenCalledWith({ success: true });
  */
 export const createMockResponse = (overrides = {}) => {
   /** @type {Record<string, Function[]>} */
   const listeners = {};
   const res = /** @type {Response} */ ({
-    statusCode: 200,
+    statusCode: HTTP_STATUS.OK,
     headers: {},
     status: jest.fn(function (code) {
       this.statusCode = code;

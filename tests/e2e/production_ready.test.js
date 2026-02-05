@@ -24,6 +24,7 @@ const { app, webhookManager, sseHeartbeat, initialize, shutdown } =
 const { Actor } = await import("apify");
 const { createDatasetMock } = await import("../setup/helpers/shared-mocks.js");
 import { logRepository } from "../../src/repositories/LogRepository.js";
+import { HTTP_STATUS } from "../../src/consts.js";
 
 describe("Production Readiness Tests (v2.6.0)", () => {
   /** @type {string} */
@@ -65,19 +66,19 @@ describe("Production Readiness Tests (v2.6.0)", () => {
         .get("/info")
         .set("Authorization", "Bearer top-secret")
         .set("X-Forwarded-For", testIp)
-        .expect(200);
+        .expect(HTTP_STATUS.OK);
       // 2nd request - Success
       await agent
         .get("/info")
         .set("Authorization", "Bearer top-secret")
         .set("X-Forwarded-For", testIp)
-        .expect(200);
+        .expect(HTTP_STATUS.OK);
       // 3rd request - Failure (Rate Limit Exceeded)
       const res = await agent
         .get("/info")
         .set("Authorization", "Bearer top-secret")
         .set("X-Forwarded-For", testIp);
-      expect(res.statusCode).toBe(429);
+      expect(res.statusCode).toBe(HTTP_STATUS.TOO_MANY_REQUESTS);
     });
   });
 
@@ -122,7 +123,7 @@ describe("Production Readiness Tests (v2.6.0)", () => {
         .set("Authorization", "Bearer top-secret")
         .set("X-Forwarded-For", "192.168.1.50")
         .send({});
-      expect(res.statusCode).toBe(200);
+      expect(res.statusCode).toBe(HTTP_STATUS.OK);
     });
 
     test("Should reject IP outside CIDR range", async () => {
@@ -131,7 +132,7 @@ describe("Production Readiness Tests (v2.6.0)", () => {
         .set("Authorization", "Bearer top-secret")
         .set("X-Forwarded-For", "8.8.8.8")
         .send({});
-      expect(res.statusCode).toBe(403);
+      expect(res.statusCode).toBe(HTTP_STATUS.FORBIDDEN);
     });
   });
 
@@ -168,14 +169,14 @@ describe("Production Readiness Tests (v2.6.0)", () => {
         query: {},
         contentType: "application/json",
         size: mockEvent.body.length,
-        statusCode: 200,
+        statusCode: HTTP_STATUS.OK,
         processingTime: 10,
       });
 
       const res = await request(app)
         .post(`/replay/${webhookId}/${eventId}?url=${targetUrl}`)
         .set("Authorization", "Bearer top-secret")
-        .expect(200);
+        .expect(HTTP_STATUS.OK);
 
       const { default: axiosMock } = await import("axios");
       const axiosConfig = getLastAxiosConfig(axiosMock, null);

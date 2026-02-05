@@ -1,5 +1,6 @@
 import { describe, test, beforeAll, afterAll } from "@jest/globals";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
+import { HTTP_STATUS } from "../../src/consts.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 import { sleep } from "../setup/helpers/test-utils.js";
 import {
@@ -41,7 +42,7 @@ describe("Hot Reload E2E - Dynamic Config Updates", () => {
     const { kvStore } = setupBasicApifyMock(apifyMock, {
       input: {
         authKey: "initial-secret",
-        defaultResponseCode: 200,
+        defaultResponseCode: HTTP_STATUS.OK,
       },
     });
     kvStoreMock = kvStore;
@@ -59,18 +60,18 @@ describe("Hot Reload E2E - Dynamic Config Updates", () => {
     await appClient
       .get("/info")
       .set("Authorization", "Bearer initial-secret")
-      .expect(200);
+      .expect(HTTP_STATUS.OK);
 
     // Should fail with future key
     await appClient
       .get("/info")
       .set("Authorization", "Bearer new-secret")
-      .expect(401);
+      .expect(HTTP_STATUS.UNAUTHORIZED);
 
     // Step 2: Update Input in KV Store (Simulate external update)
     kvStoreMock.getValue.mockResolvedValue({
       authKey: "new-secret",
-      defaultResponseCode: 201, // Changing another prop to be sure
+      defaultResponseCode: HTTP_STATUS.CREATED, // Changing another prop to be sure
     });
 
     // Step 3: Wait for Hot Reload Poll Interval
@@ -82,12 +83,12 @@ describe("Hot Reload E2E - Dynamic Config Updates", () => {
     await appClient
       .get("/info")
       .set("Authorization", "Bearer initial-secret")
-      .expect(401);
+      .expect(HTTP_STATUS.UNAUTHORIZED);
 
     // New key should succeed
     await appClient
       .get("/info")
       .set("Authorization", "Bearer new-secret")
-      .expect(200);
+      .expect(HTTP_STATUS.OK);
   });
 });

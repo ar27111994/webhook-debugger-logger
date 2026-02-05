@@ -1,8 +1,12 @@
 import { describe, test, expect, beforeAll, afterAll } from "@jest/globals";
-import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
+import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
-import { logRepositoryMock } from "../setup/helpers/shared-mocks.js";
 import { sleep } from "../setup/helpers/test-utils.js";
+import {
+  logRepositoryMock,
+  loggerMock,
+} from "../setup/helpers/shared-mocks.js";
+import { HTTP_STATUS } from "../../src/consts.js";
 
 // Setup mocks first
 // Ensure real SyncService consumes events while mocking the repository failure
@@ -48,7 +52,7 @@ describe("Disk Full / Write Failure Resilience", () => {
       .post(`/webhook/${webhookId}`)
       .send({ data: "crash_test" });
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(HTTP_STATUS.OK);
 
     await sleep(200);
 

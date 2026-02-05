@@ -20,7 +20,7 @@ The test suite is organized into the following categories:
 Centralized mock registration. Import BEFORE any source code:
 
 ```javascript
-import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
+import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 await setupCommonMocks({
   axios: true,
   apify: true,
@@ -42,6 +42,8 @@ await setupCommonMocks({
 - `createMockWebhookManager()` - WebhookManager mock factory
 - `createDatasetMock()` - Dataset mock factory
 - `fsPromisesMock` - Mock for `node:fs/promises`
+- `logRepositoryMock` - Mock for LogRepository
+- `loggerMock` - Mock for logger
 
 ### Test Utilities (`setup/helpers/test-utils.js`)
 

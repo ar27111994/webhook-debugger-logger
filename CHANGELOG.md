@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.1.4] - 2026-02-05
+
+### Added (3.1.4)
+
+- **Modular Constants Refactoring**: Transitioned system-wide magic strings and numbers to a modular `src/consts/` architecture.
+  - Divided constants into domain-specific modules: `auth.js`, `db.js`, `error.js`, `logging.js`, `network.js`, `status.js`, `storage.js`, and `ui.js`.
+  - Implemented an aggregator in `src/consts/index.js` for clean, destructured imports.
+- **Environment Utility**: Added `src/utils/env.js` for robust, type-safe environment variable parsing.
+- **Database Maintenance**: Implemented automated `VACUUM` support in `webhook_manager.js` to reclaim disk space during retention cleanup.
+
+### Improved (3.1.4)
+
+- **Test Suite Stabilization**:
+  - Refactored `tests/unit/main_lifecycle.test.js` with strict module isolation via dynamic imports, resolving Jest worker cache collisions.
+  - Enhanced `setupCommonMocks` and `shared-mocks.js` to support modular constant patterns.
+  - Optimized `tests/unit/timestamp_filtering.test.js` to prevent timeouts in heavy DuckDB environments.
+- **Architecture**: Unified environment variable handling across `main.js`, `SyncService.js`, and `ForwardingService.js` using the new `env.js` utility.
+- **Documentation**: Updated `.agent/rules/testing.md` with advanced ESM isolation patterns and refined storage schemas.
+
 ## [3.1.3] - 2026-02-04
 
 ### Added (3.1.3)

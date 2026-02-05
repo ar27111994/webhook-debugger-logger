@@ -24,20 +24,22 @@ const { Actor } = await import("apify");
 const { createDatasetMock } = await import("../setup/helpers/shared-mocks.js");
 const { logRepository } =
   await import("../../src/repositories/LogRepository.js");
+const { HTTP_STATUS, WEBHOOK_ID_PREFIX, REQUEST_ID_PREFIX } =
+  await import("../../src/consts.js");
 
 const createMockLog = (overrides = {}) => ({
   id: "log_" + Math.random().toString(36).substr(2, 9),
-  webhookId: "wh_1",
+  webhookId: `${WEBHOOK_ID_PREFIX}1`,
   method: "POST",
   headers: {},
   body: "{}",
   query: {},
   contentType: "application/json",
   size: 2,
-  statusCode: 200,
+  statusCode: HTTP_STATUS.OK,
   processingTime: 10,
   timestamp: new Date().toISOString(),
-  requestId: "req_" + Math.random().toString(36).substr(2, 9),
+  requestId: `${REQUEST_ID_PREFIX}${Math.random().toString(36).substr(2, 9)}`,
   remoteIp: "127.0.0.1",
   ...overrides,
 });
@@ -72,38 +74,38 @@ describe("Log Filtering Routes", () => {
   });
 
   describe("Root Route Content Negotiation", () => {
-    test("GET / should return 200 OK for readiness probe", async () => {
+    test("GET / should return HTTP_STATUS.OK OK for readiness probe", async () => {
       const res = await appClient
         .get("/")
         .set("X-Apify-Container-Server-Readiness-Probe", "1");
-      expect(res.statusCode).toBe(200);
+      expect(res.statusCode).toBe(HTTP_STATUS.OK);
       expect(res.text).toBe("OK");
     });
 
-    test("GET / should return 401 HTML for browser without auth", async () => {
+    test("GET / should return HTTP_STATUS.UNAUTHORIZED HTML for browser without auth", async () => {
       // Ensure we don't send auth headers
       const res = await appClient.get("/").set("Accept", "text/html");
 
-      expect(res.statusCode).toBe(401);
+      expect(res.statusCode).toBe(HTTP_STATUS.UNAUTHORIZED);
       expect(res.headers["content-type"]).toMatch(/text\/html/);
       expect(res.text).toContain("Access Restricted");
       expect(res.text).toContain("Strict Mode enabled");
     });
 
-    test("GET / should return 401 JSON for non-browser without auth", async () => {
+    test("GET / should return HTTP_STATUS.UNAUTHORIZED JSON for non-browser without auth", async () => {
       const res = await appClient.get("/").set("Accept", "application/json");
 
-      expect(res.statusCode).toBe(401);
+      expect(res.statusCode).toBe(HTTP_STATUS.UNAUTHORIZED);
       expect(res.body.error).toBe("Unauthorized");
     });
 
-    test("GET / should return 200 HTML with Dashboard loop for valid auth", async () => {
+    test("GET / should return HTTP_STATUS.OK HTML with Dashboard loop for valid auth", async () => {
       const res = await appClient
         .get("/")
         .set("Accept", "text/html")
         .set("Authorization", authHeader);
 
-      expect(res.statusCode).toBe(200);
+      expect(res.statusCode).toBe(HTTP_STATUS.OK);
       expect(res.text).toContain("Webhook Debugger");
       expect(res.text).toContain("Enterprise Suite");
       expect(res.text).toMatch(/\d+ active endpoints/);
@@ -117,7 +119,7 @@ describe("Log Filtering Routes", () => {
         id: "log_filter_1",
         webhookId: "wh_1",
         method: "POST",
-        statusCode: 200,
+        statusCode: HTTP_STATUS.OK,
         headers: { "content-type": "application/json" },
         timestamp: "2023-01-01T10:00:00Z",
       }),
@@ -125,7 +127,7 @@ describe("Log Filtering Routes", () => {
         id: "log_filter_2",
         webhookId: "wh_1",
         method: "GET",
-        statusCode: 404,
+        statusCode: HTTP_STATUS.NOT_FOUND,
         headers: { "content-type": "text/plain" },
         contentType: "text/plain",
         timestamp: "2023-01-01T10:01:00Z",
@@ -134,7 +136,7 @@ describe("Log Filtering Routes", () => {
         id: "log_filter_3",
         webhookId: "wh_2",
         method: "POST",
-        statusCode: 200,
+        statusCode: HTTP_STATUS.OK,
         headers: { "content-type": "application/json" },
         timestamp: "2023-01-01T10:02:00Z",
       }),
@@ -155,10 +157,10 @@ describe("Log Filtering Routes", () => {
     // Filter by StatusCode
     res = await appClient
       .get("/logs")
-      .query({ statusCode: "404" })
+      .query({ statusCode: HTTP_STATUS.NOT_FOUND.toString() })
       .set("Authorization", authHeader);
     expect(res.body.items).toHaveLength(1);
-    expect(res.body.items[0].statusCode).toBe(404);
+    expect(res.body.items[0].statusCode).toBe(HTTP_STATUS.NOT_FOUND);
 
     // Filter by ContentType
     res = await appClient
@@ -179,12 +181,12 @@ describe("Log Filtering Routes", () => {
     // Combined Filters
     res = await appClient
       .get("/logs")
-      .query({ method: "POST", statusCode: 200 })
+      .query({ method: "POST", statusCode: HTTP_STATUS.OK })
       .set("Authorization", authHeader);
     expect(res.body.items).toHaveLength(2);
     res.body.items.forEach((/** @type {WebhookEvent} */ item) => {
       expect(item.method).toBe("POST");
-      expect(item.statusCode).toBe(200);
+      expect(item.statusCode).toBe(HTTP_STATUS.OK);
     });
 
     // Invalid Webhook ID
@@ -202,7 +204,7 @@ describe("Log Filtering Routes", () => {
 
     const res = await appClient.get("/logs").set("Authorization", authHeader);
 
-    expect(res.statusCode).toBe(500);
+    expect(res.statusCode).toBe(HTTP_STATUS.INTERNAL_SERVER_ERROR);
     expect(res.body.error).toBe("Logs failed");
   });
 
@@ -225,7 +227,7 @@ describe("Log Filtering Routes", () => {
       .get("/logs")
       .query({ limit: 0 })
       .set("Authorization", authHeader);
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(HTTP_STATUS.OK);
     // Our logic often defaults invalid/zero limit to DEFAULT_PAGINATION_LIMIT (100)
     expect(res.body.items.length).toBeGreaterThan(0);
 
@@ -234,7 +236,7 @@ describe("Log Filtering Routes", () => {
       .get("/logs")
       .query({ limit: -10 })
       .set("Authorization", authHeader);
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(HTTP_STATUS.OK);
     expect(res.body.items.length).toBeGreaterThan(0);
 
     // Case 3: Non-numeric Limit (Should use default)
@@ -242,7 +244,7 @@ describe("Log Filtering Routes", () => {
       .get("/logs")
       .query({ limit: "invalid" })
       .set("Authorization", authHeader);
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(HTTP_STATUS.OK);
     expect(res.body.items.length).toBeGreaterThan(0);
   });
 
@@ -277,7 +279,7 @@ describe("Log Filtering Routes", () => {
         id: "log_1",
         webhookId: "wh_1",
         method: "POST",
-        statusCode: 200,
+        statusCode: HTTP_STATUS.OK,
         timestamp: new Date().toISOString(),
       });
       jest.spyOn(logRepository, "getLogById").mockResolvedValue(item);
@@ -286,7 +288,7 @@ describe("Log Filtering Routes", () => {
       const res = await appClient
         .get("/logs/log_1")
         .set("Authorization", authHeader);
-      expect(res.statusCode).toBe(200);
+      expect(res.statusCode).toBe(HTTP_STATUS.OK);
       expect(res.body).toEqual(item);
     });
 
@@ -296,7 +298,7 @@ describe("Log Filtering Routes", () => {
         id: "log_2",
         webhookId: "wh_1",
         method: "GET",
-        statusCode: 404,
+        statusCode: HTTP_STATUS.NOT_FOUND,
       });
 
       jest.spyOn(logRepository, "getLogById").mockResolvedValue(item);
@@ -307,7 +309,7 @@ describe("Log Filtering Routes", () => {
         .query({ fields: "method,statusCode" })
         .set("Authorization", authHeader);
 
-      expect(res.statusCode).toBe(200);
+      expect(res.statusCode).toBe(HTTP_STATUS.OK);
       expect(logRepository.getLogById).toHaveBeenCalledWith(
         "log_2",
         expect.arrayContaining(["method", "statusCode", "webhookId"]),
@@ -329,7 +331,7 @@ describe("Log Filtering Routes", () => {
         .query({ fields: "method" })
         .set("Authorization", authHeader);
 
-      expect(res.statusCode).toBe(200);
+      expect(res.statusCode).toBe(HTTP_STATUS.OK);
       expect(res.body.webhookId).toBeUndefined();
       expect(res.body.method).toBe("POST");
     });

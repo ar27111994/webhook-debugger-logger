@@ -2,6 +2,7 @@ import { describe, test, expect, beforeAll, afterAll } from "@jest/globals";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 import { setupTestApp } from "../setup/helpers/app-utils.js";
+import { HTTP_STATUS } from "../../src/consts.js";
 
 // Setup mocks
 await setupCommonMocks({ apify: true, logger: true });
@@ -30,7 +31,7 @@ describe("Dashboard UI Integration", () => {
   test("should render the dashboard HTML page correctly", async () => {
     const res = await appClient
       .get("/")
-      .expect(200)
+      .expect(HTTP_STATUS.OK)
       .expect("Content-Type", /html/);
 
     // Verify presence of critical UI elements or tokens
@@ -48,7 +49,7 @@ describe("Dashboard UI Integration", () => {
     const res = await appClient
       .get("/")
       .set("Accept", "text/plain")
-      .expect(200)
+      .expect(HTTP_STATUS.OK)
       .expect("Content-Type", /plain/);
 
     expect(res.text).toContain("Webhook Debugger & Logger");

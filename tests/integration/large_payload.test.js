@@ -16,8 +16,8 @@ await setupCommonMocks({ axios: true, apify: true });
 const { Actor } = await import("apify");
 const { setupTestApp } = await import("../setup/helpers/app-utils.js");
 const { webhookManager } = await import("../../src/main.js");
-const { OFFLOAD_MARKER_STREAM } =
-  await import("../../src/utils/storage_helper.js");
+const { HTTP_STATUS, OFFLOAD_MARKER_STREAM, MAX_DATASET_ITEM_BYTES } =
+  await import("../../src/consts.js");
 
 /**
  * @typedef {import("../setup/helpers/app-utils.js").AppClient} AppClient
@@ -68,14 +68,14 @@ describe("Large Payload Stability", () => {
 
   test("Should offload >5MB payload to KVS and generate public URL", async () => {
     const [webhookId] = await webhookManager.generateWebhooks(1, 1);
-    const largeBody = "a".repeat(6 * 1024 * 1024); // 6MB > 5MB threshold
+    const largeBody = "a".repeat(MAX_DATASET_ITEM_BYTES + 1024); // Exceed threshold
 
     const res = await appClient
       .post(`/webhook/${webhookId}`)
       .set("Content-Type", "text/plain")
       .send(largeBody);
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(HTTP_STATUS.OK);
     expect(res.text).toBe("OK");
 
     // Verify KVS offload occurred
@@ -109,9 +109,9 @@ describe("Large Payload Stability", () => {
     expect(body.originalSize).toBe(largeBody.length);
   }, 60000); // Extended timeout
 
-  test("Should NOT offload <5MB payload", async () => {
+  test("Should NOT offload below threshold payload", async () => {
     const [webhookId] = await webhookManager.generateWebhooks(1, 1);
-    const smallBody = "a".repeat(1 * 1024 * 1024); // 1MB < 5MB threshold
+    const smallBody = "a".repeat(1 * 1024 * 1024); // 1MB < threshold
 
     kvStoreMock.setValue.mockClear();
 
@@ -120,7 +120,7 @@ describe("Large Payload Stability", () => {
       .set("Content-Type", "text/plain")
       .send(smallBody);
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(HTTP_STATUS.OK);
     expect(kvStoreMock.setValue).not.toHaveBeenCalled();
   });
 
@@ -133,7 +133,7 @@ describe("Large Payload Stability", () => {
       .set("Content-Type", "image/png")
       .send(pngBuffer);
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(HTTP_STATUS.OK);
 
     // Verify pushData
     expect(Actor.pushData).toHaveBeenCalled();
@@ -166,7 +166,12 @@ describe("Large Payload Stability", () => {
         .set("Content-Type", "application/json")
         .send(nested);
 
-      expect([200, 400, 413, 500]).toContain(res.statusCode);
+      expect([
+        HTTP_STATUS.OK,
+        HTTP_STATUS.BAD_REQUEST,
+        HTTP_STATUS.PAYLOAD_TOO_LARGE,
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+      ]).toContain(res.statusCode);
     } catch {
       // Supertest/Axios might fail to serialize too
     }

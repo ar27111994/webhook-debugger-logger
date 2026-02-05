@@ -3,6 +3,7 @@ import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import { createMiddlewareTestContext } from "../setup/helpers/middleware-test-utils.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 import { assertType } from "../setup/helpers/test-utils.js";
+import { HTTP_STATUS } from "../../src/consts.js";
 
 /**
  * @typedef {import('../../src/typedefs.js').WebhookEvent} WebhookEvent
@@ -21,7 +22,7 @@ describe("Logger Middleware", () => {
 
     await ctx.middleware(ctx.req, ctx.res, ctx.next);
 
-    expect(ctx.res.statusCode).toBe(404);
+    expect(ctx.res.statusCode).toBe(HTTP_STATUS.NOT_FOUND);
   });
 
   test("should block unauthorized requests (Auth Key)", async () => {
@@ -35,7 +36,7 @@ describe("Logger Middleware", () => {
 
     await ctx.middleware(ctx.req, ctx.res, ctx.next);
 
-    expect(ctx.res.statusCode).toBe(401);
+    expect(ctx.res.statusCode).toBe(HTTP_STATUS.UNAUTHORIZED);
   });
 
   test("should block requests from non-whitelisted IPs", async () => {
@@ -52,7 +53,7 @@ describe("Logger Middleware", () => {
 
     await ctx.middleware(ctx.req, ctx.res, ctx.next);
 
-    expect(ctx.res.statusCode).toBe(403);
+    expect(ctx.res.statusCode).toBe(HTTP_STATUS.FORBIDDEN);
   });
 
   test("should block oversized payloads", async () => {
@@ -70,7 +71,7 @@ describe("Logger Middleware", () => {
 
     await ctx.middleware(ctx.req, ctx.res, ctx.next);
 
-    expect(ctx.res.statusCode).toBe(413);
+    expect(ctx.res.statusCode).toBe(HTTP_STATUS.PAYLOAD_TOO_LARGE);
   });
 
   test("should validate JSON Schema", async () => {
@@ -90,7 +91,7 @@ describe("Logger Middleware", () => {
 
     await ctx.middleware(ctx.req, ctx.res, ctx.next);
 
-    expect(ctx.res.statusCode).toBe(400);
+    expect(ctx.res.statusCode).toBe(HTTP_STATUS.BAD_REQUEST);
   });
 
   test("should execute custom script", async () => {
@@ -170,14 +171,14 @@ describe("Logger Middleware", () => {
 
     await ctx.middleware(ctx.req, ctx.res, ctx.next);
 
-    expect(ctx.res.statusCode).toBe(200);
+    expect(ctx.res.statusCode).toBe(HTTP_STATUS.OK);
   });
 
   test("should return JSON response for 4xx error status codes", async () => {
     const ctx = await createMiddlewareTestContext({
       options: {
         authKey: "secret",
-        defaultResponseCode: 400,
+        defaultResponseCode: HTTP_STATUS.BAD_REQUEST,
       },
       request: {
         params: { id: "wh_123" },
@@ -188,7 +189,7 @@ describe("Logger Middleware", () => {
 
     await ctx.middleware(ctx.req, ctx.res, ctx.next);
 
-    expect(ctx.res.statusCode).toBe(400);
+    expect(ctx.res.statusCode).toBe(HTTP_STATUS.BAD_REQUEST);
     // 4xx with no custom body should return a JSON object
     const responseData = jest.mocked(ctx.res.json).mock.calls[0][0];
     expect(responseData).toHaveProperty("webhookId");
@@ -198,7 +199,7 @@ describe("Logger Middleware", () => {
     const ctx = await createMiddlewareTestContext({
       options: {
         authKey: "secret",
-        defaultResponseCode: 200,
+        defaultResponseCode: HTTP_STATUS.OK,
         defaultResponseBody: assertType({
           status: "ok",
           custom: "response",
@@ -213,7 +214,7 @@ describe("Logger Middleware", () => {
 
     await ctx.middleware(ctx.req, ctx.res, ctx.next);
 
-    expect(ctx.res.statusCode).toBe(200);
+    expect(ctx.res.statusCode).toBe(HTTP_STATUS.OK);
     const responseData = jest.mocked(ctx.res.json).mock.calls[0][0];
     expect(responseData.status).toBe("ok");
     expect(responseData.custom).toBe("response");

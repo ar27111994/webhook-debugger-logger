@@ -5,17 +5,23 @@
  */
 import { Actor } from "apify";
 import { nanoid } from "nanoid";
+import {
+  DEFAULT_ID_LENGTH,
+  OFFLOAD_MARKER_SYNC as OFFLOAD_MARKER_SYNC_CONST,
+  OFFLOAD_MARKER_STREAM as OFFLOAD_MARKER_STREAM_CONST,
+  DEFAULT_OFFLOAD_NOTE,
+} from "../consts.js";
 
 /**
  * Generates a unique key for the KVS payload.
  * @returns {string}
  */
 export function generateKvsKey() {
-  return `payload_${nanoid(10)}`;
+  return `payload_${nanoid(DEFAULT_ID_LENGTH)}`;
 }
 
-export const OFFLOAD_MARKER_SYNC = "[OFFLOADED_TO_KVS]";
-export const OFFLOAD_MARKER_STREAM = "[OFFLOADED_VIA_STREAM]";
+export const OFFLOAD_MARKER_SYNC = OFFLOAD_MARKER_SYNC_CONST;
+export const OFFLOAD_MARKER_STREAM = OFFLOAD_MARKER_STREAM_CONST;
 
 /**
  * Offloads content to the Key-Value Store.
@@ -65,7 +71,7 @@ export function createReferenceBody({
   key,
   kvsUrl,
   originalSize,
-  note = "Body too large for Dataset. Stored in KeyValueStore.",
+  note = DEFAULT_OFFLOAD_NOTE,
   data = OFFLOAD_MARKER_SYNC,
 }) {
   return {

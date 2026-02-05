@@ -8,6 +8,7 @@ import {
   createMockNextFunction,
   assertType,
 } from "../setup/helpers/test-utils.js";
+import { HTTP_STATUS } from "../../src/consts.js";
 
 // Initialize mocks
 await setupCommonMocks({ apify: true, axios: false });
@@ -48,7 +49,7 @@ describe("Robust Sorting Logic", () => {
     body: "{}",
     query: {},
     contentType: "application/json",
-    statusCode: 200,
+    statusCode: HTTP_STATUS.OK,
     processingTime: 10,
     requestId: `req_${i}`,
     remoteIp: "127.0.0.1",

@@ -2,6 +2,79 @@ import { jest } from "@jest/globals";
 import { createApifyMock } from "./apify-mock.js";
 import { assertType } from "./test-utils.js";
 
+import {
+  HTTP_STATUS,
+  MIME_TYPES,
+  RECURSION_HEADER_NAME,
+  RECURSION_HEADER_LOOP_SUFFIX,
+  SENSITIVE_HEADERS,
+  REPLAY_HEADERS_TO_IGNORE as REPLAY_HEADERS_TO_IGNORE_REAL,
+  FORWARD_HEADERS_TO_IGNORE,
+} from "../../../src/consts/http.js";
+
+import {
+  KVS_STATE_KEY,
+  KVS_INPUT_KEY,
+  MAX_DATASET_ITEM_BYTES,
+  OFFLOAD_MARKER_SYNC as OFFLOAD_MARKER_SYNC_REAL,
+  OFFLOAD_MARKER_STREAM as OFFLOAD_MARKER_STREAM_REAL,
+  DEFAULT_OFFLOAD_NOTE,
+} from "../../../src/consts/storage.js";
+
+import {
+  DEFAULT_ID_LENGTH,
+  WEBHOOK_ID_PREFIX,
+  REQUEST_ID_PREFIX,
+  SYNC_ENTITY_SYSTEM,
+  EVENT_NAMES,
+  ERROR_LABELS,
+  REPLAY_STATUS_LABELS,
+  APIFY_HOMEPAGE_URL,
+  EVENT_MAX_LISTENERS,
+  DEFAULT_FIXED_MEMORY_MBYTES,
+  MAX_SAFE_REPLAY_RETRIES,
+  MAX_SAFE_RATE_LIMIT_PER_MINUTE,
+  MAX_SAFE_RETENTION_HOURS,
+  MAX_SAFE_URL_COUNT,
+  MAX_SAFE_REPLAY_TIMEOUT_MS,
+  MAX_SAFE_RESPONSE_DELAY_MS,
+  MAX_ALLOWED_PAYLOAD_SIZE,
+  MAX_SAFE_FORWARD_RETRIES,
+  MAX_SAFE_FIXED_MEMORY_MBYTES,
+} from "../../../src/consts/app.js";
+
+import {
+  SSRF_BLOCKED_RANGES,
+  ALLOWED_PROTOCOLS,
+  SSRF_ERRORS,
+  SSRF_INTERNAL_ERRORS,
+  SSRF_LOG_MESSAGES,
+  ERROR_MESSAGES,
+  TRANSIENT_ERROR_CODES,
+  DELIMITERS,
+  PROTOCOL_PREFIXES,
+} from "../../../src/consts/network.js";
+
+import {
+  DUCKDB_STORAGE_DIR_DEFAULT,
+  DUCKDB_FILENAME_DEFAULT,
+  DUCKDB_MEMORY_LIMIT,
+  DUCKDB_THREADS,
+  DUCKDB_POOL_SIZE,
+  SQL_FRAGMENTS,
+  SORT_DIRECTIONS,
+  DB_MISSING_OFFSET_MARKER,
+  DEFAULT_PAGE_LIMIT,
+  MAX_PAGE_LIMIT,
+  DEFAULT_PAGE_OFFSET,
+} from "../../../src/consts/db.js";
+
+import {
+  DASHBOARD_PLACEHOLDERS,
+  DASHBOARD_TEMPLATE_PATH,
+  UNAUTHORIZED_HTML_TEMPLATE,
+} from "../../../src/consts/ui.js";
+
 /**
  * @typedef {import("apify").Dataset} Dataset
  * @typedef {import("apify").DatasetDataOptions} DatasetDataOptions
@@ -27,25 +100,45 @@ import { assertType } from "./test-utils.js";
  */
 
 /**
+ * Shared logger mock for test assertions.
+ * Import this in tests to verify logging behavior.
+ *
+ * @example
+ * import { loggerMock } from "../setup/helpers/shared-mocks.js";
+ * expect(loggerMock.error).toHaveBeenCalledWith(expect.objectContaining({ component: "Main" }), "Failed");
+ */
+export const loggerMock = {
+  trace: jest.fn(),
+  debug: jest.fn(),
+  info: jest.fn(),
+  warn: jest.fn(),
+  error: jest.fn(),
+  fatal: jest.fn(),
+  child: jest.fn(function () {
+    return loggerMock;
+  }),
+};
+
+/**
  * Standard axios mock for mirroring internal behavior.
  */
 const axiosBase = /** @type {AxiosMock} */ (jest.fn());
 
-axiosBase.mockResolvedValue({ status: 200, data: "OK" });
+axiosBase.mockResolvedValue({ status: HTTP_STATUS.OK, data: "OK" });
 axiosBase.post = /** @type {AxiosMock} */ (jest.fn()).mockResolvedValue({
-  status: 200,
+  status: HTTP_STATUS.OK,
   data: "OK",
 });
 axiosBase.get = /** @type {AxiosMock} */ (jest.fn()).mockResolvedValue({
-  status: 200,
+  status: HTTP_STATUS.OK,
   data: "OK",
 });
 axiosBase.delete = /** @type {AxiosMock} */ (jest.fn()).mockResolvedValue({
-  status: 200,
+  status: HTTP_STATUS.OK,
   data: "OK",
 });
 axiosBase.put = /** @type {AxiosMock} */ (jest.fn()).mockResolvedValue({
-  status: 200,
+  status: HTTP_STATUS.OK,
   data: "OK",
 });
 
@@ -81,15 +174,7 @@ export const ssrfMock = {
     href: "http://example.com",
     host: "example.com",
   }),
-  SSRF_ERRORS: {
-    INVALID_URL: "Invalid URL format",
-    PROTOCOL_NOT_ALLOWED: "Only http/https URLs are allowed",
-    CREDENTIALS_NOT_ALLOWED: "Credentials in URL are not allowed",
-    HOSTNAME_RESOLUTION_FAILED: "Unable to resolve hostname",
-    INVALID_IP: "URL resolves to invalid IP address",
-    INTERNAL_IP: "URL resolves to internal/reserved IP range",
-    VALIDATION_FAILED: "URL validation failed",
-  },
+  SSRF_ERRORS,
   checkIpInRanges: /** @type {jest.Mock<any>} */ (jest.fn()).mockReturnValue(
     false,
   ),
@@ -239,9 +324,9 @@ export const resetNetworkMocks = async () => {
   dnsPromisesMock.resolve6.mockResolvedValue([]);
 
   // Reset Axios
-  axiosMock.mockResolvedValue({ status: 200, data: "OK" });
-  axiosMock.post.mockResolvedValue({ status: 200, data: "OK" });
-  axiosMock.get.mockResolvedValue({ status: 200, data: "OK" });
+  axiosMock.mockResolvedValue({ status: HTTP_STATUS.OK, data: "OK" });
+  axiosMock.post.mockResolvedValue({ status: HTTP_STATUS.OK, data: "OK" });
+  axiosMock.get.mockResolvedValue({ status: HTTP_STATUS.OK, data: "OK" });
 };
 
 /**
@@ -302,7 +387,7 @@ export function createMockWebhookManager(overrides = {}) {
     // State
     webhooks: new Map(),
     kvStore: null,
-    STATE_KEY: "WEBHOOK_STATE",
+    STATE_KEY: KVS_STATE_KEY,
   });
 }
 
@@ -466,106 +551,128 @@ export const middlewareFactoriesMock = assertType({
   createErrorHandler: jest.fn(() => jest.fn()),
 });
 
-/**
- * Shared Consts Mock.
- */
-/**
- * @type {ConstsMock}
- */
-export const constsMock = assertType({
-  CLEANUP_INTERVAL_MS: 100,
+// Keep a mutable base object for test-overridable constants
+/** @type {Record<string, any>} */
+const overridableConsts = {
+  BACKGROUND_TASK_TIMEOUT_PROD_MS: 1000,
+  BACKGROUND_TASK_TIMEOUT_TEST_MS: 100,
+  RETENTION_LOG_SUPPRESSION_MS: 100,
+  DNS_RESOLUTION_TIMEOUT_MS: 100,
   INPUT_POLL_INTERVAL_PROD_MS: 100,
   INPUT_POLL_INTERVAL_TEST_MS: 100,
-  SHUTDOWN_TIMEOUT_MS: 100,
-  SSE_HEARTBEAT_INTERVAL_MS: 100,
-  RECURSION_HEADER_NAME: "X-Forwarded-By",
-  RECURSION_HEADER_VALUE: "Apify-Webhook-Debugger",
-  STARTUP_TEST_EXIT_DELAY_MS: 100,
-  MAX_BULK_CREATE: 10,
-  DUCKDB_VACUUM_ENABLED: true,
-  DUCKDB_VACUUM_INTERVAL_MS: 0,
-  KVS_OFFLOAD_THRESHOLD: 1024 * 1024,
-  // DuckDB Defaults
-  DUCKDB_FILENAME_DEFAULT: "test.db",
-  DUCKDB_STORAGE_DIR_DEFAULT: "/tmp/test",
-  DUCKDB_MEMORY_LIMIT: "1GB",
-  DUCKDB_THREADS: 4,
-  DUCKDB_POOL_SIZE: 2,
+  REPLAY_SCAN_MAX_DEPTH_MS: 3600000,
+  HOT_RELOAD_DEBOUNCE_MS: 10,
+  HOT_RELOAD_ENABLED: true,
   DEFAULT_URL_COUNT: 1,
   DEFAULT_RETENTION_HOURS: 24,
-  DEFAULT_PAYLOAD_LIMIT: 1000,
-  MAX_SAFE_URL_COUNT: 50,
-  MAX_SAFE_RETENTION_HOURS: 168,
-  MAX_SAFE_RATE_LIMIT_PER_MINUTE: 1000,
-  MAX_ALLOWED_PAYLOAD_SIZE: 100000,
-  MAX_SAFE_REPLAY_RETRIES: 3,
-  MAX_SAFE_REPLAY_TIMEOUT_MS: 1000,
-  MAX_SAFE_FORWARD_RETRIES: 3,
-  MAX_SAFE_RESPONSE_DELAY_MS: 1000,
   DEFAULT_RATE_LIMIT_PER_MINUTE: 60,
+  DEFAULT_RATE_LIMIT_MAX_ENTRIES: 100,
+  DEFAULT_WEBHOOK_RATE_LIMIT_PER_MINUTE: 100,
+  DEFAULT_WEBHOOK_RATE_LIMIT_MAX_ENTRIES: 100,
+  DEFAULT_RATE_LIMIT_WINDOW_MS: 60000,
+  DEFAULT_PAYLOAD_LIMIT: 1000,
+  DEFAULT_TOLERANCE_SECONDS: 300,
   DEFAULT_REPLAY_RETRIES: 3,
   DEFAULT_REPLAY_TIMEOUT_MS: 1000,
   DEFAULT_FORWARD_RETRIES: 3,
   FORWARD_TIMEOUT_MS: 1000,
   RETRY_BASE_DELAY_MS: 100,
-  TRANSIENT_ERROR_CODES: [
-    "ECONNABORTED",
-    "ECONNRESET",
-    "ETIMEDOUT",
-    "ENETUNREACH",
-    "EHOSTUNREACH",
-    "EAI_AGAIN",
-    "ENOTFOUND",
-  ],
-  SENSITIVE_HEADERS: ["authorization"],
-  SYNC_BATCH_SIZE: 10,
+  SCRIPT_EXECUTION_TIMEOUT_MS: 1000,
+  MAX_SSE_CLIENTS: 2,
+  MAX_BULK_CREATE: 10,
+  MAX_ITEMS_FOR_BATCH: 100,
   SYNC_MAX_CONCURRENT: 1,
   SYNC_MIN_TIME_MS: 0,
-  MAX_SSE_CLIENTS: 2,
-  ERROR_MESSAGES: { HOSTNAME_RESOLUTION_FAILED: "Hostname Resolution Failed" },
+  SYNC_BATCH_SIZE: 10,
+  SSE_HEARTBEAT_INTERVAL_MS: 100,
+  SHUTDOWN_TIMEOUT_MS: 100,
+  STARTUP_TEST_EXIT_DELAY_MS: 100,
+  CLEANUP_INTERVAL_MS: 100,
+  DUCKDB_POOL_SIZE: 2,
+  // Primitives that tests explicitly override:
+  DUCKDB_VACUUM_ENABLED: false,
+  DUCKDB_VACUUM_INTERVAL_MS: 24 * 60 * 60 * 1000,
+};
+
+/**
+ * Shared Consts Mock.
+ * Uses getters for overridable values to support ESM live binding updates in tests.
+ */
+/** @type {Record<string, any>} */
+export const constsMock = {
+  HTTP_STATUS,
+  MIME_TYPES,
+  ERROR_LABELS,
+  REPLAY_STATUS_LABELS,
+  RECURSION_HEADER_LOOP_SUFFIX,
+  SENSITIVE_HEADERS,
   REPLAY_HEADERS_TO_IGNORE: [
-    "content-length",
-    "host",
-    "connection",
+    ...REPLAY_HEADERS_TO_IGNORE_REAL,
     "ignored-header",
   ],
-  FORWARD_HEADERS_TO_IGNORE: [
-    "authorization", // SENSITIVE_HEADERS
-    "content-length",
-    "host",
-    "connection",
-    "transfer-encoding",
-    "keep-alive",
-    "proxy-connection",
-    "upgrade",
-  ],
-  DNS_RESOLUTION_TIMEOUT_MS: 1000,
-  SSRF_INTERNAL_ERRORS: {
-    DNS_TIMEOUT: "DNS Timeout",
-  },
-  SSRF_LOG_MESSAGES: {
-    DNS_TIMEOUT: "DNS Timeout",
-    RESOLUTION_FAILED: "Resolution Failed",
-  },
-  DEFAULT_TOLERANCE_SECONDS: 300,
-  REPLAY_SCAN_MAX_DEPTH_MS: 3600000,
-  BACKGROUND_TASK_TIMEOUT_PROD_MS: 1000,
-  BACKGROUND_TASK_TIMEOUT_TEST_MS: 100,
-  SCRIPT_EXECUTION_TIMEOUT_MS: 1000,
-  MAX_ITEMS_FOR_BATCH: 100,
-  DEFAULT_RATE_LIMIT_MAX_ENTRIES: 100,
-  DEFAULT_WEBHOOK_RATE_LIMIT_PER_MINUTE: 100,
-  DEFAULT_WEBHOOK_RATE_LIMIT_MAX_ENTRIES: 100,
-  DEFAULT_RATE_LIMIT_WINDOW_MS: 60000,
-  DEFAULT_PAGE_LIMIT: 20,
-  MAX_PAGE_LIMIT: 100,
-  DEFAULT_PAGE_OFFSET: 0,
-  EVENT_MAX_LISTENERS: 20,
-  HOT_RELOAD_DEBOUNCE_MS: 100,
-  HOT_RELOAD_ENABLED: true,
-  DUCKDB_POOL_MAX_WAIT_MS: 100,
-  APIFY_HOMEPAGE_URL: "https://mock-docs.com",
-});
+  FORWARD_HEADERS_TO_IGNORE,
+  ALLOWED_PROTOCOLS,
+  PROTOCOL_PREFIXES,
+  SSRF_BLOCKED_RANGES,
+  SSRF_ERRORS,
+  SSRF_INTERNAL_ERRORS,
+  SSRF_LOG_MESSAGES,
+  ERROR_MESSAGES,
+  DELIMITERS,
+  SQL_FRAGMENTS,
+  SORT_DIRECTIONS,
+  EVENT_NAMES,
+  DEFAULT_ID_LENGTH,
+  WEBHOOK_ID_PREFIX,
+  REQUEST_ID_PREFIX,
+  SYNC_ENTITY_SYSTEM,
+  DB_MISSING_OFFSET_MARKER,
+  DEFAULT_FIXED_MEMORY_MBYTES,
+  RECURSION_HEADER_NAME,
+  RECURSION_HEADER_VALUE: "Apify-Webhook-Debugger",
+  APIFY_HOMEPAGE_URL,
+  EVENT_MAX_LISTENERS,
+  TRANSIENT_ERROR_CODES,
+  KVS_STATE_KEY,
+  KVS_INPUT_KEY,
+  MAX_DATASET_ITEM_BYTES,
+  KVS_OFFLOAD_THRESHOLD: 1024 * 1024,
+  OFFLOAD_MARKER_SYNC: OFFLOAD_MARKER_SYNC_REAL,
+  OFFLOAD_MARKER_STREAM: OFFLOAD_MARKER_STREAM_REAL,
+  DEFAULT_OFFLOAD_NOTE,
+  MAX_SAFE_REPLAY_RETRIES,
+  MAX_SAFE_RATE_LIMIT_PER_MINUTE,
+  MAX_SAFE_RETENTION_HOURS,
+  MAX_SAFE_URL_COUNT,
+  MAX_SAFE_REPLAY_TIMEOUT_MS,
+  MAX_SAFE_RESPONSE_DELAY_MS,
+  MAX_ALLOWED_PAYLOAD_SIZE,
+  MAX_SAFE_FORWARD_RETRIES,
+  MAX_SAFE_FIXED_MEMORY_MBYTES,
+  DEFAULT_PAGE_LIMIT,
+  MAX_PAGE_LIMIT,
+  DEFAULT_PAGE_OFFSET,
+  DUCKDB_STORAGE_DIR_DEFAULT,
+  DUCKDB_FILENAME_DEFAULT,
+  DUCKDB_MEMORY_LIMIT,
+  DUCKDB_THREADS,
+  DUCKDB_POOL_SIZE,
+  DASHBOARD_PLACEHOLDERS,
+  DASHBOARD_TEMPLATE_PATH,
+  UNAUTHORIZED_HTML_TEMPLATE,
+};
+
+// Dynamically add getters for overridable constants
+for (const key of Object.keys(overridableConsts)) {
+  Object.defineProperty(constsMock, key, {
+    get: () => overridableConsts[key],
+    set: (val) => {
+      overridableConsts[key] = val;
+    },
+    enumerable: true,
+    configurable: true,
+  });
+}
 
 /**
  * Shared Auth Mock.
@@ -622,8 +729,8 @@ export const storageHelperMock = {
   createReferenceBody: jest.fn((opts) =>
     assertType({ ...assertType(opts), isReference: true }),
   ),
-  OFFLOAD_MARKER_STREAM: "STREAM_MARKER",
-  OFFLOAD_MARKER_SYNC: "SYNC_MARKER",
+  OFFLOAD_MARKER_STREAM: OFFLOAD_MARKER_STREAM_REAL,
+  OFFLOAD_MARKER_SYNC: OFFLOAD_MARKER_SYNC_REAL,
 };
 
 /**
@@ -636,7 +743,7 @@ export const configMock = {
   getSafeResponseDelay: jest.fn(() => 0),
   parseWebhookOptions: jest.fn((opts) => ({
     allowedIps: [],
-    defaultResponseCode: 200,
+    defaultResponseCode: HTTP_STATUS.OK,
     defaultResponseBody: "OK",
     defaultResponseHeaders: {},
     maskSensitiveData: true,
@@ -670,7 +777,7 @@ export const eventsMock = {
     off: jest.fn(),
   },
   EVENTS: {
-    LOG_RECEIVED: "LOG_RECEIVED",
+    LOG_RECEIVED: EVENT_NAMES.LOG_RECEIVED,
   },
 };
 

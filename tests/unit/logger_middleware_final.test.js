@@ -19,7 +19,8 @@ import {
   sleep,
 } from "../setup/helpers/test-utils.js";
 import { Readable } from "stream";
-import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
+import { HTTP_STATUS } from "../../src/consts.js";
+import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import {
   webhookManagerMock,
   alertingMock,
@@ -28,6 +29,7 @@ import {
   signatureMock,
   axiosMock,
   ssrfMock,
+  loggerMock,
 } from "../setup/helpers/shared-mocks.js";
 // ESM mocks must be registered before the module under test is imported.
 // LoggerMiddleware will be imported dynamically in beforeAll.
@@ -112,7 +114,7 @@ describe("LoggerMiddleware Complete Coverage", () => {
       (id) => id !== "wh_none",
     );
 
-    axiosMock.post.mockResolvedValue({ status: 200, data: {} });
+    axiosMock.post.mockResolvedValue({ status: HTTP_STATUS.OK, data: {} });
   });
 
   describe("Core Features", () => {
@@ -140,7 +142,7 @@ describe("LoggerMiddleware Complete Coverage", () => {
       const req = createMockRequest({ method: "POST", params: { id: "wh_1" } });
       const res = createMockResponse();
       await middleware.ingestMiddleware(req, res, createMockNextFunction());
-      expect(res.status).toHaveBeenCalledWith(429);
+      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.TOO_MANY_REQUESTS);
     });
 
     test("large payload rejection (413)", async () => {
@@ -152,7 +154,7 @@ describe("LoggerMiddleware Complete Coverage", () => {
       });
       const res = createMockResponse();
       await middleware.ingestMiddleware(req, res, createMockNextFunction());
-      expect(res.status).toHaveBeenCalledWith(413);
+      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.PAYLOAD_TOO_LARGE);
     });
 
     test("streaming offload to KVS", async () => {
@@ -185,7 +187,7 @@ describe("LoggerMiddleware Complete Coverage", () => {
   });
 
   describe("Main Middleware", () => {
-    test("signature verification failure (401)", async () => {
+    test("signature verification failure (HTTP_STATUS.UNAUTHORIZED)", async () => {
       middleware.updateOptions({
         signatureVerification: { provider: "test", secret: "test" },
       });
@@ -202,7 +204,7 @@ describe("LoggerMiddleware Complete Coverage", () => {
       });
       const res = createMockResponse();
       await middleware.middleware(req, res, createMockNextFunction());
-      expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.UNAUTHORIZED);
     });
 
     test("schema validation failure (400)", async () => {
@@ -217,7 +219,7 @@ describe("LoggerMiddleware Complete Coverage", () => {
       });
       const res = createMockResponse();
       await middleware.middleware(req, res, createMockNextFunction());
-      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.BAD_REQUEST);
     });
 
     test("custom script execution", async () => {
@@ -295,10 +297,10 @@ describe("LoggerMiddleware Complete Coverage", () => {
       const req = createMockRequest({ params: { id: "wh_none" } });
       const res = createMockResponse();
       await middleware.middleware(req, res, createMockNextFunction());
-      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.NOT_FOUND);
     });
 
-    test("JSON parse error in body (400)", async () => {
+    test("JSON parse error in body (HTTP_STATUS.BAD_REQUEST)", async () => {
       middleware.updateOptions({ jsonSchema: { type: "object" } });
       const req = createMockRequest({
         headers: { "content-type": "application/json" },
@@ -306,7 +308,7 @@ describe("LoggerMiddleware Complete Coverage", () => {
       });
       const res = createMockResponse();
       await middleware.middleware(req, res, createMockNextFunction());
-      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.BAD_REQUEST);
     });
 
     test("background task timeout coverage", async () => {
@@ -320,8 +322,8 @@ describe("LoggerMiddleware Complete Coverage", () => {
       const req = createMockRequest({ method: "POST", params: { id: "wh_1" } });
       const res = createMockResponse();
       await middleware.middleware(req, res, createMockNextFunction());
-      // Default response for POST is status 200 and body "OK" via res.send
-      expect(res.status).toHaveBeenCalledWith(200);
+      // Default response for POST is status HTTP_STATUS.OK and body "OK" via res.send
+      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
       expect(res.send).toHaveBeenCalledWith("OK");
     });
   });
@@ -346,7 +348,7 @@ describe("LoggerMiddleware Complete Coverage", () => {
 
       const res = createMockResponse();
       await middleware.middleware(req, res, createMockNextFunction());
-      expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.UNAUTHORIZED);
 
       const jsonMock = jest.mocked(res.json);
       // res.json is called with an object, no need to parse
@@ -380,7 +382,7 @@ describe("LoggerMiddleware Complete Coverage", () => {
       jest.mocked(Actor.isAtHome).mockReturnValue(true);
       jest.mocked(Actor.getEnv).mockReturnValue(assertType({ isAtHome: true }));
 
-      const largeBody = "X".repeat(1000); // 1KB > 500 bytes threshold
+      const largeBody = "X".repeat(1000); // 1KB > HTTP_STATUS.INTERNAL_SERVER_ERROR bytes threshold
       storageHelperMock.offloadToKvs.mockRejectedValueOnce(
         new Error("KVS Failed"),
       );

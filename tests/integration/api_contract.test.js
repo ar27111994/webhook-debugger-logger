@@ -25,7 +25,12 @@ await setupCommonMocks({ axios: true, apify: true, dns: true, ssrf: true });
 const { resetNetworkMocks } = await import("../setup/helpers/shared-mocks.js");
 
 import { createRequire } from "module";
-import { APIFY_HOMEPAGE_URL } from "../../src/consts.js";
+import {
+  APIFY_HOMEPAGE_URL,
+  HTTP_STATUS,
+  REPLAY_STATUS_LABELS,
+  ERROR_LABELS,
+} from "../../src/consts.js";
 
 const require = createRequire(import.meta.url);
 const { version } = require("../../package.json");
@@ -68,7 +73,7 @@ describe("API Contract & Regression Tests", () => {
         .get("/info")
         .set("Authorization", "Bearer test-secret");
 
-      expect(res.statusCode).toBe(200);
+      expect(res.statusCode).toBe(HTTP_STATUS.OK);
       const body = res.body;
 
       // Top-level
@@ -114,7 +119,7 @@ describe("API Contract & Regression Tests", () => {
           remoteIp: "127.0.0.1",
           webhookId,
           method: "POST",
-          statusCode: 201,
+          statusCode: HTTP_STATUS.CREATED,
           timestamp: new Date().toISOString(),
           headers: {},
           query: {},
@@ -128,7 +133,7 @@ describe("API Contract & Regression Tests", () => {
           contentType: "application/json",
           processingTime: 10,
           remoteIp: "127.0.0.1",
-          statusCode: 200,
+          statusCode: HTTP_STATUS.OK,
           timestamp: new Date().toISOString(),
           headers: {},
           query: {},
@@ -144,15 +149,15 @@ describe("API Contract & Regression Tests", () => {
         .query({
           webhookId,
           method: "POST",
-          statusCode: "201",
+          statusCode: "HTTP_STATUS.CREATED",
         })
         .set("Authorization", "Bearer test-secret");
 
-      expect(res.statusCode).toBe(200);
+      expect(res.statusCode).toBe(HTTP_STATUS.OK);
       expect(res.body.filters.method).toBe("POST");
       expect(res.body.items).toHaveLength(1);
       expect(res.body.items[0].method).toBe("POST");
-      expect(res.body.items[0].statusCode).toBe(201);
+      expect(res.body.items[0].statusCode).toBe(HTTP_STATUS.CREATED);
     });
 
     // Obsolete tests: New LogRepository uses SQL LIMIT directly, not in-memory filtering with over-fetching.
@@ -161,12 +166,12 @@ describe("API Contract & Regression Tests", () => {
   });
 
   describe("Global Error Handler Contract", () => {
-    test("should return 400 Bad Request status and title for unidentifiable IP", async () => {
+    test("should return HTTP_STATUS.BAD_REQUEST Bad Request status and title for unidentifiable IP", async () => {
       const res = await appClient.get("/info").set("x-simulate-no-ip", "true");
 
-      expect(res.statusCode).toBe(400);
-      expect(res.body.status).toBe(400);
-      expect(res.body.error).toBe("Bad Request");
+      expect(res.statusCode).toBe(HTTP_STATUS.BAD_REQUEST);
+      expect(res.body.status).toBe(HTTP_STATUS.BAD_REQUEST);
+      expect(res.body.error).toBe(ERROR_LABELS.BAD_REQUEST);
     });
   });
 
@@ -200,8 +205,8 @@ describe("API Contract & Regression Tests", () => {
         .query({ url: "http://target.com" })
         .set("Authorization", "Bearer test-secret");
 
-      expect(res.statusCode).toBe(200);
-      expect(res.body.status).toBe("Replayed");
+      expect(res.statusCode).toBe(HTTP_STATUS.OK);
+      expect(res.body.status).toBe(REPLAY_STATUS_LABELS.REPLAYED);
       expect(res.body.targetUrl).toBe("http://target.com");
       expect(res.body.targetResponseBody).toBeDefined();
       expect(res.headers["x-apify-replay-warning"]).toMatch(/Headers stripped/);
@@ -255,7 +260,7 @@ describe("API Contract & Regression Tests", () => {
         .query({ url: "http://target.com" })
         .set("Authorization", "Bearer test-secret");
 
-      expect(res.statusCode).toBe(200);
+      expect(res.statusCode).toBe(HTTP_STATUS.OK);
 
       const lastCallConfig = getLastAxiosConfig(axiosMock, null);
       if (!lastCallConfig || !lastCallConfig.data)
@@ -268,7 +273,7 @@ describe("API Contract & Regression Tests", () => {
         .query({ url: "http://target.com" })
         .set("Authorization", "Bearer test-secret");
 
-      expect(res2.statusCode).toBe(200);
+      expect(res2.statusCode).toBe(HTTP_STATUS.OK);
 
       const lastCallConfig2 = getLastAxiosConfig(axiosMock, null);
       if (!lastCallConfig2 || !lastCallConfig2.data)
@@ -291,7 +296,7 @@ describe("API Contract & Regression Tests", () => {
         contentType: "application/json",
         remoteIp: "127.0.0.1",
         processingTime: 5,
-        statusCode: 200,
+        statusCode: HTTP_STATUS.OK,
       };
       await logRepository.insertLog(mockItem);
 
@@ -306,8 +311,8 @@ describe("API Contract & Regression Tests", () => {
         .query({ url: "http://timeout.com" })
         .set("Authorization", "Bearer test-secret");
 
-      expect(res.statusCode).toBe(504);
-      expect(res.body.error).toBe("Replay failed");
+      expect(res.statusCode).toBe(HTTP_STATUS.GATEWAY_TIMEOUT);
+      expect(res.body.error).toBe(ERROR_LABELS.REPLAY_FAILED);
       expect(res.body.message).toContain("Target destination timed out");
 
       expect(axiosMock).toHaveBeenCalledTimes(3);

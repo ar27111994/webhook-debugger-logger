@@ -6,8 +6,12 @@ import {
   beforeEach,
   afterEach,
 } from "@jest/globals";
-import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
-import { fsPromisesMock, constsMock } from "../setup/helpers/shared-mocks.js";
+import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
+import {
+  fsPromisesMock,
+  constsMock,
+  loggerMock,
+} from "../setup/helpers/shared-mocks.js";
 import { assertType } from "../setup/helpers/test-utils.js";
 
 // 1. Mock dependencies

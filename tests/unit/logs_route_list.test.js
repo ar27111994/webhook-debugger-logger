@@ -4,6 +4,7 @@
  */
 import { jest, describe, test, expect } from "@jest/globals";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
+import { HTTP_STATUS } from "../../src/consts.js";
 import {
   assertType,
   createMockRequest,
@@ -33,7 +34,7 @@ describe("Logs Route Listing", () => {
         query: {
           webhookId: "wh_123",
           method: "POST",
-          statusCode: "200",
+          statusCode: HTTP_STATUS.OK.toString(),
           limit: "50",
           offset: "10",
         },
@@ -52,7 +53,7 @@ describe("Logs Route Listing", () => {
         expect.objectContaining({
           webhookId: "wh_123",
           method: "POST",
-          statusCode: [{ operator: "eq", value: 200 }],
+          statusCode: [{ operator: "eq", value: HTTP_STATUS.OK }],
         }),
       );
     });

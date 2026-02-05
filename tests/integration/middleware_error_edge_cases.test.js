@@ -5,6 +5,7 @@ import {
   createMockNextFunction,
 } from "../setup/helpers/test-utils.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
+import { HTTP_STATUS, ERROR_LABELS } from "../../src/consts.js";
 
 /**
  * @typedef {import("express").Request} Request
@@ -15,7 +16,8 @@ import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
  */
 
 // Setup logger mock before importing error middleware
-import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
+import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
+import { loggerMock } from "../setup/helpers/shared-mocks.js";
 await setupCommonMocks({ logger: true });
 
 const { createErrorHandler } = await import("../../src/middleware/error.js");
@@ -50,61 +52,63 @@ describe("Error Middleware - Edge Cases", () => {
   describe("Error Status Code Extraction", () => {
     test("should use err.statusCode if present", () => {
       const err = /** @type {CommonError} */ (new Error("Test error"));
-      err.statusCode = 404;
+      err.statusCode = HTTP_STATUS.NOT_FOUND;
 
       errorHandler(err, req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.NOT_FOUND);
       expect(res.json).toHaveBeenCalledWith({
         requestId: "test_req_123",
-        status: 404,
-        error: "Not Found",
+        status: HTTP_STATUS.NOT_FOUND,
+        error: ERROR_LABELS.NOT_FOUND,
         message: "Test error",
       });
     });
 
     test("should use err.status if statusCode not present", () => {
       const err = /** @type {CommonError} */ (new Error("Test error"));
-      err.status = 403;
+      err.status = HTTP_STATUS.FORBIDDEN;
 
       errorHandler(err, req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(403);
+      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.FORBIDDEN);
       expect(res.json).toHaveBeenCalledWith({
         requestId: "test_req_123",
-        status: 403,
+        status: HTTP_STATUS.FORBIDDEN,
         error: "Client Error",
         message: "Test error",
       });
     });
 
-    test("should default to 500 if no status info", () => {
+    test("should default to HTTP_STATUS.INTERNAL_SERVER_ERROR if no status info", () => {
       const err = /** @type {CommonError} */ (new Error("Test error"));
 
       errorHandler(err, req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.status).toHaveBeenCalledWith(
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+      );
       expect(res.json).toHaveBeenCalledWith({
         requestId: "test_req_123",
-        status: 500,
+        status: HTTP_STATUS.INTERNAL_SERVER_ERROR,
         error: "Internal Server Error",
-        message: "Internal Server Error",
+        message: ERROR_LABELS.INTERNAL_SERVER_ERROR,
       });
     });
 
     test("should prefer statusCode over status", () => {
       const err = /** @type {CommonError} */ (new Error("Test error"));
-      err.statusCode = 400;
-      err.status = 500;
+      err.statusCode = HTTP_STATUS.BAD_REQUEST;
+      err.status = HTTP_STATUS.INTERNAL_SERVER_ERROR;
 
       errorHandler(err, req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.BAD_REQUEST);
     });
 
     test("should use 'unknown' when requestId is missing", () => {
       const err = /** @type {CommonError} */ (new Error("Test error"));
-      err.statusCode = 500;
+      err.statusCode = HTTP_STATUS.INTERNAL_SERVER_ERROR;
 
       const reqNoId = createMockRequest();
       // @ts-expect-error - testing missing property
@@ -125,7 +129,7 @@ describe("Error Middleware - Edge Cases", () => {
       const err = /** @type {CommonError} */ (
         new Error("Internal database error")
       );
-      err.statusCode = 500;
+      err.statusCode = HTTP_STATUS.INTERNAL_SERVER_ERROR;
 
       errorHandler(err, req, res, next);
 
@@ -133,59 +137,59 @@ describe("Error Middleware - Edge Cases", () => {
       expect(loggerMock.error).toHaveBeenCalledWith(
         expect.objectContaining({
           requestId: expect.any(String),
-          status: 500,
+          status: HTTP_STATUS.INTERNAL_SERVER_ERROR,
         }),
         "Server error",
       );
     });
 
-    test("should sanitize error message for 500 errors", () => {
+    test("should sanitize error message for HTTP_STATUS.INTERNAL_SERVER_ERROR errors", () => {
       const err = /** @type {CommonError} */ (
         new Error("Database connection string: secret123")
       );
-      err.statusCode = 500;
+      err.statusCode = HTTP_STATUS.INTERNAL_SERVER_ERROR;
 
       errorHandler(err, req, res, next);
 
       expect(res.json).toHaveBeenCalledWith({
         requestId: "test_req_123",
-        status: 500,
-        error: "Internal Server Error",
-        message: "Internal Server Error", // Sanitized, not original message
+        status: HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        error: ERROR_LABELS.INTERNAL_SERVER_ERROR,
+        message: ERROR_LABELS.INTERNAL_SERVER_ERROR, // Sanitized, not original message
       });
     });
 
-    test("should sanitize error message for 502 errors", () => {
+    test("should sanitize error message for HTTP_STATUS.BAD_GATEWAY errors", () => {
       const err = /** @type {CommonError} */ (new Error("Proxy error details"));
-      err.statusCode = 502;
+      err.statusCode = HTTP_STATUS.BAD_GATEWAY;
 
       errorHandler(err, req, res, next);
 
       expect(res.json).toHaveBeenCalledWith({
         requestId: "test_req_123",
-        status: 502,
-        error: "Internal Server Error",
-        message: "Internal Server Error",
+        status: HTTP_STATUS.BAD_GATEWAY,
+        error: ERROR_LABELS.INTERNAL_SERVER_ERROR,
+        message: ERROR_LABELS.INTERNAL_SERVER_ERROR,
       });
     });
 
-    test("should sanitize error message for 503 errors", () => {
+    test("should sanitize error message for HTTP_STATUS.SERVICE_UNAVAILABLE errors", () => {
       const err = /** @type {CommonError} */ (new Error("Service details"));
-      err.statusCode = 503;
+      err.statusCode = HTTP_STATUS.SERVICE_UNAVAILABLE;
 
       errorHandler(err, req, res, next);
 
       expect(res.json).toHaveBeenCalledWith({
         requestId: "test_req_123",
-        status: 503,
-        error: "Internal Server Error",
-        message: "Internal Server Error",
+        status: HTTP_STATUS.SERVICE_UNAVAILABLE,
+        error: ERROR_LABELS.INTERNAL_SERVER_ERROR,
+        message: ERROR_LABELS.INTERNAL_SERVER_ERROR,
       });
     });
 
     test("should log err.stack if available", () => {
       const err = /** @type {CommonError} */ (new Error("Test error"));
-      err.statusCode = 500;
+      err.statusCode = HTTP_STATUS.INTERNAL_SERVER_ERROR;
       err.stack = "Error: Test error\n    at file.js:10:5";
 
       errorHandler(err, req, res, next);
@@ -196,7 +200,7 @@ describe("Error Middleware - Edge Cases", () => {
           err: expect.objectContaining({
             stack: err.stack,
           }),
-          status: 500,
+          status: HTTP_STATUS.INTERNAL_SERVER_ERROR,
         }),
         "Server error",
       );
@@ -205,7 +209,7 @@ describe("Error Middleware - Edge Cases", () => {
     test("should log err.message if no stack", () => {
       const err = /** @type {CommonError} */ ({
         message: "Test error",
-        statusCode: 500,
+        statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
       });
 
       errorHandler(err, req, res, next);
@@ -216,7 +220,7 @@ describe("Error Middleware - Edge Cases", () => {
           err: expect.objectContaining({
             message: err.message,
           }),
-          status: 500,
+          status: HTTP_STATUS.INTERNAL_SERVER_ERROR,
         }),
         "Server error",
       );
@@ -224,7 +228,7 @@ describe("Error Middleware - Edge Cases", () => {
 
     test("should log err object if no message or stack", () => {
       const err = /** @type {CommonError} */ ({
-        statusCode: 500,
+        statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
         someProperty: "value",
       });
 
@@ -240,16 +244,16 @@ describe("Error Middleware - Edge Cases", () => {
   });
 
   describe("Client Error Handling (4xx)", () => {
-    test("should return original message for 400 errors", () => {
+    test("should return original message for HTTP_STATUS.BAD_REQUEST errors", () => {
       const err = /** @type {CommonError} */ (new Error("Invalid JSON"));
-      err.statusCode = 400;
+      err.statusCode = HTTP_STATUS.BAD_REQUEST;
 
       errorHandler(err, req, res, next);
 
       expect(res.json).toHaveBeenCalledWith({
         requestId: "test_req_123",
-        status: 400,
-        error: "Bad Request",
+        status: HTTP_STATUS.BAD_REQUEST,
+        error: ERROR_LABELS.BAD_REQUEST,
         message: "Invalid JSON",
       });
     });
@@ -258,14 +262,14 @@ describe("Error Middleware - Edge Cases", () => {
       const err = /** @type {CommonError} */ (
         new Error("Authentication required")
       );
-      err.statusCode = 401;
+      err.statusCode = HTTP_STATUS.UNAUTHORIZED;
 
       errorHandler(err, req, res, next);
 
       expect(res.json).toHaveBeenCalledWith({
         requestId: "test_req_123",
-        status: 401,
-        error: "Client Error",
+        status: HTTP_STATUS.UNAUTHORIZED,
+        error: ERROR_LABELS.CLIENT_ERROR,
         message: "Authentication required",
       });
     });
@@ -274,49 +278,49 @@ describe("Error Middleware - Edge Cases", () => {
       const err = /** @type {CommonError} */ (
         new Error("Payload exceeds limit")
       );
-      err.statusCode = 413;
+      err.statusCode = HTTP_STATUS.PAYLOAD_TOO_LARGE;
 
       errorHandler(err, req, res, next);
 
       expect(res.json).toHaveBeenCalledWith({
         requestId: "test_req_123",
-        status: 413,
-        error: "Payload Too Large",
+        status: HTTP_STATUS.PAYLOAD_TOO_LARGE,
+        error: ERROR_LABELS.PAYLOAD_TOO_LARGE,
         message: "Payload exceeds limit",
       });
     });
 
-    test("should return specific error for 404 errors", () => {
+    test("should return specific error for HTTP_STATUS.NOT_FOUND errors", () => {
       const err = /** @type {CommonError} */ (new Error("Resource not found"));
-      err.statusCode = 404;
+      err.statusCode = HTTP_STATUS.NOT_FOUND;
 
       errorHandler(err, req, res, next);
 
       expect(res.json).toHaveBeenCalledWith({
         requestId: "test_req_123",
-        status: 404,
-        error: "Not Found",
+        status: HTTP_STATUS.NOT_FOUND,
+        error: ERROR_LABELS.NOT_FOUND,
         message: "Resource not found",
       });
     });
 
     test("should return generic 'Client Error' for other 4xx", () => {
       const err = /** @type {CommonError} */ (new Error("Conflict"));
-      err.statusCode = 409;
+      err.statusCode = HTTP_STATUS.CONFLICT;
 
       errorHandler(err, req, res, next);
 
       expect(res.json).toHaveBeenCalledWith({
         requestId: "test_req_123",
-        status: 409,
-        error: "Client Error",
+        status: HTTP_STATUS.CONFLICT,
+        error: ERROR_LABELS.CLIENT_ERROR,
         message: "Conflict",
       });
     });
 
     test("should NOT log 4xx errors to structured logger", () => {
       const err = /** @type {CommonError} */ (new Error("Not found"));
-      err.statusCode = 404;
+      err.statusCode = HTTP_STATUS.NOT_FOUND;
 
       errorHandler(err, req, res, next);
 
@@ -341,7 +345,7 @@ describe("Error Middleware - Edge Cases", () => {
       res.headersSent = true;
 
       const err = /** @type {CommonError} */ (new Error("Test error"));
-      err.statusCode = 500;
+      err.statusCode = HTTP_STATUS.INTERNAL_SERVER_ERROR;
 
       errorHandler(err, req, res, next);
 
@@ -353,15 +357,15 @@ describe("Error Middleware - Edge Cases", () => {
   describe("Error Object Variations", () => {
     test("should handle Error instance", () => {
       const err = /** @type {CommonError} */ (new Error("Standard error"));
-      err.statusCode = 400;
+      err.statusCode = HTTP_STATUS.BAD_REQUEST;
 
       errorHandler(err, req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.BAD_REQUEST);
       expect(res.json).toHaveBeenCalledWith({
         requestId: "test_req_123",
-        status: 400,
-        error: "Bad Request",
+        status: HTTP_STATUS.BAD_REQUEST,
+        error: ERROR_LABELS.BAD_REQUEST,
         message: "Standard error",
       });
     });
@@ -370,29 +374,31 @@ describe("Error Middleware - Edge Cases", () => {
       const err = /** @type {CommonError} */ (
         new TypeError("Cannot read property")
       );
-      err.statusCode = 500;
+      err.statusCode = HTTP_STATUS.INTERNAL_SERVER_ERROR;
 
       errorHandler(err, req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.status).toHaveBeenCalledWith(
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+      );
       expect(res.json).toHaveBeenCalledWith({
         requestId: "test_req_123",
-        status: 500,
-        error: "Internal Server Error",
-        message: "Internal Server Error",
+        status: HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        error: ERROR_LABELS.INTERNAL_SERVER_ERROR,
+        message: ERROR_LABELS.INTERNAL_SERVER_ERROR,
       });
     });
 
     test("should handle RangeError", () => {
       const err = /** @type {CommonError} */ (new RangeError("Invalid range"));
-      err.statusCode = 400;
+      err.statusCode = HTTP_STATUS.BAD_REQUEST;
 
       errorHandler(err, req, res, next);
 
       expect(res.json).toHaveBeenCalledWith({
         requestId: "test_req_123",
-        status: 400,
-        error: "Bad Request",
+        status: HTTP_STATUS.BAD_REQUEST,
+        error: ERROR_LABELS.BAD_REQUEST,
         message: "Invalid range",
       });
     });
@@ -400,23 +406,23 @@ describe("Error Middleware - Edge Cases", () => {
     test("should handle plain object error", () => {
       const err = /** @type {CommonError} */ ({
         message: "Plain object error",
-        statusCode: 422,
+        statusCode: HTTP_STATUS.UNPROCESSABLE_ENTITY,
       });
 
       errorHandler(err, req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(422);
+      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.UNPROCESSABLE_ENTITY);
       expect(res.json).toHaveBeenCalledWith({
         requestId: "test_req_123",
-        status: 422,
-        error: "Client Error",
+        status: HTTP_STATUS.UNPROCESSABLE_ENTITY,
+        error: ERROR_LABELS.CLIENT_ERROR,
         message: "Plain object error",
       });
     });
 
     test("should handle error with no message property", () => {
       const err = /** @type {CommonError} */ ({
-        statusCode: 400,
+        statusCode: HTTP_STATUS.BAD_REQUEST,
         // No message
       });
 
@@ -424,41 +430,43 @@ describe("Error Middleware - Edge Cases", () => {
 
       expect(res.json).toHaveBeenCalledWith({
         requestId: "test_req_123",
-        status: 400,
-        error: "Bad Request",
+        status: HTTP_STATUS.BAD_REQUEST,
+        error: ERROR_LABELS.BAD_REQUEST,
         message: undefined,
       });
     });
 
     test("should handle error with empty message", () => {
       const err = /** @type {CommonError} */ (new Error(""));
-      err.statusCode = 400;
+      err.statusCode = HTTP_STATUS.BAD_REQUEST;
 
       errorHandler(err, req, res, next);
 
       expect(res.json).toHaveBeenCalledWith({
         requestId: "test_req_123",
-        status: 400,
-        error: "Bad Request",
+        status: HTTP_STATUS.BAD_REQUEST,
+        error: ERROR_LABELS.BAD_REQUEST,
         message: "",
       });
     });
   });
 
   describe("Edge Status Codes", () => {
-    test("should handle status 0 (falsy, defaults to 500)", () => {
+    test("should handle status 0 (falsy, defaults to HTTP_STATUS.INTERNAL_SERVER_ERROR)", () => {
       const err = /** @type {CommonError} */ (new Error("Zero status"));
       err.statusCode = 0;
 
       errorHandler(err, req, res, next);
 
-      // Status 0 is falsy, so defaults to 500
-      expect(res.status).toHaveBeenCalledWith(500);
+      // Status 0 is falsy, so defaults to HTTP_STATUS.INTERNAL_SERVER_ERROR
+      expect(res.status).toHaveBeenCalledWith(
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+      );
       expect(res.json).toHaveBeenCalledWith({
         requestId: "test_req_123",
-        status: 500,
-        error: "Internal Server Error",
-        message: "Internal Server Error",
+        status: HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        error: ERROR_LABELS.INTERNAL_SERVER_ERROR,
+        message: ERROR_LABELS.INTERNAL_SERVER_ERROR,
       });
     });
 
@@ -472,8 +480,8 @@ describe("Error Middleware - Edge Cases", () => {
       expect(res.json).toHaveBeenCalledWith({
         requestId: "test_req_123",
         status: 999,
-        error: "Internal Server Error",
-        message: "Internal Server Error",
+        error: ERROR_LABELS.INTERNAL_SERVER_ERROR,
+        message: ERROR_LABELS.INTERNAL_SERVER_ERROR,
       });
     });
 
@@ -508,13 +516,13 @@ describe("Error Middleware - Edge Cases", () => {
 
     test("should handle 2xx status codes (unusual for errors)", () => {
       const err = /** @type {CommonError} */ (new Error("Success error"));
-      err.statusCode = 200;
+      err.statusCode = HTTP_STATUS.OK;
 
       errorHandler(err, req, res, next);
 
       expect(res.json).toHaveBeenCalledWith({
         requestId: "test_req_123",
-        status: 200,
+        status: HTTP_STATUS.OK,
         error: "Error",
         message: "Success error",
       });
@@ -538,13 +546,13 @@ describe("Error Middleware - Edge Cases", () => {
   describe("Response Method Chaining", () => {
     test("should properly chain status() and json()", () => {
       const err = /** @type {CommonError} */ (new Error("Test"));
-      err.statusCode = 400;
+      err.statusCode = HTTP_STATUS.BAD_REQUEST;
 
       errorHandler(err, req, res, next);
 
       // Verify status was called first
       expect(jest.mocked(res.status).mock.results[0].value).toBe(res);
-      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.BAD_REQUEST);
       expect(res.json).toHaveBeenCalled();
     });
   });
@@ -552,10 +560,10 @@ describe("Error Middleware - Edge Cases", () => {
   describe("Concurrent Error Handling", () => {
     test("should handle multiple errors sequentially", () => {
       const err1 = /** @type {CommonError} */ (new Error("Error 1"));
-      err1.statusCode = 400;
+      err1.statusCode = HTTP_STATUS.BAD_REQUEST;
 
       const err2 = /** @type {CommonError} */ (new Error("Error 2"));
-      err2.statusCode = 500;
+      err2.statusCode = HTTP_STATUS.INTERNAL_SERVER_ERROR;
 
       const res2 = createMockResponse();
 
@@ -564,19 +572,19 @@ describe("Error Middleware - Edge Cases", () => {
 
       expect(res.json).toHaveBeenCalledWith({
         requestId: "test_req_123",
-        status: 400,
-        error: "Bad Request",
+        status: HTTP_STATUS.BAD_REQUEST,
+        error: ERROR_LABELS.BAD_REQUEST,
         message: "Error 1",
       });
 
       expect(res2.json).toHaveBeenCalledWith({
         requestId: "test_req_123",
-        status: 500,
-        error: "Internal Server Error",
-        message: "Internal Server Error",
+        status: HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        error: ERROR_LABELS.INTERNAL_SERVER_ERROR,
+        message: ERROR_LABELS.INTERNAL_SERVER_ERROR,
       });
 
-      expect(loggerMock.error).toHaveBeenCalledTimes(1); // Only for 500 error
+      expect(loggerMock.error).toHaveBeenCalledTimes(1); // Only for HTTP_STATUS.INTERNAL_SERVER_ERROR error
     });
   });
 });

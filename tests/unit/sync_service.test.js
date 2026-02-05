@@ -3,7 +3,7 @@ import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 import { assertType } from "../setup/helpers/test-utils.js";
 
 // 1. Setup Common Mocks
-import { setupCommonMocks, loggerMock } from "../setup/helpers/mock-setup.js";
+import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 await setupCommonMocks({
   logger: true,
   apify: true,
@@ -18,6 +18,7 @@ import {
   logRepositoryMock,
   eventsMock,
   createDatasetMock,
+  loggerMock,
 } from "../setup/helpers/shared-mocks.js";
 
 const { appEvents } = eventsMock; // Destructure for test usage

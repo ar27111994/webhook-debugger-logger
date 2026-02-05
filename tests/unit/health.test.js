@@ -4,6 +4,7 @@ import {
   createMockRequest,
   createMockResponse,
 } from "../setup/helpers/test-utils.js";
+import { HTTP_STATUS } from "../../src/consts.js";
 
 // Mock duckdb dependency
 jest.unstable_mockModule("../../src/db/duckdb.js", () => ({
@@ -47,13 +48,13 @@ describe("Health Routes Unit Tests", () => {
   });
 
   describe("GET /ready", () => {
-    test("should return 200 ready when DB and Webhooks are OK", async () => {
+    test(`should return ${HTTP_STATUS.OK} ready when DB and Webhooks are OK`, async () => {
       const req = createMockRequest();
       const res = createMockResponse();
 
       await routes.ready(req, res);
 
-      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
           status: "ready",
@@ -68,14 +69,14 @@ describe("Health Routes Unit Tests", () => {
       );
     });
 
-    test("should return 503 when DB is missing", async () => {
+    test(`should return ${HTTP_STATUS.SERVICE_UNAVAILABLE} when DB is missing`, async () => {
       jest.mocked(getDbInstance).mockResolvedValue(assertType(null));
       const req = createMockRequest();
       const res = createMockResponse();
 
       await routes.ready(req, res);
 
-      expect(res.status).toHaveBeenCalledWith(503);
+      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.SERVICE_UNAVAILABLE);
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
           status: "not_ready",
@@ -86,7 +87,7 @@ describe("Health Routes Unit Tests", () => {
       );
     });
 
-    test("should return 503 when DB check throws", async () => {
+    test("should return HTTP_STATUS.SERVICE_UNAVAILABLE when DB check throws", async () => {
       jest
         .mocked(getDbInstance)
         .mockRejectedValue(new Error("Connection failed"));
@@ -95,7 +96,7 @@ describe("Health Routes Unit Tests", () => {
 
       await routes.ready(req, res);
 
-      expect(res.status).toHaveBeenCalledWith(503);
+      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.SERVICE_UNAVAILABLE);
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
           checks: expect.objectContaining({
@@ -105,7 +106,7 @@ describe("Health Routes Unit Tests", () => {
       );
     });
 
-    test("should return 503 when Webhook count throws", async () => {
+    test("should return HTTP_STATUS.SERVICE_UNAVAILABLE when Webhook count throws", async () => {
       getActiveWebhookCount.mockImplementation(() => {
         throw new Error("Count error");
       });
@@ -114,7 +115,7 @@ describe("Health Routes Unit Tests", () => {
 
       await routes.ready(req, res);
 
-      expect(res.status).toHaveBeenCalledWith(503);
+      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.SERVICE_UNAVAILABLE);
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
           checks: expect.objectContaining({
