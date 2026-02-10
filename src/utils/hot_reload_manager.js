@@ -2,16 +2,26 @@
  * @file src/utils/hot_reload_manager.js
  * @description Manages runtime configuration hot-reloading from KeyValueStore and filesystem.
  * Supports both platform polling and local fs.watch for instant updates.
+ * @module utils/hot_reload_manager
  */
 import { Actor } from "apify";
 import { watch as fsWatch } from "fs/promises";
 import { existsSync } from "fs";
 import { join } from "path";
 import { normalizeInput, coerceRuntimeOptions } from "./config.js";
-import { HOT_RELOAD_DEBOUNCE_MS } from "../consts.js";
+import { APP_CONSTS, ENV_VARS } from "../consts/app.js";
+import {
+  STORAGE_CONSTS,
+  KEY_VALUE_STORES_DIR,
+  DEFAULT_KVS_DIR,
+  FILE_NAMES,
+  KVS_KEYS,
+} from "../consts/storage.js";
+import { LOG_COMPONENTS } from "../consts/logging.js";
+import { LOG_MESSAGES } from "../consts/messages.js";
 import { createChildLogger, serializeError } from "./logger.js";
 
-const log = createChildLogger({ component: "HotReloadManager" });
+const log = createChildLogger({ component: LOG_COMPONENTS.HOT_RELOAD_MANAGER });
 
 /**
  * @typedef {import("../typedefs.js").CommonError} CommonError
@@ -60,26 +70,29 @@ export class HotReloadManager {
    */
   start() {
     if (!this.#store) {
-      log.warn("HotReloadManager not initialized, skipping start");
+      log.warn(LOG_MESSAGES.HOT_RELOAD_NOT_INIT);
       return;
     }
 
     // 1. Fallback to interval polling (works on platform and as backup for local)
     // Can be disabled via env var for efficiency in production
-    if (process.env.DISABLE_HOT_RELOAD !== "true") {
+    if (process.env[ENV_VARS.DISABLE_HOT_RELOAD] !== "true") {
       this.#inputPollInterval = global.setInterval(() => {
         this.#handleHotReload().catch((err) => {
-          log.error({ err: serializeError(err) }, "Polling hot-reload failed");
+          log.error(
+            { err: serializeError(err) },
+            LOG_MESSAGES.HOT_RELOAD_POLL_FAILED,
+          );
         });
       }, this.#pollIntervalMs);
 
       this.#inputPollInterval.unref();
       log.info(
         { intervalMs: this.#pollIntervalMs },
-        "Hot-reload polling enabled",
+        LOG_MESSAGES.HOT_RELOAD_POLL_ENABLED,
       );
     } else {
-      log.info("Hot-reload polling disabled via DISABLE_HOT_RELOAD");
+      log.info(LOG_MESSAGES.HOT_RELOAD_POLL_DISABLED);
     }
 
     // 2. Use fs.watch for instant hot-reload in local development
@@ -104,7 +117,7 @@ export class HotReloadManager {
     this.#activePollPromise = (async () => {
       try {
         const newInput = /** @type {Record<string, any> | null} */ (
-          await this.#store.getValue("INPUT")
+          await this.#store.getValue(KVS_KEYS.INPUT)
         );
         if (!newInput) return;
 
@@ -115,7 +128,7 @@ export class HotReloadManager {
         if (newInputStr === this.#lastInputStr) return;
 
         this.#lastInputStr = newInputStr;
-        log.info("Detected input update, applying new settings");
+        log.info(LOG_MESSAGES.HOT_RELOAD_DETECTED);
 
         // Validate/Coerce new config
         const validated = coerceRuntimeOptions(normalizedInput);
@@ -123,7 +136,7 @@ export class HotReloadManager {
         // Notify listener
         await this.#onConfigChange(normalizedInput, validated);
 
-        log.info("Hot-reload complete, new settings active");
+        log.info(LOG_MESSAGES.HOT_RELOAD_COMPLETE);
       } finally {
         this.#activePollPromise = null;
       }
@@ -135,14 +148,14 @@ export class HotReloadManager {
   #startFsWatch() {
     const localInputPath = join(
       process.cwd(),
-      "storage",
-      "key_value_stores",
-      "default",
-      "INPUT.json",
+      STORAGE_CONSTS.DEFAULT_STORAGE_DIR,
+      KEY_VALUE_STORES_DIR,
+      DEFAULT_KVS_DIR,
+      FILE_NAMES.CONFIG,
     );
 
     if (existsSync(localInputPath)) {
-      log.info("Local mode detected, using fs.watch for instant hot-reload");
+      log.info(LOG_MESSAGES.HOT_RELOAD_LOCAL_MODE);
 
       this.#fileWatcherAbortController = new AbortController();
       let debounceTimer =
@@ -157,9 +170,7 @@ export class HotReloadManager {
           for await (const event of watcher) {
             if (event.eventType === "change" || event.eventType === "rename") {
               if (event.eventType === "rename") {
-                log.warn(
-                  "Input file renamed/replaced, potential watcher break",
-                );
+                log.warn(LOG_MESSAGES.HOT_RELOAD_WATCHER_WARNING);
               }
               // Debounce rapid file changes (editors often write multiple times)
               if (debounceTimer) clearTimeout(debounceTimer);
@@ -167,16 +178,19 @@ export class HotReloadManager {
                 this.#handleHotReload().catch((err) => {
                   log.error(
                     { err: serializeError(err) },
-                    "fs.watch hot-reload failed",
+                    LOG_MESSAGES.HOT_RELOAD_WATCH_FAILED,
                   );
                 });
-              }, HOT_RELOAD_DEBOUNCE_MS);
+              }, APP_CONSTS.HOT_RELOAD_DEBOUNCE_MS);
             }
           }
         } catch (err) {
           const error = /** @type {CommonError} */ (err);
           if (error.name !== "AbortError") {
-            log.error({ err: serializeError(error) }, "fs.watch failed");
+            log.error(
+              { err: serializeError(error) },
+              LOG_MESSAGES.HOT_RELOAD_WATCH_ERROR,
+            );
           }
         }
       })();

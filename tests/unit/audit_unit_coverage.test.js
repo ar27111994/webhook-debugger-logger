@@ -7,7 +7,7 @@ import {
   afterEach,
 } from "@jest/globals";
 import path from "node:path";
-import { HTTP_STATUS, MIME_TYPES } from "../../src/consts.js";
+import { HTTP_STATUS, MIME_TYPES } from "../../src/consts/http.js";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import {
   apifyMock,

@@ -1,14 +1,22 @@
 /**
- * Simple in-memory rate limiter with background pruning and eviction.
+ * @file src/utils/rate_limiter.js
+ * @description Simple in-memory rate limiter with background pruning and eviction.
+ * @module utils/rate_limiter
  */
 import net from "node:net";
+import { APP_CONSTS, ENV_VALUES, ENV_VARS } from "../consts/app.js";
 import {
-  DEFAULT_RATE_LIMIT_MAX_ENTRIES,
-  DEFAULT_RATE_LIMIT_WINDOW_MS,
-} from "../consts.js";
+  HTTP_HEADERS,
+  HTTP_CONSTS,
+  HTTP_STATUS,
+  HTTP_STATUS_MESSAGES,
+} from "../consts/http.js";
+import { LOG_COMPONENTS } from "../consts/logging.js";
+import { LOG_MESSAGES } from "../consts/messages.js";
+import { ERROR_MESSAGES } from "../consts/errors.js";
 import { createChildLogger } from "./logger.js";
 
-const log = createChildLogger({ component: "RateLimiter" });
+const log = createChildLogger({ component: LOG_COMPONENTS.RATE_LIMITER });
 
 /**
  * @typedef {import('express').RequestHandler} RequestHandler
@@ -38,7 +46,7 @@ export class RateLimiter {
   constructor(
     limit,
     windowMs,
-    maxEntries = DEFAULT_RATE_LIMIT_MAX_ENTRIES,
+    maxEntries = APP_CONSTS.DEFAULT_RATE_LIMIT_MAX_ENTRIES,
     trustProxy = false,
   ) {
     if (
@@ -46,7 +54,7 @@ export class RateLimiter {
       !Number.isFinite(windowMs) ||
       windowMs <= 0
     ) {
-      throw new Error("RateLimiter: windowMs must be a finite number > 0");
+      throw new Error(ERROR_MESSAGES.RATE_LIMITER_INVALID_WINDOW);
     }
     if (
       typeof maxEntries !== "number" ||
@@ -54,7 +62,7 @@ export class RateLimiter {
       !Number.isInteger(maxEntries) ||
       maxEntries <= 0
     ) {
-      throw new Error("RateLimiter: maxEntries must be a finite integer > 0");
+      throw new Error(ERROR_MESSAGES.RATE_LIMITER_INVALID_MAX_ENTRIES);
     }
 
     // Initialize fields
@@ -80,10 +88,13 @@ export class RateLimiter {
         }
       }
 
-      if (prunedCount > 0 && process.env.NODE_ENV !== "test") {
-        log.info({ prunedCount }, "RateLimiter pruned expired entries");
+      if (
+        prunedCount > 0 &&
+        process.env[ENV_VARS.NODE_ENV] !== ENV_VALUES.TEST
+      ) {
+        log.info({ prunedCount }, LOG_MESSAGES.RATELIMIT_PRUNED);
       }
-    }, DEFAULT_RATE_LIMIT_WINDOW_MS);
+    }, APP_CONSTS.DEFAULT_RATE_LIMIT_WINDOW_MS);
     if (this.#cleanupInterval.unref) this.#cleanupInterval.unref();
   }
 
@@ -104,7 +115,7 @@ export class RateLimiter {
       !Number.isInteger(value) ||
       value < 0
     ) {
-      throw new Error("RateLimiter: limit must be a finite integer >= 0");
+      throw new Error(ERROR_MESSAGES.RATE_LIMITER_INVALID_LIMIT);
     }
     this.#limit = value;
   }
@@ -121,7 +132,7 @@ export class RateLimiter {
    * @param {string} ip
    */
   hasIp(ip) {
-    if (process.env.NODE_ENV === "test") {
+    if (process.env[ENV_VARS.NODE_ENV] === ENV_VALUES.TEST) {
       return this.#hits.has(ip);
     }
     return false;
@@ -133,14 +144,14 @@ export class RateLimiter {
    * @returns {string}
    */
   maskIp(ip) {
-    if (!ip) return "unknown";
+    if (!ip) return LOG_MESSAGES.MASK_HIDDEN;
     if (ip.includes(":")) {
       // IPv6: Keep first 2 segments
       const segments = ip.split(":");
-      return segments.slice(0, 2).join(":") + ":****";
+      return segments.slice(0, 2).join(":") + LOG_MESSAGES.MASK_IPV6_SUFFIX;
     }
     // IPv4: Mask last octet
-    return ip.split(".").slice(0, 3).join(".") + ".****";
+    return ip.split(".").slice(0, 3).join(".") + LOG_MESSAGES.MASK_IPV4_SUFFIX;
   }
 
   /**
@@ -190,19 +201,25 @@ export class RateLimiter {
 
       if (this.#trustProxy) {
         const forwardedIp = this.extractFirstValidIp(
-          req.headers?.["x-forwarded-for"],
+          req.headers?.[HTTP_HEADERS.X_FORWARDED_FOR],
         );
-        const realIp = this.extractFirstValidIp(req.headers?.["x-real-ip"]);
+        const realIp = this.extractFirstValidIp(
+          req.headers?.[HTTP_HEADERS.X_REAL_IP],
+        );
         ip = forwardedIp || realIp || ip;
       }
 
       // Test hook to simulate missing IP metadata
-      if (process.env.NODE_ENV === "test" && req.headers["x-simulate-no-ip"]) {
+      if (
+        process.env[ENV_VARS.NODE_ENV] === ENV_VALUES.TEST &&
+        req.headers[HTTP_HEADERS.X_SIMULATE_NO_IP]
+      ) {
         ip = undefined;
       }
 
       if (!ip) {
-        const safeHeaders = ["user-agent", "accept-language", "referer"];
+        /** @type {string[]} */
+        const safeHeaders = HTTP_CONSTS.SAFE_HEADERS;
         const loggedHeaders = Object.fromEntries(
           Object.entries(req.headers).filter(([key]) =>
             safeHeaders.includes(key.toLowerCase()),
@@ -210,14 +227,16 @@ export class RateLimiter {
         );
 
         log.warn(
-          { userAgent: req.headers["user-agent"], headers: loggedHeaders },
-          "Rejecting request with unidentifiable IP",
+          {
+            userAgent: req.headers[HTTP_HEADERS.USER_AGENT],
+            headers: loggedHeaders,
+          },
+          LOG_MESSAGES.RATELIMIT_REJECT_NO_IP,
         );
-        return res.status(400).json({
-          status: 400,
-          error: "Bad Request",
-          message:
-            "Client IP could not be identified. Ensure your request includes standard IP headers if behind a proxy.",
+        return res.status(HTTP_STATUS.BAD_REQUEST).json({
+          status: HTTP_STATUS.BAD_REQUEST,
+          error: HTTP_STATUS_MESSAGES[HTTP_STATUS.BAD_REQUEST],
+          message: ERROR_MESSAGES.RATE_LIMIT_NO_IP,
         });
       }
 
@@ -230,7 +249,7 @@ export class RateLimiter {
           const oldestKey = this.#hits.keys().next().value;
           if (typeof oldestKey === "string") this.#hits.delete(oldestKey);
           if (
-            process.env.NODE_ENV !== "test" &&
+            process.env[ENV_VARS.NODE_ENV] !== ENV_VALUES.TEST &&
             typeof oldestKey === "string"
           ) {
             log.info(
@@ -238,7 +257,7 @@ export class RateLimiter {
                 evictedIp: this.maskIp(oldestKey),
                 maxEntries: this.#maxEntries,
               },
-              "RateLimiter evicted entry",
+              LOG_MESSAGES.RATELIMIT_EVICTED,
             );
           }
         }
@@ -252,24 +271,30 @@ export class RateLimiter {
       const recentHits = userHits.filter((h) => now - h < this.#windowMs);
 
       // Set rate limit headers for all responses
-      const resetTime = Math.ceil((now + this.#windowMs) / 1000);
-      res.setHeader("X-RateLimit-Limit", this.#limit);
+      const resetTime = Math.ceil(
+        (now + this.#windowMs) / APP_CONSTS.MS_PER_SECOND,
+      );
+      res.setHeader(HTTP_HEADERS.X_RATELIMIT_LIMIT, this.#limit);
       res.setHeader(
-        "X-RateLimit-Remaining",
+        HTTP_HEADERS.X_RATELIMIT_REMAINING,
         Math.max(0, this.#limit - recentHits.length - 1),
       );
-      res.setHeader("X-RateLimit-Reset", resetTime);
+      res.setHeader(HTTP_HEADERS.X_RATELIMIT_RESET, resetTime);
 
       if (recentHits.length >= this.#limit) {
         // Restore existing hits before returning error (otherwise user is forgotten/reset)
         this.#hits.set(ip, recentHits);
-        res.setHeader("Retry-After", Math.ceil(this.#windowMs / 1000));
-        return res.status(429).json({
-          status: 429,
-          error: "Too Many Requests",
-          message: `Rate limit exceeded. Max ${this.#limit} requests per ${
-            this.#windowMs / 1000
-          }s.`,
+        res.setHeader(
+          HTTP_HEADERS.RETRY_AFTER,
+          Math.ceil(this.#windowMs / APP_CONSTS.MS_PER_SECOND),
+        );
+        return res.status(HTTP_STATUS.TOO_MANY_REQUESTS).json({
+          status: HTTP_STATUS.TOO_MANY_REQUESTS,
+          error: HTTP_STATUS_MESSAGES[HTTP_STATUS.TOO_MANY_REQUESTS],
+          message: ERROR_MESSAGES.RATE_LIMIT_EXCEEDED(
+            this.#limit,
+            this.#windowMs / APP_CONSTS.MS_PER_SECOND,
+          ),
         });
       }
 

@@ -2,8 +2,11 @@
  * @file src/utils/logger.js
  * @description Structured logging utility using Pino.
  * Provides consistent JSON log output with request ID correlation and sensitive data redaction.
+ * @module utils/logger
  */
 import pino from "pino";
+import { APP_CONSTS, ENV_VARS } from "../consts/app.js";
+import { LOG_CONSTS } from "../consts/logging.js";
 
 /**
  * @typedef {import('../typedefs.js').CommonError} CommonError
@@ -18,32 +21,34 @@ import pino from "pino";
  */
 
 /**
+ * Log levels for convenience.
+ */
+export const LogLevel = Object.freeze({
+  TRACE: "trace",
+  DEBUG: "debug",
+  INFO: "info",
+  WARN: "warn",
+  ERROR: "error",
+  FATAL: "fatal",
+});
+
+/**
  * Redaction paths for sensitive data in logs.
  * Uses Pino's redaction feature to mask sensitive values.
  */
-const REDACT_PATHS = [
-  "req.headers.authorization",
-  "req.headers.cookie",
-  "req.headers['x-api-key']",
-  "req.headers['api-key']",
-  "body.password",
-  "body.token",
-  "body.secret",
-  "body.apiKey",
-  "body.api_key",
-];
+const REDACT_PATHS = LOG_CONSTS.REDACT_PATHS;
 
 /**
  * Log level from environment or default to 'info'.
  * Supports: trace, debug, info, warn, error, fatal
  */
-const LOG_LEVEL = process.env.LOG_LEVEL || "info";
+const LOG_LEVEL = process.env[ENV_VARS.LOG_LEVEL] || LogLevel.INFO;
 
 /**
  * Whether to format logs for human readability (development).
  * Set PRETTY_LOGS=true for colorized output.
  */
-const PRETTY_LOGS = process.env.PRETTY_LOGS === "true";
+const PRETTY_LOGS = process.env[ENV_VARS.PRETTY_LOGS] === "true";
 
 /**
  * Creates the base Pino logger configuration.
@@ -55,7 +60,7 @@ function createLoggerConfig() {
     level: LOG_LEVEL,
     redact: {
       paths: REDACT_PATHS,
-      censor: "[REDACTED]",
+      censor: LOG_CONSTS.CENSOR_MARKER,
     },
     formatters: {
       level: (label) => ({ level: label }),
@@ -63,7 +68,7 @@ function createLoggerConfig() {
     },
     timestamp: pino.stdTimeFunctions.isoTime,
     base: {
-      service: "webhook-debugger",
+      service: APP_CONSTS.SERVICE_NAME,
     },
   };
 
@@ -118,18 +123,6 @@ export function createChildLogger(bindings) {
 export function createRequestLogger(requestId) {
   return logger.child({ requestId });
 }
-
-/**
- * Log levels for convenience.
- */
-export const LogLevel = {
-  TRACE: "trace",
-  DEBUG: "debug",
-  INFO: "info",
-  WARN: "warn",
-  ERROR: "error",
-  FATAL: "fatal",
-};
 
 /**
  * Utility to safely serialize errors for structured logging.

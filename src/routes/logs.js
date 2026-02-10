@@ -7,18 +7,18 @@ import { asyncHandler, jsonSafe } from "./utils.js";
 import { logRepository } from "../repositories/LogRepository.js";
 import { parseRangeQuery, parseObjectFilter } from "../utils/filter_utils.js";
 import { Actor } from "apify";
+import { HTTP_STATUS } from "../consts/http.js";
+import { SORT_DIRECTIONS } from "../consts/app.js";
+import { DELIMITERS } from "../consts/network.js";
+import { ERROR_LABELS, ERROR_MESSAGES } from "../consts/errors.js";
+import { STORAGE_CONSTS } from "../consts/storage.js";
+import { LOG_CONSTS } from "../consts/logging.js";
 import {
-  OFFLOAD_MARKER_SYNC,
-  OFFLOAD_MARKER_STREAM,
-} from "../utils/storage_helper.js";
-import {
-  DEFAULT_PAGE_LIMIT,
-  DEFAULT_PAGE_OFFSET,
-  MAX_PAGE_LIMIT,
-  HTTP_STATUS,
-  DELIMITERS,
-  SORT_DIRECTIONS,
-} from "../consts.js";
+  DEFAULT_SORT,
+  PAGINATION_CONSTS,
+  SQL_CONSTS,
+} from "../consts/database.js";
+import { HTTP_HEADERS } from "../consts/http.js";
 
 /**
  * @typedef {import("../webhook_manager.js").WebhookManager} WebhookManager
@@ -34,7 +34,7 @@ import {
  * Creates the logs route handler.
  * @param {WebhookManager} _webhookManager
  * @param {object} [deps]
- * @param {LogRepository} [deps.logRepo]
+ * @param {LogRepository} [deps.logRepo] - Optional repository injection for testing
  * @returns {RequestHandler}
  */
 export const createLogsHandler = (
@@ -45,8 +45,6 @@ export const createLogsHandler = (
     /** @param {Request} req @param {Response} res */
     async (req, res) => {
       try {
-        const DEFAULT_SORT = ["timestamp", SORT_DIRECTIONS.DESC.toLowerCase()];
-
         let {
           id,
           webhookId,
@@ -68,8 +66,8 @@ export const createLogsHandler = (
           responseHeaders,
           signatureProvider,
           signatureError,
-          limit = MAX_PAGE_LIMIT,
-          offset = DEFAULT_PAGE_OFFSET,
+          limit = PAGINATION_CONSTS.MAX_PAGE_LIMIT,
+          offset = PAGINATION_CONSTS.DEFAULT_PAGE_OFFSET,
           cursor,
           sort = DEFAULT_SORT.join(DELIMITERS.QUERY_SORT),
           timestamp,
@@ -77,11 +75,11 @@ export const createLogsHandler = (
 
         // Parse pagination
         const limitNum = Math.max(
-          parseInt(String(limit), 10) || DEFAULT_PAGE_LIMIT,
+          parseInt(String(limit), 10) || PAGINATION_CONSTS.DEFAULT_PAGE_LIMIT,
           1,
         );
         const offsetNum = Math.max(
-          parseInt(String(offset), 10) || DEFAULT_PAGE_OFFSET,
+          parseInt(String(offset), 10) || PAGINATION_CONSTS.DEFAULT_PAGE_OFFSET,
           0,
         );
 
@@ -89,13 +87,13 @@ export const createLogsHandler = (
         const timestampConditions = parseRangeQuery(timestamp, "string") || [];
         if (startTime) {
           timestampConditions.push({
-            operator: "gte",
+            operator: SQL_CONSTS.OPERATORS.GTE,
             value: new Date(String(startTime)).toISOString(),
           });
         }
         if (endTime) {
           timestampConditions.push({
-            operator: "lte",
+            operator: SQL_CONSTS.OPERATORS.LTE,
             value: new Date(String(endTime)).toISOString(),
           });
         }
@@ -110,15 +108,24 @@ export const createLogsHandler = (
           for (const part of parts) {
             const [field, dir] = part.split(DELIMITERS.QUERY_SORT);
             if (!field) continue;
+
+            const sortDir =
+              dir && dir.toUpperCase() === SORT_DIRECTIONS.ASC
+                ? SORT_DIRECTIONS.ASC
+                : SORT_DIRECTIONS.DESC;
             sortRules.push({
               field: field.trim(),
-              dir: (dir || "").toLowerCase() === "asc" ? "asc" : "desc",
+              dir: sortDir,
             });
           }
         } else {
           sortRules.push({
-            field: "timestamp",
-            dir: "desc",
+            field: LOG_CONSTS.VALID_SORT_FIELDS.includes(
+              SQL_CONSTS.COLUMNS.TIMESTAMP,
+            )
+              ? SQL_CONSTS.COLUMNS.TIMESTAMP
+              : LOG_CONSTS.VALID_SORT_FIELDS[0],
+            dir: SORT_DIRECTIONS.DESC,
           });
         }
 
@@ -141,7 +148,7 @@ export const createLogsHandler = (
           userAgent: userAgent ? String(userAgent) : undefined,
           signatureValid:
             signatureValid !== undefined
-              ? String(signatureValid) === "true"
+              ? String(signatureValid) === String(true)
               : undefined,
           signatureProvider: signatureProvider
             ? String(signatureProvider)
@@ -227,10 +234,10 @@ export const createLogsHandler = (
             nextPageUrl,
           }),
         );
-      } catch (e) {
+      } catch (_e) {
         res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-          error: "Logs failed",
-          message: /** @type {Error} */ (e).message,
+          error: ERROR_LABELS.LOGS_FAILED,
+          message: ERROR_LABELS.INTERNAL_SERVER_ERROR,
         });
       }
     },
@@ -261,21 +268,10 @@ export const createLogDetailHandler = (webhookManager) =>
               .filter(Boolean)
           : [];
 
-        const foundItem = await logRepository.getLogById(logId, fieldList);
-
-        if (!foundItem) {
-          res
-            .status(HTTP_STATUS.NOT_FOUND)
-            .json({ error: "Log entry not found" });
-          return;
-        }
-
-        // Security Check: Ensure webhook ID is still valid for this user context
-        // if fields are requested, ensure webhookId is included query-side.
+        // Always include webhookId for security validation, even if not requested
         const effectiveFields =
           fieldList.length > 0 ? [...new Set([...fieldList, "webhookId"])] : [];
 
-        // Rerun query
         const validatedItem = await logRepository.getLogById(
           logId,
           effectiveFields,
@@ -284,14 +280,14 @@ export const createLogDetailHandler = (webhookManager) =>
         if (!validatedItem) {
           res
             .status(HTTP_STATUS.NOT_FOUND)
-            .json({ error: "Log entry not found" });
+            .json({ error: ERROR_MESSAGES.LOG_NOT_FOUND });
           return;
         }
 
         if (!webhookManager.isValid(validatedItem.webhookId)) {
           res
             .status(HTTP_STATUS.NOT_FOUND)
-            .json({ error: "Log entry belongs to invalid webhook" });
+            .json({ error: ERROR_MESSAGES.INVALID_WEBHOOK_LOG });
           return;
         }
 
@@ -304,10 +300,10 @@ export const createLogDetailHandler = (webhookManager) =>
         }
 
         res.json(validatedItem);
-      } catch (e) {
+      } catch (_e) {
         res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-          error: "Failed to fetch log detail",
-          message: /** @type {Error} */ (e).message,
+          error: ERROR_MESSAGES.LOG_DETAIL_FAILED,
+          message: ERROR_LABELS.INTERNAL_SERVER_ERROR,
         });
       }
     },
@@ -330,14 +326,14 @@ export const createLogPayloadHandler = (webhookManager) =>
         if (!item) {
           res
             .status(HTTP_STATUS.NOT_FOUND)
-            .json({ error: "Log entry not found" });
+            .json({ error: ERROR_MESSAGES.LOG_NOT_FOUND });
           return;
         }
 
         if (!webhookManager.isValid(item.webhookId)) {
           res
             .status(HTTP_STATUS.NOT_FOUND)
-            .json({ error: "Log entry belongs to invalid webhook" });
+            .json({ error: ERROR_MESSAGES.INVALID_WEBHOOK_LOG });
           return;
         }
 
@@ -350,9 +346,10 @@ export const createLogPayloadHandler = (webhookManager) =>
         if (
           bodyToSend &&
           typeof bodyToSend === "object" &&
-          [OFFLOAD_MARKER_SYNC, OFFLOAD_MARKER_STREAM].includes(
-            bodyToSend.data,
-          ) &&
+          [
+            STORAGE_CONSTS.OFFLOAD_MARKER_SYNC,
+            STORAGE_CONSTS.OFFLOAD_MARKER_STREAM,
+          ].includes(bodyToSend.data) &&
           bodyToSend.key
         ) {
           isOffloaded = true;
@@ -367,12 +364,12 @@ export const createLogPayloadHandler = (webhookManager) =>
           if (!value) {
             res
               .status(HTTP_STATUS.NOT_FOUND)
-              .json({ error: "Payload not found in KVS" });
+              .json({ error: ERROR_MESSAGES.PAYLOAD_NOT_FOUND_KVS });
             return;
           }
 
           if (item.contentType) {
-            res.setHeader("Content-Type", item.contentType);
+            res.setHeader(HTTP_HEADERS.CONTENT_TYPE, item.contentType);
           }
 
           if (Buffer.isBuffer(value)) {
@@ -385,7 +382,7 @@ export const createLogPayloadHandler = (webhookManager) =>
         } else {
           // Return stored body directly
           if (item.contentType) {
-            res.setHeader("Content-Type", item.contentType);
+            res.setHeader(HTTP_HEADERS.CONTENT_TYPE, item.contentType);
           }
           if (typeof bodyToSend === "object") {
             res.json(bodyToSend);
@@ -393,10 +390,10 @@ export const createLogPayloadHandler = (webhookManager) =>
             res.send(bodyToSend);
           }
         }
-      } catch (e) {
+      } catch (_e) {
         res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-          error: "Failed to fetch log payload",
-          message: /** @type {Error} */ (e).message,
+          error: ERROR_MESSAGES.PAYLOAD_FETCH_FAILED,
+          message: ERROR_LABELS.INTERNAL_SERVER_ERROR,
         });
       }
     },

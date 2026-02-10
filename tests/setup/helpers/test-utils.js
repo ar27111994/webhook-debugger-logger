@@ -1,5 +1,5 @@
 import { jest } from "@jest/globals";
-import { HTTP_STATUS } from "../../../src/consts.js";
+import { HTTP_STATUS } from "../../../src/consts/http.js";
 
 /**
  * @typedef {import("express").Request} Request

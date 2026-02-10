@@ -1,23 +1,27 @@
 /**
  * @file src/services/SyncService.js
  * @description Background service to sync Apify Dataset items into DuckDB Read Model
+ * @module services/SyncService
  */
 import { Actor } from "apify";
 import {
   SYNC_BATCH_SIZE,
   SYNC_MAX_CONCURRENT,
   SYNC_MIN_TIME_MS,
-  EVENT_NAMES,
   DB_MISSING_OFFSET_MARKER,
-} from "../consts.js";
+  DUCKDB_TABLES,
+} from "../consts/database.js";
+import { LOG_COMPONENTS } from "../consts/logging.js";
+import { LOG_MESSAGES } from "../consts/messages.js";
+import { ERROR_MESSAGES } from "../consts/errors.js";
 import Bottleneck from "bottleneck";
 import { executeQuery } from "../db/duckdb.js";
 import { logRepository } from "../repositories/LogRepository.js";
-import { appEvents } from "../utils/events.js";
+import { appEvents, EVENT_NAMES } from "../utils/events.js";
 import crypto from "crypto";
 import { createChildLogger, serializeError } from "../utils/logger.js";
 
-const log = createChildLogger({ component: "SyncService" });
+const log = createChildLogger({ component: LOG_COMPONENTS.SYNC_SERVICE });
 
 /**
  * @typedef {import('../typedefs.js').LogEntry} LogEntry
@@ -102,7 +106,10 @@ export class SyncService {
       // 2. Schedule sync
       this.#triggerSync();
     } catch (err) {
-      log.error({ err: serializeError(err) }, "Real-time insert failed");
+      log.error(
+        { err: serializeError(err) },
+        LOG_MESSAGES.REALTIME_INSERT_FAILED,
+      );
     }
   }
 
@@ -113,7 +120,7 @@ export class SyncService {
     if (this.#isRunning) return;
     this.#isRunning = true;
 
-    log.info("SyncService starting (Event-Driven)");
+    log.info(LOG_MESSAGES.SYNC_START);
 
     // Initial sync to catch up on any missed data (e.g. restart)
     this.#triggerSync();
@@ -126,7 +133,7 @@ export class SyncService {
    * Stop the synchronization service
    */
   stop() {
-    log.info("SyncService stopped");
+    log.info(LOG_MESSAGES.SYNC_STOP);
     this.#isRunning = false;
     appEvents.off(EVENT_NAMES.LOG_RECEIVED, this.#boundOnLogReceived);
     this.#limiter.stop({ dropWaitingJobs: true });
@@ -143,8 +150,11 @@ export class SyncService {
       .schedule(() => this.#syncLogs())
       .catch((err) => {
         // Suppress expected error when service is stopping
-        if (err?.message?.includes("has been stopped")) return;
-        log.error({ err: serializeError(err) }, "Sync scheduling error");
+        if (err?.message?.includes(ERROR_MESSAGES.BOTTLENECK_STOPPED)) return;
+        log.error(
+          { err: serializeError(err) },
+          LOG_MESSAGES.SYNC_SCHEDULE_ERROR,
+        );
       });
   }
 
@@ -159,7 +169,7 @@ export class SyncService {
     }
 
     const rows = await executeQuery(
-      "SELECT MAX(source_offset) as maxOffset FROM logs",
+      `SELECT MAX(source_offset) as maxOffset FROM ${DUCKDB_TABLES.LOGS}`,
     );
     const maxOffsetVal = rows[0]?.maxOffset;
     const lastOffset =
@@ -199,7 +209,7 @@ export class SyncService {
 
       log.info(
         { count: items.length, offset: nextOffset },
-        "Syncing items from Dataset",
+        LOG_MESSAGES.SYNC_DATASET_START,
       );
 
       // 4. Batch Processing
@@ -229,7 +239,7 @@ export class SyncService {
         this.#triggerSync();
       }
     } catch (err) {
-      log.error({ err: serializeError(err) }, "Sync error");
+      log.error({ err: serializeError(err) }, LOG_MESSAGES.SYNC_ERROR_GENERAL);
       // Invalidate cache on error
       this.#cachedMaxOffset = null;
       this.#errorCount++;

@@ -1,6 +1,7 @@
 /* istanbul ignore file */
 /**
- * Middleware index - exports all middleware functions.
+ * @file src/middleware/index.js
+ * @description Middleware index - exports all middleware functions.
  * @module middleware
  */
 

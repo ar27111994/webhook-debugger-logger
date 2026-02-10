@@ -2,7 +2,7 @@ import { jest, describe, test, expect, beforeEach } from "@jest/globals";
 import { assertType } from "../setup/helpers/test-utils.js";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import { duckDbMock } from "../setup/helpers/shared-mocks.js";
-import { HTTP_STATUS } from "../../src/consts.js";
+import { HTTP_STATUS } from "../../src/consts/http.js";
 
 await setupCommonMocks({ db: true });
 

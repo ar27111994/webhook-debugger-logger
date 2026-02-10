@@ -1,6 +1,19 @@
+/**
+ * @file src/utils/signature.js
+ * @description Cryptographic signature verification for webhooks (Stripe, GitHub, etc).
+ * @module utils/signature
+ */
 import crypto from "crypto";
-import { DEFAULT_TOLERANCE_SECONDS } from "../consts.js";
+import {
+  SIGNATURE_CONSTS,
+  SIGNATURE_PROVIDERS,
+  SIGNATURE_ENCODINGS,
+  SIGNATURE_PREFIXES,
+} from "../consts/security.js";
+import { HTTP_HEADERS, ENCODINGS } from "../consts/http.js";
+import { SIGNATURE_ERRORS } from "../consts/errors.js";
 import { secureCompare } from "./crypto.js";
+import { APP_CONSTS } from "../consts/app.js";
 
 /**
  * @typedef {import('crypto').Hmac} Hmac
@@ -30,14 +43,6 @@ import { secureCompare } from "./crypto.js";
  * @property {string} [error]
  */
 
-export const SUPPORTED_PROVIDERS = Object.freeze([
-  "stripe",
-  "shopify",
-  "github",
-  "slack",
-  "custom",
-]);
-
 /**
  * Verifies a webhook signature based on the provider configuration.
  * @param {SignatureConfig} config - Signature verification configuration
@@ -51,13 +56,17 @@ export function verifySignature(config, payload, headers) {
   if (!secret) {
     return {
       valid: false,
-      error: "No signing secret configured",
+      error: SIGNATURE_ERRORS.NO_SECRET,
       provider: String(provider),
     };
   }
 
   // Get generic provider context (params, error, validation logic)
-  const context = getProviderContext(provider || "custom", headers, config);
+  const context = getProviderContext(
+    provider || SIGNATURE_CONSTS.DEFAULT_PROVIDER,
+    headers,
+    config,
+  );
 
   if (context.error) {
     return {
@@ -73,7 +82,10 @@ export function verifySignature(config, payload, headers) {
     context.validateTimestamp &&
     !context.validateTimestamp()
   ) {
-    return invalidateSignatureWithAge(context.timestamp, provider || "custom");
+    return invalidateSignatureWithAge(
+      context.timestamp,
+      provider || SIGNATURE_PROVIDERS.CUSTOM,
+    );
   }
 
   // Compute expected HMAC
@@ -85,7 +97,7 @@ export function verifySignature(config, payload, headers) {
   if (Buffer.isBuffer(payload)) {
     hmac.update(payload);
   } else {
-    hmac.update(payload, "utf8");
+    hmac.update(payload, ENCODINGS.UTF8);
   }
 
   const calculatedSignature = hmac.digest(context.encoding);
@@ -97,7 +109,7 @@ export function verifySignature(config, payload, headers) {
     ? { valid: true, provider: String(provider) }
     : {
         valid: false,
-        error: "Signature mismatch",
+        error: SIGNATURE_ERRORS.MISMATCH,
         provider: String(provider),
       };
 }
@@ -114,8 +126,10 @@ function getProviderContext(provider, headers, config) {
    * @type {VerificationContext}
    */
   const context = {
-    algorithm: "sha256",
-    encoding: "hex",
+    algorithm: SIGNATURE_CONSTS.DEFAULT_ALGORITHM,
+    encoding: /** @type {BinaryToTextEncoding} */ (
+      SIGNATURE_CONSTS.DEFAULT_ENCODING
+    ),
     prefix: "",
     expectedSignature: "",
     validateTimestamp: undefined,
@@ -123,11 +137,11 @@ function getProviderContext(provider, headers, config) {
 
   try {
     switch (provider) {
-      case "stripe": {
+      case SIGNATURE_PROVIDERS.STRIPE: {
         /** @see https://docs.stripe.com/webhooks?lang=node#verify-events */
-        const sigHeader = headers["stripe-signature"];
+        const sigHeader = headers[HTTP_HEADERS.STRIPE_SIGNATURE];
         if (!sigHeader) {
-          context.error = "Missing Stripe-Signature header";
+          context.error = `${SIGNATURE_ERRORS.MISSING_HEADER}: ${HTTP_HEADERS.STRIPE_SIGNATURE}`;
           return context;
         }
 
@@ -138,7 +152,7 @@ function getProviderContext(provider, headers, config) {
         }, /** @type {Record<string,string>} */ ({}));
 
         if (!elements.t || !elements.v1) {
-          context.error = "Invalid Stripe-Signature format";
+          context.error = `${SIGNATURE_ERRORS.INVALID_FORMAT}: ${HTTP_HEADERS.STRIPE_SIGNATURE}`;
           return context;
         }
 
@@ -149,87 +163,93 @@ function getProviderContext(provider, headers, config) {
           !!context.timestamp &&
           isTimestampWithinTolerance(
             context.timestamp,
-            config.tolerance || DEFAULT_TOLERANCE_SECONDS,
+            config.tolerance || SIGNATURE_CONSTS.TOLERANCE_SECONDS,
           );
         break;
       }
 
-      case "shopify": {
+      case SIGNATURE_PROVIDERS.SHOPIFY: {
         /** @see https://shopify.dev/docs/apps/build/webhooks/subscribe/https#step-2-validate-the-origin-of-your-webhook-to-ensure-its-coming-from-shopify */
         const sig =
-          headers["x-shopify-hmac-sha256"] ||
-          headers["http_x_shopify_hmac_sha256"];
+          headers[HTTP_HEADERS.SHOPIFY_HMAC_SHA256] ||
+          headers[HTTP_HEADERS.SHOPIFY_HMAC_SHA256_FALLBACK];
         if (!sig) {
-          context.error = "Missing X-Shopify-Hmac-SHA256 header";
+          context.error = `${SIGNATURE_ERRORS.MISSING_HEADER}: ${HTTP_HEADERS.SHOPIFY_HMAC_SHA256}`;
           return context;
         }
 
         context.expectedSignature = sig;
-        context.encoding = "base64";
+        context.encoding = /** @type {BinaryToTextEncoding} */ (
+          SIGNATURE_ENCODINGS.BASE64
+        );
 
         const timestamp =
-          headers["x-shopify-triggered-at"] ||
-          headers["http_x_shopify_triggered_at"];
+          headers[HTTP_HEADERS.SHOPIFY_TRIGGERED_AT] ||
+          headers[HTTP_HEADERS.SHOPIFY_TRIGGERED_AT_FALLBACK];
         context.timestamp = timestamp;
         if (context.timestamp) {
           context.validateTimestamp = () =>
             !!context.timestamp &&
             isTimestampWithinTolerance(
               context.timestamp,
-              config.tolerance || DEFAULT_TOLERANCE_SECONDS,
+              config.tolerance || SIGNATURE_CONSTS.TOLERANCE_SECONDS,
             );
         }
         break;
       }
 
-      case "github": {
+      case SIGNATURE_PROVIDERS.GITHUB: {
         /** @see https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries#validating-webhook-deliveries */
-        const sig = headers["x-hub-signature-256"];
+        const sig = headers[HTTP_HEADERS.HUB_SIGNATURE_256];
         if (!sig) {
-          context.error = "Missing X-Hub-Signature-256 header";
+          context.error = `${SIGNATURE_ERRORS.MISSING_HEADER}: ${HTTP_HEADERS.HUB_SIGNATURE_256}`;
           return context;
         }
 
-        if (!sig.startsWith("sha256=")) {
-          context.error = "Invalid signature format";
+        const prefix = SIGNATURE_PREFIXES.SHA256;
+        if (!sig.startsWith(prefix)) {
+          context.error = SIGNATURE_ERRORS.INVALID_FORMAT;
           return context;
         }
 
-        context.expectedSignature = sig.slice(7);
+        context.expectedSignature = sig.slice(prefix.length);
         break;
       }
 
-      case "slack": {
+      case SIGNATURE_PROVIDERS.SLACK: {
         /** @see https://api.slack.com/authentication/verifying-requests-from-slack */
-        const ts = headers["x-slack-request-timestamp"];
-        const sig = headers["x-slack-signature"];
+        const ts = headers[HTTP_HEADERS.SLACK_TIMESTAMP];
+        const sig = headers[HTTP_HEADERS.SLACK_SIGNATURE];
         if (!ts || !sig) {
-          context.error = "Missing Slack signature headers";
+          context.error = `${SIGNATURE_ERRORS.MISSING_HEADER}: Slack`;
           return context;
         }
 
-        if (!sig.startsWith("v0=")) {
-          context.error = "Invalid signature format";
+        const prefix = SIGNATURE_PREFIXES.V0;
+        if (!sig.startsWith(prefix)) {
+          context.error = SIGNATURE_ERRORS.INVALID_FORMAT;
           return context;
         }
 
         context.timestamp = ts;
-        context.prefix = `v0:${context.timestamp}:`;
-        context.expectedSignature = sig.slice(3);
+        context.prefix = `${SIGNATURE_PREFIXES.V0_NO_PREFIX}:${context.timestamp}:`;
+        context.expectedSignature = sig.slice(prefix.length);
         context.validateTimestamp = () =>
           !!context.timestamp &&
           isTimestampWithinTolerance(
             context.timestamp,
-            config.tolerance || DEFAULT_TOLERANCE_SECONDS,
+            config.tolerance || SIGNATURE_CONSTS.TOLERANCE_SECONDS,
           );
         break;
       }
 
-      case "custom": {
+      case SIGNATURE_PROVIDERS.CUSTOM: {
         const {
           headerName,
-          algorithm = "sha256",
-          encoding = "hex",
+          algorithm = SIGNATURE_CONSTS.DEFAULT_ALGORITHM,
+          encoding = /** @type {BinaryToTextEncoding} */ (
+            SIGNATURE_CONSTS.DEFAULT_ENCODING
+          ),
           timestampKey,
         } = config;
 
@@ -252,21 +272,21 @@ function getProviderContext(provider, headers, config) {
           const timestamp = headers[timestampKey.toLowerCase()];
           context.timestamp = timestamp;
           if (!context.timestamp) {
-            context.error = `Missing timestamp header: ${timestampKey}`;
+            context.error = `${SIGNATURE_ERRORS.MISSING_TIMESTAMP}: ${timestampKey}`;
             return context;
           }
           context.validateTimestamp = () =>
             !!context.timestamp &&
             isTimestampWithinTolerance(
               context.timestamp,
-              config.tolerance || DEFAULT_TOLERANCE_SECONDS,
+              config.tolerance || SIGNATURE_CONSTS.TOLERANCE_SECONDS,
             );
         }
         break;
       }
 
       default:
-        context.error = `Unknown provider: ${provider}`;
+        context.error = `${SIGNATURE_ERRORS.UNKNOWN_PROVIDER}: ${provider}`;
     }
   } catch (err) {
     context.error = String(err);
@@ -284,14 +304,14 @@ function getProviderContext(provider, headers, config) {
 function isTimestampWithinTolerance(timestampStr, tolerance) {
   // Support ISO 8601 or Unix seconds
   const timestampDate = !isNaN(Number(timestampStr))
-    ? new Date(parseInt(timestampStr, 10) * 1000)
+    ? new Date(parseInt(timestampStr, 10) * APP_CONSTS.MS_PER_SECOND)
     : new Date(timestampStr);
 
   if (isNaN(timestampDate.getTime())) return false;
 
   const now = Date.now();
   const timestampMs = timestampDate.getTime();
-  const toleranceMs = tolerance * 1000;
+  const toleranceMs = tolerance * APP_CONSTS.MS_PER_SECOND;
 
   return Math.abs(now - timestampMs) <= toleranceMs;
 }
@@ -303,11 +323,12 @@ function isTimestampWithinTolerance(timestampStr, tolerance) {
  * @returns {SignatureResult}
  */
 function invalidateSignatureWithAge(timestamp, provider) {
-  const timestampAge = Math.floor(Date.now() / 1000) - parseInt(timestamp, 10);
+  const timestampAge =
+    Math.floor(Date.now() / APP_CONSTS.MS_PER_SECOND) - parseInt(timestamp, 10);
 
   return {
     valid: false,
-    error: `Timestamp outside tolerance (${timestampAge}s)`,
+    error: `${SIGNATURE_ERRORS.TIMESTAMP_TOLERANCE} (${timestampAge}s)`,
     provider,
   };
 }
@@ -324,18 +345,22 @@ export function createStreamVerifier(config, headers) {
   if (!secret)
     return {
       hmac: null,
-      encoding: "hex",
+      encoding: /** @type {BinaryToTextEncoding} */ (SIGNATURE_ENCODINGS.HEX),
       expectedSignature: "",
-      error: "No secret",
+      error: SIGNATURE_ERRORS.NO_SECRET,
     };
 
   // Reuse the exact same context logic
-  const context = getProviderContext(provider || "custom", headers, config);
+  const context = getProviderContext(
+    provider || SIGNATURE_PROVIDERS.CUSTOM,
+    headers,
+    config,
+  );
 
   if (context.error) {
     return {
       hmac: null,
-      encoding: "hex",
+      encoding: /** @type {BinaryToTextEncoding} */ (SIGNATURE_ENCODINGS.HEX),
       expectedSignature: "",
       error: context.error,
     };
@@ -350,10 +375,12 @@ export function createStreamVerifier(config, headers) {
   ) {
     return {
       hmac: null,
-      encoding: "hex",
+      encoding: /** @type {BinaryToTextEncoding} */ (SIGNATURE_ENCODINGS.HEX),
       expectedSignature: "",
-      error: invalidateSignatureWithAge(context.timestamp, provider || "custom")
-        .error,
+      error: invalidateSignatureWithAge(
+        context.timestamp,
+        provider || SIGNATURE_PROVIDERS.CUSTOM,
+      ).error,
     };
   }
 
@@ -371,7 +398,7 @@ export function createStreamVerifier(config, headers) {
   } catch (err) {
     return {
       hmac: null,
-      encoding: "hex",
+      encoding: /** @type {BinaryToTextEncoding} */ (SIGNATURE_ENCODINGS.HEX),
       expectedSignature: "",
       error: String(err),
     };

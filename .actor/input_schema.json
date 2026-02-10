@@ -109,10 +109,17 @@
       "default": true,
       "editor": "checkbox"
     },
+    "redactBodyPaths": {
+      "type": "array",
+      "title": "Redact Payalod Paths",
+      "description": "List of dot-notation paths in the JSON body to redact. Must start with 'body.' (e.g., 'body.token', 'body.auth', 'body.user.password', 'body.payment.card', etc.).",
+      "editor": "stringList",
+      "default": []
+    },
     "rateLimitPerMinute": {
       "type": "integer",
       "title": "Management Rate Limit",
-      "description": "Maximum requests per minute for management endpoints (/logs, /info, /replay). Applied per client IP.",
+      "description": "Maximum requests per minute for management endpoints (/logs, /info, /replay, etc.). Applied per client IP.",
       "minimum": 1,
       "maximum": 1000,
       "default": 60,

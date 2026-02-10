@@ -5,7 +5,7 @@ import {
   DEFAULT_FIXED_MEMORY_MBYTES,
   DEFAULT_PAYLOAD_LIMIT,
   DEFAULT_RATE_LIMIT_PER_MINUTE,
-} from "../../src/consts.js";
+} from "../../src/consts/app.js";
 import { assertType } from "../setup/helpers/test-utils.js";
 
 // 1. Setup Common Mocks

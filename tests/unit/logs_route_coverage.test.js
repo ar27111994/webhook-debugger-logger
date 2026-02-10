@@ -5,7 +5,7 @@ import {
   createMockNextFunction,
   assertType,
 } from "../setup/helpers/test-utils.js";
-import { HTTP_STATUS } from "../../src/consts.js";
+import { HTTP_STATUS } from "../../src/consts/http.js";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import { createKeyValueStoreMock } from "../setup/helpers/shared-mocks.js";
 

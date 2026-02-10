@@ -46,14 +46,15 @@ import {
 import {
   SSRF_BLOCKED_RANGES,
   ALLOWED_PROTOCOLS,
-  SSRF_ERRORS,
   SSRF_INTERNAL_ERRORS,
   SSRF_LOG_MESSAGES,
-  ERROR_MESSAGES,
   TRANSIENT_ERROR_CODES,
   DELIMITERS,
   PROTOCOL_PREFIXES,
 } from "../../../src/consts/network.js";
+
+import { SSRF_ERRORS } from "../../../src/consts/security.js";
+import { ERROR_MESSAGES } from "../../../src/consts/errors.js";
 
 import {
   DUCKDB_STORAGE_DIR_DEFAULT,
@@ -67,7 +68,7 @@ import {
   DEFAULT_PAGE_LIMIT,
   MAX_PAGE_LIMIT,
   DEFAULT_PAGE_OFFSET,
-} from "../../../src/consts/db.js";
+} from "../../../src/consts/database.js";
 
 import {
   DASHBOARD_PLACEHOLDERS,

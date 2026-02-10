@@ -1,6 +1,6 @@
 import { jest } from "@jest/globals";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
-import { HTTP_STATUS } from "../../src/consts.js";
+import { HTTP_STATUS } from "../../src/consts/http.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 import { createDatasetMock } from "../setup/helpers/shared-mocks.js";
 import {

@@ -1,6 +1,7 @@
 /**
  * @file src/utils/crypto.js
  * @description Cryptographic utilities for secure string comparison.
+ * @module utils/crypto
  */
 import crypto from "crypto";
 

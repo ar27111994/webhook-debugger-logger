@@ -2,6 +2,7 @@
  * @file src/typedefs.js
  * @description Centralized JSDoc type definitions for the application.
  * Provides type safety and IDE support across all modules.
+ * @module typedefs
  */
 
 /**
@@ -41,13 +42,13 @@
  * @property {string|Object|Buffer} body
  * @property {string} [bodyEncoding]
  * @property {string} contentType
- * @property {number | undefined} size
+ * @property {number} [size]
  * @property {number} statusCode
  * @property {string|Object} [responseBody]
  * @property {Object.<string, string>} [responseHeaders]
  * @property {number} processingTime
- * @property {string | undefined} remoteIp
- * @property {string | undefined} [userAgent]
+ * @property {string} [remoteIp]
+ * @property {string} [userAgent]
  * @property {boolean} [signatureValid]
  * @property {string} [signatureProvider]
  * @property {string} [signatureError]
@@ -84,12 +85,21 @@
  * @property {string} [stack]
  * @property {string} [error]
  * @property {unknown} [details]
- * @property {Object} [response]
+ * @property {Object.<string, any>} [response]
+ * @property {boolean} [isHttpError]
  */
 
 /**
- * @typedef {("error" | "4xx" | "5xx" | "timeout" | "signature_invalid")} AlertTrigger
- * @typedef {("slack" | "discord")} AlertChannel
+ * @typedef {import('./consts/alerting.js').ALERT_TRIGGERS} AlertTriggerEnum
+ * @typedef {import('./consts/alerting.js').ALERT_CHANNELS} AlertChannelEnum
+ * @typedef {import('./consts/security.js').SIGNATURE_PROVIDERS} SignatureProviderEnum
+ * @typedef {import('./consts/security.js').HASH_ALGORITHMS} HashAlgorithmEnum
+ * @typedef {import('./consts/security.js').SIGNATURE_ENCODINGS} SignatureEncodingEnum
+ */
+
+/**
+ * @typedef {AlertTriggerEnum[keyof AlertTriggerEnum]} AlertTrigger
+ * @typedef {AlertChannelEnum[keyof AlertChannelEnum]} AlertChannel
  */
 
 /**
@@ -101,7 +111,7 @@
  * @typedef {Object} AlertConfig
  * @property {AlertChannelConfig} [slack]
  * @property {AlertChannelConfig} [discord]
- * @property {AlertTrigger[]} [alertOn] - Trigger conditions: "error", "4xx", "5xx", "timeout", "signature_invalid"
+ * @property {AlertTrigger[]} [alertOn] - Trigger conditions
  */
 
 /**
@@ -117,9 +127,9 @@
  */
 
 /**
- * @typedef {"stripe" | "shopify" | "github" | "slack" | "custom"} SignatureProvider
- * @typedef {"sha256" | "sha1"} HashAlgorithm
- * @typedef {"hex" | "base64"} SignatureEncoding
+ * @typedef {SignatureProviderEnum[keyof SignatureProviderEnum]} SignatureProvider
+ * @typedef {HashAlgorithmEnum[keyof HashAlgorithmEnum]} HashAlgorithm
+ * @typedef {SignatureEncodingEnum[keyof SignatureEncodingEnum]} SignatureEncoding
  */
 
 /**
@@ -151,9 +161,13 @@
  */
 
 /**
+ * @typedef {import('./consts/app.js').SORT_DIRECTIONS} SortDirectionEnum
+ */
+
+/**
  * @typedef {Object} SortRule
  * @property {string} field
- * @property {'asc' | 'desc'} dir
+ * @property {SortDirectionEnum[keyof SortDirectionEnum]} dir
  */
 
 /**

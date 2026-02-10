@@ -2,6 +2,7 @@
  * @file src/main.js
  * @description Main Entry Point. Initializes the Apify Actor, sets up the Express server,
  * configures middleware (Auth, DB, Sync), and handles graceful shutdown.
+ * @module main
  */
 import { Actor } from "apify";
 import { getDbInstance } from "./db/duckdb.js";
@@ -15,16 +16,18 @@ import { ensureLocalInputExists } from "./utils/bootstrap.js";
 import { HotReloadManager } from "./utils/hot_reload_manager.js";
 import { AppState } from "./utils/app_state.js";
 import {
-  CLEANUP_INTERVAL_MS,
-  INPUT_POLL_INTERVAL_PROD_MS,
-  INPUT_POLL_INTERVAL_TEST_MS,
-  SHUTDOWN_TIMEOUT_MS,
-  SSE_HEARTBEAT_INTERVAL_MS,
-  STARTUP_TEST_EXIT_DELAY_MS,
-  DEFAULT_URL_COUNT,
-  DEFAULT_RETENTION_HOURS,
-  DEFAULT_PAYLOAD_LIMIT,
-} from "./consts.js";
+  APP_CONSTS,
+  ENV_VARS,
+  ENV_VALUES,
+  SHUTDOWN_SIGNALS,
+  APP_ROUTES,
+  QUERY_PARAMS,
+  EXIT_CODES,
+  EXPRESS_SETTINGS,
+} from "./consts/app.js";
+import { LOG_COMPONENTS, LOG_TAGS } from "./consts/logging.js";
+import { HTTP_METHODS, HTTP_STATUS, MIME_TYPES } from "./consts/http.js";
+import { STORAGE_CONSTS, FILE_NAMES } from "./consts/storage.js";
 import {
   createBroadcaster,
   createLogsHandler,
@@ -50,11 +53,14 @@ import { fileURLToPath } from "url";
 import { createRequire } from "module";
 import cors from "cors";
 import { createChildLogger, serializeError } from "./utils/logger.js";
+import { LOG_MESSAGES } from "./consts/messages.js";
+import { validateStatusCode } from "./utils/common.js";
+import { SSE_CONSTS } from "./consts/ui.js";
 
-const log = createChildLogger({ component: "Main" });
+const log = createChildLogger({ component: LOG_COMPONENTS.MAIN });
 
 const require = createRequire(import.meta.url);
-const packageJson = require("../package.json");
+const packageJson = require(FILE_NAMES.PACKAGE_JSON);
 
 /**
  * @typedef {import("express").Request} Request
@@ -68,12 +74,14 @@ const packageJson = require("../package.json");
  */
 
 const INPUT_POLL_INTERVAL_MS =
-  process.env.NODE_ENV === "test"
-    ? INPUT_POLL_INTERVAL_TEST_MS
-    : INPUT_POLL_INTERVAL_PROD_MS;
+  process.env[ENV_VARS.NODE_ENV] === ENV_VALUES.TEST
+    ? APP_CONSTS.INPUT_POLL_INTERVAL_TEST_MS
+    : APP_CONSTS.INPUT_POLL_INTERVAL_PROD_MS;
 
 const APP_VERSION =
-  process.env.npm_package_version || packageJson.version || "unknown";
+  process.env[ENV_VARS.NPM_PACKAGE_VERSION] ||
+  packageJson.version ||
+  APP_CONSTS.UNKNOWN;
 
 /** @type {Server | undefined} */
 let server;
@@ -109,19 +117,24 @@ const shutdown = async (signal) => {
 
   if (appState) appState.destroy();
 
-  if (process.env.NODE_ENV === "test" && signal !== "TEST_COMPLETE") return;
+  if (
+    process.env[ENV_VARS.NODE_ENV] === ENV_VALUES.TEST &&
+    signal !== SHUTDOWN_SIGNALS.TEST_COMPLETE
+  )
+    return;
 
-  log.info({ signal }, "Shutting down");
+  log.info({ signal }, LOG_MESSAGES.SHUTDOWN_START);
   const forceExitTimer = setTimeout(() => {
-    log.error("Forceful shutdown after timeout");
-    process.exit(1);
-  }, SHUTDOWN_TIMEOUT_MS);
+    log.error(LOG_MESSAGES.FORCE_SHUTDOWN);
+    process.exit(EXIT_CODES.FAILURE);
+  }, APP_CONSTS.SHUTDOWN_TIMEOUT_MS);
 
   const finalCleanup = async () => {
     await webhookManager.persist();
-    if (process.env.NODE_ENV !== "test") await Actor.exit();
+    if (process.env[ENV_VARS.NODE_ENV] !== ENV_VALUES.TEST) await Actor.exit();
     clearTimeout(forceExitTimer);
-    if (process.env.NODE_ENV !== "test") process.exit(0);
+    if (process.env[ENV_VARS.NODE_ENV] !== ENV_VALUES.TEST)
+      process.exit(EXIT_CODES.SUCCESS);
   };
 
   if (server && server.listening) {
@@ -132,6 +145,38 @@ const shutdown = async (signal) => {
   } else {
     await finalCleanup();
   }
+};
+
+/**
+ * Handles shutdown signals with retry logic.
+ * @param {string} signal - The shutdown signal.
+ */
+const handleShutdownSignal = (signal) => {
+  let attempts = 0;
+  const maxAttempts = APP_CONSTS.SHUTDOWN_RETRY_MAX_ATTEMPTS;
+  const retryDelayMs = APP_CONSTS.SHUTDOWN_RETRY_DELAY_MS;
+
+  const attemptShutdown = async () => {
+    try {
+      await shutdown(signal);
+    } catch (error) {
+      log.warn(
+        { err: serializeError(error), signal, attempts },
+        LOG_MESSAGES.SHUTDOWN_RETRY,
+      );
+      attempts++;
+      if (attempts < maxAttempts) {
+        setTimeout(attemptShutdown, retryDelayMs);
+      } else {
+        log.error(
+          { err: serializeError(error), signal },
+          LOG_MESSAGES.SHUTDOWN_FAILED_AFTER_RETRIES,
+        );
+        process.exit(EXIT_CODES.FAILURE); // Force exit if retries fail
+      }
+    }
+  };
+  attemptShutdown();
 };
 
 /**
@@ -160,9 +205,9 @@ export async function initialize(testOptions = {}) {
     // FORCE override from process.env.INPUT if present (CLI usage)
     // Apify SDK prioritizes local storage file over Env Var if the file exists.
     // We want the reverse for CLI usage (npx webhook-debugger-logger).
-    if (process.env.INPUT) {
+    if (process.env[ENV_VARS.INPUT]) {
       try {
-        const envInput = JSON.parse(process.env.INPUT);
+        const envInput = JSON.parse(String(process.env[ENV_VARS.INPUT]));
 
         if (
           envInput &&
@@ -171,20 +216,23 @@ export async function initialize(testOptions = {}) {
         ) {
           // Override local artifacts completely for stateless CLI usage
           input = envInput;
-          log.info("Using override from INPUT environment variable");
+          log.info(LOG_MESSAGES.INPUT_ENV_VAR_PARSED);
         } else {
-          throw new Error("INPUT env var must be a non-array JSON object");
+          throw new Error(LOG_MESSAGES.INPUT_ENV_VAR_INVALID);
         }
       } catch (e) {
-        log.warn({ err: serializeError(e) }, "Failed to parse INPUT env var");
+        log.warn(
+          { err: serializeError(e) },
+          LOG_MESSAGES.INPUT_ENV_VAR_PARSE_FAILED,
+        );
       }
     }
   }
 
   const config = parseWebhookOptions(input);
   const {
-    urlCount = DEFAULT_URL_COUNT,
-    retentionHours = DEFAULT_RETENTION_HOURS,
+    urlCount = APP_CONSTS.DEFAULT_URL_COUNT,
+    retentionHours = APP_CONSTS.DEFAULT_RETENTION_HOURS,
   } = config; // Uses coerced defaults via config.js (which we updated)
   const enableJSONParsing =
     config.enableJSONParsing !== undefined ? config.enableJSONParsing : true;
@@ -198,32 +246,32 @@ export async function initialize(testOptions = {}) {
     // Start background sync (non-blocking, but initial sync will happen)
     await syncService.start();
   } catch (err) {
-    log.error(
-      { err: serializeError(err) },
-      "Failed to initialize DuckDB or SyncService",
-    );
+    log.error({ err: serializeError(err) }, LOG_MESSAGES.INIT_DB_SYNC_FAILED);
     // Strategy: Disposable Read Model
     // We intentionally allow the application to start even if the Read Model (DuckDB) fails.
     // The Dataset (Write Model) is the single source of truth, so ingestion remains functional.
     // Query capabilities may be unavailable, but data integrity is preserved in the Dataset.
   }
 
-  if (process.env.NODE_ENV !== "test") {
+  if (process.env[ENV_VARS.NODE_ENV] !== ENV_VALUES.TEST) {
     try {
       await Actor.pushData({
-        id: "startup-" + Date.now(),
+        id: APP_CONSTS.STARTUP_ID_PREFIX + Date.now(),
         timestamp: new Date().toISOString(),
-        method: "SYSTEM",
-        type: "startup",
-        body: "Enterprise Webhook Suite initialized.",
-        statusCode: 200,
+        method: HTTP_METHODS.SYSTEM,
+        type: LOG_TAGS.STARTUP,
+        body: LOG_MESSAGES.STARTUP_COMPLETE,
+        statusCode: HTTP_STATUS.OK,
       });
-      log.info("Startup event pushed to dataset");
+      log.info(LOG_MESSAGES.STARTUP_COMPLETE);
     } catch (e) {
-      log.warn({ err: serializeError(e) }, "Startup log failed");
+      log.warn({ err: serializeError(e) }, LOG_MESSAGES.STARTUP_LOG_FAILED);
     }
     if (testAndExit)
-      setTimeout(() => shutdown("TESTANDEXIT"), STARTUP_TEST_EXIT_DELAY_MS);
+      setTimeout(
+        () => shutdown(SHUTDOWN_SIGNALS.TESTANDEXIT),
+        APP_CONSTS.STARTUP_TEST_EXIT_DELAY_MS,
+      );
   }
 
   const active = webhookManager.getAllActive();
@@ -232,18 +280,18 @@ export async function initialize(testOptions = {}) {
   if (active.length < urlCount) {
     const diff = urlCount - active.length;
     if (active.length === 0) {
-      log.info({ count: diff }, "Initializing webhooks");
+      log.info({ count: diff }, LOG_MESSAGES.SCALING_INITIALIZING);
     } else {
-      log.info({ count: diff }, "Scaling up: generating additional webhooks");
+      log.info({ count: diff }, LOG_MESSAGES.SCALING_UP);
     }
     await webhookManager.generateWebhooks(diff, retentionHours);
   } else if (active.length > urlCount) {
     log.info(
       { active: active.length, requested: urlCount },
-      "Active webhooks exceed requested count",
+      LOG_MESSAGES.SCALING_LIMIT_REACHED,
     );
   } else {
-    log.info({ count: active.length }, "Resuming with active webhooks");
+    log.info({ count: active.length }, LOG_MESSAGES.SCALING_RESUMING);
   }
 
   // 2. Sync Retention (Global Extension)
@@ -267,14 +315,16 @@ export async function initialize(testOptions = {}) {
   const mgmtRateLimiter = appState.rateLimitMiddleware;
 
   // --- Express Middleware ---
-  app.set("trust proxy", true);
+  // On Apify platform, trust all proxy hops (their infrastructure).
+  // Self-hosted: only trust the first proxy to prevent X-Forwarded-For spoofing.
+  app.set(EXPRESS_SETTINGS.TRUST_PROXY, Actor.isAtHome() ? true : 1);
   app.use(
     compression({
       filter: (req, res) => {
         if (
-          req.path === "/log-stream" ||
+          req.path === APP_ROUTES.LOG_STREAM ||
           (req.headers.accept &&
-            req.headers.accept.includes("text/event-stream"))
+            req.headers.accept.includes(MIME_TYPES.EVENT_STREAM))
         ) {
           return false;
         }
@@ -289,13 +339,23 @@ export async function initialize(testOptions = {}) {
   // CSP Headers for dashboard security (using modular factory)
   app.use(createCspMiddleware());
 
-  app.use("/fonts", express.static(join(__dirname, "..", "public", "fonts")));
+  app.use(
+    APP_ROUTES.FONTS,
+    express.static(
+      join(
+        __dirname,
+        "..",
+        STORAGE_CONSTS.PUBLIC_DIR,
+        STORAGE_CONSTS.FONTS_DIR_NAME,
+      ),
+    ),
+  );
 
   app.use(cors());
 
   // Dynamic Body Parser managed by AppState
   // Crucial: Mount ingestMiddleware BEFORE body-parser to handle streams
-  app.all("/webhook/:id", loggerMiddlewareInstance.ingestMiddleware);
+  app.all(APP_ROUTES.WEBHOOK, loggerMiddlewareInstance.ingestMiddleware);
   app.use(appState.bodyParserMiddleware);
 
   if (enableJSONParsing) {
@@ -315,17 +375,17 @@ export async function initialize(testOptions = {}) {
   sseHeartbeat = setInterval(() => {
     clients.forEach((c) => {
       try {
-        c.write(": heartbeat\n\n");
+        c.write(SSE_CONSTS.HEARTBEAT_MESSAGE);
       } catch {
         clients.delete(c);
       }
     });
-  }, SSE_HEARTBEAT_INTERVAL_MS);
+  }, APP_CONSTS.SSE_HEARTBEAT_INTERVAL_MS);
   if (sseHeartbeat.unref) sseHeartbeat.unref();
 
   // --- Routes ---
   app.get(
-    "/",
+    APP_ROUTES.DASHBOARD,
     mgmtRateLimiter,
     authMiddleware,
     createDashboardHandler({
@@ -346,17 +406,17 @@ export async function initialize(testOptions = {}) {
   );
 
   app.all(
-    "/webhook/:id",
+    APP_ROUTES.WEBHOOK,
     (
       /** @type {Request} */ req,
       /** @type {Response} */ _res,
       /** @type {NextFunction} */ next,
     ) => {
       const statusOverride = Number.parseInt(
-        /** @type {string} */ (req.query.__status),
+        /** @type {string} */ (req.query[QUERY_PARAMS.STATUS]),
         10,
       );
-      if (statusOverride >= 100 && statusOverride < 600) {
+      if (validateStatusCode(statusOverride)) {
         /** @type {any} */ (req).forcedStatus = statusOverride;
       }
       next();
@@ -365,7 +425,7 @@ export async function initialize(testOptions = {}) {
   );
 
   app.all(
-    "/replay/:webhookId/:itemId",
+    APP_ROUTES.REPLAY,
     mgmtRateLimiter,
     authMiddleware,
     createReplayHandler(
@@ -375,51 +435,51 @@ export async function initialize(testOptions = {}) {
   );
 
   app.get(
-    "/log-stream",
+    APP_ROUTES.LOG_STREAM,
     mgmtRateLimiter,
     authMiddleware,
     createLogStreamHandler(clients),
   );
 
   app.get(
-    "/logs",
+    APP_ROUTES.LOGS,
     mgmtRateLimiter,
     authMiddleware,
     createLogsHandler(webhookManager),
   );
 
   app.get(
-    "/logs/:logId",
+    APP_ROUTES.LOG_DETAIL,
     mgmtRateLimiter,
     authMiddleware,
     createLogDetailHandler(webhookManager),
   );
 
   app.get(
-    "/logs/:logId/payload",
+    APP_ROUTES.LOG_PAYLOAD,
     mgmtRateLimiter,
     authMiddleware,
     createLogPayloadHandler(webhookManager),
   );
 
   app.get(
-    "/info",
+    APP_ROUTES.INFO,
     mgmtRateLimiter,
     authMiddleware,
     createInfoHandler({
       webhookManager,
       getAuthKey: () => appState?.authKey || "",
       getRetentionHours: () =>
-        appState?.retentionHours || DEFAULT_RETENTION_HOURS,
+        appState?.retentionHours || APP_CONSTS.DEFAULT_RETENTION_HOURS,
       getMaxPayloadSize: () =>
-        appState?.maxPayloadSize || DEFAULT_PAYLOAD_LIMIT,
+        appState?.maxPayloadSize || APP_CONSTS.DEFAULT_PAYLOAD_LIMIT,
       version: APP_VERSION,
     }),
   );
 
   // System metrics endpoint for monitoring
   app.get(
-    "/system/metrics",
+    APP_ROUTES.SYSTEM_METRICS,
     mgmtRateLimiter,
     authMiddleware,
     createSystemMetricsHandler(syncService),
@@ -429,34 +489,48 @@ export async function initialize(testOptions = {}) {
   const { health, ready } = createHealthRoutes(
     () => webhookManager.getAllActive().length,
   );
-  app.get("/health", mgmtRateLimiter, health);
-  app.get("/ready", mgmtRateLimiter, ready);
+  app.get(APP_ROUTES.HEALTH, mgmtRateLimiter, health);
+  app.get(APP_ROUTES.READY, mgmtRateLimiter, ready);
 
   // Error handling middleware (using modular factory)
   app.use(createErrorHandler());
 
+  // -----------------------------------------------------------------------
+  // 2. Constants & Configuration
+  // -----------------------------------------------------------------------
+  const IS_TEST = process.env[ENV_VARS.NODE_ENV] === ENV_VALUES.TEST;
+
   /* istanbul ignore next */
-  if (process.env.NODE_ENV !== "test") {
-    const port = process.env.ACTOR_WEB_SERVER_PORT || 8080;
-    server = app.listen(port, () => log.info({ port }, "Server listening"));
+  if (!IS_TEST) {
+    const port =
+      process.env[ENV_VARS.ACTOR_WEB_SERVER_PORT] || APP_CONSTS.DEFAULT_PORT;
+    server = app.listen(port, () => {
+      log.info({ port }, LOG_MESSAGES.SERVER_STARTED(Number(port)));
+    });
     cleanupInterval = setInterval(() => {
       webhookManager.cleanup().catch((e) => {
-        log.error({ err: serializeError(e) }, "Cleanup error");
+        log.error({ err: serializeError(e) }, LOG_MESSAGES.CLEANUP_ERROR);
       });
-    }, CLEANUP_INTERVAL_MS);
-    Actor.on("migrating", () => shutdown("MIGRATING"));
-    Actor.on("aborting", () => shutdown("ABORTING"));
-    process.on("SIGTERM", () => shutdown("SIGTERM"));
-    process.on("SIGINT", () => shutdown("SIGINT"));
+    }, APP_CONSTS.CLEANUP_INTERVAL_MS);
+    Actor.on("migrating", () => shutdown(SHUTDOWN_SIGNALS.MIGRATING));
+    Actor.on("aborting", () => shutdown(SHUTDOWN_SIGNALS.ABORTING));
+
+    // Refactored shutdown signals to include retry logic
+    process.on(SHUTDOWN_SIGNALS.SIGTERM, () =>
+      handleShutdownSignal(SHUTDOWN_SIGNALS.SIGTERM),
+    );
+    process.on(SHUTDOWN_SIGNALS.SIGINT, () =>
+      handleShutdownSignal(SHUTDOWN_SIGNALS.SIGINT),
+    );
   }
 
   return app;
 }
 
-if (process.env.NODE_ENV !== "test") {
+if (process.env[ENV_VARS.NODE_ENV] !== ENV_VALUES.TEST) {
   initialize().catch((err) => {
-    log.error({ err: serializeError(err) }, "Server failed to start");
-    process.exit(1);
+    log.error({ err: serializeError(err) }, LOG_MESSAGES.SERVER_START_FAILED);
+    process.exit(EXIT_CODES.FAILURE);
   });
 }
 

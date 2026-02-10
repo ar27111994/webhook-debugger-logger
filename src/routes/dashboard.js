@@ -6,15 +6,25 @@
 import { readFile } from "fs/promises";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
+import { escapeHtml } from "./utils.js";
 import { createChildLogger, serializeError } from "../utils/logger.js";
+import { LOG_MESSAGES } from "../consts/messages.js";
 import {
   HTTP_STATUS,
   MIME_TYPES,
+  HTTP_HEADERS,
+  HTTP_STATUS_MESSAGES,
+  ENCODINGS,
+} from "../consts/http.js";
+import {
   DASHBOARD_PLACEHOLDERS,
   DASHBOARD_TEMPLATE_PATH,
-} from "../consts.js";
+  DASHBOARD_CONSTS,
+  STATUS_LABELS,
+} from "../consts/ui.js";
+import { LOG_COMPONENTS } from "../consts/logging.js";
 
-const log = createChildLogger({ component: "Dashboard" });
+const log = createChildLogger({ component: LOG_COMPONENTS.DASHBOARD });
 
 /**
  * @typedef {import("express").Request} Request
@@ -54,13 +64,13 @@ export const createDashboardHandler =
     const activeCount = webhookManager.getAllActive().length;
     const signatureProvider = getSignatureStatus ? getSignatureStatus() : null;
 
-    if (req.headers["accept"]?.includes(MIME_TYPES.PLAIN)) {
+    if (req.headers[HTTP_HEADERS.ACCEPT]?.includes(MIME_TYPES.PLAIN)) {
       return res
         .type(MIME_TYPES.PLAIN)
         .send(
-          `Webhook Debugger & Logger - Enterprise Suite (v${version})\n` +
+          `${DASHBOARD_CONSTS.BRAND_HEADER} (v${version})\n` +
             `Active Webhooks: ${activeCount}\n` +
-            `Signature Verification: ${signatureProvider || "Disabled"}`,
+            `Signature Verification: ${signatureProvider || STATUS_LABELS.DISABLED}`,
         );
     }
 
@@ -69,14 +79,17 @@ export const createDashboardHandler =
       if (!template) {
         template = await readFile(
           join(__dirname, "..", "..", DASHBOARD_TEMPLATE_PATH),
-          "utf-8",
+          ENCODINGS.UTF8,
         );
         setTemplate(template);
       }
 
-      const sigBadge = signatureProvider
-        ? `<div class="status-badge signature-active">🔒 Verified: ${signatureProvider}</div>`
-        : `<div class="status-badge signature-inactive">🔓 No Verification</div>`;
+      const escapedProvider = signatureProvider
+        ? escapeHtml(signatureProvider)
+        : null;
+      const sigBadge = escapedProvider
+        ? `<div class="status-badge signature-active">🔒 Verified: ${escapedProvider}</div>`
+        : `<div class="status-badge signature-inactive">🔓 ${STATUS_LABELS.NO_VERIFICATION}</div>`;
 
       const html = template
         .replaceAll(DASHBOARD_PLACEHOLDERS.VERSION, `v${version}`)
@@ -85,8 +98,13 @@ export const createDashboardHandler =
 
       res.send(html);
     } catch (err) {
-      log.error({ err: serializeError(err) }, "Failed to load index.html");
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).send("Internal Server Error");
+      log.error(
+        { err: serializeError(err) },
+        LOG_MESSAGES.DASHBOARD_LOAD_FAILED,
+      );
+      res
+        .status(HTTP_STATUS.INTERNAL_SERVER_ERROR)
+        .send(HTTP_STATUS_MESSAGES[HTTP_STATUS.INTERNAL_SERVER_ERROR]);
     }
   };
 
@@ -98,10 +116,13 @@ export const preloadTemplate = async () => {
   try {
     return await readFile(
       join(__dirname, "..", "..", DASHBOARD_TEMPLATE_PATH),
-      "utf-8",
+      ENCODINGS.UTF8,
     );
   } catch (err) {
-    log.warn({ err: serializeError(err) }, "Failed to preload index.html");
+    log.warn(
+      { err: serializeError(err) },
+      LOG_MESSAGES.DASHBOARD_PRELOAD_FAILED,
+    );
     return "";
   }
 };

@@ -26,8 +26,9 @@ const {
   MAX_SAFE_REPLAY_RETRIES,
   MAX_SAFE_REPLAY_TIMEOUT_MS,
   MAX_SAFE_FORWARD_RETRIES,
-  HTTP_STATUS,
-} = await import("../../src/consts.js");
+} = await import("../../src/consts/app.js");
+
+const { HTTP_STATUS } = await import("../../src/consts/http.js");
 
 /**
  * @typedef {import('../../src/typedefs.js').SignatureProvider} SignatureProvider

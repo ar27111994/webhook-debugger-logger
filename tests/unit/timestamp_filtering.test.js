@@ -9,7 +9,7 @@ import {
   assertType,
 } from "../setup/helpers/test-utils.js";
 import { resetDb } from "../setup/helpers/db-hooks.js";
-import { HTTP_STATUS } from "../../src/consts.js";
+import { HTTP_STATUS } from "../../src/consts/http.js";
 
 // Initialize mocks BEFORE imports
 await setupCommonMocks({ apify: true, axios: false });

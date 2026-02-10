@@ -4,10 +4,21 @@
  * @module routes/stream
  */
 
-import { MAX_SSE_CLIENTS } from "../consts.js";
 import { createChildLogger, serializeError } from "../utils/logger.js";
+import {
+  HTTP_STATUS,
+  MIME_TYPES,
+  HTTP_HEADERS,
+  HTTP_STATUS_MESSAGES,
+} from "../consts/http.js";
+import { LOG_COMPONENTS } from "../consts/logging.js";
+import { SSE_CONSTS } from "../consts/ui.js";
+import { SECURITY_HEADERS_VALUES } from "../consts/security.js";
+import { LOG_MESSAGES } from "../consts/messages.js";
+import { ERROR_MESSAGES } from "../consts/errors.js";
+import { MAX_SSE_CLIENTS } from "../consts/app.js";
 
-const log = createChildLogger({ component: "Stream" });
+const log = createChildLogger({ component: LOG_COMPONENTS.STREAM });
 
 /**
  * @typedef {import("express").Request} Request
@@ -21,25 +32,32 @@ const log = createChildLogger({ component: "Stream" });
  * Manages the Server-Sent Events connection, headers, and keep-alive.
  *
  * @param {Set<ServerResponse>} clients - Set of connected SSE client responses
+ * @param {Object} [options]
+ * @param {number} [options.maxSseClients]
  * @returns {RequestHandler} Express middleware
  */
 export const createLogStreamHandler =
-  (clients) => /** @param {Request} req @param {Response} res */ (req, res) => {
+  (clients, { maxSseClients = MAX_SSE_CLIENTS } = {}) =>
+  /** @param {Request} req @param {Response} res */
+  (req, res) => {
     // 0. Enforce connection limit
-    if (clients.size >= MAX_SSE_CLIENTS) {
-      res.status(503).json({
-        error: "Service Unavailable",
-        message: `Maximum SSE connections reached (${MAX_SSE_CLIENTS}). Try again later.`,
+    if (clients.size >= maxSseClients) {
+      res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json({
+        error: HTTP_STATUS_MESSAGES[HTTP_STATUS.SERVICE_UNAVAILABLE],
+        message: ERROR_MESSAGES.SSE_LIMIT_REACHED(maxSseClients),
       });
       return;
     }
 
     // 1. Optimize headers
-    res.setHeader("Content-Encoding", "identity"); // Disable compression
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
-    res.setHeader("X-Accel-Buffering", "no"); // Nginx: Unbuffered
+    res.setHeader(
+      HTTP_HEADERS.CONTENT_ENCODING,
+      SECURITY_HEADERS_VALUES.IDENTITY,
+    ); // Disable compression
+    res.setHeader(HTTP_HEADERS.CONTENT_TYPE, MIME_TYPES.EVENT_STREAM);
+    res.setHeader(HTTP_HEADERS.CACHE_CONTROL, SECURITY_HEADERS_VALUES.NO_CACHE);
+    res.setHeader(HTTP_HEADERS.CONNECTION, SECURITY_HEADERS_VALUES.KEEP_ALIVE);
+    res.setHeader(HTTP_HEADERS.X_ACCEL_BUFFERING, SECURITY_HEADERS_VALUES.NO); // Nginx: Unbuffered
 
     // 2. Register cleanup BEFORE writing to handle immediate close
     req.on("close", () => clients.delete(res));
@@ -48,14 +66,14 @@ export const createLogStreamHandler =
 
     // 3. Robust write with padding to force flush through proxies
     try {
-      res.write(": connected\n\n");
-      // Send 2KB of padding to bypass proxy buffers (standard is often 4KB, but 2KB usually helps trigger flush)
-      res.write(`: ${" ".repeat(2048)}\n\n`);
+      res.write(SSE_CONSTS.CONNECTED_MESSAGE);
+      // Send padding to bypass proxy buffers
+      res.write(`: ${" ".repeat(SSE_CONSTS.PADDING_LENGTH)}\n\n`);
       clients.add(res);
     } catch (error) {
       log.error(
         { err: serializeError(error) },
-        "Failed to establish SSE stream",
+        LOG_MESSAGES.FAILED_SSE_ESTABLISH,
       );
       // Cleanup handled by 'close' event
     }

@@ -1,7 +1,24 @@
+/**
+ * @file src/utils/alerting.js
+ * @description Alerting logic for sending notifications to Slack/Discord.
+ * @module utils/alerting
+ */
 import axios from "axios";
+import { validateUrlForSsrf } from "./ssrf.js";
+import { HTTP_HEADERS, HTTP_STATUS, MIME_TYPES } from "../consts/http.js";
+import { LOG_COMPONENTS } from "../consts/logging.js";
+import { LOG_MESSAGES } from "../consts/messages.js";
+import {
+  ALERT_TRIGGERS,
+  SLACK_BLOCK_TYPES,
+  DISCORD_COLORS,
+  DEFAULT_ALERT_ON,
+  ALERT_TIMEOUT_MS,
+} from "../consts/alerting.js";
 import { createChildLogger, serializeError } from "./logger.js";
+import { ERROR_MESSAGES } from "../consts/errors.js";
 
-const log = createChildLogger({ component: "Alerting" });
+const log = createChildLogger({ component: LOG_COMPONENTS.ALERTING });
 
 /**
  * @typedef {import("../typedefs.js").AlertTrigger} AlertTrigger
@@ -32,12 +49,6 @@ const log = createChildLogger({ component: "Alerting" });
  */
 
 /**
- * @type {Readonly<AlertTrigger[]>}
- */
-const DEFAULT_ALERT_ON = Object.freeze(["error", "5xx"]);
-const ALERT_TIMEOUT_MS = 5000;
-
-/**
  * Checks if an alert should be triggered based on the context and config.
  * @param {AlertConfig} config
  * @param {AlertContext} context
@@ -48,24 +59,29 @@ export function shouldAlert(config, context) {
 
   for (const trigger of triggers) {
     switch (trigger) {
-      case "error":
+      case ALERT_TRIGGERS.ERROR:
         if (context.error) return true;
         break;
-      case "4xx":
+      case ALERT_TRIGGERS.STATUS_4XX:
         if (
           context.statusCode &&
-          context.statusCode >= 400 &&
-          context.statusCode < 500
+          context.statusCode >= HTTP_STATUS.BAD_REQUEST &&
+          context.statusCode < HTTP_STATUS.INTERNAL_SERVER_ERROR
         )
           return true;
         break;
-      case "5xx":
-        if (context.statusCode && context.statusCode >= 500) return true;
+      case ALERT_TRIGGERS.STATUS_5XX:
+        if (
+          context.statusCode &&
+          context.statusCode >= HTTP_STATUS.INTERNAL_SERVER_ERROR
+        )
+          return true;
         break;
-      case "timeout":
-        if (context.error?.toLowerCase().includes("timeout")) return true;
+      case ALERT_TRIGGERS.TIMEOUT:
+        if (context.error?.toLowerCase().includes(ALERT_TRIGGERS.TIMEOUT))
+          return true;
         break;
-      case "signature_invalid":
+      case ALERT_TRIGGERS.SIGNATURE_INVALID:
         if (context.signatureValid === false) return true;
         break;
     }
@@ -92,7 +108,10 @@ export async function sendAlert(config, context) {
           results.slack = true;
         })
         .catch((err) => {
-          log.error({ err: serializeError(err) }, "Slack notification failed");
+          log.error(
+            { err: serializeError(err) },
+            LOG_MESSAGES.SLACK_NOTIF_FAILED,
+          );
           results.slack = false;
         }),
     );
@@ -107,7 +126,7 @@ export async function sendAlert(config, context) {
         .catch((err) => {
           log.error(
             { err: serializeError(err) },
-            "Discord notification failed",
+            LOG_MESSAGES.DISCORD_NOTIF_FAILED,
           );
           results.discord = false;
         }),
@@ -125,6 +144,12 @@ export async function sendAlert(config, context) {
  * @returns {Promise<void>}
  */
 async function sendSlackAlert(webhookUrl, context) {
+  const ssrfCheck = await validateUrlForSsrf(webhookUrl);
+  if (!ssrfCheck.safe) {
+    throw new Error(
+      ERROR_MESSAGES.ALERT_URL_BLOCKED_BY_SSRF_POLICY(String(ssrfCheck.error)),
+    );
+  }
   const emoji = context.error
     ? "🚨"
     : context.signatureValid === false
@@ -140,20 +165,29 @@ async function sendSlackAlert(webhookUrl, context) {
   const payload = {
     blocks: [
       {
-        type: "header",
+        type: SLACK_BLOCK_TYPES.HEADER,
         text: {
-          type: "plain_text",
+          type: SLACK_BLOCK_TYPES.PLAIN_TEXT,
           text: `${emoji} Webhook Alert`,
           emoji: true,
         },
       },
       {
-        type: "section",
+        type: SLACK_BLOCK_TYPES.SECTION,
         fields: [
-          { type: "mrkdwn", text: `*Webhook ID:*\n\`${context.webhookId}\`` },
-          { type: "mrkdwn", text: `*Method:*\n${context.method}` },
-          { type: "mrkdwn", text: `*Status:*\n${status}` },
-          { type: "mrkdwn", text: `*Time:*\n${context.timestamp}` },
+          {
+            type: SLACK_BLOCK_TYPES.MARKDOWN,
+            text: `*Webhook ID:*\n\`${context.webhookId}\``,
+          },
+          {
+            type: SLACK_BLOCK_TYPES.MARKDOWN,
+            text: `*Method:*\n${context.method}`,
+          },
+          { type: SLACK_BLOCK_TYPES.MARKDOWN, text: `*Status:*\n${status}` },
+          {
+            type: SLACK_BLOCK_TYPES.MARKDOWN,
+            text: `*Time:*\n${context.timestamp}`,
+          },
         ],
       },
     ],
@@ -161,14 +195,19 @@ async function sendSlackAlert(webhookUrl, context) {
 
   if (context.sourceIp) {
     payload.blocks?.push({
-      type: "context",
-      elements: [{ type: "mrkdwn", text: `Source IP: ${context.sourceIp}` }],
+      type: SLACK_BLOCK_TYPES.CONTEXT,
+      elements: [
+        {
+          type: SLACK_BLOCK_TYPES.MARKDOWN,
+          text: `Source IP: ${context.sourceIp}`,
+        },
+      ],
     });
   }
 
   await axios.post(webhookUrl, payload, {
     timeout: ALERT_TIMEOUT_MS,
-    headers: { "Content-Type": "application/json" },
+    headers: { [HTTP_HEADERS.CONTENT_TYPE]: MIME_TYPES.JSON },
   });
 }
 
@@ -179,11 +218,17 @@ async function sendSlackAlert(webhookUrl, context) {
  * @returns {Promise<void>}
  */
 async function sendDiscordAlert(webhookUrl, context) {
+  const ssrfCheck = await validateUrlForSsrf(webhookUrl);
+  if (!ssrfCheck.safe) {
+    throw new Error(
+      ERROR_MESSAGES.ALERT_URL_BLOCKED_BY_SSRF_POLICY(String(ssrfCheck.error)),
+    );
+  }
   const color = context.error
-    ? 0xff0000
+    ? DISCORD_COLORS.RED
     : context.signatureValid === false
-      ? 0xffa500
-      : 0x00ff00;
+      ? DISCORD_COLORS.ORANGE
+      : DISCORD_COLORS.GREEN;
   const status = context.error
     ? `Error: ${context.error}`
     : context.signatureValid === false
@@ -220,7 +265,7 @@ async function sendDiscordAlert(webhookUrl, context) {
 
   await axios.post(webhookUrl, payload, {
     timeout: ALERT_TIMEOUT_MS,
-    headers: { "Content-Type": "application/json" },
+    headers: { [HTTP_HEADERS.CONTENT_TYPE]: MIME_TYPES.JSON },
   });
 }
 

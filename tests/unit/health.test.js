@@ -4,7 +4,7 @@ import {
   createMockRequest,
   createMockResponse,
 } from "../setup/helpers/test-utils.js";
-import { HTTP_STATUS } from "../../src/consts.js";
+import { HTTP_STATUS } from "../../src/consts/http.js";
 
 // Mock duckdb dependency
 jest.unstable_mockModule("../../src/db/duckdb.js", () => ({

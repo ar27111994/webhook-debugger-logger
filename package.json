@@ -20,7 +20,9 @@
     "lint:fix": "eslint src tests --fix",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "sync:version": "node -e \"const fs=require('fs');const p='.actor/actor.json';const a=JSON.parse(fs.readFileSync(p,'utf8'));a.version=JSON.parse(fs.readFileSync('package.json','utf8')).version;fs.writeFileSync(p,JSON.stringify(a,null,2)+'\\n');console.log('Synced actor.json to v'+a.version)\"",
+    "prepare": "husky"
   },
   "dependencies": {
     "@duckdb/node-api": "^1.4.3-r.3",
@@ -50,9 +52,11 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^25.0.6",
     "@types/supertest": "^6.0.3",
-    "eslint": "^9.39.2",
+    "eslint": "^10.0.0",
     "globals": "^17.0.0",
+    "husky": "^9.1.7",
     "jest": "^30.2.0",
+    "lint-staged": "^16.2.7",
     "prettier": "^3.8.0",
     "supertest": "^7.2.2",
     "typescript": "^5.9.3"
@@ -80,5 +84,15 @@
   "publishConfig": {
     "access": "public",
     "provenance": true
+  },
+  "lint-staged": {
+    "*.js": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "package.json": [
+      "npm run sync:version",
+      "git add .actor/actor.json"
+    ]
   }
 }

@@ -1,21 +1,30 @@
 /**
  * @file src/db/duckdb.js
  * @description DuckDB Singleton and Schema Management using @duckdb/node-api (Neo Client)
+ * @module db/duckdb
  */
 import { DuckDBInstance } from "@duckdb/node-api";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { LOG_COMPONENTS } from "../consts/logging.js";
+import { LOG_MESSAGES } from "../consts/messages.js";
 import {
+  DUCKDB_CONSTS,
+  DUCKDB_TABLES,
+  DUCKDB_SCHEMA,
   DUCKDB_FILENAME_DEFAULT,
   DUCKDB_MEMORY_LIMIT,
+  DUCKDB_POOL_SIZE,
   DUCKDB_STORAGE_DIR_DEFAULT,
   DUCKDB_THREADS,
-  DUCKDB_POOL_SIZE,
-} from "../consts.js";
+  SQL_CONSTS,
+} from "../consts/database.js";
+import { ENV_VARS } from "../consts/app.js";
+import { NODE_ERROR_CODES } from "../consts/errors.js";
 import { createChildLogger } from "../utils/logger.js";
 import Bottleneck from "bottleneck";
 
-const log = createChildLogger({ component: "DuckDB" });
+const log = createChildLogger({ component: LOG_COMPONENTS.DUCKDB });
 
 // Serialize all write operations to prevent "Database Locked" errors
 // and ensure sequential processing of mutations.
@@ -40,7 +49,7 @@ const connectionPool = [];
 /** @type {DuckDBConnection[]} */
 const inUseConnections = [];
 
-const IN_MEM_DB = ":memory:";
+const IN_MEM_DB = DUCKDB_CONSTS.MEMORY_DB;
 
 /**
  * Gets the current database path based on environment variables.
@@ -48,8 +57,9 @@ const IN_MEM_DB = ":memory:";
  */
 function getDbPath() {
   const storageDir =
-    process.env.DUCKDB_STORAGE_DIR || DUCKDB_STORAGE_DIR_DEFAULT;
-  const filename = process.env.DUCKDB_FILENAME || DUCKDB_FILENAME_DEFAULT;
+    process.env[ENV_VARS.DUCKDB_STORAGE_DIR] || DUCKDB_STORAGE_DIR_DEFAULT;
+  const filename =
+    process.env[ENV_VARS.DUCKDB_FILENAME] || DUCKDB_FILENAME_DEFAULT;
   return filename === IN_MEM_DB ? IN_MEM_DB : path.join(storageDir, filename);
 }
 
@@ -64,14 +74,16 @@ export async function getDbInstance() {
     initPromise = (async () => {
       const dbPath = getDbPath();
       const storageDir =
-        process.env.DUCKDB_STORAGE_DIR || DUCKDB_STORAGE_DIR_DEFAULT;
+        process.env[ENV_VARS.DUCKDB_STORAGE_DIR] || DUCKDB_STORAGE_DIR_DEFAULT;
 
       if (dbPath !== IN_MEM_DB) {
         try {
           await fs.mkdir(storageDir, { recursive: true });
         } catch (err) {
           // Ignore if exists
-          if (/** @type {CommonError} */ (err).code !== "EEXIST") {
+          if (
+            /** @type {CommonError} */ (err).code !== NODE_ERROR_CODES.EEXIST
+          ) {
             throw err;
           }
         }
@@ -100,6 +112,7 @@ export async function getDbInstance() {
 
 /**
  * Resets the DuckDB singleton instance (primarily for tests).
+ * @returns {Promise<void>}
  */
 export async function resetDbInstance() {
   dbInstance = null;
@@ -131,6 +144,7 @@ async function acquireConnection() {
 /**
  * Releases a connection back to the pool or closes it if pool is full.
  * @param {DuckDBConnection} conn
+ * @returns {void}
  */
 function releaseConnection(conn) {
   const idx = inUseConnections.indexOf(conn);
@@ -193,15 +207,18 @@ export async function executeTransaction(task) {
   return writeQueue.schedule(async () => {
     const conn = await acquireConnection();
     try {
-      await conn.run("BEGIN TRANSACTION");
+      await conn.run(SQL_CONSTS.TRANSACTION_COMMANDS.BEGIN);
       const result = await task(conn);
-      await conn.run("COMMIT");
+      await conn.run(SQL_CONSTS.TRANSACTION_COMMANDS.COMMIT);
       return result;
     } catch (err) {
       try {
-        await conn.run("ROLLBACK");
+        await conn.run(SQL_CONSTS.TRANSACTION_COMMANDS.ROLLBACK);
       } catch (rollbackErr) {
-        log.error({ err: rollbackErr }, "Failed to rollback transaction");
+        log.error(
+          { err: rollbackErr },
+          LOG_MESSAGES.TRANSACTION_ROLLBACK_FAILED,
+        );
       }
       throw err;
     } finally {
@@ -213,79 +230,64 @@ export async function executeTransaction(task) {
 /**
  * Initialize Schema
  * @param {DuckDBConnection} conn
+ * @returns {Promise<void>}
  */
 async function initSchema(conn) {
   // 1. Create table with baseline schema (minimum viable)
   // If it exists, this does nothing.
   await conn.run(`
-    CREATE TABLE IF NOT EXISTS logs (
-      id VARCHAR PRIMARY KEY,
-      timestamp TIMESTAMP
+    CREATE TABLE IF NOT EXISTS ${DUCKDB_TABLES.LOGS} (
+      ${SQL_CONSTS.COLUMNS.ID} VARCHAR PRIMARY KEY,
+      ${SQL_CONSTS.COLUMNS.TIMESTAMP} TIMESTAMP
     );
   `);
 
   // 2. Ensure all columns exist (Migration / Evolution)
   // DuckDB 'ADD COLUMN IF NOT EXISTS' makes this idempotent.
-  const columns = [
-    "webhookId VARCHAR",
-    "requestId VARCHAR",
-    "method VARCHAR",
-    "statusCode INTEGER",
-    "contentType VARCHAR",
-    "processingTime INTEGER",
-    "size INTEGER",
-    "remoteIp VARCHAR",
-    "userAgent VARCHAR",
-    "requestUrl VARCHAR",
-    "bodyEncoding VARCHAR",
-
-    // JSON Columns
-    "headers JSON",
-    "query JSON",
-    "body JSON",
-    "responseHeaders JSON",
-    "responseBody JSON",
-
-    // Metadata
-    "signatureValid BOOLEAN",
-    "signatureProvider VARCHAR",
-    "signatureError VARCHAR",
-
-    // System
-    "source_offset BIGINT",
-  ];
+  const columns = DUCKDB_SCHEMA.COLUMNS;
 
   for (const colDef of columns) {
-    await conn.run(`ALTER TABLE logs ADD COLUMN IF NOT EXISTS ${colDef}`);
+    await conn.run(
+      `ALTER TABLE ${DUCKDB_TABLES.LOGS} ADD COLUMN IF NOT EXISTS ${colDef}`,
+    );
   }
 
   // 3. Create Indexes
   await conn.run(
-    "CREATE INDEX IF NOT EXISTS idx_timestamp ON logs (timestamp DESC)",
+    `CREATE INDEX IF NOT EXISTS idx_${SQL_CONSTS.COLUMNS.TIMESTAMP} ON ${DUCKDB_TABLES.LOGS} (${SQL_CONSTS.COLUMNS.TIMESTAMP} DESC)`,
   );
   await conn.run(
-    "CREATE INDEX IF NOT EXISTS idx_statusCode ON logs (statusCode)",
+    `CREATE INDEX IF NOT EXISTS idx_${SQL_CONSTS.COLUMNS.STATUS_CODE} ON ${DUCKDB_TABLES.LOGS} (${SQL_CONSTS.COLUMNS.STATUS_CODE})`,
   );
   await conn.run(
-    "CREATE INDEX IF NOT EXISTS idx_offset ON logs (source_offset)",
+    `CREATE INDEX IF NOT EXISTS idx_${SQL_CONSTS.COLUMNS.SOURCE_OFFSET} ON ${DUCKDB_TABLES.LOGS} (${SQL_CONSTS.COLUMNS.SOURCE_OFFSET})`,
   );
   await conn.run(
-    "CREATE INDEX IF NOT EXISTS idx_webhookId ON logs (webhookId)",
+    `CREATE INDEX IF NOT EXISTS idx_${SQL_CONSTS.COLUMNS.WEBHOOK_ID} ON ${DUCKDB_TABLES.LOGS} (${SQL_CONSTS.COLUMNS.WEBHOOK_ID})`,
   );
   await conn.run(
-    "CREATE INDEX IF NOT EXISTS idx_processingTime ON logs (processingTime)",
+    `CREATE INDEX IF NOT EXISTS idx_${SQL_CONSTS.COLUMNS.PROCESSING_TIME} ON ${DUCKDB_TABLES.LOGS} (${SQL_CONSTS.COLUMNS.PROCESSING_TIME})`,
   );
-  await conn.run("CREATE INDEX IF NOT EXISTS idx_method ON logs (method)");
   await conn.run(
-    "CREATE INDEX IF NOT EXISTS idx_requestId ON logs (requestId)",
+    `CREATE INDEX IF NOT EXISTS idx_${SQL_CONSTS.COLUMNS.METHOD} ON ${DUCKDB_TABLES.LOGS} (${SQL_CONSTS.COLUMNS.METHOD})`,
   );
-  await conn.run("CREATE INDEX IF NOT EXISTS idx_remoteIp ON logs (remoteIp)");
-  await conn.run("CREATE INDEX IF NOT EXISTS idx_size ON logs (size)");
   await conn.run(
-    "CREATE INDEX IF NOT EXISTS idx_requestUrl ON logs (requestUrl)",
+    `CREATE INDEX IF NOT EXISTS idx_${SQL_CONSTS.COLUMNS.REQUEST_ID} ON ${DUCKDB_TABLES.LOGS} (${SQL_CONSTS.COLUMNS.REQUEST_ID})`,
+  );
+  await conn.run(
+    `CREATE INDEX IF NOT EXISTS idx_${SQL_CONSTS.COLUMNS.REMOTE_IP} ON ${DUCKDB_TABLES.LOGS} (${SQL_CONSTS.COLUMNS.REMOTE_IP})`,
+  );
+  await conn.run(
+    `CREATE INDEX IF NOT EXISTS idx_${SQL_CONSTS.COLUMNS.SIZE} ON ${DUCKDB_TABLES.LOGS} (${SQL_CONSTS.COLUMNS.SIZE})`,
+  );
+  await conn.run(
+    `CREATE INDEX IF NOT EXISTS idx_${SQL_CONSTS.COLUMNS.REQUEST_URL} ON ${DUCKDB_TABLES.LOGS} (${SQL_CONSTS.COLUMNS.REQUEST_URL})`,
   );
 }
 
+/**
+ * @returns {Promise<void>}
+ */
 export async function closeDb() {
   // Drain connection pool
   while (connectionPool.length > 0) {
@@ -307,9 +309,9 @@ export async function vacuumDb() {
   const instance = await getDbInstance();
   const conn = await instance.connect();
   try {
-    await conn.run("VACUUM");
-    await conn.run("CHECKPOINT");
-    log.info("Vacuum and checkpoint completed");
+    await conn.run(SQL_CONSTS.TRANSACTION_COMMANDS.VACUUM);
+    await conn.run(SQL_CONSTS.TRANSACTION_COMMANDS.CHECKPOINT);
+    log.info(LOG_MESSAGES.VACUUM_COMPLETE);
   } finally {
     conn.closeSync();
   }

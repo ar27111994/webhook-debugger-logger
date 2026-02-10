@@ -1,10 +1,11 @@
 /**
  * @file src/utils/events.js
  * @description Centralized event emitter for internal application events (e.g., log:received).
+ * @module utils/events
  */
 import { EventEmitter } from "node:events";
 
-import { EVENT_MAX_LISTENERS } from "../consts.js";
+import { EVENT_MAX_LISTENERS, INTERNAL_EVENTS } from "../consts/app.js";
 
 /**
  * @typedef {import('../typedefs.js').WebhookEvent} WebhookEvent
@@ -23,6 +24,4 @@ appEvents.setMaxListeners(EVENT_MAX_LISTENERS);
  * @property {(payload: WebhookEvent) => void} logReceived
  */
 
-export const EVENTS = {
-  LOG_RECEIVED: "log:received",
-};
+export const EVENT_NAMES = INTERNAL_EVENTS;

@@ -1,0 +1,13 @@
+.git
+.github
+.agent
+.vscode
+node_modules
+tests
+coverage
+*.md
+!README.md
+.eslintrc*
+.prettier*
+tsconfig.json
+storage

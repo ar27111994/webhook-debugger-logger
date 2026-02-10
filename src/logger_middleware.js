@@ -2,6 +2,7 @@
  * @file src/logger_middleware.js
  * @description Core webhook logging middleware. Handles request validation, payload processing,
  * signature verification, large payload offloading to KVS, and response generation.
+ * @module logger_middleware
  */
 import { Actor } from "apify";
 import Ajv from "ajv";
@@ -10,44 +11,57 @@ import vm from "vm";
 import { validateAuth } from "./utils/auth.js";
 import { getSafeResponseDelay, parseWebhookOptions } from "./utils/config.js";
 import { checkIpInRanges } from "./utils/ssrf.js";
+import { sendUnauthorizedResponse } from "./routes/utils.js";
 import {
   generateKvsKey,
   offloadToKvs,
   getKvsUrl,
   createReferenceBody,
-  OFFLOAD_MARKER_STREAM,
-  OFFLOAD_MARKER_SYNC,
 } from "./utils/storage_helper.js";
 import {
-  BACKGROUND_TASK_TIMEOUT_PROD_MS,
-  BACKGROUND_TASK_TIMEOUT_TEST_MS,
-  SCRIPT_EXECUTION_TIMEOUT_MS,
-  SENSITIVE_HEADERS,
-  DEFAULT_PAYLOAD_LIMIT,
-  KVS_OFFLOAD_THRESHOLD,
-  APIFY_HOMEPAGE_URL,
+  APP_CONSTS,
+  ENV_VARS,
+  DEFAULT_ID_LENGTH,
+  ENV_VALUES,
+  STREAM_EVENTS,
+} from "./consts/app.js";
+import { STORAGE_CONSTS } from "./consts/storage.js";
+import {
+  HTTP_HEADERS,
+  HTTP_STATUS,
+  HTTP_METHODS,
+  HTTP_STATUS_MESSAGES,
+  MIME_TYPES,
+  ENCODINGS,
   RECURSION_HEADER_NAME,
   RECURSION_HEADER_VALUE,
   RECURSION_HEADER_LOOP_SUFFIX,
-  HTTP_STATUS,
-  MIME_TYPES,
-  DEFAULT_ID_LENGTH,
-  MAX_DATASET_ITEM_BYTES,
-} from "./consts.js";
+  SENSITIVE_HEADERS,
+  HTTP_CONSTS,
+} from "./consts/http.js";
+import { LOG_COMPONENTS, LOG_CONSTS, LOG_TAGS } from "./consts/logging.js";
+import {
+  ERROR_MESSAGES,
+  ERROR_LABELS,
+  NODE_ERROR_CODES,
+} from "./consts/errors.js";
 import {
   createStreamVerifier,
   verifySignature,
   finalizeStreamVerification,
 } from "./utils/signature.js";
 import { triggerAlertIfNeeded } from "./utils/alerting.js";
-import { appEvents, EVENTS } from "./utils/events.js";
-import { ForwardingService } from "./services/ForwardingService.js";
+import { appEvents, EVENT_NAMES } from "./utils/events.js";
+import { forwardingService as defaultForwardingService } from "./services/index.js";
 import { PassThrough } from "stream";
 import { webhookRateLimiter } from "./utils/webhook_rate_limiter.js";
 import {
   createChildLogger,
   serializeError as serializeErrorUtil,
 } from "./utils/logger.js";
+import { LOG_MESSAGES } from "./consts/messages.js";
+import { deepRedact, validateStatusCode } from "./utils/common.js";
+import { DEFAULT_ALERT_ON } from "./consts/alerting.js";
 
 /**
  * @typedef {import("express").RequestHandler} RequestHandler
@@ -63,6 +77,9 @@ import {
  * @typedef {import('./typedefs.js').LoggerOptions} LoggerOptions
  * @typedef {import('./typedefs.js').CommonError} CommonError
  * @typedef {import('./typedefs.js').MiddlewareValidationResult} MiddlewareValidationResult
+ * @typedef {import('./typedefs.js').AlertConfig} AlertConfig
+ * @typedef {import('./utils/config.js').WebhookConfig} WebhookConfig
+ * @typedef {import("./services/index.js").ForwardingService} ForwardingService
  */
 
 /** @type {AjvType} */
@@ -70,9 +87,13 @@ import {
 const ajv = new Ajv.default();
 
 export class LoggerMiddleware {
+  /** @type {WebhookManager} */
   #webhookManager;
+  /** @type {Function} */
   #onEvent;
+  /** @type {WebhookConfig} */
   #options;
+  /** @type {ForwardingService} */
   #forwardingService;
   /** @type {vm.Script | null} */
   #compiledScript = null;
@@ -91,7 +112,7 @@ export class LoggerMiddleware {
    */
   static getValidStatusCode(forcedStatus, defaultCode = HTTP_STATUS.OK) {
     const forced = Number(forcedStatus);
-    if (Number.isFinite(forced) && forced >= 100 && forced < 600) {
+    if (validateStatusCode(forced)) {
       return forced;
     }
     return defaultCode;
@@ -108,7 +129,9 @@ export class LoggerMiddleware {
     this.#onEvent = onEvent;
 
     // Initialize private logger FIRST (required by #refreshCompilations)
-    this.#log = createChildLogger({ component: "LoggerMiddleware" });
+    this.#log = createChildLogger({
+      component: LOG_COMPONENTS.LOGGER_MIDDLEWARE,
+    });
     this.#serializeError = serializeErrorUtil;
 
     // Bind methods where necessary (middleware is used as value)
@@ -124,7 +147,7 @@ export class LoggerMiddleware {
     this.#options = options;
 
     /** @type {ForwardingService} */
-    this.#forwardingService = forwardingService || new ForwardingService();
+    this.#forwardingService = forwardingService || defaultForwardingService;
   }
 
   /**
@@ -177,8 +200,10 @@ export class LoggerMiddleware {
       return result;
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : String(err ?? "Unknown error");
-      this.#log.error({ errorPrefix, message }, "Invalid resource");
+        err instanceof Error
+          ? err.message
+          : String(err ?? LOG_MESSAGES.UNKNOWN_ERROR);
+      this.#log.error({ errorPrefix, message }, LOG_MESSAGES.RESOURCE_INVALID);
       return null;
     }
   }
@@ -197,8 +222,8 @@ export class LoggerMiddleware {
       this.#compiledScript = this.#compileResource(
         newOptions.customScript,
         (src) => new vm.Script(src),
-        "Custom script re-compiled successfully.",
-        "SCRIPT-ERROR",
+        LOG_MESSAGES.SCRIPT_COMPILED,
+        LOG_TAGS.SCRIPT_ERROR,
       );
     }
 
@@ -219,8 +244,8 @@ export class LoggerMiddleware {
           const schema = typeof src === "string" ? JSON.parse(src) : src;
           return ajv.compile(schema);
         },
-        "JSON Schema re-compiled successfully.",
-        "SCHEMA-ERROR",
+        LOG_MESSAGES.SCHEMA_COMPILED,
+        LOG_TAGS.SCHEMA_ERROR,
       );
     }
   }
@@ -234,6 +259,7 @@ export class LoggerMiddleware {
     const webhookData = this.#webhookManager.getWebhookData(webhookId) || {};
 
     // Only allow non-security settings to be overridden per-webhook
+    /** @type {Array<keyof WebhookConfig>} */
     const allowedOverrides = [
       "defaultResponseCode",
       "defaultResponseBody",
@@ -245,7 +271,7 @@ export class LoggerMiddleware {
     ];
     const webhookOverrides = Object.fromEntries(
       Object.entries(webhookData).filter(([key]) =>
-        allowedOverrides.includes(key),
+        allowedOverrides.includes(/** @type {keyof WebhookConfig} */ (key)),
       ),
     );
 
@@ -263,7 +289,8 @@ export class LoggerMiddleware {
    * @param {NextFunction} next
    */
   async ingestMiddleware(req, res, next) {
-    if (req.method === "GET" || req.method === "HEAD") return next();
+    if (req.method === HTTP_METHODS.GET || req.method === HTTP_METHODS.HEAD)
+      return next();
 
     const webhookId = String(req.params.id);
     const clientIp = req.ip || req.socket?.remoteAddress;
@@ -271,65 +298,73 @@ export class LoggerMiddleware {
     // 0. Recursion Protection (Loop Detection)
     // If we receive a request that We ourselves forwarded, block it to prevent infinite loops.
     // We check if the incoming header matches THIS specific instance's Run ID.
-    const forwardedBy = req.headers[RECURSION_HEADER_NAME.toLowerCase()];
+    const forwardedBy =
+      req.headers[RECURSION_HEADER_NAME] ||
+      req.headers[HTTP_HEADERS.X_FORWARDED_FOR];
     if (
       forwardedBy === RECURSION_HEADER_VALUE ||
       forwardedBy === `${RECURSION_HEADER_VALUE}${RECURSION_HEADER_LOOP_SUFFIX}`
     ) {
       this.#log.warn(
         { webhookId, clientIp, headers: req.headers },
-        "Recursive forwarding loop detected and blocked (Self-Reference).",
+        ERROR_MESSAGES.RECURSIVE_FORWARDING_BLOCKED,
       );
       return res.status(HTTP_STATUS.UNPROCESSABLE_ENTITY).json({
         status: HTTP_STATUS.UNPROCESSABLE_ENTITY,
-        error: "Unprocessable Entity",
-        message:
-          "Recursive forwarding detected. The forwarding target appears to be the Actor itself.",
+        error: HTTP_STATUS_MESSAGES[HTTP_STATUS.UNPROCESSABLE_ENTITY],
+        message: ERROR_MESSAGES.RECURSIVE_FORWARDING,
       });
     }
 
     // Per-webhook rate limiting (DDoS protection)
     const rateLimitResult = webhookRateLimiter.check(webhookId, clientIp);
     if (!rateLimitResult.allowed) {
-      res.setHeader("Retry-After", Math.ceil(rateLimitResult.resetMs / 1000));
-      res.setHeader("X-RateLimit-Limit", webhookRateLimiter.limit);
-      res.setHeader("X-RateLimit-Remaining", rateLimitResult.remaining);
+      res.setHeader(
+        HTTP_HEADERS.RETRY_AFTER,
+        Math.ceil(rateLimitResult.resetMs / APP_CONSTS.MS_PER_SECOND),
+      );
+      res.setHeader(HTTP_HEADERS.X_RATELIMIT_LIMIT, webhookRateLimiter.limit);
+      res.setHeader(
+        HTTP_HEADERS.X_RATELIMIT_REMAINING,
+        rateLimitResult.remaining,
+      );
 
       return res.status(HTTP_STATUS.TOO_MANY_REQUESTS).json({
         status: HTTP_STATUS.TOO_MANY_REQUESTS,
-        error: "Too Many Requests",
-        message: `Webhook rate limit exceeded. Max ${webhookRateLimiter.limit} requests per minute per webhook.`,
-        retryAfterSeconds: Math.ceil(rateLimitResult.resetMs / 1000),
+        error: HTTP_STATUS_MESSAGES[HTTP_STATUS.TOO_MANY_REQUESTS],
+        message: ERROR_MESSAGES.WEBHOOK_RATE_LIMIT_EXCEEDED(
+          webhookRateLimiter.limit,
+        ),
+        retryAfterSeconds: Math.ceil(
+          rateLimitResult.resetMs / APP_CONSTS.MS_PER_SECOND,
+        ),
       });
     }
 
     const options = this.#resolveOptions(webhookId);
 
     // Check Content-Length to decide strategy
-    const rawHeader = req.headers["content-length"];
+    const rawHeader = req.headers[HTTP_HEADERS.CONTENT_LENGTH];
     const contentLength = rawHeader ? parseInt(String(rawHeader), 10) : 0;
 
-    const maxSize = options.maxPayloadSize ?? DEFAULT_PAYLOAD_LIMIT;
+    const maxSize = options.maxPayloadSize ?? APP_CONSTS.DEFAULT_PAYLOAD_LIMIT;
 
     // 1. Hard Security Limit Check
     if (contentLength > maxSize) {
       return res.status(HTTP_STATUS.PAYLOAD_TOO_LARGE).json({
-        error: `Payload too large. Limit is ${maxSize} bytes.`,
+        error: ERROR_MESSAGES.PAYLOAD_TOO_LARGE(maxSize),
         received: contentLength,
       });
     }
 
     // 2. Streaming Offload Check
     // If > threshold, we stream to KVS and bypass body-parser
-    if (contentLength > KVS_OFFLOAD_THRESHOLD) {
+    if (contentLength > STORAGE_CONSTS.KVS_OFFLOAD_THRESHOLD) {
       const kvsKey = generateKvsKey();
       const rawContentType =
-        req.headers["content-type"] || MIME_TYPES.OCTET_STREAM;
+        req.headers[HTTP_HEADERS.CONTENT_TYPE] || MIME_TYPES.OCTET_STREAM;
 
-      this.#log.info(
-        { contentLength, kvsKey },
-        "Streaming large payload to KVS",
-      );
+      this.#log.info({ contentLength, kvsKey }, LOG_MESSAGES.KVS_OFFLOAD_START);
 
       try {
         // Setup streaming signature verification
@@ -346,12 +381,12 @@ export class LoggerMiddleware {
             verifier = result;
             this.#log.info(
               { provider: options.signatureVerification.provider },
-              "Stream signature verification initialized",
+              LOG_MESSAGES.STREAM_VERIFIER_INIT,
             );
           } else {
             this.#log.warn(
               { error: result.error },
-              "Failed to init stream verifier",
+              LOG_MESSAGES.STREAM_VERIFIER_FAILED,
             );
           }
         }
@@ -361,7 +396,7 @@ export class LoggerMiddleware {
         // Fork stream: One to KVS, one to Verifier (if active)
         req.pipe(kvsStream);
         if (verifier && verifier.hmac) {
-          req.on("data", (chunk) => {
+          req.on(STREAM_EVENTS.DATA, (chunk) => {
             verifier.hmac?.update(chunk);
           });
         }
@@ -378,7 +413,7 @@ export class LoggerMiddleware {
           /** @type {any} */ (req).ingestSignatureResult = {
             valid,
             provider: options.signatureVerification?.provider,
-            error: valid ? undefined : "Signature mismatch (stream verified)",
+            error: valid ? undefined : ERROR_LABELS.SIGNATURE_MISMATCH_STREAM,
           };
         }
 
@@ -389,8 +424,8 @@ export class LoggerMiddleware {
           key: kvsKey,
           kvsUrl,
           originalSize: contentLength,
-          note: "Body streamed to KeyValueStore due to size.",
-          data: OFFLOAD_MARKER_STREAM,
+          note: STORAGE_CONSTS.DEFAULT_OFFLOAD_NOTE,
+          data: STORAGE_CONSTS.OFFLOAD_MARKER_STREAM,
         });
 
         // Replace body and flag to bypass body-parser
@@ -402,10 +437,10 @@ export class LoggerMiddleware {
       } catch (err) {
         this.#log.error(
           { err: this.#serializeError(err) },
-          "Streaming offload failed",
+          LOG_MESSAGES.STREAM_OFFLOAD_FAILED,
         );
         return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-          error: "Failed to process large upload",
+          error: ERROR_MESSAGES.PAYLOAD_STREAM_FAILED,
           details: /** @type {Error} */ (err).message,
         });
       }
@@ -434,6 +469,12 @@ export class LoggerMiddleware {
         mergedOptions,
       );
       if (!validation.isValid) {
+        if (validation.statusCode === HTTP_STATUS.UNAUTHORIZED) {
+          return sendUnauthorizedResponse(req, res, {
+            error: validation.error,
+            id: webhookId,
+          });
+        }
         return res
           .status(validation.statusCode || HTTP_STATUS.BAD_REQUEST)
           .json({
@@ -441,7 +482,7 @@ export class LoggerMiddleware {
             ip: validation.remoteIp,
             received: validation.contentLength,
             id: webhookId,
-            docs: APIFY_HOMEPAGE_URL,
+            docs: APP_CONSTS.APIFY_HOMEPAGE_URL,
           });
       }
 
@@ -457,8 +498,10 @@ export class LoggerMiddleware {
             ? this.#maskHeaders(req.headers)
             : req.headers,
           contentType:
-            req.headers["content-type"]?.split(";")[0].trim().toLowerCase() ||
-            MIME_TYPES.OCTET_STREAM,
+            req.headers[HTTP_HEADERS.CONTENT_TYPE]
+              ?.split(";")[0]
+              .trim()
+              .toLowerCase() || MIME_TYPES.OCTET_STREAM,
           bodyEncoding: undefined,
         };
       } else {
@@ -490,7 +533,7 @@ export class LoggerMiddleware {
         responseHeaders: {}, // Custom scripts can add headers
         processingTime: 0,
         remoteIp: validation.remoteIp,
-        userAgent: req.headers["user-agent"]?.toString(),
+        userAgent: req.headers[HTTP_HEADERS.USER_AGENT]?.toString(),
         requestId: /** @type {any} */ (req).requestId,
         requestUrl: req.originalUrl || req.url,
       };
@@ -512,9 +555,10 @@ export class LoggerMiddleware {
             event.signatureError = ingestResult.error;
             event.statusCode = HTTP_STATUS.UNAUTHORIZED;
             event.responseBody = {
-              error: "Invalid signature",
+              error: ERROR_LABELS.INVALID_SIGNATURE,
               details: ingestResult.error,
-              docs: APIFY_HOMEPAGE_URL,
+              provider: ingestResult.provider,
+              docs: APP_CONSTS.APIFY_HOMEPAGE_URL,
             };
           }
         } else {
@@ -544,9 +588,9 @@ export class LoggerMiddleware {
             event.statusCode = HTTP_STATUS.UNAUTHORIZED;
             // Set delayed response body for #sendResponse to use
             event.responseBody = {
-              error: "Invalid signature",
+              error: ERROR_LABELS.INVALID_SIGNATURE,
               details: sigResult.error,
-              docs: APIFY_HOMEPAGE_URL,
+              docs: APP_CONSTS.APIFY_HOMEPAGE_URL,
             };
             // Do NOT return here; let it proceed to logging
           }
@@ -566,16 +610,25 @@ export class LoggerMiddleware {
       this.#sendResponse(res, event, mergedOptions);
 
       // Execute background tasks (storage, forwarding, alerting) after response
+      const controller = new AbortController();
       const backgroundPromise = async () => {
         try {
-          await this.#executeBackgroundTasks(event, req, mergedOptions);
+          await this.#executeBackgroundTasks(
+            event,
+            req,
+            mergedOptions,
+            controller.signal,
+          );
 
           // Trigger alerts if configured
           if (mergedOptions.alerts) {
+            /** @type {Readonly<AlertConfig['alertOn']>} */
+            const alertOn = mergedOptions.alertOn || DEFAULT_ALERT_ON;
+            /** @type {AlertConfig} */
             const alertConfig = {
               slack: mergedOptions.alerts.slack,
               discord: mergedOptions.alerts.discord,
-              alertOn: mergedOptions.alertOn || ["error", "5xx"],
+              alertOn,
             };
             const alertContext = {
               webhookId: event.webhookId,
@@ -589,18 +642,20 @@ export class LoggerMiddleware {
             await triggerAlertIfNeeded(alertConfig, alertContext);
           }
         } catch (err) {
-          this.#log.error(
-            { eventId: event.id, err: this.#serializeError(err) },
-            "Background tasks failed",
-          );
+          if (!controller.signal.aborted) {
+            this.#log.error(
+              { eventId: event.id, err: this.#serializeError(err) },
+              LOG_MESSAGES.BACKGROUND_TASKS_FAILED,
+            );
+          }
         }
       };
 
       // Wrap background work in Promise.race to ensure we don't hang the Actor if storage is slow
       const timeoutMs =
-        process.env.NODE_ENV === "test"
-          ? BACKGROUND_TASK_TIMEOUT_TEST_MS
-          : BACKGROUND_TASK_TIMEOUT_PROD_MS;
+        process.env[ENV_VARS.NODE_ENV] === ENV_VALUES.TEST
+          ? APP_CONSTS.BACKGROUND_TASK_TIMEOUT_TEST_MS
+          : APP_CONSTS.BACKGROUND_TASK_TIMEOUT_PROD_MS;
       /** @type {ReturnType<typeof setTimeout> | undefined} */
       let timeoutHandle;
       await Promise.race([
@@ -611,12 +666,15 @@ export class LoggerMiddleware {
         (
           new Promise((resolve) => {
             timeoutHandle = setTimeout(() => {
-              if (process.env.NODE_ENV !== "test") {
+              controller.abort(); // Cancel any pending axios requests
+              if (process.env[ENV_VARS.NODE_ENV] !== ENV_VALUES.TEST) {
                 const readableTimeout =
-                  timeoutMs < 1000 ? `${timeoutMs}ms` : `${timeoutMs / 1000}s`;
+                  timeoutMs < APP_CONSTS.MS_PER_SECOND
+                    ? `${timeoutMs}ms`
+                    : `${timeoutMs / APP_CONSTS.MS_PER_SECOND}s`;
                 this.#log.warn(
                   { eventId: event.id, timeout: readableTimeout },
-                  "Background tasks exceeded timeout",
+                  LOG_MESSAGES.BACKGROUND_TIMEOUT,
                 );
               }
               resolve();
@@ -640,7 +698,7 @@ export class LoggerMiddleware {
       // If headers are sent, we can't do much but log it
       this.#log.error(
         { err: this.#serializeError(middlewareError) },
-        "Internal middleware error after headers sent",
+        LOG_MESSAGES.MIDDLEWARE_ERROR_SENT,
       );
     }
   }
@@ -660,7 +718,7 @@ export class LoggerMiddleware {
       return {
         isValid: false,
         statusCode: HTTP_STATUS.NOT_FOUND,
-        error: "Webhook ID not found or expired",
+        error: ERROR_MESSAGES.WEBHOOK_NOT_FOUND,
       };
     }
 
@@ -672,7 +730,7 @@ export class LoggerMiddleware {
         return {
           isValid: false,
           statusCode: HTTP_STATUS.FORBIDDEN,
-          error: "Forbidden: IP not in whitelist",
+          error: ERROR_MESSAGES.FORBIDDEN_IP,
           remoteIp,
         };
       }
@@ -689,7 +747,7 @@ export class LoggerMiddleware {
     }
 
     // 4. Payload size check
-    const rawHeader = req.headers["content-length"];
+    const rawHeader = req.headers[HTTP_HEADERS.CONTENT_LENGTH];
     let parsedLength = NaN;
     if (rawHeader !== undefined) {
       const headerStr = Array.isArray(rawHeader) ? rawHeader[0] : rawHeader;
@@ -708,12 +766,12 @@ export class LoggerMiddleware {
     const contentLength = Number.isFinite(parsedLength)
       ? parsedLength
       : bodyLen;
-    const maxSize = options.maxPayloadSize ?? DEFAULT_PAYLOAD_LIMIT;
-    if (contentLength > maxSize) {
+    const limit = options.maxPayloadSize ?? APP_CONSTS.DEFAULT_PAYLOAD_LIMIT;
+    if (contentLength > limit) {
       return {
         isValid: false,
         statusCode: HTTP_STATUS.PAYLOAD_TOO_LARGE,
-        error: `Payload too large. Limit is ${maxSize} bytes.`,
+        error: ERROR_MESSAGES.PAYLOAD_TOO_LARGE(limit),
         remoteIp,
         contentLength,
       };
@@ -728,98 +786,100 @@ export class LoggerMiddleware {
    * @returns {Promise<{ loggedBody: string|object, loggedHeaders: Object, contentType: string, bodyEncoding?: BufferEncoding }>}
    */
   async #prepareRequestData(req, options) {
-    const { maskSensitiveData } = options;
+    const { maskSensitiveData, redactBodyPaths } = options;
     const rawContentType =
-      req.headers["content-type"] || MIME_TYPES.OCTET_STREAM;
+      req.headers[HTTP_HEADERS.CONTENT_TYPE] || MIME_TYPES.OCTET_STREAM;
     const contentType = rawContentType.split(";")[0].trim().toLowerCase();
 
     // Heuristic for text-based content types
-    const isJson = contentType.includes("json");
+    const isJson = contentType.includes(HTTP_CONSTS.JSON_KEYWORD);
     const isText =
-      contentType.startsWith("text/") ||
-      contentType.includes("xml") ||
-      contentType.includes("javascript") ||
-      contentType.includes("urlencoded") ||
-      contentType.includes("html");
+      HTTP_CONSTS.TEXT_CONTENT_TYPE_PREFIXES.some((prefix) =>
+        contentType.startsWith(prefix),
+      ) ||
+      HTTP_CONSTS.TEXT_CONTENT_TYPE_INCLUDES.some((part) =>
+        contentType.includes(part),
+      );
 
     let loggedBody = req.body;
     /** @type {BufferEncoding | undefined} */
     let bodyEncoding;
 
-    // Handle Binary Buffers
-    if (Buffer.isBuffer(loggedBody)) {
-      if (isJson || isText) {
-        loggedBody = loggedBody.toString("utf8");
-      } else {
-        loggedBody = loggedBody.toString("base64");
-        bodyEncoding = "base64";
-      }
-    }
+    // 1. Redaction (MUST run on Object BEFORE stringification if JSON)
+    if (
+      redactBodyPaths &&
+      loggedBody &&
+      typeof loggedBody === "object" &&
+      !Buffer.isBuffer(loggedBody)
+    ) {
+      const prefix = "body.";
+      const normalizedPaths = redactBodyPaths
+        .filter((p) => p.startsWith(prefix))
+        .map((p) => p.slice(prefix.length));
 
-    // JSON Schema Validation
-    if (this.#validate && isJson) {
-      let bodyToValidate = loggedBody;
-      if (typeof bodyToValidate === "string") {
+      if (normalizedPaths.length > 0) {
+        // Critical: Clone body to avoid mutating req.body used by ForwardingService
         try {
-          bodyToValidate = JSON.parse(bodyToValidate);
-        } catch (_) {
-          throw {
-            statusCode: HTTP_STATUS.BAD_REQUEST,
-            error: "Invalid JSON for schema validation",
-          };
+          if (typeof structuredClone === "function") {
+            loggedBody = structuredClone(loggedBody);
+          } else {
+            loggedBody = JSON.parse(JSON.stringify(loggedBody));
+          }
+          deepRedact(loggedBody, normalizedPaths, LOG_CONSTS.CENSOR_MARKER);
+        } catch {
+          // Clone failed (circular?), proceed provided best effort or original
         }
       }
+    }
 
-      const isValid = this.#validate(bodyToValidate);
-      if (!isValid) {
-        throw {
-          statusCode: HTTP_STATUS.BAD_REQUEST,
-          error: "JSON Schema Validation Failed",
-          details: this.#validate.errors,
-        };
+    let stringifiedBody = null;
+
+    if (isJson || isText) {
+      if (typeof loggedBody === "object" && !Buffer.isBuffer(loggedBody)) {
+        try {
+          stringifiedBody = JSON.stringify(loggedBody);
+          loggedBody = stringifiedBody;
+        } catch {
+          loggedBody = String(loggedBody); // Fallback
+        }
+      } else if (Buffer.isBuffer(loggedBody)) {
+        loggedBody = loggedBody.toString(ENCODINGS.UTF8);
+      }
+    } else {
+      // Binary handling
+      if (Buffer.isBuffer(loggedBody)) {
+        bodyEncoding = ENCODINGS.BASE64;
+        loggedBody = loggedBody.toString(bodyEncoding);
+      } else if (typeof loggedBody === "object") {
+        try {
+          stringifiedBody = JSON.stringify(loggedBody);
+          loggedBody = stringifiedBody;
+        } catch {
+          loggedBody = LOG_MESSAGES.BINARY_OBJECT_PLACEHOLDER;
+        }
       }
     }
 
-    // Parse JSON for storage if enabled and valid
-    if (
-      isJson &&
-      typeof loggedBody === "string" &&
-      options.enableJSONParsing !== false
-    ) {
-      try {
-        loggedBody = JSON.parse(loggedBody);
-        bodyEncoding = undefined; // Processed to object
-      } catch {
-        // Keep as string if parsing fails
-      }
-    }
+    // Size Check & Offloading (Reuse stringified body)
+    const contentToSave =
+      stringifiedBody ||
+      (typeof loggedBody === "string" ? loggedBody : String(loggedBody));
 
-    // Platform Safety: Offload to KeyValueStore if large to avoid dataset bloat/rejection
-    // Apify Dataset limit is ~9MB. But generally, anything >5MB is better in KVS.
-    // This logic now applies to both Platform and Self-Hosted/Docker to keep the log listing fast.
-    let sizeCheck = 0;
-    if (typeof loggedBody === "string")
-      sizeCheck = Buffer.byteLength(loggedBody);
-    else if (typeof loggedBody === "object")
-      sizeCheck = Buffer.byteLength(JSON.stringify(loggedBody));
+    const sizeCheck = Buffer.byteLength(contentToSave);
 
-    if (sizeCheck > KVS_OFFLOAD_THRESHOLD) {
+    if (sizeCheck > STORAGE_CONSTS.KVS_OFFLOAD_THRESHOLD) {
       const kvsKey = generateKvsKey();
       this.#log.info(
-        { bodySize: sizeCheck, threshold: KVS_OFFLOAD_THRESHOLD, kvsKey },
-        "Body exceeds threshold, offloading to KVS",
+        {
+          bodySize: sizeCheck,
+          threshold: STORAGE_CONSTS.KVS_OFFLOAD_THRESHOLD,
+          kvsKey,
+        },
+        LOG_MESSAGES.KVS_OFFLOAD_THRESHOLD_EXCEEDED,
       );
 
-      // Determine content to save (prefer original buffer if available, or current state)
-      const contentToSave = Buffer.isBuffer(req.body)
-        ? req.body
-        : typeof loggedBody === "object"
-          ? JSON.stringify(loggedBody)
-          : loggedBody;
-
       try {
-        await offloadToKvs(kvsKey, contentToSave, rawContentType);
-
+        await offloadToKvs(kvsKey, contentToSave, contentType);
         const kvsUrl = await getKvsUrl(kvsKey);
 
         // Replace body with reference
@@ -827,47 +887,26 @@ export class LoggerMiddleware {
           key: kvsKey,
           kvsUrl,
           originalSize: sizeCheck,
-          note: "Body too large for Dataset. Stored in KeyValueStore.",
-          data: OFFLOAD_MARKER_SYNC,
+          note: STORAGE_CONSTS.DEFAULT_OFFLOAD_NOTE,
+          data: STORAGE_CONSTS.OFFLOAD_MARKER_SYNC,
         });
-        bodyEncoding = undefined; // Reference object is standard JSON
+        bodyEncoding = undefined;
       } catch (err) {
         this.#log.error(
           { err: this.#serializeError(err) },
-          "Failed to offload large payload to KVS",
+          LOG_MESSAGES.KVS_OFFLOAD_FAILED_LARGE_PAYLOAD,
         );
-        // Fallback to truncation if KVS fails
-        const MAX_FALLBACK_SIZE = MAX_DATASET_ITEM_BYTES; // Hard limit for dataset
-        if (typeof loggedBody === "string") {
-          loggedBody =
-            loggedBody.substring(0, MAX_FALLBACK_SIZE) +
-            "\n...[TRUNCATED_AND_KVS_FAILED]";
-        } else {
-          loggedBody = { error: "Payload too large and KVS offload failed." };
-        }
+        // Fallback
+        const MAX_FALLBACK_SIZE = STORAGE_CONSTS.MAX_DATASET_ITEM_BYTES;
+        loggedBody =
+          contentToSave.substring(0, MAX_FALLBACK_SIZE) +
+          LOG_MESSAGES.TRUNCATED_AND_KVS_FAILED;
       }
     }
 
-    // Normalize loggedBody for storage (last resort formatting)
-    // We prefer stringifying objects to ensure consistent "string" storage in some contexts,
-    // though Apify Dataset supports objects. Existing logic enforced stringify for non-empty objects.
-    if (
-      loggedBody &&
-      typeof loggedBody === "object" &&
-      Object.keys(loggedBody).length > 0 &&
-      !Array.isArray(loggedBody)
-    ) {
-      loggedBody = JSON.stringify(loggedBody, null, 2);
-    } else if (
-      !loggedBody ||
-      (typeof loggedBody === "object" && Object.keys(loggedBody).length === 0)
-    ) {
-      loggedBody = "";
-    }
-
-    const loggedHeaders = maskSensitiveData
-      ? this.#maskHeaders(req.headers)
-      : req.headers;
+    const { loggedHeaders } = maskSensitiveData
+      ? { loggedHeaders: this.#maskHeaders(req.headers) }
+      : { loggedHeaders: req.headers };
 
     return { loggedBody, loggedHeaders, contentType, bodyEncoding };
   }
@@ -876,11 +915,14 @@ export class LoggerMiddleware {
    * @param {IncomingHttpHeaders} headers
    */
   #maskHeaders(headers) {
+    /** @type {Readonly<string[]>} */
     const headersToMask = SENSITIVE_HEADERS;
     return Object.fromEntries(
       Object.entries(headers).map(([key, value]) => [
         key,
-        headersToMask.includes(key.toLowerCase()) ? "[MASKED]" : value,
+        headersToMask.includes(key.toLowerCase())
+          ? LOG_CONSTS.MASKED_VALUE
+          : value,
       ]),
     );
   }
@@ -892,15 +934,27 @@ export class LoggerMiddleware {
   #transformRequestData(event, req) {
     if (this.#compiledScript) {
       try {
-        const sandbox = { event, req, console, HTTP_STATUS };
+        /** @type {Partial<Console>} */
+        const limitedConsole = {
+          log: (...args) => this.#log.debug({ source: "script" }, ...args),
+          error: (...args) => this.#log.error({ source: "script" }, ...args),
+          warn: (...args) => this.#log.warn({ source: "script" }, ...args),
+          info: (...args) => this.#log.info({ source: "script" }, ...args),
+        };
+        const sandbox = {
+          event,
+          req,
+          console: limitedConsole,
+          HTTP_STATUS,
+        };
         this.#compiledScript.runInNewContext(sandbox, {
-          timeout: SCRIPT_EXECUTION_TIMEOUT_MS,
+          timeout: APP_CONSTS.SCRIPT_EXECUTION_TIMEOUT_MS,
         });
       } catch (err) {
         const error = /** @type {CommonError} */ (err);
         const isTimeout =
-          error.code === "ERR_SCRIPT_EXECUTION_TIMEOUT" ||
-          error.message?.includes("Script execution timed out");
+          error.code === NODE_ERROR_CODES.ERR_SCRIPT_EXECUTION_TIMEOUT ||
+          error.message?.includes(LOG_MESSAGES.SCRIPT_EXECUTION_TIMEOUT_ERROR);
         this.#log.error(
           {
             webhookId: event.webhookId,
@@ -908,8 +962,10 @@ export class LoggerMiddleware {
             err: this.#serializeError(error),
           },
           isTimeout
-            ? `Custom script execution timed out after ${SCRIPT_EXECUTION_TIMEOUT_MS}ms`
-            : `Failed to run custom script`,
+            ? LOG_MESSAGES.SCRIPT_EXECUTION_TIMED_OUT(
+                APP_CONSTS.SCRIPT_EXECUTION_TIMEOUT_MS,
+              )
+            : LOG_MESSAGES.SCRIPT_EXECUTION_FAILED,
         );
       }
     }
@@ -941,9 +997,12 @@ export class LoggerMiddleware {
         ? event.responseBody
         : defaultResponseBody;
 
-    if (event.statusCode >= 400 && (!responseBody || responseBody === "OK")) {
+    if (
+      event.statusCode >= HTTP_STATUS.BAD_REQUEST &&
+      (!responseBody || responseBody === HTTP_CONSTS.DEFAULT_SUCCESS_BODY)
+    ) {
       res.json({
-        message: `Webhook received with status ${event.statusCode}`,
+        message: LOG_MESSAGES.WEBHOOK_RECEIVED_STATUS(event.statusCode),
         webhookId: event.webhookId,
       });
     } else if (typeof responseBody === "object" && responseBody !== null) {
@@ -957,34 +1016,58 @@ export class LoggerMiddleware {
    * @param {WebhookEvent} event
    * @param {Request} req
    * @param {LoggerOptions} options
+   * @param {AbortSignal} [signal]
    */
-  async #executeBackgroundTasks(event, req, options) {
+  async #executeBackgroundTasks(event, req, options, signal) {
+    if (signal?.aborted) return;
+
     const { forwardUrl } = options;
 
     try {
       if (event && event.webhookId) {
-        await Actor.pushData(event);
+        // Add timeout to pushData
+        await Promise.race([
+          Actor.pushData(event),
+          new Promise((_, reject) => {
+            const timer = setTimeout(
+              () =>
+                reject(
+                  new Error(
+                    ERROR_MESSAGES.ACTOR_PUSH_DATA_TIMEOUT(
+                      APP_CONSTS.BACKGROUND_TASK_TIMEOUT_PROD_MS,
+                    ),
+                  ),
+                ),
+              APP_CONSTS.BACKGROUND_TASK_TIMEOUT_PROD_MS,
+            );
+            if (timer.unref) timer.unref();
+          }),
+        ]);
+
         // Emit internal event for real-time SyncService
-        appEvents.emit(EVENTS.LOG_RECEIVED, event);
+        appEvents.emit(EVENT_NAMES.LOG_RECEIVED, event);
         if (this.#onEvent) this.#onEvent(event);
       }
 
       if (forwardUrl) {
+        if (signal?.aborted) return;
+
         await this.#forwardingService.forwardWebhook(
           event,
           req,
           options,
           forwardUrl,
+          signal,
         );
       }
     } catch (error) {
+      if (signal?.aborted) return;
+
       const errorMessage = /** @type {Error} */ (error).message;
       const msg = errorMessage ? errorMessage.toLowerCase() : "";
-      const isPlatformError =
-        msg.includes("dataset") ||
-        msg.includes("quota") ||
-        msg.includes("limit") ||
-        msg.includes("rate");
+      const isPlatformError = APP_CONSTS.PLATFORM_ERROR_KEYWORDS.some(
+        (keyword) => msg.includes(keyword),
+      );
 
       this.#log.error(
         {
@@ -992,11 +1075,13 @@ export class LoggerMiddleware {
           isPlatformError,
           err: this.#serializeError(error),
         },
-        isPlatformError ? "Platform limit error" : "Background error",
+        isPlatformError
+          ? LOG_MESSAGES.PLATFORM_LIMIT_ERROR
+          : LOG_MESSAGES.BACKGROUND_ERROR,
       );
 
       if (isPlatformError) {
-        this.#log.warn("Check Apify platform limits or storage availability");
+        this.#log.warn(LOG_MESSAGES.CHECK_PLATFORM_LIMITS);
       }
     }
   }

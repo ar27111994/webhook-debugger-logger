@@ -1,20 +1,17 @@
 /**
  * @file src/utils/app_state.js
  * @description Manages application runtime state and propagates configuration updates to components.
+ * @module utils/app_state
  */
 import bodyParser from "body-parser";
-import {
-  DEFAULT_PAYLOAD_LIMIT,
-  DEFAULT_RATE_LIMIT_WINDOW_MS,
-  DEFAULT_RATE_LIMIT_PER_MINUTE,
-  DEFAULT_REPLAY_RETRIES,
-  DEFAULT_REPLAY_TIMEOUT_MS,
-  DEFAULT_FIXED_MEMORY_MBYTES,
-} from "../consts.js";
+import { APP_CONSTS } from "../consts/app.js";
+import { MIME_TYPES } from "../consts/http.js";
+import { LOG_COMPONENTS } from "../consts/logging.js";
+import { LOG_MESSAGES } from "../consts/messages.js";
 import { RateLimiter } from "./rate_limiter.js";
 import { createChildLogger } from "./logger.js";
 
-const log = createChildLogger({ component: "AppState" });
+const log = createChildLogger({ component: LOG_COMPONENTS.APP_STATE });
 
 /**
  * @typedef {import('express').RequestHandler} RequestHandler
@@ -35,27 +32,42 @@ export class AppState {
    * @param {LoggerMiddleware} loggerMiddleware
    */
   constructor(config, webhookManager, loggerMiddleware) {
+    /** @type {WebhookManager} */
     this.webhookManager = webhookManager;
+    /** @type {LoggerMiddleware} */
     this.loggerMiddleware = loggerMiddleware;
 
     // Core State
+    /** @type {string} */
     this.authKey = config.authKey || "";
-    this.maxPayloadSize = config.maxPayloadSize || DEFAULT_PAYLOAD_LIMIT;
-    this.retentionHours = config.retentionHours;
-    this.urlCount = config.urlCount;
-    this.replayMaxRetries = config.replayMaxRetries || DEFAULT_REPLAY_RETRIES;
-    this.replayTimeoutMs = config.replayTimeoutMs || DEFAULT_REPLAY_TIMEOUT_MS;
+    /** @type {number} */
+    this.maxPayloadSize =
+      config.maxPayloadSize || APP_CONSTS.DEFAULT_PAYLOAD_LIMIT;
+    /** @type {number} */
+    this.retentionHours = Number(config.retentionHours);
+    /** @type {number} */
+    this.urlCount = Number(config.urlCount);
+    /** @type {number} */
+    this.replayMaxRetries =
+      config.replayMaxRetries || APP_CONSTS.DEFAULT_REPLAY_RETRIES;
+    /** @type {number} */
+    this.replayTimeoutMs =
+      config.replayTimeoutMs || APP_CONSTS.DEFAULT_REPLAY_TIMEOUT_MS;
+    /** @type {boolean} */
     this.useFixedMemory = config.useFixedMemory ?? false;
+    /** @type {number} */
     this.fixedMemoryMbytes =
-      config.fixedMemoryMbytes ?? DEFAULT_FIXED_MEMORY_MBYTES;
+      config.fixedMemoryMbytes ?? APP_CONSTS.DEFAULT_FIXED_MEMORY_MBYTES;
 
     // Rate Limiter
+    /** @type {RateLimiter} */
     this.rateLimiter = new RateLimiter(
-      config.rateLimitPerMinute || DEFAULT_RATE_LIMIT_PER_MINUTE,
-      DEFAULT_RATE_LIMIT_WINDOW_MS,
+      config.rateLimitPerMinute || APP_CONSTS.DEFAULT_RATE_LIMIT_PER_MINUTE,
+      APP_CONSTS.DEFAULT_RATE_LIMIT_WINDOW_MS,
     );
 
     // Body Parser (recreated when maxPayloadSize changes)
+    /** @type {RequestHandler} */
     this.bodyParser = this._createBodyParser();
   }
 
@@ -67,7 +79,7 @@ export class AppState {
   _createBodyParser() {
     return bodyParser.raw({
       limit: this.maxPayloadSize,
-      type: "*/*",
+      type: MIME_TYPES.WILDCARD,
     });
   }
 
@@ -102,7 +114,7 @@ export class AppState {
     if (validated.maxPayloadSize !== this.maxPayloadSize) {
       log.info(
         { maxPayloadSize: validated.maxPayloadSize },
-        "Updating max payload size",
+        LOG_MESSAGES.UPDATE_MAX_PAYLOAD,
       );
       this.maxPayloadSize = validated.maxPayloadSize;
       this.bodyParser = this._createBodyParser();
@@ -111,14 +123,14 @@ export class AppState {
     // 3. Update Rate Limiter
     const newRateLimit = validated.rateLimitPerMinute;
     if (this.rateLimiter.limit !== newRateLimit) {
-      log.info({ rateLimit: newRateLimit }, "Updating rate limit");
+      log.info({ rateLimit: newRateLimit }, LOG_MESSAGES.UPDATE_RATE_LIMIT);
       this.rateLimiter.limit = newRateLimit;
     }
 
     // 4. Update Auth Key
     if (validated.authKey !== this.authKey) {
       // Sensitive, so maybe don't log the key itself
-      log.info("Auth key updated");
+      log.info(LOG_MESSAGES.AUTH_KEY_UPDATED);
       this.authKey = validated.authKey;
     }
 
@@ -127,13 +139,10 @@ export class AppState {
     const activeWebhooks = this.webhookManager.getAllActive();
     if (activeWebhooks.length < this.urlCount) {
       const diff = this.urlCount - activeWebhooks.length;
-      log.info(
-        { count: diff },
-        "Dynamic scale-up: generating additional webhook(s)",
-      );
+      log.info({ count: diff }, LOG_MESSAGES.DYNAMIC_SCALE_UP);
       await this.webhookManager.generateWebhooks(
         diff,
-        this.retentionHours || 24,
+        this.retentionHours || APP_CONSTS.DEFAULT_RETENTION_HOURS,
       ); // Use current retention
     }
 
@@ -141,7 +150,7 @@ export class AppState {
     if (validated.retentionHours !== this.retentionHours) {
       log.info(
         { retentionHours: validated.retentionHours },
-        "Updating retention policy",
+        LOG_MESSAGES.UPDATE_RETENTION,
       );
       this.retentionHours = validated.retentionHours;
       await this.webhookManager.updateRetention(this.retentionHours);
@@ -150,7 +159,7 @@ export class AppState {
     if (validated.replayMaxRetries !== this.replayMaxRetries) {
       log.info(
         { replayMaxRetries: validated.replayMaxRetries },
-        "Updating replay max retries",
+        LOG_MESSAGES.UPDATE_REPLAY_RETRIES,
       );
       this.replayMaxRetries = validated.replayMaxRetries;
     }
@@ -158,7 +167,7 @@ export class AppState {
     if (validated.replayTimeoutMs !== this.replayTimeoutMs) {
       log.info(
         { replayTimeoutMs: validated.replayTimeoutMs },
-        "Updating replay timeout",
+        LOG_MESSAGES.UPDATE_REPLAY_TIMEOUT,
       );
       this.replayTimeoutMs = validated.replayTimeoutMs;
     }
@@ -166,7 +175,7 @@ export class AppState {
     if (validated.useFixedMemory !== this.useFixedMemory) {
       log.info(
         { useFixedMemory: validated.useFixedMemory },
-        "Updating fixed memory toggle",
+        LOG_MESSAGES.UPDATE_FIXED_MEMORY,
       );
       this.useFixedMemory = validated.useFixedMemory;
     }
@@ -174,7 +183,7 @@ export class AppState {
     if (validated.fixedMemoryMbytes !== this.fixedMemoryMbytes) {
       log.info(
         { fixedMemoryMbytes: validated.fixedMemoryMbytes },
-        "Updating manual memory target",
+        LOG_MESSAGES.UPDATE_MANUAL_MEMORY,
       );
       this.fixedMemoryMbytes = validated.fixedMemoryMbytes;
     }

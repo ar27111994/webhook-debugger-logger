@@ -4,9 +4,13 @@
  * @module middleware/error
  */
 import { createChildLogger, serializeError } from "../utils/logger.js";
-import { HTTP_STATUS, ERROR_LABELS } from "../consts.js";
+import { HTTP_STATUS } from "../consts/http.js";
+import { ERROR_LABELS } from "../consts/errors.js";
+import { LOG_COMPONENTS } from "../consts/logging.js";
+import { LOG_MESSAGES } from "../consts/messages.js";
+import { APP_CONSTS } from "../consts/app.js";
 
-const log = createChildLogger({ component: "ErrorHandler" });
+const log = createChildLogger({ component: LOG_COMPONENTS.ERROR_HANDLER });
 
 /**
  * @typedef {import("express").Request} Request
@@ -36,7 +40,7 @@ export const createErrorHandler =
     const isServerError = status >= HTTP_STATUS.INTERNAL_SERVER_ERROR;
 
     // Extract request ID for correlation
-    const requestId = /** @type {any} */ (req).requestId || "unknown";
+    const requestId = /** @type {any} */ (req).requestId || APP_CONSTS.UNKNOWN;
 
     if (isServerError) {
       log.error(
@@ -47,7 +51,7 @@ export const createErrorHandler =
           method: req.method,
           err: serializeError(err),
         },
-        "Server error",
+        LOG_MESSAGES.SERVER_ERROR,
       );
     }
 
@@ -65,7 +69,7 @@ export const createErrorHandler =
                 ? ERROR_LABELS.NOT_FOUND
                 : status >= HTTP_STATUS.BAD_REQUEST
                   ? ERROR_LABELS.CLIENT_ERROR
-                  : "Error",
+                  : ERROR_LABELS.GENERIC,
       message: isServerError ? ERROR_LABELS.INTERNAL_SERVER_ERROR : err.message,
     };
     res.status(status).json(responseBody);

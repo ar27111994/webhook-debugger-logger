@@ -6,7 +6,7 @@ import {
   createMockResponse,
   createMockNextFunction,
 } from "../setup/helpers/test-utils.js";
-import { HTTP_STATUS } from "../../src/consts.js";
+import { HTTP_STATUS } from "../../src/consts/http.js";
 
 // Setup mocks
 await setupCommonMocks({ logger: true, auth: true });

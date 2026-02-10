@@ -21,10 +21,11 @@ import {
 
 // Mock logger before importing RateLimiter
 await setupCommonMocks({ logger: true, consts: true });
-import { HTTP_STATUS } from "../../src/consts.js";
+import { HTTP_STATUS } from "../../src/consts/http.js";
 
 const { RateLimiter } = await import("../../src/utils/rate_limiter.js");
-const { DEFAULT_RATE_LIMIT_WINDOW_MS } = await import("../../src/consts.js");
+const { DEFAULT_RATE_LIMIT_WINDOW_MS } =
+  await import("../../src/consts/app.js");
 
 /**
  * @typedef {import("net").Socket} Socket

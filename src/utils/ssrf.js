@@ -1,3 +1,9 @@
+/**
+ * @file src/utils/ssrf.js
+ * @description Server-Side Request Forgery protection utilities.
+ * Validates URLs, resolves DNS, and checks IPs against blocklists.
+ * @module utils/ssrf
+ */
 import dns from "dns/promises";
 import ipaddr from "ipaddr.js";
 import {
@@ -6,28 +12,17 @@ import {
   DNS_RESOLUTION_TIMEOUT_MS,
   SSRF_BLOCKED_RANGES,
   ALLOWED_PROTOCOLS,
-} from "../consts.js";
+} from "../consts/network.js";
+import { SSRF_ERRORS } from "../consts/security.js";
+import { LOG_COMPONENTS } from "../consts/logging.js";
 import { createChildLogger } from "./logger.js";
 
-const log = createChildLogger({ component: "SSRF" });
+const log = createChildLogger({ component: LOG_COMPONENTS.SSRF });
 
 /**
  * @typedef {import('ipaddr.js').IPv6} IP
  * @typedef {import('../typedefs.js').SsrfValidationResult} SsrfValidationResult
  */
-
-/**
- * Error messages for SSRF validation.
- */
-export const SSRF_ERRORS = Object.freeze({
-  INVALID_URL: "Invalid URL format",
-  PROTOCOL_NOT_ALLOWED: "Only http/https URLs are allowed",
-  CREDENTIALS_NOT_ALLOWED: "Credentials in URL are not allowed",
-  HOSTNAME_RESOLUTION_FAILED: "Unable to resolve hostname",
-  INVALID_IP: "URL resolves to invalid IP address",
-  INTERNAL_IP: "URL resolves to internal/reserved IP range",
-  VALIDATION_FAILED: "URL validation failed",
-});
 
 /**
  * Checks if an IP address falls within any of the specified CIDR ranges or single IP addresses.
@@ -201,7 +196,7 @@ export async function validateUrlForSsrf(urlString) {
             ? SSRF_LOG_MESSAGES.DNS_TIMEOUT
             : SSRF_LOG_MESSAGES.RESOLUTION_FAILED,
       },
-      "SSRF validation error",
+      SSRF_LOG_MESSAGES.VALIDATION_ERROR,
     );
     return { safe: false, error: SSRF_ERRORS.VALIDATION_FAILED };
   }

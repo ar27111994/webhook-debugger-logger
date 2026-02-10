@@ -19,7 +19,7 @@ import {
   sleep,
 } from "../setup/helpers/test-utils.js";
 import { Readable } from "stream";
-import { HTTP_STATUS } from "../../src/consts.js";
+import { HTTP_STATUS } from "../../src/consts/http.js";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import {
   webhookManagerMock,

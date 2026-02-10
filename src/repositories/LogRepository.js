@@ -1,6 +1,7 @@
 /**
  * @file src/repositories/LogRepository.js
  * @description Data access layer for Logs (Read Model)
+ * @module repositories/LogRepository
  */
 
 import {
@@ -8,18 +9,18 @@ import {
   executeWrite,
   executeTransaction,
 } from "../db/duckdb.js";
-import { parseIfPresent } from "../utils/common.js";
+import { SORT_DIRECTIONS } from "../consts/app.js";
+import { ENCODINGS } from "../consts/http.js";
 import {
-  DEFAULT_PAGE_LIMIT,
-  MAX_PAGE_LIMIT,
-  DEFAULT_PAGE_OFFSET,
+  DUCKDB_TABLES,
+  SQL_CONSTS,
+  SQL_FUNCTIONS,
   SQL_FRAGMENTS,
-  SORT_DIRECTIONS,
-} from "../consts.js";
-import {
-  OFFLOAD_MARKER_SYNC,
-  OFFLOAD_MARKER_STREAM,
-} from "../utils/storage_helper.js";
+  PAGINATION_CONSTS,
+} from "../consts/database.js";
+import { STORAGE_CONSTS } from "../consts/storage.js";
+import { LOG_CONSTS } from "../consts/logging.js";
+import { parseIfPresent } from "../utils/common.js";
 
 /**
  * @typedef {import('@duckdb/node-api').DuckDBValue} DuckDBValue
@@ -43,47 +44,22 @@ import {
  */
 
 const INSERT_LOG_SQL = `
-    INSERT INTO logs (
-        id, webhookId, timestamp, method, statusCode, size, remoteIp, userAgent, requestUrl,
-        headers, query, body, responseHeaders, responseBody,
-        signatureValid, signatureProvider, signatureError,
-        requestId, processingTime, contentType,
-        source_offset, bodyEncoding
+    INSERT INTO ${DUCKDB_TABLES.LOGS} (
+        id, webhookId, requestId, method, statusCode, contentType,
+        processingTime, size, remoteIp, userAgent, requestUrl,
+        bodyEncoding, headers, query, body, responseHeaders, responseBody,
+        timestamp, signatureValid, signatureProvider, signatureError, source_offset
     ) VALUES (
-        $id, $webhookId, $timestamp, $method, $statusCode, $size, $remoteIp, $userAgent, $requestUrl,
-        $headers, $query, $body, $responseHeaders, $responseBody,
-        $signatureValid, $signatureProvider, $signatureError,
-        $requestId, $processingTime, $contentType,
-        $sourceOffset, $bodyEncoding
+        $id, $webhookId, $requestId, $method, $statusCode, $contentType,
+        $processingTime, $size, $remoteIp, $userAgent, $requestUrl,
+        $bodyEncoding, $headers, $query, $body, $responseHeaders, $responseBody,
+        $timestamp, $signatureValid, $signatureProvider, $signatureError, $sourceOffset
     )
     ON CONFLICT (id) DO UPDATE SET
         source_offset = COALESCE(EXCLUDED.source_offset, logs.source_offset)
 `;
 
-const VALID_LOG_COLUMNS = Object.freeze([
-  "id",
-  "webhookId",
-  "timestamp",
-  "method",
-  "statusCode",
-  "size",
-  "remoteIp",
-  "userAgent",
-  "requestUrl",
-  "headers",
-  "query",
-  "body",
-  "responseHeaders",
-  "responseBody",
-  "signatureValid",
-  "signatureProvider",
-  "signatureError",
-  "requestId",
-  "processingTime",
-  "contentType",
-  "source_offset",
-  "bodyEncoding",
-]);
+const VALID_LOG_COLUMNS = SQL_CONSTS.ALL_LOG_COLUMNS;
 
 export class LogRepository {
   /**
@@ -92,24 +68,7 @@ export class LogRepository {
    * @returns {string} - SQL ORDER BY clause
    */
   #buildOrderBy(sortRules) {
-    /** @type {Record<string, string>} */
-    const validSorts = {
-      id: "id",
-      statusCode: "statusCode",
-      method: "method",
-      size: "size",
-      timestamp: "timestamp",
-      remoteIp: "remoteIp",
-      processingTime: "processingTime",
-      webhookId: "webhookId",
-      userAgent: "userAgent",
-      requestUrl: "requestUrl",
-      contentType: "contentType",
-      requestId: "requestId",
-      signatureValid: "signatureValid",
-      signatureProvider: "signatureProvider",
-      signatureError: "signatureError",
-    };
+    const validFields = LOG_CONSTS.VALID_SORT_FIELDS;
     const defaultClause = `timestamp ${SORT_DIRECTIONS.DESC}`;
 
     if (!sortRules || sortRules.length === 0) {
@@ -118,8 +77,8 @@ export class LogRepository {
 
     const clauses = sortRules
       .map((rule) => {
-        const col = validSorts[rule.field];
-        if (!col) return null;
+        if (!validFields.includes(rule.field)) return null;
+        const col = rule.field; // Using field name as column name directly for whitelisted fields
         const dir =
           rule.dir.toUpperCase() === SORT_DIRECTIONS.ASC
             ? SORT_DIRECTIONS.ASC
@@ -145,14 +104,7 @@ export class LogRepository {
     conds.forEach((cond, idx) => {
       const pName = `${col}_${idx}`;
       /** @type {Record<string, string>} */
-      const opMap = {
-        gt: ">",
-        gte: ">=",
-        lt: "<",
-        lte: "<=",
-        eq: "=",
-        ne: "!=",
-      };
+      const opMap = SQL_CONSTS.OPERATOR_MAP;
       const sqlOp = opMap[cond.operator];
       if (sqlOp) {
         result.conditions.push(`${col} ${sqlOp} $${pName}`);
@@ -180,14 +132,17 @@ export class LogRepository {
     if (typeof filter === "string") {
       const pName = `${col}_json_search`;
       result.conditions.push(
-        `json_extract_string(${col}, '$') ILIKE $${pName}`,
+        `${SQL_FUNCTIONS.JSON_EXTRACT_STRING}(${col}, '$') ILIKE $${pName}`,
       );
       result.params[pName] = `%${filter}%`;
     } else {
       Object.entries(filter).forEach(([key, val], idx) => {
+        // Whitelist safe characters to prevent SQL injection via JSON path
+        const safeKey = key.replace(/[^a-zA-Z0-9_.-]/g, "");
+        if (!safeKey) return;
         const pName = `${col}_key_${idx}`;
         result.conditions.push(
-          `json_extract_string(${col}, '$.${key}') ILIKE $${pName}`,
+          `${SQL_FUNCTIONS.JSON_EXTRACT_STRING}(${col}, '$.${safeKey}') ILIKE $${pName}`,
         );
         result.params[pName] = `%${val}%`;
       });
@@ -325,23 +280,24 @@ export class LogRepository {
     const { sql: whereSql, params } = this.#buildWhereClause(filters);
 
     // Count
-    const countSql = `SELECT COUNT(*) as total FROM logs WHERE ${whereSql}`;
+    const countSql = `SELECT COUNT(*) as total FROM ${DUCKDB_TABLES.LOGS} WHERE ${whereSql}`;
     const countRows = await executeQuery(countSql, params);
     const total = Number(countRows[0]?.total || 0);
 
     // Sort & Page
     const orderByClause = this.#buildOrderBy(filters.sort || []);
     const limit = Math.min(
-      Number(filters.limit) || DEFAULT_PAGE_LIMIT,
-      MAX_PAGE_LIMIT,
+      Number(filters.limit) || PAGINATION_CONSTS.DEFAULT_PAGE_LIMIT,
+      PAGINATION_CONSTS.MAX_PAGE_LIMIT,
     );
-    const offset = Number(filters.offset) || DEFAULT_PAGE_OFFSET;
+    const offset =
+      Number(filters.offset) || PAGINATION_CONSTS.DEFAULT_PAGE_OFFSET;
 
     params.limit = limit;
     params.offset = offset;
 
     const sql = `
-    SELECT * FROM logs
+    SELECT * FROM ${DUCKDB_TABLES.LOGS}
     WHERE ${whereSql}
     ORDER BY ${orderByClause}
     LIMIT $limit OFFSET $offset
@@ -390,7 +346,7 @@ export class LogRepository {
     const finalSelect =
       selectedFields.length > 0 ? selectedFields.join(", ") : "*";
 
-    const sql = `SELECT ${finalSelect} FROM logs WHERE id = $id`;
+    const sql = `SELECT ${finalSelect} FROM ${DUCKDB_TABLES.LOGS} WHERE id = $id`;
     const rows = await executeQuery(sql, { id });
     if (rows.length === 0) return null;
 
@@ -492,19 +448,19 @@ export class LogRepository {
 
     const sql = `
       SELECT body
-      FROM logs
+      FROM ${DUCKDB_TABLES.LOGS}
       WHERE webhookId = $webhookId
       AND (
-        json_extract_string(body, '$.data') = $markerSync
+        ${SQL_FUNCTIONS.JSON_EXTRACT_STRING}(body, '$.data') = $markerSync
         OR
-        json_extract_string(body, '$.data') = $markerStream
+        ${SQL_FUNCTIONS.JSON_EXTRACT_STRING}(body, '$.data') = $markerStream
       )
     `;
 
     const rows = await executeQuery(sql, {
       webhookId,
-      markerSync: OFFLOAD_MARKER_SYNC,
-      markerStream: OFFLOAD_MARKER_STREAM,
+      markerSync: STORAGE_CONSTS.OFFLOAD_MARKER_SYNC,
+      markerStream: STORAGE_CONSTS.OFFLOAD_MARKER_STREAM,
     });
 
     // Parse bodies and return keys
@@ -529,7 +485,7 @@ export class LogRepository {
    * @returns {Promise<void>}
    */
   async deleteLogsByWebhookId(webhookId) {
-    const sql = `DELETE FROM logs WHERE webhookId = $webhookId`;
+    const sql = `DELETE FROM ${DUCKDB_TABLES.LOGS} WHERE webhookId = $webhookId`;
     await executeWrite(sql, { webhookId });
   }
 
@@ -542,15 +498,19 @@ export class LogRepository {
   async findLogsCursor(filters) {
     const { sql: whereSql, params } = this.#buildWhereClause(filters);
     const limit = Math.min(
-      Number(filters.limit) || DEFAULT_PAGE_LIMIT,
-      MAX_PAGE_LIMIT,
+      Number(filters.limit) || PAGINATION_CONSTS.DEFAULT_PAGE_LIMIT,
+      PAGINATION_CONSTS.MAX_PAGE_LIMIT,
     );
 
     // Parse cursor: base64(timestamp:id)
     if (filters.cursor) {
       try {
-        const decoded = Buffer.from(filters.cursor, "base64").toString("utf-8");
-        const lastColonIndex = decoded.lastIndexOf(":");
+        const decoded = Buffer.from(filters.cursor, ENCODINGS.BASE64).toString(
+          ENCODINGS.UTF8,
+        );
+        const lastColonIndex = decoded.lastIndexOf(
+          STORAGE_CONSTS.CURSOR_SEPARATOR,
+        );
         if (lastColonIndex !== -1) {
           const cursorTs = decoded.substring(0, lastColonIndex);
           const cursorId = decoded.substring(lastColonIndex + 1);
@@ -572,7 +532,7 @@ export class LogRepository {
     params.limit = limit + 1; // Fetch one extra to detect hasMore
 
     const sql = `
-      SELECT * FROM logs
+      SELECT * FROM ${DUCKDB_TABLES.LOGS}
       WHERE ${whereSql} ${cursorCondition}
       ORDER BY timestamp DESC, id DESC
       LIMIT $limit
@@ -607,8 +567,8 @@ export class LogRepository {
     let nextCursor = null;
     if (hasMore && items.length > 0) {
       const last = items[items.length - 1];
-      const cursorData = `${last.timestamp}:${last.id}`;
-      nextCursor = Buffer.from(cursorData).toString("base64");
+      const cursorData = `${last.timestamp}${STORAGE_CONSTS.CURSOR_SEPARATOR}${last.id}`;
+      nextCursor = Buffer.from(cursorData).toString(ENCODINGS.BASE64);
     }
 
     return { items, nextCursor };

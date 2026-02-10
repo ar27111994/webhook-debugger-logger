@@ -1,22 +1,56 @@
 /**
  * @file src/consts/storage.js
  * @description Storage-related keys, markers, and thresholds.
+ * @module consts/storage
  */
 import { getInt } from "../utils/env.js";
+import { ENV_VARS } from "./app.js";
 
-export const KVS_STATE_KEY = "WEBHOOK_STATE";
-export const KVS_INPUT_KEY = "INPUT";
+export const DEFAULT_STORAGE_DIR =
+  process.env[ENV_VARS.DUCKDB_STORAGE_DIR] ||
+  process.env[ENV_VARS.APIFY_LOCAL_STORAGE_DIR] ||
+  "./storage";
 
-// Apify Dataset has a ~9MB limit per item. We use 9,000,000 to be safe.
-export const MAX_DATASET_ITEM_BYTES = 9 * 1000 * 1000;
+export const STORAGE_CONSTS = Object.freeze({
+  KVS_KEY_PREFIX: "payload_",
+  KVS_URL_FALLBACK: "Key: ${key} (Use Actor.getValue('${key}') to retrieve)",
+  CURSOR_SEPARATOR: ":",
+  INPUT_JSON: "INPUT.json",
+  OFFLOAD_MARKER_SYNC: "[OFFLOADED_TO_KVS]",
+  OFFLOAD_MARKER_STREAM: "[OFFLOADED_VIA_STREAM]",
+  DEFAULT_OFFLOAD_NOTE:
+    "Payload offloaded to Key-Value Store due to size threshold in the Apify Dataset",
+  KVS_OFFLOAD_THRESHOLD: getInt("KVS_OFFLOAD_THRESHOLD", 5 * 1024 * 1024),
+  MAX_DATASET_ITEM_BYTES: getInt("MAX_DATASET_ITEM_BYTES", 9 * 1024 * 1024),
+  PUBLIC_DIR: "public",
+  FONTS_DIR_NAME: "fonts",
+  DEFAULT_STORAGE_DIR,
+});
 
-export const KVS_OFFLOAD_THRESHOLD = getInt(
-  "KVS_OFFLOAD_THRESHOLD",
-  5 * 1024 * 1024,
-); // 5MB
+export const KEY_VALUE_STORES_DIR = "key_value_stores";
+export const DEFAULT_KVS_DIR = "default";
+export const ACTOR_CONFIG_DIR = ".actor";
 
-export const OFFLOAD_MARKER_SYNC = "[OFFLOADED_TO_KVS]";
-export const OFFLOAD_MARKER_STREAM = "[OFFLOADED_VIA_STREAM]";
+/** @enum {string} */
+export const FILE_NAMES = Object.freeze({
+  CONFIG: STORAGE_CONSTS.INPUT_JSON,
+  SCHEMA: "input_schema.json",
+  PACKAGE_JSON: "../package.json",
+});
 
-export const DEFAULT_OFFLOAD_NOTE =
-  "Body too large for Dataset. Stored in KeyValueStore.";
+/** @enum {string} */
+export const FILE_EXTENSIONS = Object.freeze({
+  TMP: ".tmp",
+});
+
+/** @enum {string} */
+export const KVS_KEYS = Object.freeze({
+  INPUT: "INPUT",
+  STATE: "WEBHOOK_STATE",
+});
+
+/** @enum {string} */
+export const SCHEMA_KEYS = Object.freeze({
+  SECTION_PREFIX: "section_",
+  EDITOR_HIDDEN: "hidden",
+});

@@ -2,23 +2,30 @@
  * @file src/webhook_manager.js
  * @description Manages webhook lifecycle: creation, persistence, validation, and cleanup.
  * State is persisted to KeyValueStore to survive Actor restarts and migrations.
+ * @module webhook_manager
  */
 import { Actor } from "apify";
 import { nanoid } from "nanoid";
+import { ERROR_MESSAGES } from "./consts/errors.js";
 import {
-  MAX_BULK_CREATE,
   WEBHOOK_ID_PREFIX,
   DEFAULT_ID_LENGTH,
-  RETENTION_LOG_SUPPRESSION_MS,
+  APP_CONSTS,
+  ENV_VARS,
+  ENV_VALUES,
+} from "./consts/app.js";
+import { LOG_COMPONENTS } from "./consts/logging.js";
+import {
   DUCKDB_VACUUM_ENABLED,
   DUCKDB_VACUUM_INTERVAL_MS,
-  KVS_STATE_KEY,
-} from "./consts.js";
+} from "./consts/database.js";
+import { KVS_KEYS } from "./consts/storage.js";
 import { logRepository } from "./repositories/LogRepository.js";
 import { vacuumDb } from "./db/duckdb.js";
 import { createChildLogger, serializeError } from "./utils/logger.js";
+import { LOG_MESSAGES } from "./consts/messages.js";
 
-const log = createChildLogger({ component: "WebhookManager" });
+const log = createChildLogger({ component: LOG_COMPONENTS.WEBHOOK_MANAGER });
 
 /**
  * @typedef {import('apify').KeyValueStore | null} KeyValueStore
@@ -31,14 +38,14 @@ export class WebhookManager {
   /** @type {KeyValueStore} */
   #kvStore = null;
   /** @type {string} */
-  #STATE_KEY = KVS_STATE_KEY;
+  #STATE_KEY = KVS_KEYS.STATE;
   /** @type {number} */
   #lastVacuumTime = 0;
 
   constructor() {
     this.#webhooks = new Map();
     this.#kvStore = null;
-    this.#STATE_KEY = KVS_STATE_KEY;
+    this.#STATE_KEY = KVS_KEYS.STATE;
   }
 
   /**
@@ -53,13 +60,13 @@ export class WebhookManager {
         this.#webhooks = new Map(Object.entries(savedState));
         log.info(
           { count: this.#webhooks.size },
-          "Restored webhooks from state",
+          LOG_MESSAGES.WEBHOOK_STATE_RESTORED,
         );
       }
     } catch (error) {
       log.error(
         { err: serializeError(error) },
-        "Failed to initialize WebhookManager state",
+        LOG_MESSAGES.WEBHOOK_STATE_INIT_FAILED,
       );
       // Fallback to empty map is already handled by constructor
     }
@@ -79,7 +86,7 @@ export class WebhookManager {
     } catch (error) {
       log.error(
         { err: serializeError(error) },
-        "Failed to persist webhook state",
+        LOG_MESSAGES.WEBHOOK_STATE_PERSIST_FAILED,
       );
     }
   }
@@ -94,14 +101,12 @@ export class WebhookManager {
    */
   async generateWebhooks(count, retentionHours) {
     if (!Number.isInteger(count) || count < 0) {
-      throw new Error(
-        `Invalid count: ${count}. Must be a non-negative integer.`,
-      );
+      throw new Error(ERROR_MESSAGES.INVALID_COUNT(count));
     }
     // count check handled by MAX_BULK_CREATE usage below
-    if (count > MAX_BULK_CREATE) {
+    if (count > APP_CONSTS.MAX_BULK_CREATE) {
       throw new Error(
-        `Invalid count: ${count}. Max allowed is ${MAX_BULK_CREATE}.`,
+        ERROR_MESSAGES.INVALID_COUNT_MAX(count, APP_CONSTS.MAX_BULK_CREATE),
       );
     }
 
@@ -110,12 +115,10 @@ export class WebhookManager {
       retentionHours <= 0 ||
       !Number.isFinite(retentionHours)
     ) {
-      throw new Error(
-        `Invalid retentionHours: ${retentionHours}. Must be a positive number.`,
-      );
+      throw new Error(ERROR_MESSAGES.INVALID_RETENTION(retentionHours));
     }
     const expiresAt = new Date(
-      Date.now() + retentionHours * 60 * 60 * 1000,
+      Date.now() + retentionHours * APP_CONSTS.MS_PER_HOUR,
     ).toISOString();
     const newIds = [];
 
@@ -173,7 +176,7 @@ export class WebhookManager {
               } catch (kvsErr) {
                 log.warn(
                   { key: item.key, webhookId: id, err: serializeError(kvsErr) },
-                  "Failed to delete KVS key during cleanup",
+                  LOG_MESSAGES.KVS_DELETE_FAILED,
                 );
               }
             }
@@ -181,18 +184,17 @@ export class WebhookManager {
           if (deletedCount > 0) {
             log.info(
               { deleted: deletedCount, total: payloads.length, webhookId: id },
-              "Deleted offloaded payloads",
+              LOG_MESSAGES.CLEANUP_DELETED_PAYLOADS,
             );
           }
 
           // 2. Delete logs from database
           await logRepository.deleteLogsByWebhookId(id);
-
-          log.info({ webhookId: id }, "Removed expired webhook and data");
+          log.info({ webhookId: id }, LOG_MESSAGES.CLEANUP_WEBHOOK_REMOVED);
         } catch (err) {
           log.error(
             { webhookId: id, err: serializeError(err) },
-            "Failed to clean up webhook",
+            LOG_MESSAGES.CLEANUP_WEBHOOK_FAILED,
           );
         }
 
@@ -215,7 +217,7 @@ export class WebhookManager {
           } catch (vacuumErr) {
             log.warn(
               { err: serializeError(vacuumErr) },
-              "DuckDB vacuum failed",
+              LOG_MESSAGES.VACUUM_FAILED,
             );
           }
         }
@@ -229,7 +231,7 @@ export class WebhookManager {
    * @param {WebhookData} data
    */
   addWebhookForTest(id, data) {
-    if (process.env.NODE_ENV === "test") {
+    if (process.env[ENV_VARS.NODE_ENV] === ENV_VALUES.TEST) {
       this.#webhooks.set(id, data);
     }
   }
@@ -255,7 +257,7 @@ export class WebhookManager {
    * @param {string} id
    */
   hasWebhook(id) {
-    if (process.env.NODE_ENV === "test") {
+    if (process.env[ENV_VARS.NODE_ENV] === ENV_VALUES.TEST) {
       return this.#webhooks.has(id);
     }
     return false;
@@ -276,16 +278,14 @@ export class WebhookManager {
    */
   async updateRetention(retentionHours) {
     if (
-      typeof retentionHours !== "number" ||
+      isNaN(retentionHours) ||
       retentionHours <= 0 ||
       !Number.isFinite(retentionHours)
     ) {
-      throw new Error(
-        `Invalid retentionHours: ${retentionHours}. Must be a positive number.`,
-      );
+      throw new Error(ERROR_MESSAGES.INVALID_RETENTION(retentionHours));
     }
     const now = Date.now();
-    const newExpiryMs = now + retentionHours * 60 * 60 * 1000;
+    const newExpiryMs = now + retentionHours * APP_CONSTS.MS_PER_HOUR;
     const newExpiresAt = new Date(newExpiryMs).toISOString();
     let updatedCount = 0;
 
@@ -308,10 +308,10 @@ export class WebhookManager {
 
     if (updatedCount > 0) {
       // Suppress log for insignificant updates (< 5 minutes)
-      if (maxExtensionMs > RETENTION_LOG_SUPPRESSION_MS) {
+      if (maxExtensionMs > APP_CONSTS.RETENTION_LOG_SUPPRESSION_MS) {
         log.info(
           { count: updatedCount, total: this.#webhooks.size, retentionHours },
-          "Refreshed webhook retention",
+          LOG_MESSAGES.RETENTION_REFRESHED,
         );
       }
       await this.persist();

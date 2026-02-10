@@ -176,10 +176,40 @@ describe("LoggerMiddleware Coverage Tests", () => {
       jest.mocked(webhookManagerMock.isValid).mockReturnValue(true);
 
       await middleware.middleware(req, res, next);
+      expect(mockActor.pushData.mock.calls[0][0].headers["authorization"]).toBe(
+        "[MASKED]",
+      );
+    });
 
-      // Check if Actor.pushData was called with masked headers
+    test("should deeply redact body paths", async () => {
+      middleware.updateOptions({
+        redactBodyPaths: ["body.user.password", "body.creditCard.number"],
+      });
+
+      const req = createMockRequest({
+        params: { id: "wh_1" },
+        body: {
+          user: { name: "John", password: "secret_password" },
+          creditCard: { number: "1234-5678", expiry: "12/24" },
+          other: "safe",
+        },
+      });
+      const res = createMockResponse();
+      const next = createMockNextFunction();
+
+      jest.mocked(webhookManagerMock.isValid).mockReturnValue(true);
+
+      await middleware.middleware(req, res, next);
+
+      // Verify Actor.pushData call
       const pushCall = mockActor.pushData.mock.calls[0][0];
-      expect(pushCall.headers["authorization"]).toBe("[MASKED]");
+      const body = JSON.parse(pushCall.body);
+
+      expect(body.user.password).toBe("[REDACTED]");
+      expect(body.user.name).toBe("John");
+      expect(body.creditCard.number).toBe("[REDACTED]");
+      expect(body.creditCard.expiry).toBe("12/24");
+      expect(body.other).toBe("safe");
     });
 
     test("should validate JSON schema if configured", async () => {

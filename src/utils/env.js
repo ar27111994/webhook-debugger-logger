@@ -2,6 +2,7 @@
  * @file src/utils/env.js
  * @description Lightweight helpers for environment variable parsing.
  * This file is dependency-free to allow usage in constants without circular dependencies.
+ * @module utils/env
  */
 
 /**
@@ -16,5 +17,5 @@ export function getInt(key, fallback) {
   const val = process.env[key];
   if (val === undefined || val === "") return fallback;
   const parsed = parseInt(val, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }

@@ -2,26 +2,20 @@
  * @file src/utils/storage_helper.js
  * @description Utilities for offloading large payloads to Apify KeyValueStore.
  * Handles streaming uploads, reference body creation, and public URL generation.
+ * @module utils/storage_helper
  */
 import { Actor } from "apify";
 import { nanoid } from "nanoid";
-import {
-  DEFAULT_ID_LENGTH,
-  OFFLOAD_MARKER_SYNC as OFFLOAD_MARKER_SYNC_CONST,
-  OFFLOAD_MARKER_STREAM as OFFLOAD_MARKER_STREAM_CONST,
-  DEFAULT_OFFLOAD_NOTE,
-} from "../consts.js";
+import { APP_CONSTS } from "../consts/app.js";
+import { STORAGE_CONSTS } from "../consts/storage.js";
 
 /**
  * Generates a unique key for the KVS payload.
  * @returns {string}
  */
 export function generateKvsKey() {
-  return `payload_${nanoid(DEFAULT_ID_LENGTH)}`;
+  return `${STORAGE_CONSTS.KVS_KEY_PREFIX}${nanoid(APP_CONSTS.DEFAULT_ID_LENGTH)}`;
 }
-
-export const OFFLOAD_MARKER_SYNC = OFFLOAD_MARKER_SYNC_CONST;
-export const OFFLOAD_MARKER_STREAM = OFFLOAD_MARKER_STREAM_CONST;
 
 /**
  * Offloads content to the Key-Value Store.
@@ -45,7 +39,10 @@ export async function offloadToKvs(key, value, contentType) {
  * @returns {Promise<string>}
  */
 export async function getKvsUrl(key) {
-  let kvsUrl = `Key: ${key} (Use Actor.getValue('${key}') to retrieve)`;
+  let kvsUrl = STORAGE_CONSTS.KVS_URL_FALLBACK.replace("${key}", key).replace(
+    "${key}",
+    key,
+  );
   try {
     const kvs = await Actor.openKeyValueStore();
     if (typeof kvs.getPublicUrl === "function") {
@@ -71,8 +68,8 @@ export function createReferenceBody({
   key,
   kvsUrl,
   originalSize,
-  note = DEFAULT_OFFLOAD_NOTE,
-  data = OFFLOAD_MARKER_SYNC,
+  note = STORAGE_CONSTS.DEFAULT_OFFLOAD_NOTE,
+  data = STORAGE_CONSTS.OFFLOAD_MARKER_SYNC,
 }) {
   return {
     data,

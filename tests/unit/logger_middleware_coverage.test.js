@@ -14,7 +14,7 @@ await setupCommonMocks({
 
 // Import the class after mocking
 const { LoggerMiddleware } = await import("../../src/logger_middleware.js");
-import { HTTP_STATUS } from "../../src/consts.js";
+import { HTTP_STATUS } from "../../src/consts/http.js";
 
 /**
  * @typedef {import("../../src/webhook_manager.js").WebhookManager} WebhookManager

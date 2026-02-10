@@ -2,8 +2,10 @@
  * @file src/utils/filter_utils.js
  * @description Query parameter parsing and range filter utilities for log filtering.
  * Supports operators (gt, gte, lt, lte, eq, ne), IP matching, and object filters.
+ * @module utils/filter_utils
  */
 import { checkIpInRanges } from "./ssrf.js";
+import { SQL_CONSTS } from "../consts/database.js";
 
 /**
  * @typedef {Object} RangeCondition
@@ -16,9 +18,10 @@ import { checkIpInRanges } from "./ssrf.js";
  */
 
 /**
- * Valid operators whitelist
+ * Whitelist of valid query operators to prevent SQL injection.
  */
-const VALID_OPERATORS = ["gt", "gte", "lt", "lte", "ne", "eq"];
+const VALID_OPERATORS = SQL_CONSTS.VALID_OPERATORS;
+const OPERATORS = SQL_CONSTS.OPERATORS;
 
 /**
  * Parses a query parameter into range conditions.
@@ -47,7 +50,7 @@ export function parseRangeQuery(queryParam, type = "number") {
   if (typeof queryParam !== "object") {
     const val = parseValue(queryParam);
     if (val !== null) {
-      return [{ operator: "eq", value: val }];
+      return [{ operator: OPERATORS.EQ, value: val }];
     }
     return [];
   }
@@ -80,17 +83,17 @@ export function matchesRange(value, conditions) {
 
   return conditions.every(({ operator, value: target }) => {
     switch (operator) {
-      case "gt":
+      case OPERATORS.GT:
         return value > target;
-      case "gte":
+      case OPERATORS.GTE:
         return value >= target;
-      case "lt":
+      case OPERATORS.LT:
         return value < target;
-      case "lte":
+      case OPERATORS.LTE:
         return value <= target;
-      case "ne":
+      case OPERATORS.NE:
         return value !== target;
-      case "eq":
+      case OPERATORS.EQ:
         return value === target;
       default:
         return true;

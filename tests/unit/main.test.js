@@ -1,7 +1,7 @@
 import { jest, describe, test, expect } from "@jest/globals";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
-import { INPUT_POLL_INTERVAL_TEST_MS } from "../../src/consts.js";
+import { INPUT_POLL_INTERVAL_TEST_MS } from "../../src/consts/app.js";
 
 // 1. Setup Common Mocks
 await setupCommonMocks({

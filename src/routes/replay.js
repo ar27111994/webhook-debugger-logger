@@ -3,28 +3,30 @@
  * @description Replay route handler for re-sending captured webhook payloads.
  * @module routes/replay
  */
-import axios from "axios";
 import { Actor } from "apify";
 import { logRepository } from "../repositories/LogRepository.js";
-import { validateUrlForSsrf, SSRF_ERRORS } from "../utils/ssrf.js";
+import { forwardingService } from "../services/index.js";
+import { validateUrlForSsrf } from "../utils/ssrf.js";
 import { asyncHandler } from "./utils.js";
 import {
   REPLAY_HEADERS_TO_IGNORE,
-  DEFAULT_REPLAY_RETRIES as MAX_REPLAY_RETRIES,
-  DEFAULT_REPLAY_TIMEOUT_MS as REPLAY_TIMEOUT_MS,
-  ERROR_MESSAGES,
-  TRANSIENT_ERROR_CODES,
   HTTP_STATUS,
-  REPLAY_STATUS_LABELS,
-  RETRY_BASE_DELAY_MS,
-} from "../consts.js";
+  HTTP_HEADERS,
+} from "../consts/http.js";
+import { ERROR_MESSAGES, ERROR_LABELS } from "../consts/errors.js";
 import {
-  OFFLOAD_MARKER_SYNC,
-  OFFLOAD_MARKER_STREAM,
-} from "../utils/storage_helper.js";
+  REPLAY_STATUS_LABELS,
+  APP_CONSTS,
+  FORWARDING_CONSTS,
+} from "../consts/app.js";
+import { LOG_COMPONENTS, LOG_CONSTS } from "../consts/logging.js";
+import { STORAGE_CONSTS } from "../consts/storage.js";
+import { SSRF_ERRORS } from "../consts/security.js";
+import { SQL_CONSTS } from "../consts/database.js";
+import { LOG_MESSAGES } from "../consts/messages.js";
 import { createChildLogger, serializeError } from "../utils/logger.js";
 
-const log = createChildLogger({ component: "Replay" });
+const log = createChildLogger({ component: LOG_COMPONENTS.REPLAY });
 
 /**
  * @typedef {import("express").Request} Request
@@ -45,8 +47,8 @@ export const createReplayHandler = (getReplayMaxRetries, getReplayTimeoutMs) =>
   asyncHandler(
     /** @param {Request} req @param {Response} res */
     async (req, res) => {
-      let maxRetries = MAX_REPLAY_RETRIES;
-      let replayTimeout = REPLAY_TIMEOUT_MS;
+      let maxRetries = APP_CONSTS.MAX_REPLAY_RETRIES;
+      let replayTimeout = APP_CONSTS.DEFAULT_REPLAY_TIMEOUT_MS;
 
       try {
         /** @type {{webhookId?: string, itemId?: string}} */
@@ -66,7 +68,7 @@ export const createReplayHandler = (getReplayMaxRetries, getReplayTimeoutMs) =>
         if (!targetUrl) {
           res
             .status(HTTP_STATUS.BAD_REQUEST)
-            .json({ error: "Missing 'url' parameter" });
+            .json({ error: ERROR_MESSAGES.MISSING_URL });
           return;
         }
 
@@ -93,7 +95,7 @@ export const createReplayHandler = (getReplayMaxRetries, getReplayTimeoutMs) =>
         // Fallback: Try to find by timestamp if ID not found (and ID looks like a date)
         if (!item && !isNaN(Date.parse(itemId))) {
           const { items } = await logRepository.findLogs({
-            timestamp: [{ operator: "eq", value: itemId }],
+            timestamp: [{ operator: SQL_CONSTS.OPERATORS.EQ, value: itemId }],
             webhookId, // Ensure it matches the webhook
             limit: 1,
           });
@@ -103,10 +105,13 @@ export const createReplayHandler = (getReplayMaxRetries, getReplayTimeoutMs) =>
         }
 
         if (!item) {
-          res.status(HTTP_STATUS.NOT_FOUND).json({ error: "Event not found" });
+          res
+            .status(HTTP_STATUS.NOT_FOUND)
+            .json({ error: ERROR_MESSAGES.EVENT_NOT_FOUND });
           return;
         }
 
+        /** @type {Readonly<string[]>} */
         const headersToIgnore = REPLAY_HEADERS_TO_IGNORE;
         /** @type {string[]} */
         const strippedHeaders = [];
@@ -115,7 +120,8 @@ export const createReplayHandler = (getReplayMaxRetries, getReplayTimeoutMs) =>
           (/** @type {Record<string, unknown>} */ acc, [key, value]) => {
             const lowerKey = key.toLowerCase();
             const isMasked =
-              typeof value === "string" && value.toUpperCase() === "[MASKED]";
+              typeof value === "string" &&
+              value.toUpperCase() === LOG_CONSTS.MASKED_VALUE;
             if (isMasked || headersToIgnore.includes(lowerKey)) {
               strippedHeaders.push(key);
             } else {
@@ -133,15 +139,13 @@ export const createReplayHandler = (getReplayMaxRetries, getReplayTimeoutMs) =>
         if (
           bodyToSend &&
           typeof bodyToSend === "object" &&
-          [OFFLOAD_MARKER_SYNC, OFFLOAD_MARKER_STREAM].includes(
-            bodyToSend.data,
-          ) &&
+          /** @type {string[]} */ ([
+            STORAGE_CONSTS.OFFLOAD_MARKER_SYNC,
+            STORAGE_CONSTS.OFFLOAD_MARKER_STREAM,
+          ]).includes(bodyToSend.data) &&
           bodyToSend.key
         ) {
-          log.info(
-            { kvsKey: bodyToSend.key },
-            "Hydrating offloaded payload from KVS",
-          );
+          log.info({ kvsKey: bodyToSend.key }, LOG_MESSAGES.HYDRATING_PAYLOAD);
           try {
             /** @type {ReqBody} */
             const hydrated = await Actor.getValue(bodyToSend.key);
@@ -150,74 +154,68 @@ export const createReplayHandler = (getReplayMaxRetries, getReplayTimeoutMs) =>
             } else {
               log.warn(
                 { kvsKey: bodyToSend.key },
-                "Failed to find KVS key, sending metadata instead",
+                LOG_MESSAGES.HYDRATE_FAILED_KEY,
               );
             }
           } catch (e) {
             log.error(
               { kvsKey: bodyToSend.key, err: serializeError(e) },
-              "Error fetching KVS key",
+              LOG_MESSAGES.HYDRATE_ERROR,
             );
           }
         }
 
-        let attempt = 0;
         /** @type {AxiosResponse | undefined} */
         let response;
-        while (attempt < maxRetries) {
-          try {
-            attempt++;
-            response = await axios({
-              method: item.method,
-              url: target.href,
-              data: bodyToSend,
-              headers: {
-                ...filteredHeaders,
-                "X-Apify-Replay": "true",
-                "X-Original-Webhook-Id": webhookId,
-                "Idempotency-Key": itemId, // Standard header using the unique event/log ID
-                host: target.host,
-              },
-              maxRedirects: 0,
-              validateStatus: () => true,
-              timeout: replayTimeout,
-            });
-            break; // Success
-          } catch (err) {
-            const axiosError = /** @type {CommonError} */ (err);
-            if (
-              attempt >= maxRetries ||
-              !TRANSIENT_ERROR_CODES.includes(axiosError.code || "")
-            ) {
-              throw err;
-            }
-            const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
-            log.warn(
-              {
-                attempt,
-                maxRetries,
-                url: target.href,
-                code: axiosError.code,
-                delay,
-              },
-              "Replay attempt failed, retrying",
-            );
-            await new Promise((resolve) => setTimeout(resolve, delay));
+        const replayAbort = new AbortController();
+        const totalTimeoutMs = replayTimeout * (maxRetries + 1);
+        const replayTimeoutId = setTimeout(
+          () => replayAbort.abort(),
+          totalTimeoutMs,
+        );
+
+        try {
+          response = await forwardingService.sendSafeRequest(
+            String(target.href),
+            item.method,
+            bodyToSend,
+            {
+              ...filteredHeaders,
+              [HTTP_HEADERS.APIFY_REPLAY]: String(true),
+              [HTTP_HEADERS.ORIGINAL_WEBHOOK_ID]: webhookId,
+              [HTTP_HEADERS.IDEMPOTENCY_KEY]: itemId,
+            },
+            {
+              maxRetries,
+              hostHeader: target.host,
+              forwardHeaders: true, // We manually filtered headers above
+            },
+            replayAbort.signal,
+          );
+        } catch (err) {
+          const axiosError = /** @type {CommonError} */ (err);
+
+          if (axiosError.response) {
+            response = /** @type {AxiosResponse} */ (axiosError.response); // It was a non-2xx response, but we got one.
+          } else {
+            throw err; // Real network error / timeout
           }
+        } finally {
+          clearTimeout(replayTimeoutId);
         }
 
         if (!response) {
           res.status(HTTP_STATUS.GATEWAY_TIMEOUT).json({
-            error: "Replay failed",
-            message: `All ${maxRetries} retry attempts exhausted`,
+            error: ERROR_LABELS.REPLAY_FAILED,
+            message: ERROR_MESSAGES.REPLAY_ATTEMPTS_EXHAUSTED(maxRetries),
           });
           return;
         }
 
         if (strippedHeaders.length > 0) {
           res.setHeader(
-            "X-Apify-Replay-Warning",
-            `Headers stripped (masked or transmission-related): ${strippedHeaders.join(
+            HTTP_HEADERS.APIFY_REPLAY_WARNING,
+            `${LOG_MESSAGES.STRIPPED_HEADERS_WARNING}: ${strippedHeaders.join(
               ", ",
             )}`,
           );
@@ -234,7 +232,8 @@ export const createReplayHandler = (getReplayMaxRetries, getReplayTimeoutMs) =>
       } catch (error) {
         const axiosError = /** @type {CommonError} */ (error);
         const isTimeout =
-          axiosError.code === "ECONNABORTED" || axiosError.code === "ETIMEDOUT";
+          axiosError.code &&
+          FORWARDING_CONSTS.TIMEOUT_CODES.includes(axiosError.code);
         res
           .status(
             isTimeout
@@ -242,11 +241,9 @@ export const createReplayHandler = (getReplayMaxRetries, getReplayTimeoutMs) =>
               : HTTP_STATUS.INTERNAL_SERVER_ERROR,
           )
           .json({
-            error: "Replay failed",
+            error: ERROR_LABELS.REPLAY_FAILED,
             message: isTimeout
-              ? `Target destination timed out after ${maxRetries} attempts (${
-                  replayTimeout / 1000
-                }s timeout per attempt)`
+              ? ERROR_MESSAGES.REPLAY_TIMEOUT(maxRetries, replayTimeout)
               : axiosError.message,
             code: axiosError.code,
           });

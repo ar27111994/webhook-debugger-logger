@@ -3,22 +3,35 @@
  * @module middleware/json_parser
  * @description JSON body parsing middleware with raw body preservation for signature verification.
  */
+import { HTTP_HEADERS, MIME_TYPES } from "../consts/http.js";
+
+/**
+ * @typedef {import('express').Request} Request
+ * @typedef {import('express').Response} Response
+ * @typedef {import('express').NextFunction} NextFunction
+ * @typedef {import('express').RequestHandler} RequestHandler
+ */
 
 /**
  * Middleware to parse JSON body if content-type header is present.
  * It strictly parses strings but is lenient to buffer/string mismatch as main.js logic was.
  *
- * @param {import('express').Request} req
- * @param {import('express').Response} _res
- * @param {import('express').NextFunction} next
+ * @param {Request} req
+ * @param {Response} _res
+ * @param {NextFunction} next
  */
 export const jsonParserMiddleware = (req, _res, next) => {
   if (!req.body || Buffer.isBuffer(req.body) === false) return next();
 
   // Preserve raw body for signature verification (Stripe/Shopify)
-  /** @type {any} */ (req).rawBody = req.body;
+  Object.defineProperty(req, "rawBody", {
+    value: req.body,
+    writable: false,
+    enumerable: true,
+    configurable: false,
+  });
 
-  if (req.headers["content-type"]?.includes("application/json")) {
+  if (req.headers[HTTP_HEADERS.CONTENT_TYPE]?.includes(MIME_TYPES.JSON)) {
     try {
       req.body = JSON.parse(req.body.toString());
     } catch (_) {
@@ -31,7 +44,7 @@ export const jsonParserMiddleware = (req, _res, next) => {
 
 /**
  * Factory to create JSON parser middleware.
- * @returns {import('express').RequestHandler}
+ * @returns {RequestHandler}
  */
 export const createJsonParserMiddleware = () => {
   return jsonParserMiddleware;

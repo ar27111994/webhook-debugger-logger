@@ -2,8 +2,14 @@
  * @file src/routes/health.js
  * @description Health check endpoints for monitoring and orchestration.
  * Provides /health and /ready endpoints for container health probes.
+ * @module routes/health
  */
 import { getDbInstance } from "../db/duckdb.js";
+import { HTTP_STATUS } from "../consts/http.js";
+import { STATUS_LABELS, UNIT_LABELS } from "../consts/ui.js";
+import { ERROR_MESSAGES } from "../consts/errors.js";
+import { LOG_MESSAGES } from "../consts/messages.js";
+import { APP_CONSTS } from "../consts/app.js";
 
 /**
  * @typedef {import('express').Request} Request
@@ -39,18 +45,20 @@ export function createHealthRoutes(getActiveWebhookCount) {
      * @param {Response} res
      */
     async (_req, res) => {
-      const uptime = Math.floor((Date.now() - startTime) / 1000);
+      const uptime = Math.floor(
+        (Date.now() - startTime) / APP_CONSTS.MS_PER_SECOND,
+      );
       const memoryUsage = process.memoryUsage();
 
       res.json({
-        status: "healthy",
+        status: STATUS_LABELS.HEALTHY,
         uptime,
         timestamp: new Date().toISOString(),
         memory: {
           heapUsed: Math.round(memoryUsage.heapUsed / 1024 / 1024),
           heapTotal: Math.round(memoryUsage.heapTotal / 1024 / 1024),
           rss: Math.round(memoryUsage.rss / 1024 / 1024),
-          unit: "MB",
+          unit: UNIT_LABELS.MB,
         },
       });
     };
@@ -66,7 +74,7 @@ export function createHealthRoutes(getActiveWebhookCount) {
      * @param {Response} res
      */
     async (_req, res) => {
-      /** @type {Record<string, { status: 'ok' | 'error', message?: string }>} */
+      /** @type {Record<string, { status: string, message?: string }>} */
       const checks = {};
       let allHealthy = true;
 
@@ -74,18 +82,19 @@ export function createHealthRoutes(getActiveWebhookCount) {
       try {
         const db = await getDbInstance();
         if (db) {
-          checks.database = { status: "ok" };
+          checks.database = { status: STATUS_LABELS.OK };
         } else {
           checks.database = {
-            status: "error",
-            message: "Database not initialized",
+            status: STATUS_LABELS.ERROR,
+            message: ERROR_MESSAGES.DB_NOT_INITIALIZED,
           };
           allHealthy = false;
         }
       } catch (err) {
         checks.database = {
-          status: "error",
-          message: err instanceof Error ? err.message : "Unknown error",
+          status: STATUS_LABELS.ERROR,
+          message:
+            err instanceof Error ? err.message : LOG_MESSAGES.UNKNOWN_ERROR,
         };
         allHealthy = false;
       }
@@ -94,20 +103,23 @@ export function createHealthRoutes(getActiveWebhookCount) {
       try {
         const webhookCount = getActiveWebhookCount();
         checks.webhooks = {
-          status: "ok",
+          status: STATUS_LABELS.OK,
           message: `${webhookCount} active webhook(s)`,
         };
       } catch (err) {
         checks.webhooks = {
-          status: "error",
-          message: err instanceof Error ? err.message : "Unknown error",
+          status: STATUS_LABELS.ERROR,
+          message:
+            err instanceof Error ? err.message : LOG_MESSAGES.UNKNOWN_ERROR,
         };
         allHealthy = false;
       }
 
-      const status = allHealthy ? 200 : 503;
+      const status = allHealthy
+        ? HTTP_STATUS.OK
+        : HTTP_STATUS.SERVICE_UNAVAILABLE;
       res.status(status).json({
-        status: allHealthy ? "ready" : "not_ready",
+        status: allHealthy ? STATUS_LABELS.READY : STATUS_LABELS.NOT_READY,
         timestamp: new Date().toISOString(),
         checks,
       });

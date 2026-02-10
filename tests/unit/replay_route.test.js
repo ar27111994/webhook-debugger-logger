@@ -7,7 +7,7 @@ import {
   createMockNextFunction,
   assertType,
 } from "../setup/helpers/test-utils.js";
-import { HTTP_STATUS, REPLAY_STATUS_LABELS } from "../../src/consts.js";
+import { HTTP_STATUS, REPLAY_STATUS_LABELS } from "../../src/consts/http.js";
 import {
   apifyMock,
   axiosMock,
@@ -251,7 +251,7 @@ describe("Replay Route", () => {
     req = createMockRequest({ query: { url: "http://bad-host.com" } });
     await handler()(req, res, next);
 
-    const { ERROR_MESSAGES } = await import("../../src/consts.js");
+    const { ERROR_MESSAGES } = await import("../../src/consts/errors.js");
     expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.BAD_REQUEST);
     expect(res.json).toHaveBeenCalledWith({
       error: ERROR_MESSAGES.HOSTNAME_RESOLUTION_FAILED,

@@ -4,7 +4,8 @@
  * @module routes/info
  */
 
-import { APIFY_HOMEPAGE_URL } from "../consts.js";
+import { APP_CONSTS } from "../consts/app.js";
+import { DASHBOARD_CONSTS, UNIT_LABELS } from "../consts/ui.js";
 
 /**
  * @typedef {import("express").Request} Request
@@ -41,29 +42,22 @@ export const createInfoHandler =
 
     res.json({
       version,
-      status: "Enterprise Suite Online",
+      status: DASHBOARD_CONSTS.INFO_STATUS,
       system: {
         authActive: !!getAuthKey(),
         retentionHours: getRetentionHours(),
-        maxPayloadLimit: `${((getMaxPayloadSize() || 0) / 1024 / 1024).toFixed(1)}MB`,
+        maxPayloadLimit: `${((getMaxPayloadSize() || 0) / 1024 / 1024).toFixed(1)}${UNIT_LABELS.MB}`,
         webhookCount: activeWebhooks.length,
         activeWebhooks,
       },
-      features: [
-        "Advanced Mocking & Latency Control",
-        "Enterprise Security (Auth/CIDR)",
-        "Smart Forwarding Workflows",
-        "Isomorphic Custom Scripting",
-        "Real-time SSE Log Streaming",
-        "High-Performance Logging",
-      ],
+      features: DASHBOARD_CONSTS.FEATURES_LIST,
       endpoints: {
-        logs: `${baseUrl}/logs?limit=100`,
-        stream: `${baseUrl}/log-stream`,
-        webhook: `${baseUrl}/webhook/:id`,
-        replay: `${baseUrl}/replay/:webhookId/:itemId?url=http://your-goal.com`,
-        info: `${baseUrl}/info`,
+        logs: `${baseUrl}${DASHBOARD_CONSTS.ENDPOINTS.LOGS}`,
+        stream: `${baseUrl}${DASHBOARD_CONSTS.ENDPOINTS.STREAM}`,
+        webhook: `${baseUrl}${DASHBOARD_CONSTS.ENDPOINTS.WEBHOOK}`,
+        replay: `${baseUrl}${DASHBOARD_CONSTS.ENDPOINTS.REPLAY}`,
+        info: `${baseUrl}${DASHBOARD_CONSTS.ENDPOINTS.INFO}`,
       },
-      docs: APIFY_HOMEPAGE_URL,
+      docs: APP_CONSTS.APIFY_HOMEPAGE_URL,
     });
   };

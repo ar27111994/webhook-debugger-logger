@@ -2,26 +2,13 @@
  * @file src/utils/config.js
  * @description Configuration parsing and normalization utilities.
  * Validates Actor input and applies sensible defaults with safety bounds.
+ * @module utils/config
  */
-import {
-  DEFAULT_URL_COUNT,
-  DEFAULT_RETENTION_HOURS,
-  DEFAULT_REPLAY_RETRIES,
-  DEFAULT_REPLAY_TIMEOUT_MS,
-  DEFAULT_RATE_LIMIT_PER_MINUTE,
-  DEFAULT_PAYLOAD_LIMIT,
-  MAX_ALLOWED_PAYLOAD_SIZE,
-  MAX_SAFE_RESPONSE_DELAY_MS,
-  MAX_SAFE_REPLAY_RETRIES,
-  MAX_SAFE_RATE_LIMIT_PER_MINUTE,
-  MAX_SAFE_RETENTION_HOURS,
-  MAX_SAFE_URL_COUNT,
-  MAX_SAFE_REPLAY_TIMEOUT_MS,
-  DEFAULT_FORWARD_RETRIES,
-  MAX_SAFE_FORWARD_RETRIES,
-  DEFAULT_FIXED_MEMORY_MBYTES,
-  MAX_SAFE_FIXED_MEMORY_MBYTES,
-} from "../consts.js";
+import { APP_CONSTS } from "../consts/app.js";
+import { HTTP_CONSTS } from "../consts/http.js";
+
+import { LOG_COMPONENTS } from "../consts/logging.js";
+import { LOG_MESSAGES } from "../consts/messages.js";
 import { createChildLogger } from "./logger.js";
 
 /**
@@ -40,6 +27,7 @@ import { createChildLogger } from "./logger.js";
  * @property {number} [responseDelayMs]
  * @property {string} [forwardUrl]
  * @property {boolean} [forwardHeaders]
+ * @property {string[]} [redactBodyPaths]
  * @property {Object} [jsonSchema]
  * @property {string} [customScript]
  * @property {boolean} [maskSensitiveData]
@@ -67,15 +55,21 @@ import { createChildLogger } from "./logger.js";
 export function parseWebhookOptions(options = {}) {
   return {
     allowedIps: options.allowedIps ?? [],
-    defaultResponseCode: options.defaultResponseCode ?? 200,
-    defaultResponseBody: options.defaultResponseBody ?? "OK",
+    defaultResponseCode:
+      options.defaultResponseCode ?? HTTP_CONSTS.DEFAULT_RESPONSE_CODE,
+    defaultResponseBody:
+      options.defaultResponseBody ?? HTTP_CONSTS.DEFAULT_SUCCESS_BODY,
     defaultResponseHeaders: options.defaultResponseHeaders ?? {},
     forwardUrl: options.forwardUrl,
-    forwardHeaders: options.forwardHeaders ?? true,
+    forwardHeaders:
+      options.forwardHeaders ?? APP_CONSTS.DEFAULT_FORWARD_HEADERS,
     jsonSchema: options.jsonSchema,
     customScript: options.customScript,
-    maskSensitiveData: options.maskSensitiveData ?? true, // Default to true
-    enableJSONParsing: options.enableJSONParsing ?? true,
+    maskSensitiveData:
+      options.maskSensitiveData ?? APP_CONSTS.DEFAULT_MASK_SENSITIVE_DATA,
+    redactBodyPaths: options.redactBodyPaths ?? [],
+    enableJSONParsing:
+      options.enableJSONParsing ?? APP_CONSTS.DEFAULT_ENABLE_JSON_PARSING,
     signatureVerification: options.signatureVerification,
     alerts: options.alerts,
     alertOn: options.alertOn,
@@ -109,30 +103,30 @@ export function coerceRuntimeOptions(input) {
     Number.isFinite(urlCountRaw) && urlCountRaw >= 1
       ? clampWithWarning(
           Math.floor(urlCountRaw),
-          MAX_SAFE_URL_COUNT,
+          APP_CONSTS.MAX_SAFE_URL_COUNT,
           "urlCount",
         )
-      : DEFAULT_URL_COUNT;
+      : APP_CONSTS.DEFAULT_URL_COUNT;
 
   const retentionRaw = Number(input.retentionHours);
   const retentionHours =
     Number.isFinite(retentionRaw) && retentionRaw >= 1
       ? clampWithWarning(
           Math.floor(retentionRaw),
-          MAX_SAFE_RETENTION_HOURS,
+          APP_CONSTS.MAX_SAFE_RETENTION_HOURS,
           "retentionHours",
         )
-      : DEFAULT_RETENTION_HOURS;
+      : APP_CONSTS.DEFAULT_RETENTION_HOURS;
 
   const rateLimitRaw = Number(input.rateLimitPerMinute);
   const rateLimitPerMinute =
     Number.isFinite(rateLimitRaw) && rateLimitRaw >= 1
       ? clampWithWarning(
           Math.floor(rateLimitRaw),
-          MAX_SAFE_RATE_LIMIT_PER_MINUTE,
+          APP_CONSTS.MAX_SAFE_RATE_LIMIT_PER_MINUTE,
           "rateLimitPerMinute",
         )
-      : DEFAULT_RATE_LIMIT_PER_MINUTE;
+      : APP_CONSTS.DEFAULT_RATE_LIMIT_PER_MINUTE;
 
   const authKey = typeof input.authKey === "string" ? input.authKey.trim() : "";
 
@@ -141,10 +135,10 @@ export function coerceRuntimeOptions(input) {
     Number.isFinite(maxPayloadSizeRaw) && maxPayloadSizeRaw > 0
       ? clampWithWarning(
           maxPayloadSizeRaw,
-          MAX_ALLOWED_PAYLOAD_SIZE,
+          APP_CONSTS.MAX_ALLOWED_PAYLOAD_SIZE,
           "maxPayloadSize",
         )
-      : DEFAULT_PAYLOAD_LIMIT;
+      : APP_CONSTS.DEFAULT_PAYLOAD_LIMIT;
 
   const responseDelayMsRaw = Number(input.responseDelayMs);
   const responseDelayMs = getSafeResponseDelay(responseDelayMsRaw);
@@ -154,41 +148,43 @@ export function coerceRuntimeOptions(input) {
     Number.isFinite(replayRetriesRaw) && replayRetriesRaw >= 0
       ? clampWithWarning(
           Math.floor(replayRetriesRaw),
-          MAX_SAFE_REPLAY_RETRIES,
+          APP_CONSTS.MAX_SAFE_REPLAY_RETRIES,
           "replayMaxRetries",
         )
-      : DEFAULT_REPLAY_RETRIES;
+      : APP_CONSTS.DEFAULT_REPLAY_RETRIES;
 
   const replayTimeoutRaw = Number(input.replayTimeoutMs);
   const replayTimeoutMs =
-    Number.isFinite(replayTimeoutRaw) && replayTimeoutRaw >= 1000
+    Number.isFinite(replayTimeoutRaw) &&
+    replayTimeoutRaw >= APP_CONSTS.MIN_REPLAY_TIMEOUT_MS
       ? clampWithWarning(
           Math.floor(replayTimeoutRaw),
-          MAX_SAFE_REPLAY_TIMEOUT_MS,
+          APP_CONSTS.MAX_SAFE_REPLAY_TIMEOUT_MS,
           "replayTimeoutMs",
         )
-      : DEFAULT_REPLAY_TIMEOUT_MS;
+      : APP_CONSTS.DEFAULT_REPLAY_TIMEOUT_MS;
 
   const forwardRetriesRaw = Number(input.maxForwardRetries);
   const maxForwardRetries =
     Number.isFinite(forwardRetriesRaw) && forwardRetriesRaw >= 0
       ? clampWithWarning(
           Math.floor(forwardRetriesRaw),
-          MAX_SAFE_FORWARD_RETRIES,
+          APP_CONSTS.MAX_SAFE_FORWARD_RETRIES,
           "maxForwardRetries",
         )
-      : DEFAULT_FORWARD_RETRIES;
+      : APP_CONSTS.DEFAULT_FORWARD_RETRIES;
 
   const useFixedMemory = Boolean(input.useFixedMemory);
   const fixedMemoryRaw = Number(input.fixedMemoryMbytes);
   const fixedMemoryMbytes =
-    Number.isFinite(fixedMemoryRaw) && fixedMemoryRaw >= 256
+    Number.isFinite(fixedMemoryRaw) &&
+    fixedMemoryRaw >= APP_CONSTS.MIN_FIXED_MEMORY_MBYTES
       ? clampWithWarning(
           fixedMemoryRaw,
-          MAX_SAFE_FIXED_MEMORY_MBYTES,
+          APP_CONSTS.MAX_SAFE_FIXED_MEMORY_MBYTES,
           "fixedMemoryMbytes",
         )
-      : DEFAULT_FIXED_MEMORY_MBYTES;
+      : APP_CONSTS.DEFAULT_FIXED_MEMORY_MBYTES;
 
   return {
     urlCount,
@@ -234,7 +230,7 @@ export function getSafeResponseDelay(delayMs = 0) {
 
   return clampWithWarning(
     delayMs,
-    MAX_SAFE_RESPONSE_DELAY_MS,
+    APP_CONSTS.MAX_SAFE_RESPONSE_DELAY_MS,
     "responseDelayMs",
   );
 }
@@ -248,8 +244,8 @@ export function getSafeResponseDelay(delayMs = 0) {
  */
 function clampWithWarning(value, max, name) {
   if (value > max) {
-    const log = createChildLogger({ component: "Config" });
-    log.warn({ name, value, max }, "Value exceeds safe max, clamping to limit");
+    const log = createChildLogger({ component: LOG_COMPONENTS.CONFIG });
+    log.warn({ name, value, max }, LOG_MESSAGES.CONFIG_VALUE_CLAMPED);
     return max;
   }
   return value;

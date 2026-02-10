@@ -2,15 +2,17 @@
  * @file src/utils/webhook_rate_limiter.js
  * @description Per-webhook rate limiter for DDoS protection on ingestion endpoints.
  * Uses a much higher limit than the management rate limiter to allow for webhook bursts.
+ * @module utils/webhook_rate_limiter
  */
-import {
-  DEFAULT_RATE_LIMIT_WINDOW_MS,
-  DEFAULT_WEBHOOK_RATE_LIMIT_MAX_ENTRIES,
-  DEFAULT_WEBHOOK_RATE_LIMIT_PER_MINUTE,
-} from "../consts.js";
+import { APP_CONSTS, ENV_VARS, ENV_VALUES } from "../consts/app.js";
+import { LOG_COMPONENTS } from "../consts/logging.js";
+import { LOG_MESSAGES } from "../consts/messages.js";
+import { ERROR_MESSAGES } from "../consts/errors.js";
 import { createChildLogger } from "./logger.js";
 
-const log = createChildLogger({ component: "WebhookRateLimiter" });
+const log = createChildLogger({
+  component: LOG_COMPONENTS.WEBHOOK_RATE_LIMITER,
+});
 
 /**
  * @typedef {import('express').Request} Request
@@ -48,18 +50,16 @@ export class WebhookRateLimiter {
    * @param {number} maxEntries - Max unique webhookIds to track (default: 10000)
    */
   constructor(
-    limit = DEFAULT_WEBHOOK_RATE_LIMIT_PER_MINUTE,
-    windowMs = DEFAULT_RATE_LIMIT_WINDOW_MS,
-    maxEntries = DEFAULT_WEBHOOK_RATE_LIMIT_MAX_ENTRIES,
+    limit = APP_CONSTS.DEFAULT_WEBHOOK_RATE_LIMIT_PER_MINUTE,
+    windowMs = APP_CONSTS.DEFAULT_RATE_LIMIT_WINDOW_MS,
+    maxEntries = APP_CONSTS.DEFAULT_WEBHOOK_RATE_LIMIT_MAX_ENTRIES,
   ) {
     if (
       typeof windowMs !== "number" ||
       !Number.isFinite(windowMs) ||
       windowMs <= 0
     ) {
-      throw new Error(
-        "WebhookRateLimiter: windowMs must be a finite number > 0",
-      );
+      throw new Error(ERROR_MESSAGES.RATE_LIMITER_INVALID_WINDOW);
     }
     if (
       typeof maxEntries !== "number" ||
@@ -67,9 +67,7 @@ export class WebhookRateLimiter {
       !Number.isInteger(maxEntries) ||
       maxEntries <= 0
     ) {
-      throw new Error(
-        "WebhookRateLimiter: maxEntries must be a finite positive integer",
-      );
+      throw new Error(ERROR_MESSAGES.RATE_LIMITER_INVALID_MAX_ENTRIES);
     }
 
     // Initialize fields
@@ -94,10 +92,13 @@ export class WebhookRateLimiter {
         }
       }
 
-      if (prunedCount > 0 && process.env.NODE_ENV !== "test") {
-        log.info({ prunedCount }, "WebhookRateLimiter pruned expired entries");
+      if (
+        prunedCount > 0 &&
+        process.env[ENV_VARS.NODE_ENV] !== ENV_VALUES.TEST
+      ) {
+        log.info({ prunedCount }, LOG_MESSAGES.WEBHOOK_RATELIMIT_PRUNED);
       }
-    }, DEFAULT_RATE_LIMIT_WINDOW_MS);
+    }, APP_CONSTS.DEFAULT_RATE_LIMIT_WINDOW_MS);
     if (this.#cleanupInterval.unref) this.#cleanupInterval.unref();
   }
 
@@ -118,20 +119,22 @@ export class WebhookRateLimiter {
       !Number.isInteger(value) ||
       value <= 0
     ) {
-      throw new Error(
-        "WebhookRateLimiter: limit must be a finite positive integer",
-      );
+      throw new Error(ERROR_MESSAGES.RATE_LIMITER_INVALID_LIMIT);
     }
     this.#limit = value;
   }
 
   /**
    * Returns specific metrics for monitoring
+   * @returns {number}
    */
   get entryCount() {
     return this.#hits.size;
   }
 
+  /**
+   * @returns {void}
+   */
   destroy() {
     if (this.#cleanupInterval) global.clearInterval(this.#cleanupInterval);
   }
@@ -195,7 +198,7 @@ export class WebhookRateLimiter {
  * Uses the configured limit from consts (generous for burst traffic).
  */
 export const webhookRateLimiter = new WebhookRateLimiter(
-  DEFAULT_WEBHOOK_RATE_LIMIT_PER_MINUTE,
-  DEFAULT_RATE_LIMIT_WINDOW_MS,
-  DEFAULT_WEBHOOK_RATE_LIMIT_MAX_ENTRIES,
+  APP_CONSTS.DEFAULT_WEBHOOK_RATE_LIMIT_PER_MINUTE,
+  APP_CONSTS.DEFAULT_RATE_LIMIT_WINDOW_MS,
+  APP_CONSTS.DEFAULT_WEBHOOK_RATE_LIMIT_MAX_ENTRIES,
 );
