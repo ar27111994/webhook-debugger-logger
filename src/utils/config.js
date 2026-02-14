@@ -6,44 +6,14 @@
  */
 import { APP_CONSTS } from "../consts/app.js";
 import { HTTP_CONSTS } from "../consts/http.js";
-
 import { LOG_COMPONENTS } from "../consts/logging.js";
 import { LOG_MESSAGES } from "../consts/messages.js";
 import { createChildLogger } from "./logger.js";
 
 /**
- * @typedef {import("../typedefs.js").SignatureConfig} SignatureConfig
- * @typedef {import("../typedefs.js").AlertConfig} AlertConfig
- * @typedef {import("../typedefs.js").AlertTrigger} AlertTrigger
- */
-
-/**
- * @typedef {Object} WebhookConfig
- * @property {string} [authKey]
- * @property {string[]} [allowedIps]
- * @property {number} [defaultResponseCode]
- * @property {string} [defaultResponseBody]
- * @property {Object.<string, string>} [defaultResponseHeaders]
- * @property {number} [responseDelayMs]
- * @property {string} [forwardUrl]
- * @property {boolean} [forwardHeaders]
- * @property {string[]} [redactBodyPaths]
- * @property {Object} [jsonSchema]
- * @property {string} [customScript]
- * @property {boolean} [maskSensitiveData]
- * @property {number} [maxPayloadSize]
- * @property {number} [rateLimitPerMinute]
- * @property {boolean} [enableJSONParsing]
- * @property {number} [urlCount]
- * @property {number} [retentionHours]
- * @property {number} [replayMaxRetries]
- * @property {number} [replayTimeoutMs]
- * @property {number} [maxForwardRetries]
- * @property {boolean} [useFixedMemory]
- * @property {number} [fixedMemoryMbytes]
- * @property {SignatureConfig} [signatureVerification]
- * @property {AlertConfig} [alerts]
- * @property {AlertTrigger[]} [alertOn]
+ * @typedef {import("../typedefs.js").ActorInput} ActorInput
+ * @typedef {import("../typedefs.js").WebhookConfig} WebhookConfig
+ * @typedef {import("../typedefs.js").RuntimeOptions} RuntimeOptions
  */
 
 /**
@@ -78,23 +48,8 @@ export function parseWebhookOptions(options = {}) {
 }
 
 /**
- * @typedef {Object} RuntimeOptions
- * @property {number} urlCount
- * @property {number} retentionHours
- * @property {number} rateLimitPerMinute
- * @property {string} authKey
- * @property {number} maxPayloadSize
- * @property {number} responseDelayMs
- * @property {number} replayMaxRetries
- * @property {number} replayTimeoutMs
- * @property {number} maxForwardRetries
- * @property {boolean} useFixedMemory
- * @property {number} fixedMemoryMbytes
- */
-
-/**
  * Coerces and validates runtime options for hot-reloading.
- * @param {Record<string, any>} input
+ * @param {Partial<WebhookConfig>} input
  * @returns {RuntimeOptions}
  */
 export function coerceRuntimeOptions(input) {
@@ -205,8 +160,8 @@ export function coerceRuntimeOptions(input) {
  * Normalizes input value from Key-Value store.
  * Handles stringified JSON and safe fallback.
  * @param {any} value - The raw value from KV store (string or object)
- * @param {any} [fallback] - Value to return if parsing fails or valid is null/undefined
- * @returns {any} Normalized object or fallback
+ * @param {Partial<ActorInput>} [fallback] - Value to return if parsing fails or valid is null/undefined
+ * @returns {ActorInput} Normalized object or fallback
  */
 export function normalizeInput(value, fallback = {}) {
   if (typeof value === "string") {

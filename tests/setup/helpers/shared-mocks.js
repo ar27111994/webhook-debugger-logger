@@ -2,80 +2,61 @@ import { jest } from "@jest/globals";
 import { createApifyMock } from "./apify-mock.js";
 import { assertType } from "./test-utils.js";
 
-import {
+import * as allConsts from "../../../src/consts/index.js";
+
+/**
+ * Creates an object with dynamic getters for all properties of the source object.
+ * This allows mocks to reflect updates to the source object immediately.
+ *
+ * @param {Record<string, any>} target - The target object to modify or create
+ * @param {Record<string, any>} source - The source object to proxy values from
+ * @returns {Record<string, any>} The modified target object
+ */
+export function createMockWithGetters(target, source) {
+  for (const key of Object.keys(source)) {
+    Object.defineProperty(target, key, {
+      get: () => source[key],
+      set: (val) => {
+        source[key] = val;
+      },
+      enumerable: true,
+      configurable: true,
+    });
+  }
+  return target;
+}
+
+// Extracts for internal mock usage and backward compatibility
+const {
   HTTP_STATUS,
-  MIME_TYPES,
-  RECURSION_HEADER_NAME,
-  RECURSION_HEADER_LOOP_SUFFIX,
-  SENSITIVE_HEADERS,
-  REPLAY_HEADERS_TO_IGNORE as REPLAY_HEADERS_TO_IGNORE_REAL,
-  FORWARD_HEADERS_TO_IGNORE,
-} from "../../../src/consts/http.js";
-
-import {
-  KVS_STATE_KEY,
-  KVS_INPUT_KEY,
-  MAX_DATASET_ITEM_BYTES,
-  OFFLOAD_MARKER_SYNC as OFFLOAD_MARKER_SYNC_REAL,
-  OFFLOAD_MARKER_STREAM as OFFLOAD_MARKER_STREAM_REAL,
-  DEFAULT_OFFLOAD_NOTE,
-} from "../../../src/consts/storage.js";
-
-import {
-  DEFAULT_ID_LENGTH,
+  HTTP_STATUS_MESSAGES,
+  STORAGE_CONSTS,
+  KVS_KEYS,
+  APP_CONSTS,
   WEBHOOK_ID_PREFIX,
   REQUEST_ID_PREFIX,
-  SYNC_ENTITY_SYSTEM,
-  EVENT_NAMES,
-  ERROR_LABELS,
+  SYSTEM_CONSTS,
+  INTERNAL_EVENTS,
   REPLAY_STATUS_LABELS,
-  APIFY_HOMEPAGE_URL,
   EVENT_MAX_LISTENERS,
-  DEFAULT_FIXED_MEMORY_MBYTES,
-  MAX_SAFE_REPLAY_RETRIES,
-  MAX_SAFE_RATE_LIMIT_PER_MINUTE,
-  MAX_SAFE_RETENTION_HOURS,
-  MAX_SAFE_URL_COUNT,
-  MAX_SAFE_REPLAY_TIMEOUT_MS,
-  MAX_SAFE_RESPONSE_DELAY_MS,
-  MAX_ALLOWED_PAYLOAD_SIZE,
-  MAX_SAFE_FORWARD_RETRIES,
-  MAX_SAFE_FIXED_MEMORY_MBYTES,
-} from "../../../src/consts/app.js";
-
-import {
-  SSRF_BLOCKED_RANGES,
-  ALLOWED_PROTOCOLS,
-  SSRF_INTERNAL_ERRORS,
-  SSRF_LOG_MESSAGES,
-  TRANSIENT_ERROR_CODES,
-  DELIMITERS,
-  PROTOCOL_PREFIXES,
-} from "../../../src/consts/network.js";
-
-import { SSRF_ERRORS } from "../../../src/consts/security.js";
-import { ERROR_MESSAGES } from "../../../src/consts/errors.js";
-
-import {
+  APP_ROUTES,
+  FORWARDING_CONSTS,
+  SORT_DIRECTIONS,
+  ENV_VARS,
+  SSRF_ERRORS,
+  DUCKDB_TABLES,
   DUCKDB_STORAGE_DIR_DEFAULT,
   DUCKDB_FILENAME_DEFAULT,
   DUCKDB_MEMORY_LIMIT,
   DUCKDB_THREADS,
-  DUCKDB_POOL_SIZE,
   SQL_FRAGMENTS,
-  SORT_DIRECTIONS,
   DB_MISSING_OFFSET_MARKER,
-  DEFAULT_PAGE_LIMIT,
-  MAX_PAGE_LIMIT,
-  DEFAULT_PAGE_OFFSET,
-} from "../../../src/consts/database.js";
-
-import {
-  DASHBOARD_PLACEHOLDERS,
-  DASHBOARD_TEMPLATE_PATH,
-  UNAUTHORIZED_HTML_TEMPLATE,
-} from "../../../src/consts/ui.js";
-
+  PAGINATION_CONSTS,
+  ERROR_MESSAGES,
+  LOG_MESSAGES,
+  HTTP_HEADERS,
+  MIME_TYPES,
+} = allConsts;
 /**
  * @typedef {import("apify").Dataset} Dataset
  * @typedef {import("apify").DatasetDataOptions} DatasetDataOptions
@@ -92,11 +73,12 @@ import {
  * @typedef {import("../../../src/typedefs.js").SignatureProvider} SignatureProvider
  * @typedef {import("../../../src/utils/webhook_rate_limiter.js").WebhookRateLimiter} WebhookRateLimiter
  * @typedef {import("../../../src/repositories/LogRepository.js").LogRepository} LogRepository
- * @typedef {import('../../../src/consts.js')} ConstsMock
+ * @typedef {import('../../../src/consts/index.js')} ConstsMock
  * @typedef {import('../../../src/webhook_manager.js').WebhookManager} WebhookManager
  * @typedef {import('../../../src/utils/signature.js').VerificationResult} VerificationResult
  * @typedef {import('../../../src/utils/signature.js').VerificationContext} VerificationContext
  * @typedef {import('../../../src/services/SyncService.js').SyncService} SyncService
+ * @typedef {import("../../../src/services/ForwardingService.js").ForwardingService} ForwardingService
  
  */
 
@@ -123,25 +105,60 @@ export const loggerMock = {
 /**
  * Standard axios mock for mirroring internal behavior.
  */
-const axiosBase = /** @type {AxiosMock} */ (jest.fn());
+const axiosBase = /** @type {AxiosMock} */ (
+  jest.fn().mockImplementation((config) => {
+    return Promise.resolve({
+      status: HTTP_STATUS.OK,
+      data: HTTP_STATUS_MESSAGES[HTTP_STATUS.OK],
+      headers: {},
+      config: typeof config === "string" ? { url: config } : config,
+    });
+  })
+);
 
-axiosBase.mockResolvedValue({ status: HTTP_STATUS.OK, data: "OK" });
-axiosBase.post = /** @type {AxiosMock} */ (jest.fn()).mockResolvedValue({
-  status: HTTP_STATUS.OK,
-  data: "OK",
-});
-axiosBase.get = /** @type {AxiosMock} */ (jest.fn()).mockResolvedValue({
-  status: HTTP_STATUS.OK,
-  data: "OK",
-});
-axiosBase.delete = /** @type {AxiosMock} */ (jest.fn()).mockResolvedValue({
-  status: HTTP_STATUS.OK,
-  data: "OK",
-});
-axiosBase.put = /** @type {AxiosMock} */ (jest.fn()).mockResolvedValue({
-  status: HTTP_STATUS.OK,
-  data: "OK",
-});
+axiosBase[allConsts.HTTP_METHODS.GET.toLowerCase()] = /** @type {AxiosMock} */ (
+  jest
+    .fn()
+    .mockImplementation((url, config) =>
+      axiosBase({ method: allConsts.HTTP_METHODS.GET, url, ...(config || {}) }),
+    )
+);
+axiosBase[allConsts.HTTP_METHODS.POST.toLowerCase()] =
+  /** @type {AxiosMock} */ (
+    jest.fn().mockImplementation((url, data, config) =>
+      axiosBase({
+        method: allConsts.HTTP_METHODS.POST,
+        url,
+        data,
+        ...(config || {}),
+      }),
+    )
+  );
+axiosBase[allConsts.HTTP_METHODS.PUT.toLowerCase()] = /** @type {AxiosMock} */ (
+  jest.fn().mockImplementation((url, data, config) =>
+    axiosBase({
+      method: allConsts.HTTP_METHODS.PUT,
+      url,
+      data,
+      ...(config || {}),
+    }),
+  )
+);
+axiosBase[allConsts.HTTP_METHODS.DELETE.toLowerCase()] =
+  /** @type {AxiosMock} */ (
+    jest.fn().mockImplementation((url, config) =>
+      axiosBase({
+        method: allConsts.HTTP_METHODS.DELETE,
+        url,
+        ...(config || {}),
+      }),
+    )
+  );
+axiosBase.request = /** @type {AxiosMock} */ (
+  jest.fn().mockImplementation((config) => axiosBase(config))
+);
+axiosBase.create = jest.fn(() => axiosBase);
+axiosBase.isCancel = jest.fn(() => false);
 
 export const axiosMock = axiosBase;
 
@@ -325,9 +342,18 @@ export const resetNetworkMocks = async () => {
   dnsPromisesMock.resolve6.mockResolvedValue([]);
 
   // Reset Axios
-  axiosMock.mockResolvedValue({ status: HTTP_STATUS.OK, data: "OK" });
-  axiosMock.post.mockResolvedValue({ status: HTTP_STATUS.OK, data: "OK" });
-  axiosMock.get.mockResolvedValue({ status: HTTP_STATUS.OK, data: "OK" });
+  axiosMock.mockResolvedValue({
+    status: HTTP_STATUS.OK,
+    data: HTTP_STATUS_MESSAGES[HTTP_STATUS.OK],
+  });
+  axiosMock.post.mockResolvedValue({
+    status: HTTP_STATUS.OK,
+    data: HTTP_STATUS_MESSAGES[HTTP_STATUS.OK],
+  });
+  axiosMock.get.mockResolvedValue({
+    status: HTTP_STATUS.OK,
+    data: HTTP_STATUS_MESSAGES[HTTP_STATUS.OK],
+  });
 };
 
 /**
@@ -388,7 +414,7 @@ export function createMockWebhookManager(overrides = {}) {
     // State
     webhooks: new Map(),
     kvStore: null,
-    STATE_KEY: KVS_STATE_KEY,
+    STATE_KEY: KVS_KEYS.STATE,
   });
 }
 
@@ -571,7 +597,7 @@ const overridableConsts = {
   DEFAULT_WEBHOOK_RATE_LIMIT_PER_MINUTE: 100,
   DEFAULT_WEBHOOK_RATE_LIMIT_MAX_ENTRIES: 100,
   DEFAULT_RATE_LIMIT_WINDOW_MS: 60000,
-  DEFAULT_PAYLOAD_LIMIT: 1000,
+  DEFAULT_PAYLOAD_LIMIT: 10 * 1024 * 1024,
   DEFAULT_TOLERANCE_SECONDS: 300,
   DEFAULT_REPLAY_RETRIES: 3,
   DEFAULT_REPLAY_TIMEOUT_MS: 1000,
@@ -580,9 +606,27 @@ const overridableConsts = {
   RETRY_BASE_DELAY_MS: 100,
   SCRIPT_EXECUTION_TIMEOUT_MS: 1000,
   MAX_SSE_CLIENTS: 2,
-  MAX_BULK_CREATE: 10,
+  MAX_BULK_CREATE: 1000,
   MAX_ITEMS_FOR_BATCH: 100,
+  MAX_SAFE_RESPONSE_DELAY_MS: 30000,
   SYNC_MAX_CONCURRENT: 1,
+  ALERT_CHANNELS: { SLACK: "slack", DISCORD: "discord" },
+  ALERT_TRIGGERS: {
+    ERROR: "error",
+    STATUS_4XX: "4xx",
+    STATUS_5XX: "5xx",
+    TIMEOUT: "timeout",
+    SIGNATURE_INVALID: "signature_invalid",
+  },
+  SLACK_BLOCK_TYPES: {
+    HEADER: "header",
+    SECTION: "section",
+    CONTEXT: "context",
+    PLAIN_TEXT: "plain_text",
+    MARKDOWN: "mrkdwn",
+  },
+  DISCORD_COLORS: { RED: 0xff0000, ORANGE: 0xffa500, GREEN: 0x00ff00 },
+  ALERT_TIMEOUT_MS: 5000,
   SYNC_MIN_TIME_MS: 0,
   SYNC_BATCH_SIZE: 10,
   SSE_HEARTBEAT_INTERVAL_MS: 100,
@@ -601,79 +645,41 @@ const overridableConsts = {
  */
 /** @type {Record<string, any>} */
 export const constsMock = {
-  HTTP_STATUS,
-  MIME_TYPES,
-  ERROR_LABELS,
-  REPLAY_STATUS_LABELS,
-  RECURSION_HEADER_LOOP_SUFFIX,
-  SENSITIVE_HEADERS,
+  ...allConsts,
+  // Custom test-only adjustments
   REPLAY_HEADERS_TO_IGNORE: [
-    ...REPLAY_HEADERS_TO_IGNORE_REAL,
+    ...(allConsts.REPLAY_HEADERS_TO_IGNORE || []),
     "ignored-header",
   ],
-  FORWARD_HEADERS_TO_IGNORE,
-  ALLOWED_PROTOCOLS,
-  PROTOCOL_PREFIXES,
-  SSRF_BLOCKED_RANGES,
-  SSRF_ERRORS,
-  SSRF_INTERNAL_ERRORS,
-  SSRF_LOG_MESSAGES,
-  ERROR_MESSAGES,
-  DELIMITERS,
-  SQL_FRAGMENTS,
-  SORT_DIRECTIONS,
-  EVENT_NAMES,
-  DEFAULT_ID_LENGTH,
-  WEBHOOK_ID_PREFIX,
-  REQUEST_ID_PREFIX,
-  SYNC_ENTITY_SYSTEM,
-  DB_MISSING_OFFSET_MARKER,
-  DEFAULT_FIXED_MEMORY_MBYTES,
-  RECURSION_HEADER_NAME,
+  REPLAY_STATUS_LABELS: { REPLAYED: "replayed", FAILED: "failed" },
+  EVENT_NAMES: INTERNAL_EVENTS,
   RECURSION_HEADER_VALUE: "Apify-Webhook-Debugger",
-  APIFY_HOMEPAGE_URL,
-  EVENT_MAX_LISTENERS,
-  TRANSIENT_ERROR_CODES,
-  KVS_STATE_KEY,
-  KVS_INPUT_KEY,
-  MAX_DATASET_ITEM_BYTES,
-  KVS_OFFLOAD_THRESHOLD: 1024 * 1024,
-  OFFLOAD_MARKER_SYNC: OFFLOAD_MARKER_SYNC_REAL,
-  OFFLOAD_MARKER_STREAM: OFFLOAD_MARKER_STREAM_REAL,
-  DEFAULT_OFFLOAD_NOTE,
-  MAX_SAFE_REPLAY_RETRIES,
-  MAX_SAFE_RATE_LIMIT_PER_MINUTE,
-  MAX_SAFE_RETENTION_HOURS,
-  MAX_SAFE_URL_COUNT,
-  MAX_SAFE_REPLAY_TIMEOUT_MS,
-  MAX_SAFE_RESPONSE_DELAY_MS,
-  MAX_ALLOWED_PAYLOAD_SIZE,
-  MAX_SAFE_FORWARD_RETRIES,
-  MAX_SAFE_FIXED_MEMORY_MBYTES,
-  DEFAULT_PAGE_LIMIT,
-  MAX_PAGE_LIMIT,
-  DEFAULT_PAGE_OFFSET,
-  DUCKDB_STORAGE_DIR_DEFAULT,
-  DUCKDB_FILENAME_DEFAULT,
-  DUCKDB_MEMORY_LIMIT,
-  DUCKDB_THREADS,
-  DUCKDB_POOL_SIZE,
-  DASHBOARD_PLACEHOLDERS,
-  DASHBOARD_TEMPLATE_PATH,
-  UNAUTHORIZED_HTML_TEMPLATE,
+  // Backward compatibility for top-level defaults
+  DEFAULT_ID_LENGTH: APP_CONSTS.DEFAULT_ID_LENGTH,
+  DEFAULT_FIXED_MEMORY_MBYTES: APP_CONSTS.DEFAULT_FIXED_MEMORY_MBYTES,
+  TRANSIENT_ERROR_CODES: FORWARDING_CONSTS.TRANSIENT_ERROR_CODES,
+  DEFAULT_PAGE_LIMIT: PAGINATION_CONSTS.DEFAULT_PAGE_LIMIT,
+  MAX_PAGE_LIMIT: PAGINATION_CONSTS.MAX_PAGE_LIMIT,
+  DEFAULT_PAGE_OFFSET: PAGINATION_CONSTS.DEFAULT_PAGE_OFFSET,
+  DEFAULT_PAYLOAD_LIMIT: APP_CONSTS.DEFAULT_PAYLOAD_LIMIT,
+  DEFAULT_RETENTION_HOURS: APP_CONSTS.DEFAULT_RETENTION_HOURS,
+  DEFAULT_URL_COUNT: APP_CONSTS.DEFAULT_URL_COUNT,
+  DEFAULT_RATE_LIMIT_PER_MINUTE: APP_CONSTS.DEFAULT_RATE_LIMIT_PER_MINUTE,
+  DEFAULT_REPLAY_RETRIES: APP_CONSTS.DEFAULT_REPLAY_RETRIES,
+  DEFAULT_REPLAY_TIMEOUT_MS: APP_CONSTS.DEFAULT_REPLAY_TIMEOUT_MS,
+  ERROR_MESSAGES,
+  LOG_MESSAGES,
+  PAGINATION_CONSTS,
+  HTTP_HEADERS,
+  MIME_TYPES,
+  ...STORAGE_CONSTS,
+  OFFLOAD_MARKER_SYNC: STORAGE_CONSTS.OFFLOAD_MARKER_SYNC,
+  OFFLOAD_MARKER_STREAM: STORAGE_CONSTS.OFFLOAD_MARKER_STREAM,
+  DEFAULT_OFFLOAD_NOTE: STORAGE_CONSTS.DEFAULT_OFFLOAD_NOTE,
 };
 
 // Dynamically add getters for overridable constants
-for (const key of Object.keys(overridableConsts)) {
-  Object.defineProperty(constsMock, key, {
-    get: () => overridableConsts[key],
-    set: (val) => {
-      overridableConsts[key] = val;
-    },
-    enumerable: true,
-    configurable: true,
-  });
-}
+createMockWithGetters(constsMock, overridableConsts);
 
 /**
  * Shared Auth Mock.
@@ -706,12 +712,19 @@ export const signatureMock = {
  * Shared Webhook Rate Limiter Mock.
  */
 /**
- * @type {jest.Mocked<{webhookRateLimiter: WebhookRateLimiter}>}
+ * @type {jest.Mocked<{['WebhookRateLimiter']: WebhookRateLimiter, webhookRateLimiter: WebhookRateLimiter}>}
  */
 export const webhookRateLimiterMock = {
+  WebhookRateLimiter: assertType(jest.fn()).mockImplementation(() => ({
+    check: jest.fn(() => ({ allowed: true, remaining: 100, resetMs: 0 })),
+    limit: 100,
+    destroy: jest.fn(),
+  })),
   webhookRateLimiter: assertType({
     check: jest.fn(() => ({ allowed: true, remaining: 100, resetMs: 0 })),
     limit: 100,
+    entryCount: 0,
+    destroy: jest.fn(),
   }),
 };
 
@@ -730,8 +743,8 @@ export const storageHelperMock = {
   createReferenceBody: jest.fn((opts) =>
     assertType({ ...assertType(opts), isReference: true }),
   ),
-  OFFLOAD_MARKER_STREAM: OFFLOAD_MARKER_STREAM_REAL,
-  OFFLOAD_MARKER_SYNC: OFFLOAD_MARKER_SYNC_REAL,
+  OFFLOAD_MARKER_STREAM: STORAGE_CONSTS.OFFLOAD_MARKER_STREAM,
+  OFFLOAD_MARKER_SYNC: STORAGE_CONSTS.OFFLOAD_MARKER_SYNC,
 };
 
 /**
@@ -745,7 +758,7 @@ export const configMock = {
   parseWebhookOptions: jest.fn((opts) => ({
     allowedIps: [],
     defaultResponseCode: HTTP_STATUS.OK,
-    defaultResponseBody: "OK",
+    defaultResponseBody: HTTP_STATUS_MESSAGES[HTTP_STATUS.OK],
     defaultResponseHeaders: {},
     maskSensitiveData: true,
     enableJSONParsing: true,
@@ -769,7 +782,7 @@ export const alertingMock = {
  * Shared Events Mock.
  */
 /**
- * @type {jest.Mocked<{appEvents: {emit: (event: string, data: any) => void, on: (event: string, listener: (data: any) => void) => void, off: (event: string, listener: (data: any) => void) => void}, EVENTS: {LOG_RECEIVED: string}}>}}
+ * @type {jest.Mocked<{appEvents: {emit: (event: string, data: any) => void, on: (event: string, listener: (data: any) => void) => void, off: (event: string, listener: (data: any) => void) => void}, EVENTS: {LOG_RECEIVED: string}, EVENT_NAMES: typeof INTERNAL_EVENTS}>}
  */
 export const eventsMock = {
   appEvents: {
@@ -778,8 +791,9 @@ export const eventsMock = {
     off: jest.fn(),
   },
   EVENTS: {
-    LOG_RECEIVED: EVENT_NAMES.LOG_RECEIVED,
+    LOG_RECEIVED: INTERNAL_EVENTS.LOG_RECEIVED,
   },
+  EVENT_NAMES: INTERNAL_EVENTS,
 };
 
 /**
@@ -838,4 +852,106 @@ export const fsPromisesMock = {
 export const fsMock = {
   existsSync: jest.fn(),
   ...fsPromisesMock,
+};
+
+/**
+ * Shared Forwarding Service Mock.
+ */
+/** @type {jest.Mocked<ForwardingService>} */
+export const forwardingServiceMock = assertType({
+  sendSafeRequest: /** @type {jest.Mock<any>} */ (jest.fn()).mockResolvedValue({
+    status: HTTP_STATUS.OK,
+    data: "Forwarded OK",
+    headers: {},
+  }),
+  circuitBreaker: assertType({
+    recordSuccess: jest.fn(),
+    recordFailure: jest.fn(),
+  }),
+});
+
+/**
+ * Shared Services File Mock.
+ */
+/** @type {jest.Mocked<{forwardingService: ForwardingService, syncService: SyncService}>} */
+export const servicesFileMock = {
+  forwardingService: forwardingServiceMock,
+  syncService: syncServiceMock,
+};
+
+/**
+ * Mock object for src/consts/app.js
+ * Proxies configured values to constsMock/overridableConsts
+ */
+export const appConstsFileMock = {
+  APP_CONSTS: {
+    ...APP_CONSTS,
+    get DEFAULT_PAYLOAD_LIMIT() {
+      return constsMock.DEFAULT_PAYLOAD_LIMIT;
+    },
+    get DEFAULT_RETENTION_HOURS() {
+      return constsMock.DEFAULT_RETENTION_HOURS;
+    },
+    get DEFAULT_URL_COUNT() {
+      return constsMock.DEFAULT_URL_COUNT;
+    },
+    get DEFAULT_RATE_LIMIT_PER_MINUTE() {
+      return constsMock.DEFAULT_RATE_LIMIT_PER_MINUTE;
+    },
+    get DEFAULT_REPLAY_RETRIES() {
+      return constsMock.DEFAULT_REPLAY_RETRIES;
+    },
+    get DEFAULT_REPLAY_TIMEOUT_MS() {
+      return constsMock.DEFAULT_REPLAY_TIMEOUT_MS;
+    },
+    get DEFAULT_FIXED_MEMORY_MBYTES() {
+      return constsMock.DEFAULT_FIXED_MEMORY_MBYTES;
+    },
+    get MAX_SAFE_RESPONSE_DELAY_MS() {
+      return constsMock.MAX_SAFE_RESPONSE_DELAY_MS;
+    },
+  },
+  ENV_VARS,
+  WEBHOOK_ID_PREFIX,
+  REQUEST_ID_PREFIX,
+  SYSTEM_CONSTS,
+  INTERNAL_EVENTS,
+  REPLAY_STATUS_LABELS,
+  EVENT_MAX_LISTENERS,
+  APP_ROUTES,
+  FORWARDING_CONSTS,
+  SORT_DIRECTIONS: { ...SORT_DIRECTIONS },
+};
+
+/**
+ * Mock object for src/consts/database.js
+ * Proxies configured values to constsMock
+ */
+export const databaseConstsFileMock = {
+  get SYNC_BATCH_SIZE() {
+    return constsMock.SYNC_BATCH_SIZE;
+  },
+  get SYNC_MAX_CONCURRENT() {
+    return constsMock.SYNC_MAX_CONCURRENT;
+  },
+  get SYNC_MIN_TIME_MS() {
+    return constsMock.SYNC_MIN_TIME_MS;
+  },
+  get DUCKDB_POOL_SIZE() {
+    return constsMock.DUCKDB_POOL_SIZE;
+  },
+  get DUCKDB_VACUUM_ENABLED() {
+    return constsMock.DUCKDB_VACUUM_ENABLED;
+  },
+  get DUCKDB_VACUUM_INTERVAL_MS() {
+    return constsMock.DUCKDB_VACUUM_INTERVAL_MS;
+  },
+  DUCKDB_STORAGE_DIR_DEFAULT,
+  DUCKDB_FILENAME_DEFAULT,
+  DUCKDB_MEMORY_LIMIT,
+  DUCKDB_THREADS,
+  SQL_FRAGMENTS,
+  DB_MISSING_OFFSET_MARKER,
+  PAGINATION_CONSTS,
+  DUCKDB_TABLES,
 };

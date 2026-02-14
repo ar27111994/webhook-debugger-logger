@@ -221,7 +221,7 @@ function getProviderContext(provider, headers, config) {
         const ts = headers[HTTP_HEADERS.SLACK_TIMESTAMP];
         const sig = headers[HTTP_HEADERS.SLACK_SIGNATURE];
         if (!ts || !sig) {
-          context.error = `${SIGNATURE_ERRORS.MISSING_HEADER}: Slack`;
+          context.error = `${SIGNATURE_ERRORS.MISSING_HEADER}: ${HTTP_HEADERS.SLACK_TIMESTAMP} or ${HTTP_HEADERS.SLACK_SIGNATURE}`;
           return context;
         }
 
@@ -254,13 +254,13 @@ function getProviderContext(provider, headers, config) {
         } = config;
 
         if (!headerName) {
-          context.error = "Custom provider requires headerName";
+          context.error = SIGNATURE_ERRORS.CUSTOM_HEADER_REQUIRED;
           return context;
         }
 
         const sig = headers[headerName.toLowerCase()];
         if (!sig) {
-          context.error = `Missing ${headerName} header`;
+          context.error = SIGNATURE_ERRORS.MISSING_CUSTOM_HEADER(headerName);
           return context;
         }
 

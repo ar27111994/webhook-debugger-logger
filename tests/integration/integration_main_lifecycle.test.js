@@ -8,7 +8,11 @@ import {
 } from "@jest/globals";
 
 import { sleep } from "../setup/helpers/test-utils.js";
-import { HTTP_STATUS } from "../../src/consts.js";
+import {
+  HTTP_STATUS,
+  MIME_TYPES,
+  HTTP_HEADERS,
+} from "../../src/consts/index.js";
 import { setupBasicApifyMock } from "../setup/helpers/shared-mocks.js";
 
 /**
@@ -100,7 +104,7 @@ describe("Main Application - Integration Tests", () => {
     });
 
     test("should have trust proxy enabled", () => {
-      expect(testApp.get("trust proxy")).toBe(true);
+      expect(testApp.get("trust proxy")).toBeTruthy();
     });
 
     test("should initialize with Apify Actor", () => {
@@ -125,11 +129,15 @@ describe("Main Application - Integration Tests", () => {
     });
 
     test("should return plain text when Accept header is text/plain", async () => {
-      const response = await appClient.get("/").set("Accept", "text/plain");
+      const response = await appClient
+        .get("/")
+        .set(HTTP_HEADERS.ACCEPT, MIME_TYPES.TEXT);
 
       expect(response.status).toBe(HTTP_STATUS.OK);
       expect(response.type).toMatch(/text\/plain/);
-      expect(response.text).toContain("Webhook Debugger");
+      expect(response.text).toContain(
+        "Webhook Debugger, Logger & API Mocking Suite",
+      );
       expect(response.text).toContain("Active Webhooks:");
     });
   });
@@ -177,7 +185,7 @@ describe("Main Application - Integration Tests", () => {
       const response = await appClient
         .post(`/webhook/${webhookId}`)
         .send({ test: "data" })
-        .set("Content-Type", "application/json");
+        .set(HTTP_HEADERS.CONTENT_TYPE, MIME_TYPES.JSON);
 
       expect(response.status).toBe(HTTP_STATUS.OK);
       expect(response.text).toBe("OK");
@@ -188,7 +196,7 @@ describe("Main Application - Integration Tests", () => {
       const response = await appClient
         .post(`/webhook/${webhookId}`)
         .send("{invalid json")
-        .set("Content-Type", "application/json");
+        .set(HTTP_HEADERS.CONTENT_TYPE, MIME_TYPES.JSON);
 
       // Should accept it - middleware handles malformed JSON
       expect([

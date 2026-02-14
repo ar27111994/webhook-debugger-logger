@@ -4,7 +4,7 @@ import path from "path";
 import fs from "fs/promises";
 import { fileURLToPath } from "url";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
-import { HTTP_STATUS } from "../../src/consts.js";
+import { HTTP_STATUS } from "../../src/consts/index.js";
 import { setupTestApp } from "../setup/helpers/app-utils.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

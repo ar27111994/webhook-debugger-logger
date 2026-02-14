@@ -55,9 +55,19 @@ export function createHealthRoutes(getActiveWebhookCount) {
         uptime,
         timestamp: new Date().toISOString(),
         memory: {
-          heapUsed: Math.round(memoryUsage.heapUsed / 1024 / 1024),
-          heapTotal: Math.round(memoryUsage.heapTotal / 1024 / 1024),
-          rss: Math.round(memoryUsage.rss / 1024 / 1024),
+          heapUsed: Math.round(
+            memoryUsage.heapUsed /
+              APP_CONSTS.BYTES_PER_KB /
+              APP_CONSTS.BYTES_PER_KB,
+          ),
+          heapTotal: Math.round(
+            memoryUsage.heapTotal /
+              APP_CONSTS.BYTES_PER_KB /
+              APP_CONSTS.BYTES_PER_KB,
+          ),
+          rss: Math.round(
+            memoryUsage.rss / APP_CONSTS.BYTES_PER_KB / APP_CONSTS.BYTES_PER_KB,
+          ),
           unit: UNIT_LABELS.MB,
         },
       });

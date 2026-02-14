@@ -71,11 +71,8 @@ export class CircuitBreaker {
       if (!state) return false;
 
       if (state.failures >= this.failureThreshold) {
-        if (Date.now() < state.nextAttempt) {
-          return true; // Open
-        }
-        // Half-open state: Allow one request to pass through to test recovery
-        return false;
+        // Open if reset timeout hasn't passed
+        return Date.now() < state.nextAttempt;
       }
       return false;
     } catch {

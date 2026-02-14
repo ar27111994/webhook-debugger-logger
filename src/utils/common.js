@@ -4,6 +4,7 @@
  * @module utils/common
  */
 
+import { DEFAULT_ID_LENGTH } from "../consts/app.js";
 import { HTTP_STATUS } from "../consts/http.js";
 import { LOG_CONSTS } from "../consts/logging.js";
 
@@ -87,4 +88,27 @@ export function deepRedact(obj, paths, censor = LOG_CONSTS.CENSOR_MARKER) {
       }
     }
   }
+}
+
+/**
+ * Helper to validate a UUID
+ * @param {string} uuid
+ * @param {number} [length=DEFAULT_ID_LENGTH]
+ * @returns {boolean}
+ */
+export function validateUUID(uuid, length = DEFAULT_ID_LENGTH) {
+  // Assuming you use the default parameters:
+  const NANOID_LENGTH = length || DEFAULT_ID_LENGTH;
+  // Default alphabet includes A-Za-z0-9_-
+  const NANOID_ALPHABET =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-";
+
+  if (typeof uuid !== "string") {
+    return false;
+  }
+  // Create a regex pattern dynamically
+  const regex = new RegExp(`^[${NANOID_ALPHABET}]+$`);
+
+  // Check characters and length
+  return regex.test(uuid) && uuid.length === NANOID_LENGTH;
 }

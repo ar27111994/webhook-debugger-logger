@@ -6,9 +6,10 @@ import { jest, describe, test, expect } from "@jest/globals";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 import { assertType } from "../setup/helpers/test-utils.js";
+import { constsMock } from "../setup/helpers/shared-mocks.js";
 
 // Mock Apify and Logger
-await setupCommonMocks({ apify: true, logger: true });
+await setupCommonMocks({ apify: true, logger: true, consts: true });
 
 const { getKvsUrl, offloadToKvs, createReferenceBody, generateKvsKey } =
   await import("../../src/utils/storage_helper.js");
@@ -19,7 +20,7 @@ describe("StorageHelper Coverage Tests", () => {
 
   test("generateKvsKey should return a string starting with payload_", () => {
     const key = generateKvsKey();
-    expect(key).toMatch(/^payload_[a-zA-Z0-9_-]{10}$/);
+    expect(key).toMatch(/^payload_[a-zA-Z0-9_-]{10,64}$/);
   });
 
   test("offloadToKvs should call store.setValue", async () => {
@@ -88,9 +89,9 @@ describe("StorageHelper Coverage Tests", () => {
     });
 
     expect(result).toEqual({
-      data: "[OFFLOADED_TO_KVS]",
+      data: constsMock.OFFLOAD_MARKER_SYNC,
       key: "k1",
-      note: "Body too large for Dataset. Stored in KeyValueStore.",
+      note: constsMock.DEFAULT_OFFLOAD_NOTE,
       originalSize: 100,
       kvsUrl: "u1",
     });

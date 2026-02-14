@@ -1,7 +1,6 @@
 import { jest, describe, test, expect } from "@jest/globals";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
-import { INPUT_POLL_INTERVAL_TEST_MS } from "../../src/consts/app.js";
 
 // 1. Setup Common Mocks
 await setupCommonMocks({
@@ -16,11 +15,14 @@ await setupCommonMocks({
   bootstrap: true,
   routes: true,
   middleware: true,
-  consts: true,
   webhookManager: true,
 });
 
+import { ENV_VARS, SHUTDOWN_SIGNALS } from "../../src/consts/app.js";
+import { LOG_MESSAGES } from "../../src/consts/messages.js";
+
 import {
+  constsMock,
   expressAppMock,
   syncServiceMock,
   hotReloadManagerMock,
@@ -57,7 +59,7 @@ describe("Main Entry Point", () => {
       // Verify HotReloadManager was initialized with correct polling interval
       expect(HotReloadManager).toHaveBeenCalledWith(
         expect.objectContaining({
-          pollIntervalMs: INPUT_POLL_INTERVAL_TEST_MS,
+          pollIntervalMs: constsMock.INPUT_POLL_INTERVAL_TEST_MS,
         }),
       );
     });
@@ -75,16 +77,16 @@ describe("Main Entry Point", () => {
 
     test("should override input from process.env.INPUT if present", async () => {
       jest.mocked(Actor.isAtHome).mockReturnValue(false);
-      const originalEnvInput = process.env.INPUT;
-      process.env.INPUT = JSON.stringify({ overridden: true });
+      const originalEnvInput = process.env[ENV_VARS.INPUT];
+      process.env[ENV_VARS.INPUT] = JSON.stringify({ overridden: true });
 
       await main.initialize();
 
       expect(webhookManagerMock.init).toHaveBeenCalled();
 
       // Cleanup
-      if (originalEnvInput) process.env.INPUT = originalEnvInput;
-      else delete process.env.INPUT;
+      if (originalEnvInput) process.env[ENV_VARS.INPUT] = originalEnvInput;
+      else delete process.env[ENV_VARS.INPUT];
     });
 
     test("should scale up webhooks if fewer than requested", async () => {
@@ -129,15 +131,15 @@ describe("Main Entry Point", () => {
         expect.objectContaining({
           err: expect.anything(),
         }),
-        "Failed to initialize DuckDB or SyncService",
+        LOG_MESSAGES.INIT_DB_SYNC_FAILED,
       );
     });
   });
 
   test("should log warning on invalid JSON in INPUT env var", async () => {
     jest.mocked(Actor.isAtHome).mockReturnValue(false);
-    const originalEnvInput = process.env.INPUT;
-    process.env.INPUT = "{ invalid json }";
+    const originalEnvInput = process.env[ENV_VARS.INPUT];
+    process.env[ENV_VARS.INPUT] = "{ invalid json }";
 
     await main.initialize();
 
@@ -145,33 +147,33 @@ describe("Main Entry Point", () => {
       expect.objectContaining({
         err: expect.any(Object),
       }),
-      "Failed to parse INPUT env var",
+      LOG_MESSAGES.INPUT_ENV_VAR_PARSE_FAILED,
     );
 
     // Cleanup
-    if (originalEnvInput) process.env.INPUT = originalEnvInput;
-    else delete process.env.INPUT;
+    if (originalEnvInput) process.env[ENV_VARS.INPUT] = originalEnvInput;
+    else delete process.env[ENV_VARS.INPUT];
   });
 
   test("should throw and log on Array input in INPUT env var", async () => {
     jest.mocked(Actor.isAtHome).mockReturnValue(false);
-    const originalEnvInput = process.env.INPUT;
-    process.env.INPUT = JSON.stringify([{ key: "value" }]);
+    const originalEnvInput = process.env[ENV_VARS.INPUT];
+    process.env[ENV_VARS.INPUT] = JSON.stringify([{ key: "value" }]);
 
     await main.initialize();
 
     expect(loggerMock.warn).toHaveBeenCalledWith(
       expect.objectContaining({
         err: expect.objectContaining({
-          message: "INPUT env var must be a non-array JSON object",
+          message: LOG_MESSAGES.INPUT_ENV_VAR_INVALID,
         }),
       }),
-      "Failed to parse INPUT env var",
+      LOG_MESSAGES.INPUT_ENV_VAR_PARSE_FAILED,
     );
 
     // Cleanup
-    if (originalEnvInput) process.env.INPUT = originalEnvInput;
-    else delete process.env.INPUT;
+    if (originalEnvInput) process.env[ENV_VARS.INPUT] = originalEnvInput;
+    else delete process.env[ENV_VARS.INPUT];
   });
 
   describe("shutdown()", () => {
@@ -179,19 +181,19 @@ describe("Main Entry Point", () => {
     let originalEnv;
 
     beforeEach(() => {
-      originalEnv = process.env.NODE_ENV;
+      originalEnv = process.env[ENV_VARS.NODE_ENV];
     });
 
     afterEach(() => {
-      process.env.NODE_ENV = originalEnv;
+      process.env[ENV_VARS.NODE_ENV] = originalEnv;
     });
 
     test("should cleanup components on shutdown", async () => {
       const exitSpy = jest
         .spyOn(process, "exit")
         .mockImplementation(() => assertType(undefined));
-      process.env.NODE_ENV = "production";
-      await main.shutdown("TEST_COMPLETE");
+      process.env[ENV_VARS.NODE_ENV] = "production";
+      await main.shutdown(SHUTDOWN_SIGNALS.TEST_COMPLETE);
 
       expect(hotReloadManagerMock.stop).toHaveBeenCalled();
       expect(syncServiceMock.stop).toHaveBeenCalled();
@@ -208,8 +210,8 @@ describe("Main Entry Point", () => {
       process.env.APIFY_IS_AT_HOME = "true";
 
       // Force logic to run (skip "test" guard)
-      const oldEnv = process.env.NODE_ENV;
-      process.env.NODE_ENV = "production";
+      const oldEnv = process.env[ENV_VARS.NODE_ENV];
+      process.env[ENV_VARS.NODE_ENV] = "production";
 
       // Prevent exit so we can assert
       jest.spyOn(Actor, "exit").mockImplementation(async () => {
@@ -224,11 +226,11 @@ describe("Main Entry Point", () => {
 
       expect(loggerMock.warn).toHaveBeenCalledWith(
         expect.objectContaining({ err: expect.any(Object) }),
-        "Startup log failed",
+        LOG_MESSAGES.STARTUP_LOG_FAILED,
       );
 
       // Cleanup
-      process.env.NODE_ENV = oldEnv;
+      process.env[ENV_VARS.NODE_ENV] = oldEnv;
     });
 
     test("should not exit process if in test mode (default)", async () => {
@@ -239,13 +241,13 @@ describe("Main Entry Point", () => {
       // Ensure Actor.exit resolves (restoring from previous test override)
       jest.spyOn(Actor, "exit").mockResolvedValue(undefined);
 
-      await main.shutdown("SIGTERM");
+      await main.shutdown(SHUTDOWN_SIGNALS.SIGTERM);
       expect(exitSpy).not.toHaveBeenCalled();
       exitSpy.mockRestore();
     });
 
     test("should exit process if not in test mode", async () => {
-      process.env.NODE_ENV = "production";
+      process.env[ENV_VARS.NODE_ENV] = "production";
 
       // FIX LEAK: Override Actor.exit to resolve, masking previous test's throw
       jest.spyOn(Actor, "exit").mockResolvedValue(undefined);
@@ -257,7 +259,7 @@ describe("Main Entry Point", () => {
         });
 
       try {
-        await main.shutdown("SIGINT");
+        await main.shutdown(SHUTDOWN_SIGNALS.SIGINT);
       } catch (e) {
         expect(/** @type {Error} */ (e).message).toBe("Process Exited");
       }

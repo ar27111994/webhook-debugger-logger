@@ -48,8 +48,10 @@ export async function getKvsUrl(key) {
     if (typeof kvs.getPublicUrl === "function") {
       kvsUrl = kvs.getPublicUrl(key);
     }
+    // eslint-disable-next-line sonarjs/no-ignored-exceptions
   } catch (_) {
-    // Ignore errors (e.g., if running locally without full platform context or API failure)
+    // Ignore errors (e.g., if running locally without full platform context or API failure).
+    // We fall back to the token-replaced generic URL.
   }
   return kvsUrl;
 }

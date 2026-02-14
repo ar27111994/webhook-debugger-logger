@@ -14,7 +14,7 @@ await setupCommonMocks({
 
 // Import the class after mocking
 const { LoggerMiddleware } = await import("../../src/logger_middleware.js");
-import { HTTP_STATUS } from "../../src/consts/http.js";
+import { constsMock } from "../setup/helpers/shared-mocks.js";
 
 /**
  * @typedef {import("../../src/webhook_manager.js").WebhookManager} WebhookManager
@@ -24,33 +24,46 @@ describe("LoggerMiddleware Coverage", () => {
   describe("getValidStatusCode (Static)", () => {
     test("should return default code for invalid inputs", () => {
       expect(LoggerMiddleware.getValidStatusCode(undefined)).toBe(
-        HTTP_STATUS.OK,
+        constsMock.HTTP_STATUS.OK,
       );
-      expect(LoggerMiddleware.getValidStatusCode(null)).toBe(HTTP_STATUS.OK);
+      expect(LoggerMiddleware.getValidStatusCode(null)).toBe(
+        constsMock.HTTP_STATUS.OK,
+      );
       expect(LoggerMiddleware.getValidStatusCode("invalid")).toBe(
-        HTTP_STATUS.OK,
+        constsMock.HTTP_STATUS.OK,
       );
-      expect(LoggerMiddleware.getValidStatusCode(NaN)).toBe(HTTP_STATUS.OK);
+      expect(LoggerMiddleware.getValidStatusCode(NaN)).toBe(
+        constsMock.HTTP_STATUS.OK,
+      );
     });
 
     test("should return default code for out-of-bounds inputs", () => {
-      expect(LoggerMiddleware.getValidStatusCode(99)).toBe(HTTP_STATUS.OK);
-      expect(LoggerMiddleware.getValidStatusCode(600)).toBe(HTTP_STATUS.OK);
+      expect(LoggerMiddleware.getValidStatusCode(99)).toBe(
+        constsMock.HTTP_STATUS.OK,
+      );
+      expect(LoggerMiddleware.getValidStatusCode(600)).toBe(
+        constsMock.HTTP_STATUS.OK,
+      );
     });
 
     test("should return custom default code if provided", () => {
       expect(
-        LoggerMiddleware.getValidStatusCode("bad", HTTP_STATUS.NOT_FOUND),
-      ).toBe(HTTP_STATUS.NOT_FOUND);
+        LoggerMiddleware.getValidStatusCode(
+          "bad",
+          constsMock.HTTP_STATUS.NOT_FOUND,
+        ),
+      ).toBe(constsMock.HTTP_STATUS.NOT_FOUND);
     });
 
     test("should return valid status code", () => {
-      expect(LoggerMiddleware.getValidStatusCode(HTTP_STATUS.CREATED)).toBe(
-        HTTP_STATUS.CREATED,
-      );
       expect(
-        LoggerMiddleware.getValidStatusCode(HTTP_STATUS.NOT_FOUND.toString()),
-      ).toBe(HTTP_STATUS.NOT_FOUND);
+        LoggerMiddleware.getValidStatusCode(constsMock.HTTP_STATUS.CREATED),
+      ).toBe(constsMock.HTTP_STATUS.CREATED);
+      expect(
+        LoggerMiddleware.getValidStatusCode(
+          constsMock.HTTP_STATUS.NOT_FOUND.toString(),
+        ),
+      ).toBe(constsMock.HTTP_STATUS.NOT_FOUND);
     });
   });
 

@@ -19,6 +19,7 @@ const log = createChildLogger({ component: LOG_COMPONENTS.APP_STATE });
  * @typedef {import('../logger_middleware.js').LoggerMiddleware} LoggerMiddleware
  * @typedef {import('./config.js').WebhookConfig} WebhookConfig
  * @typedef {import('./config.js').RuntimeOptions} RuntimeOptions
+ * @typedef {import('../typedefs.js').ActorInput} ActorInput
  */
 
 /**
@@ -102,7 +103,7 @@ export class AppState {
 
   /**
    * Applies a hot-reload configuration update.
-   * @param {Object} normalizedInput - The full input object (for options that don't need validation/coercion)
+   * @param {ActorInput} normalizedInput - The full input object (for options that don't need validation/coercion)
    * @param {RuntimeOptions} validated - The coerced runtime options
    */
   async applyConfigUpdate(normalizedInput, validated) {

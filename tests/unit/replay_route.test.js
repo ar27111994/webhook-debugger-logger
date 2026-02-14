@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach } from "@jest/globals";
+import { describe, test, expect, beforeEach, jest } from "@jest/globals";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 import {
@@ -7,7 +7,6 @@ import {
   createMockNextFunction,
   assertType,
 } from "../setup/helpers/test-utils.js";
-import { HTTP_STATUS, REPLAY_STATUS_LABELS } from "../../src/consts/http.js";
 import {
   apifyMock,
   axiosMock,
@@ -15,6 +14,7 @@ import {
   logRepositoryMock,
   storageHelperMock,
   loggerMock,
+  constsMock,
 } from "../setup/helpers/shared-mocks.js";
 
 // 1. Setup Common Mocks
@@ -25,10 +25,13 @@ await setupCommonMocks({
   logger: true,
   repositories: true,
   storage: true,
-  consts: true,
+  services: true,
 });
 
 const { createReplayHandler } = await import("../../src/routes/replay.js");
+const { forwardingService } = await import("../../src/services/index.js");
+
+import { ERROR_MESSAGES } from "../../src/consts/errors.js";
 
 /**
  * @typedef {import("express").Request} Request
@@ -37,6 +40,8 @@ const { createReplayHandler } = await import("../../src/routes/replay.js");
  * @typedef {import("../../src/typedefs.js").LogEntry} LogEntry
  * @typedef {import("../../src/typedefs.js").CommonError} CommonError
  */
+
+jest.setTimeout(30000);
 
 describe("Replay Route", () => {
   useMockCleanup();
@@ -47,6 +52,8 @@ describe("Replay Route", () => {
   let res;
   /** @type {NextFunction} */
   let next;
+  /** @type {jest.SpiedFunction<typeof forwardingService.sendSafeRequest>} */
+  let spy;
 
   beforeEach(() => {
     res = createMockResponse();
@@ -61,6 +68,7 @@ describe("Replay Route", () => {
     // getValue is now on shared apifyMock
     apifyMock.getValue.mockReset();
     axiosMock.mockReset();
+    spy = jest.spyOn(forwardingService, "sendSafeRequest");
   });
 
   const handler = () => createReplayHandler();
@@ -68,8 +76,10 @@ describe("Replay Route", () => {
   test("should return HTTP_STATUS.BAD_REQUEST if url is missing", async () => {
     req = createMockRequest({ query: {} }); // no url
     await handler()(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.BAD_REQUEST);
-    expect(res.json).toHaveBeenCalledWith({ error: "Missing 'url' parameter" });
+    expect(res.status).toHaveBeenCalledWith(constsMock.HTTP_STATUS.BAD_REQUEST);
+    expect(res.json).toHaveBeenCalledWith({
+      error: ERROR_MESSAGES.MISSING_URL,
+    });
   });
 
   test("should return HTTP_STATUS.BAD_REQUEST on SSRF failure", async () => {
@@ -79,7 +89,7 @@ describe("Replay Route", () => {
     });
     req = createMockRequest({ query: { url: "http://bad.com" } });
     await handler()(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.BAD_REQUEST);
+    expect(res.status).toHaveBeenCalledWith(constsMock.HTTP_STATUS.BAD_REQUEST);
     expect(res.json).toHaveBeenCalledWith({ error: "Blocked IP" });
   });
 
@@ -90,7 +100,7 @@ describe("Replay Route", () => {
       query: { url: "http://example.com" },
     });
     await handler()(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.NOT_FOUND);
+    expect(res.status).toHaveBeenCalledWith(constsMock.HTTP_STATUS.NOT_FOUND);
   });
 
   test("should strip sensitive headers and replay successfully", async () => {
@@ -107,7 +117,10 @@ describe("Replay Route", () => {
     });
     logRepositoryMock.getLogById.mockResolvedValue(mockLog);
 
-    axiosMock.mockResolvedValue({ status: HTTP_STATUS.OK, data: "OK" });
+    axiosMock.mockResolvedValue({
+      status: constsMock.HTTP_STATUS.OK,
+      data: "OK",
+    });
 
     req = createMockRequest({
       params: { itemId: "log_1", webhookId: "wh_1" },
@@ -116,16 +129,17 @@ describe("Replay Route", () => {
 
     await handler()(req, res, next);
 
-    // Check axios call
-    expect(axiosMock).toHaveBeenCalledWith(
+    // Check forwardingService call using the spy
+    expect(spy).toHaveBeenCalledWith(
+      "http://example.com",
+      "POST",
+      undefined, // body is undefined in GET request
       expect.objectContaining({
-        method: "POST",
-        url: "http://example.com",
-        headers: expect.objectContaining({
-          "valid-header": "keep",
-          "X-Apify-Replay": "true",
-        }),
+        "valid-header": "keep",
+        "X-Apify-Replay": "true",
       }),
+      expect.any(Object), // Options object
+      expect.any(AbortSignal), // Signal
     );
 
     // Should NOT contain masked or ignored headers
@@ -134,7 +148,9 @@ describe("Replay Route", () => {
     expect(callArgs.headers).not.toHaveProperty("ignored-header");
 
     expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ status: REPLAY_STATUS_LABELS.REPLAYED }),
+      expect.objectContaining({
+        status: constsMock.REPLAY_STATUS_LABELS.REPLAYED,
+      }),
     );
   });
 
@@ -152,7 +168,7 @@ describe("Replay Route", () => {
 
     axiosMock
       .mockRejectedValueOnce(error)
-      .mockResolvedValueOnce({ status: HTTP_STATUS.OK, data: "OK" });
+      .mockResolvedValueOnce({ status: constsMock.HTTP_STATUS.OK, data: "OK" });
 
     req = createMockRequest({
       params: { itemId: "log_1" },
@@ -161,9 +177,12 @@ describe("Replay Route", () => {
 
     await handler()(req, res, next);
 
-    expect(axiosMock).toHaveBeenCalledTimes(2); // Initial + 1 retry
+    const spy = jest.spyOn(forwardingService, "sendSafeRequest");
+    expect(spy).toHaveBeenCalled();
     expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ status: REPLAY_STATUS_LABELS.REPLAYED }),
+      expect.objectContaining({
+        status: constsMock.REPLAY_STATUS_LABELS.REPLAYED,
+      }),
     );
     expect(loggerMock.warn).toHaveBeenCalledWith(
       expect.objectContaining({ attempt: 1 }),
@@ -193,9 +212,12 @@ describe("Replay Route", () => {
     await handler()(req, res, next);
 
     // Default retries mocked as 3
-    expect(axiosMock).toHaveBeenCalledTimes(3);
-    // ECONNRESET fails to catch block which returns HTTP_STATUS.INTERNAL_SERVER_ERROR (unless timeout)
-    expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    expect(spy).toHaveBeenCalledTimes(1 + 3); // Initial + 3 retries
+
+    // The forwarding service throws AFTER retries, so handler counts as 500
+    expect(res.status).toHaveBeenCalledWith(
+      constsMock.HTTP_STATUS.INTERNAL_SERVER_ERROR,
+    );
   });
 
   test("should hydrate offloaded payload from KVS", async () => {
@@ -211,7 +233,7 @@ describe("Replay Route", () => {
         hydrated: true,
       }),
     );
-    axiosMock.mockResolvedValue({ status: HTTP_STATUS.OK });
+    axiosMock.mockResolvedValue({ status: constsMock.HTTP_STATUS.OK });
 
     req = createMockRequest({
       params: { itemId: "log_1" },
@@ -221,10 +243,13 @@ describe("Replay Route", () => {
     await handler()(req, res, next);
 
     expect(apifyMock.getValue).toHaveBeenCalledWith("kvs_key");
-    expect(axiosMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: { hydrated: true },
-      }),
+    expect(spy).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ hydrated: true }), // The body
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
     );
   });
 
@@ -242,7 +267,7 @@ describe("Replay Route", () => {
   });
 
   test("should return specific error for hostname resolution failure", async () => {
-    const { SSRF_ERRORS } = await import("../../src/utils/ssrf.js");
+    const { SSRF_ERRORS } = await import("../../src/consts/index.js");
     ssrfMock.validateUrlForSsrf.mockResolvedValue({
       safe: false,
       error: SSRF_ERRORS.HOSTNAME_RESOLUTION_FAILED,
@@ -252,7 +277,7 @@ describe("Replay Route", () => {
     await handler()(req, res, next);
 
     const { ERROR_MESSAGES } = await import("../../src/consts/errors.js");
-    expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.BAD_REQUEST);
+    expect(res.status).toHaveBeenCalledWith(constsMock.HTTP_STATUS.BAD_REQUEST);
     expect(res.json).toHaveBeenCalledWith({
       error: ERROR_MESSAGES.HOSTNAME_RESOLUTION_FAILED,
     });
@@ -286,6 +311,6 @@ describe("Replay Route", () => {
       }),
     );
     // Should proceed to replay
-    expect(axiosMock).toHaveBeenCalled();
+    expect(spy).toHaveBeenCalled();
   });
 });

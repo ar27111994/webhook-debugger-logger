@@ -7,6 +7,9 @@ import {
   fsPromisesMock as mockFs,
   loggerMock,
 } from "../setup/helpers/shared-mocks.js";
+import { FILE_NAMES } from "../../src/consts/storage.js";
+import { LOG_MESSAGES } from "../../src/consts/messages.js";
+import { ENV_VARS } from "../../src/consts/app.js";
 
 await setupCommonMocks({ logger: true, fs: true });
 
@@ -35,8 +38,8 @@ describe("Bootstrap Utilities", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    process.env.APIFY_LOCAL_STORAGE_DIR = "/tmp/storage";
-    delete process.env.APIFY_ACTOR_DIR;
+    process.env[ENV_VARS.APIFY_LOCAL_STORAGE_DIR] = "/tmp/storage";
+    delete process.env[ENV_VARS.APIFY_ACTOR_DIR];
   });
 
   describe("ensureLocalInputExists", () => {
@@ -71,19 +74,19 @@ describe("Bootstrap Utilities", () => {
       });
       // Should write merged config (defaults from schema + passed defaultInput)
       expect(mockFs.writeFile).toHaveBeenCalledWith(
-        expect.stringContaining("INPUT.json.tmp"),
+        expect.stringContaining(FILE_NAMES.CONFIG + ".tmp"),
         expect.stringContaining('"urlCount": 1'),
-        "utf-8",
+        "utf8",
       );
       expect(mockFs.writeFile).toHaveBeenCalledWith(
-        expect.stringContaining("INPUT.json.tmp"),
+        expect.stringContaining(FILE_NAMES.CONFIG + ".tmp"),
         expect.stringContaining('"secret": "secret-value"'), // Prefill priority
-        "utf-8",
+        "utf8",
       );
       expect(mockFs.rename).toHaveBeenCalled();
       expect(loggerMock.info).toHaveBeenCalledWith(
         expect.any(Object),
-        "Local configuration initialized",
+        LOG_MESSAGES.LOCAL_CONFIG_INIT,
       );
     });
 
@@ -99,7 +102,7 @@ describe("Bootstrap Utilities", () => {
       expect(mockFs.rename).toHaveBeenCalled(); // Should rename tmp to original
       expect(loggerMock.warn).toHaveBeenCalledWith(
         expect.objectContaining({ err: expect.any(Object) }),
-        "INPUT.json was invalid, rewritten with defaults",
+        LOG_MESSAGES.INPUT_INVALID_REWRITTEN,
       );
     });
 
@@ -114,7 +117,7 @@ describe("Bootstrap Utilities", () => {
       expect(mockFs.writeFile).not.toHaveBeenCalled();
       expect(loggerMock.warn).toHaveBeenCalledWith(
         expect.objectContaining({ err: expect.any(Object) }),
-        "Failed to read INPUT.json",
+        LOG_MESSAGES.INPUT_READ_FAILED,
       );
     });
 
@@ -132,7 +135,7 @@ describe("Bootstrap Utilities", () => {
 
       expect(loggerMock.warn).toHaveBeenCalledWith(
         expect.objectContaining({ err: expect.any(Object) }),
-        "Failed to write default input file",
+        LOG_MESSAGES.DEFAULT_INPUT_WRITE_FAILED,
       );
     });
 
@@ -168,7 +171,7 @@ describe("Bootstrap Utilities", () => {
         expect.objectContaining({
           err: expect.objectContaining({ message: "Rename failed" }),
         }),
-        "Failed to write default input file",
+        LOG_MESSAGES.DEFAULT_INPUT_WRITE_FAILED,
       );
     });
 
@@ -179,7 +182,7 @@ describe("Bootstrap Utilities", () => {
 
       expect(loggerMock.warn).toHaveBeenCalledWith(
         expect.objectContaining({ err: expect.any(Object) }),
-        "Unexpected error accessing INPUT.json",
+        LOG_MESSAGES.INPUT_ACCESS_ERROR,
       );
     });
   });
@@ -192,7 +195,7 @@ describe("Bootstrap Utilities", () => {
     });
 
     test("should use APIFY_ACTOR_DIR for schema path if set", async () => {
-      process.env.APIFY_ACTOR_DIR = "/custom/actor/dir";
+      process.env[ENV_VARS.APIFY_ACTOR_DIR] = "/custom/actor/dir";
       const mockSchema = {
         title: "Custom Path Schema",
         type: "object",
@@ -211,9 +214,9 @@ describe("Bootstrap Utilities", () => {
 
       expect(mockFs.readFile).toHaveBeenCalledWith(
         expect.stringContaining("/custom/actor/dir/.actor/input_schema.json"),
-        "utf-8",
+        "utf8",
       );
-      delete process.env.APIFY_ACTOR_DIR;
+      delete process.env[ENV_VARS.APIFY_ACTOR_DIR];
     });
 
     test("should handle schema read failure gracefully", async () => {
@@ -231,7 +234,7 @@ describe("Bootstrap Utilities", () => {
       expect(mockFs.writeFile).toHaveBeenCalledWith(
         expect.any(String),
         expect.stringContaining('"some": "default"'),
-        "utf-8",
+        "utf8",
       );
     });
   });

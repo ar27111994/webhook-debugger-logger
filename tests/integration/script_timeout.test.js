@@ -1,6 +1,12 @@
 import { describe, test, expect } from "@jest/globals";
 import { createMiddlewareTestContext } from "../setup/helpers/middleware-test-utils.js";
-import { HTTP_STATUS, SCRIPT_EXECUTION_TIMEOUT_MS } from "../../src/consts.js";
+import {
+  HTTP_STATUS,
+  APP_CONSTS,
+  HTTP_HEADERS,
+  MIME_TYPES,
+} from "../../src/consts/index.js";
+const { SCRIPT_EXECUTION_TIMEOUT_MS } = APP_CONSTS;
 
 // Mock Apify and Axios
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
@@ -23,7 +29,7 @@ describe("Custom Script Timeout", () => {
           params: { id: webhookId },
           query: { key: "secret" },
           body: { test: "infinite" },
-          headers: { "content-type": "application/json" },
+          headers: { [HTTP_HEADERS.CONTENT_TYPE]: MIME_TYPES.JSON },
         },
       });
 

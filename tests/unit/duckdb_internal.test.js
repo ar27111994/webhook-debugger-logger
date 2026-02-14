@@ -120,7 +120,7 @@ describe("DuckDB Internal Unit Tests", () => {
 
     test("should skip directory creation if IN_MEM_DB", async () => {
       // Override the mock specifically for this test
-      jest.unstable_mockModule("../../src/consts.js", () => ({
+      jest.unstable_mockModule("../../src/consts/index.js", () => ({
         ...constsMock,
         DUCKDB_FILENAME_DEFAULT: ":memory:",
       }));

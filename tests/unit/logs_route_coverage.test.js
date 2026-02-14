@@ -5,9 +5,15 @@ import {
   createMockNextFunction,
   assertType,
 } from "../setup/helpers/test-utils.js";
-import { HTTP_STATUS } from "../../src/consts/http.js";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
-import { createKeyValueStoreMock } from "../setup/helpers/shared-mocks.js";
+import {
+  createKeyValueStoreMock,
+  constsMock,
+  storageHelperMock,
+} from "../setup/helpers/shared-mocks.js";
+import { HTTP_HEADERS } from "../../src/consts/http.js";
+import { ERROR_MESSAGES } from "../../src/consts/errors.js";
+import { SORT_DIRECTIONS } from "../../src/consts/app.js";
 
 // Setup dependencies
 await setupCommonMocks({
@@ -19,9 +25,6 @@ await setupCommonMocks({
 
 const { createLogsHandler, createLogDetailHandler, createLogPayloadHandler } =
   await import("../../src/routes/logs.js");
-
-const { OFFLOAD_MARKER_SYNC } =
-  await import("../../src/utils/storage_helper.js");
 
 const { logRepositoryMock, apifyMock, webhookManagerMock } =
   await import("../setup/helpers/shared-mocks.js");
@@ -77,7 +80,7 @@ describe("Logs Route Coverage", () => {
     test("should parse multi-field sorting", async () => {
       req = createMockRequest({
         query: {
-          sort: "method:asc,timestamp:desc",
+          sort: `method:${SORT_DIRECTIONS.ASC},timestamp:${SORT_DIRECTIONS.DESC}`,
         },
       });
       logRepositoryMock.findLogs.mockResolvedValue({ items: [], total: 0 });
@@ -90,8 +93,8 @@ describe("Logs Route Coverage", () => {
       expect(logRepositoryMock.findLogs).toHaveBeenCalledWith(
         expect.objectContaining({
           sort: [
-            { field: "method", dir: "asc" },
-            { field: "timestamp", dir: "desc" },
+            { field: "method", dir: SORT_DIRECTIONS.ASC },
+            { field: "timestamp", dir: SORT_DIRECTIONS.DESC },
           ],
         }),
       );
@@ -100,7 +103,7 @@ describe("Logs Route Coverage", () => {
     test("should generate correct nextPageUrl for cursor pagination", async () => {
       req = createMockRequest({
         protocol: "http",
-        headers: { host: "localhost" },
+        headers: { [HTTP_HEADERS.HOST]: "localhost" },
         baseUrl: "/logs",
         query: { cursor: "curr_cursor", limit: "10" },
       });
@@ -177,7 +180,7 @@ describe("Logs Route Coverage", () => {
         id: "1",
         webhookId: "wh_1",
         body: {
-          data: OFFLOAD_MARKER_SYNC,
+          data: storageHelperMock.OFFLOAD_MARKER_SYNC,
           key: "missing_key",
         },
       });
@@ -195,9 +198,11 @@ describe("Logs Route Coverage", () => {
       const handler = createLogPayloadHandler(webhookManagerMock);
       await handler(req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.NOT_FOUND);
+      expect(res.status).toHaveBeenCalledWith(constsMock.HTTP_STATUS.NOT_FOUND);
       expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ error: "Payload not found in KVS" }),
+        expect.objectContaining({
+          error: ERROR_MESSAGES.PAYLOAD_NOT_FOUND_KVS,
+        }),
       );
     });
 
@@ -208,7 +213,7 @@ describe("Logs Route Coverage", () => {
         webhookId: "wh_1",
         contentType: "image/png",
         body: {
-          data: OFFLOAD_MARKER_SYNC,
+          data: storageHelperMock.OFFLOAD_MARKER_SYNC,
           key: "img_key",
         },
       });
@@ -226,7 +231,10 @@ describe("Logs Route Coverage", () => {
       const handler = createLogPayloadHandler(webhookManagerMock);
       await handler(req, res, next);
 
-      expect(res.setHeader).toHaveBeenCalledWith("Content-Type", "image/png");
+      expect(res.setHeader).toHaveBeenCalledWith(
+        HTTP_HEADERS.CONTENT_TYPE,
+        "image/png",
+      );
       expect(res.send).toHaveBeenCalledWith(mockBuffer);
     });
   });

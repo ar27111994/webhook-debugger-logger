@@ -15,7 +15,7 @@ import {
   assertType,
 } from "../setup/helpers/test-utils.js";
 import { createShopifySignature } from "../setup/helpers/signature-utils.js";
-import { appEvents, EVENTS } from "../../src/utils/events.js";
+import { appEvents, EVENT_NAMES as EVENTS } from "../../src/utils/events.js";
 
 /**
  * @typedef {import('express').Request} Request
@@ -28,7 +28,10 @@ import { appEvents, EVENTS } from "../../src/utils/events.js";
  */
 
 // Mock WebhookManager
-import { createMockWebhookManager } from "../setup/helpers/shared-mocks.js";
+import {
+  createMockWebhookManager,
+  constsMock,
+} from "../setup/helpers/shared-mocks.js";
 import { Actor } from "apify";
 const webhookManagerMock = createMockWebhookManager();
 
@@ -99,7 +102,7 @@ describe("Shopify Signature Verification (Raw Body)", () => {
 
     await middleware.middleware(req, res, next);
 
-    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.status).toHaveBeenCalledWith(constsMock.HTTP_STATUS.OK);
     expect(emitSpy).toHaveBeenCalledWith(
       EVENTS.LOG_RECEIVED,
       expect.any(Object),
@@ -157,7 +160,9 @@ describe("Shopify Signature Verification (Raw Body)", () => {
     );
     expect(event.signatureValid).toBe(false);
     expect(event.signatureError).toBe("Signature mismatch");
-    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.status).toHaveBeenCalledWith(
+      constsMock.HTTP_STATUS.UNAUTHORIZED,
+    );
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({ error: "Invalid signature" }),
     );
@@ -211,7 +216,9 @@ describe("Shopify Signature Verification (Raw Body)", () => {
     expect(event.signatureError).toEqual(
       expect.stringContaining("Timestamp outside tolerance"),
     );
-    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.status).toHaveBeenCalledWith(
+      constsMock.HTTP_STATUS.UNAUTHORIZED,
+    );
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({ error: "Invalid signature" }),
     );

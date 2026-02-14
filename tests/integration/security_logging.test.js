@@ -2,6 +2,7 @@ import { describe, test, expect, beforeAll, afterAll } from "@jest/globals";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import { loggerMock } from "../setup/helpers/shared-mocks.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
+import { HTTP_HEADERS } from "../../src/consts/index.js";
 
 // Setup mocks
 await setupCommonMocks({
@@ -47,7 +48,7 @@ describe("Security Logging", () => {
     // Send request with invalid token
     const res = await appClient
       .get("/info")
-      .set("Authorization", `Bearer ${SENSITIVE_TOKEN}`);
+      .set(HTTP_HEADERS.AUTHORIZATION, `Bearer ${SENSITIVE_TOKEN}`);
 
     expect(res.status).toBe(401);
 
@@ -69,7 +70,7 @@ describe("Security Logging", () => {
     // Even on success, headers shouldn't leak if redacted or handled carefully
     const res = await appClient
       .get("/info")
-      .set("Authorization", `Bearer ${VALID_KEY}`);
+      .set(HTTP_HEADERS.AUTHORIZATION, `Bearer ${VALID_KEY}`);
 
     expect(res.status).toBe(200);
 

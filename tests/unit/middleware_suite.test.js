@@ -8,10 +8,13 @@ import {
   createMockNextFunction,
   assertType,
 } from "../setup/helpers/test-utils.js";
-import { HTTP_STATUS } from "../../src/consts/http.js";
+import { constsMock } from "../setup/helpers/shared-mocks.js";
 
 // Setup mocks
 await setupCommonMocks({ logger: true });
+
+import { LOG_MESSAGES } from "../../src/consts/messages.js";
+import { MIME_TYPES } from "../../src/consts/http.js";
 
 // Import middleware under test
 const { createErrorHandler } = await import("../../src/middleware/error.js");
@@ -59,7 +62,7 @@ describe("Middleware Suite", () => {
       handler(err, req, res, next);
 
       expect(res.status).toHaveBeenCalledWith(
-        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        constsMock.HTTP_STATUS.INTERNAL_SERVER_ERROR,
       );
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -70,17 +73,19 @@ describe("Middleware Suite", () => {
       // Should log the actual error
       expect(loggerMock.error).toHaveBeenCalledWith(
         expect.objectContaining({ err: expect.anything() }),
-        "Server error",
+        LOG_MESSAGES.SERVER_ERROR,
       );
     });
 
     test("should pass through client errors (HTTP_STATUS.BAD_REQUEST)", () => {
       /** @type {CommonError} */
       const err = new Error("Invalid Input");
-      err.statusCode = HTTP_STATUS.BAD_REQUEST;
+      err.statusCode = constsMock.HTTP_STATUS.BAD_REQUEST;
       handler(err, req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.BAD_REQUEST);
+      expect(res.status).toHaveBeenCalledWith(
+        constsMock.HTTP_STATUS.BAD_REQUEST,
+      );
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
           error: "Bad Request",
@@ -97,8 +102,8 @@ describe("Middleware Suite", () => {
       Object.defineProperty(req, "path", { value: "/" });
       handler(req, res, next);
       expect(res.setHeader).toHaveBeenCalledWith(
-        "Content-Security-Policy",
-        expect.stringContaining("default-src 'self'"),
+        "X-Content-Type-Options",
+        "nosniff",
       );
       expect(next).toHaveBeenCalled();
     });
@@ -151,7 +156,7 @@ describe("Middleware Suite", () => {
     test("should parse JSON buffer and set rawBody", () => {
       const payload = JSON.stringify({ foo: "bar" });
       req.body = Buffer.from(payload);
-      req.headers["content-type"] = "application/json";
+      req.headers["content-type"] = MIME_TYPES.JSON;
 
       handler(req, res, next);
 
@@ -162,7 +167,7 @@ describe("Middleware Suite", () => {
 
     test("should fallback to string if JSON parse fails", () => {
       req.body = Buffer.from("Not JSON");
-      req.headers["content-type"] = "application/json";
+      req.headers["content-type"] = MIME_TYPES.JSON;
 
       handler(req, res, next);
 

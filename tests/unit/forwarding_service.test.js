@@ -16,7 +16,16 @@ import {
   axiosMock,
   ssrfMock,
   loggerMock,
+  constsMock,
 } from "../setup/helpers/shared-mocks.js";
+import {
+  HTTP_STATUS,
+  HTTP_HEADERS,
+  MIME_TYPES,
+} from "../../src/consts/http.js";
+import { LOG_MESSAGES } from "../../src/consts/messages.js";
+import { ERROR_MESSAGES, ERROR_LABELS } from "../../src/consts/errors.js";
+import { FORWARDING_CONSTS } from "../../src/consts/app.js";
 
 const mockActor = apifyMock;
 const mockAxios = axiosMock;
@@ -37,7 +46,7 @@ describe("ForwardingService Tests", () => {
 
   useMockCleanup(() => {
     forwardingService = new ForwardingService();
-    mockAxios.post.mockResolvedValue({ status: 200 });
+    mockAxios.mockResolvedValue({ status: HTTP_STATUS.OK });
     ssrfMock.validateUrlForSsrf.mockResolvedValue({
       safe: true,
       href: "http://target.com",
@@ -88,20 +97,20 @@ describe("ForwardingService Tests", () => {
         "http://unsafe.com",
       );
 
-      expect(mockAxios.post).not.toHaveBeenCalled();
+      expect(mockAxios).not.toHaveBeenCalled();
       expect(loggerMock.error).toHaveBeenCalledWith(
         expect.objectContaining({ error: "Blocked IP" }),
-        "SSRF blocked forward URL",
+        LOG_MESSAGES.SSRF_BLOCKED,
       );
     });
 
     test("should forward headers but ignore sensitive ones", async () => {
       const request = createMockRequest({
         headers: {
-          "content-type": "application/json",
+          [HTTP_HEADERS.CONTENT_TYPE]: MIME_TYPES.JSON,
           "x-custom": "value",
-          host: "localhost", // Should be ignored
-          "content-length": "123", // Should be ignored
+          [HTTP_HEADERS.HOST]: "localhost", // Should be ignored
+          [HTTP_HEADERS.CONTENT_LENGTH]: "123", // Should be ignored
         },
         body: { data: 123 },
       });
@@ -115,27 +124,28 @@ describe("ForwardingService Tests", () => {
         "http://target.com",
       );
 
-      expect(mockAxios.post).toHaveBeenCalledWith(
+      expect(mockAxios).toHaveBeenCalledWith(
         "http://target.com",
         request.body,
         expect.objectContaining({
           headers: expect.objectContaining({
-            "content-type": "application/json",
+            [HTTP_HEADERS.CONTENT_TYPE]: MIME_TYPES.JSON,
             "x-custom": "value",
-            "X-Forwarded-By": "Apify-Webhook-Debugger",
-            host: "target.com", // Injected from SSRF result
+            [constsMock.RECURSION_HEADER_NAME]:
+              constsMock.RECURSION_HEADER_VALUE,
+            [HTTP_HEADERS.HOST]: "target.com", // Injected from SSRF result
           }),
         }),
       );
 
-      const headers = assertType(mockAxios.post.mock.calls[0][2]).headers;
-      expect(headers).not.toHaveProperty("content-length");
+      const headers = assertType(mockAxios.mock.calls[0][0]).headers;
+      expect(headers).not.toHaveProperty(HTTP_HEADERS.CONTENT_LENGTH);
     });
 
     test("should only send content-type if forwardHeaders is false", async () => {
       const request = createMockRequest({
         headers: {
-          "content-type": "application/json",
+          [HTTP_HEADERS.CONTENT_TYPE]: MIME_TYPES.JSON,
           "x-custom": "value",
         },
       });
@@ -148,16 +158,19 @@ describe("ForwardingService Tests", () => {
         "http://target.com",
       );
 
-      const headers = assertType(mockAxios.post.mock.calls[0][2]).headers;
-      expect(headers).toHaveProperty("content-type", "application/json");
+      const headers = assertType(mockAxios.mock.calls[0][0]).headers;
+      expect(headers).toHaveProperty(
+        HTTP_HEADERS.CONTENT_TYPE,
+        MIME_TYPES.JSON,
+      );
       expect(headers).not.toHaveProperty("x-custom");
     });
 
     test("should handle ECONNABORTED error logging", async () => {
       /** @type {CommonError} */
       const error = new Error("timeout");
-      error.code = "ECONNABORTED";
-      mockAxios.post.mockRejectedValue(error);
+      error.code = FORWARDING_CONSTS.TIMEOUT_CODE;
+      mockAxios.mockRejectedValue(error);
       const event = assertType({ webhookId: "fw-5", id: "evt-5" });
       const request = createMockRequest();
 
@@ -170,7 +183,7 @@ describe("ForwardingService Tests", () => {
 
       expect(loggerMock.error).toHaveBeenCalledWith(
         expect.anything(),
-        "Forward attempt timed out",
+        ERROR_MESSAGES.FORWARD_TIMEOUT,
       );
     });
   });
@@ -180,7 +193,7 @@ describe("ForwardingService Tests", () => {
       /** @type {CommonError} */
       const error = new Error("Not Found");
       error.code = "E_GENERIC";
-      mockAxios.post.mockRejectedValue(error);
+      mockAxios.mockRejectedValue(error);
 
       /** @type {WebhookEvent} */
       const event = assertType({ webhookId: "fw-test", id: "evt-1" });
@@ -196,19 +209,19 @@ describe("ForwardingService Tests", () => {
       // Should fail fast and capture error
       expect(mockActor.pushData).toHaveBeenCalledWith(
         expect.objectContaining({
-          type: "forward_error",
+          type: ERROR_LABELS.FORWARD_ERROR,
           body: expect.stringContaining("Non-transient error"),
         }),
       );
       // Wait for 1 attempt
-      expect(mockAxios.post).toHaveBeenCalledTimes(1);
+      expect(mockAxios).toHaveBeenCalledTimes(1);
     });
 
     test("should exhaust retries on transient errors", async () => {
       /** @type {CommonError} */
       const error = new Error("Timeout");
       error.code = "ETIMEDOUT";
-      mockAxios.post.mockRejectedValue(error);
+      mockAxios.mockRejectedValue(error);
 
       /** @type {WebhookEvent} */
       const event = assertType({ webhookId: "fw-retry-test", id: "evt-2" });
@@ -222,10 +235,10 @@ describe("ForwardingService Tests", () => {
       );
 
       // Default (3)
-      expect(mockAxios.post).toHaveBeenCalledTimes(3);
+      expect(mockAxios).toHaveBeenCalledTimes(3);
       expect(mockActor.pushData).toHaveBeenCalledWith(
         expect.objectContaining({
-          type: "forward_error",
+          type: ERROR_LABELS.FORWARD_ERROR,
           body: expect.stringContaining("after 3 attempts"),
         }),
       );
@@ -235,7 +248,7 @@ describe("ForwardingService Tests", () => {
       /** @type {CommonError} */
       const error = new Error("Timeout");
       error.code = "ETIMEDOUT";
-      mockAxios.post.mockRejectedValue(error);
+      mockAxios.mockRejectedValue(error);
 
       /** @type {WebhookEvent} */
       const event = assertType({ webhookId: "fw-custom-retry", id: "evt-3" });
@@ -249,10 +262,10 @@ describe("ForwardingService Tests", () => {
         "http://target.com",
       );
 
-      expect(mockAxios.post).toHaveBeenCalledTimes(2);
+      expect(mockAxios).toHaveBeenCalledTimes(2);
       expect(mockActor.pushData).toHaveBeenCalledWith(
         expect.objectContaining({
-          type: "forward_error",
+          type: ERROR_LABELS.FORWARD_ERROR,
           body: expect.stringContaining("after 2 attempts"),
         }),
       );
@@ -262,7 +275,7 @@ describe("ForwardingService Tests", () => {
       /** @type {CommonError} */
       const error = new Error("Fatal");
       error.code = "FATAL";
-      mockAxios.post.mockRejectedValue(error);
+      mockAxios.mockRejectedValue(error);
       mockActor.pushData.mockRejectedValue(new Error("Storage Error"));
 
       const event = assertType({ webhookId: "fw-fail", id: "evt-6" });
@@ -277,7 +290,7 @@ describe("ForwardingService Tests", () => {
 
       expect(loggerMock.error).toHaveBeenCalledWith(
         expect.objectContaining({ err: expect.anything() }),
-        "Failed to log forward error",
+        LOG_MESSAGES.FAILED_LOG_FORWARD,
       );
     });
 
@@ -285,9 +298,9 @@ describe("ForwardingService Tests", () => {
       /** @type {CommonError} */
       const error = new Error("Retryable");
       error.code = "ENOTFOUND"; // transient
-      mockAxios.post
+      mockAxios
         .mockRejectedValueOnce(error)
-        .mockResolvedValueOnce({ status: 200 });
+        .mockResolvedValueOnce({ status: HTTP_STATUS.OK });
 
       const event = assertType({ webhookId: "fw-ref", id: "evt-7" });
       const request = createMockRequest();

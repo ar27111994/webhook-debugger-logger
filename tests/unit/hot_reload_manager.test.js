@@ -12,8 +12,6 @@ import {
   assertType,
   sleep,
 } from "../setup/helpers/test-utils.js";
-// Core constants will be imported dynamically to avoid mock leaks
-let INPUT_POLL_INTERVAL_TEST_MS;
 
 /**
  * @typedef {import('../../src/utils/hot_reload_manager.js').HotReloadManager} HotReloadManager
@@ -22,12 +20,13 @@ let INPUT_POLL_INTERVAL_TEST_MS;
 
 // 1. Mock Apify, Logger, and Consts
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
-await setupCommonMocks({ apify: true, logger: true, fs: true });
-const consts = await import("../../src/consts.js");
-INPUT_POLL_INTERVAL_TEST_MS = consts.INPUT_POLL_INTERVAL_TEST_MS;
+await setupCommonMocks({ apify: true, logger: true, fs: true, consts: true });
+
+import { LOG_MESSAGES } from "../../src/consts/messages.js";
 
 // 2. Mock Shared Modules
 import {
+  constsMock,
   apifyMock,
   createKeyValueStoreMock,
   fsPromisesMock as mockFsPromises,
@@ -113,7 +112,7 @@ describe("HotReloadManager Unit Tests", () => {
 
     manager = new HotReloadManager({
       initialInput: { authKey: "initial" },
-      pollIntervalMs: INPUT_POLL_INTERVAL_TEST_MS, // Fast polling for tests
+      pollIntervalMs: constsMock.INPUT_POLL_INTERVAL_TEST_MS, // Fast polling for tests
       onConfigChange,
     });
   });
@@ -146,7 +145,7 @@ describe("HotReloadManager Unit Tests", () => {
       manager.start();
       expect(setIntervalSpy).not.toHaveBeenCalled();
       expect(loggerMock.info).toHaveBeenCalledWith(
-        "Hot-reload polling disabled via DISABLE_HOT_RELOAD",
+        LOG_MESSAGES.HOT_RELOAD_POLL_DISABLED,
       );
       delete process.env.DISABLE_HOT_RELOAD;
     });
@@ -181,7 +180,9 @@ describe("HotReloadManager Unit Tests", () => {
       manager.start();
 
       // Advance verify timer has run
-      await jest.advanceTimersByTimeAsync(INPUT_POLL_INTERVAL_TEST_MS * 2);
+      await jest.advanceTimersByTimeAsync(
+        constsMock.INPUT_POLL_INTERVAL_TEST_MS * 2,
+      );
 
       // Stop should wait for usage
       const stopPromise = manager.stop();
@@ -196,7 +197,7 @@ describe("HotReloadManager Unit Tests", () => {
     test("should skip start if not initialized", () => {
       const uninitializedManager = new HotReloadManager({
         initialInput: {},
-        pollIntervalMs: INPUT_POLL_INTERVAL_TEST_MS,
+        pollIntervalMs: constsMock.INPUT_POLL_INTERVAL_TEST_MS,
         onConfigChange: async () => {},
       });
       uninitializedManager.start();
@@ -218,7 +219,9 @@ describe("HotReloadManager Unit Tests", () => {
       manager.start();
 
       // Advance time to trigger poll
-      await jest.advanceTimersByTimeAsync(INPUT_POLL_INTERVAL_TEST_MS + 10);
+      await jest.advanceTimersByTimeAsync(
+        constsMock.INPUT_POLL_INTERVAL_TEST_MS + 10,
+      );
 
       expect(mockStore.getValue).toHaveBeenCalledWith("INPUT");
       expect(onConfigChange).toHaveBeenCalled();
@@ -233,7 +236,9 @@ describe("HotReloadManager Unit Tests", () => {
 
       manager.start();
 
-      await jest.advanceTimersByTimeAsync(INPUT_POLL_INTERVAL_TEST_MS + 10);
+      await jest.advanceTimersByTimeAsync(
+        constsMock.INPUT_POLL_INTERVAL_TEST_MS + 10,
+      );
 
       expect(mockStore.getValue).toHaveBeenCalled();
       expect(onConfigChange).not.toHaveBeenCalled();
@@ -247,13 +252,15 @@ describe("HotReloadManager Unit Tests", () => {
       await manager.init();
       manager.start();
 
-      await jest.advanceTimersByTimeAsync(INPUT_POLL_INTERVAL_TEST_MS + 10);
+      await jest.advanceTimersByTimeAsync(
+        constsMock.INPUT_POLL_INTERVAL_TEST_MS + 10,
+      );
 
       expect(loggerMock.error).toHaveBeenCalledWith(
         expect.objectContaining({
           err: expect.objectContaining({ message: "KV Error" }),
         }),
-        "Polling hot-reload failed",
+        LOG_MESSAGES.HOT_RELOAD_POLL_FAILED,
       );
     });
   });
@@ -359,7 +366,7 @@ describe("HotReloadManager Unit Tests", () => {
       );
 
       expect(loggerMock.warn).toHaveBeenCalledWith(
-        "Input file renamed/replaced, potential watcher break",
+        LOG_MESSAGES.HOT_RELOAD_WATCHER_WARNING,
       );
       mockWatcher.end();
     }, 10000);
@@ -403,7 +410,7 @@ describe("HotReloadManager Unit Tests", () => {
         expect.objectContaining({
           err: expect.objectContaining({ message: "Update Error" }),
         }),
-        "fs.watch hot-reload failed",
+        LOG_MESSAGES.HOT_RELOAD_WATCH_FAILED,
       );
       mockWatcher.end();
     });
@@ -438,14 +445,14 @@ describe("HotReloadManager Unit Tests", () => {
       await waitForCondition(
         () =>
           loggerMock.info.mock.calls.some(
-            (c) => c[0] === "Hot-reload complete, new settings active",
+            (c) => c[0] === LOG_MESSAGES.HOT_RELOAD_COMPLETE,
           ),
         2000,
         100,
       );
 
       expect(loggerMock.info).toHaveBeenCalledWith(
-        "Hot-reload complete, new settings active",
+        LOG_MESSAGES.HOT_RELOAD_COMPLETE,
       );
       mockWatcher.end();
     });
@@ -484,7 +491,7 @@ describe("HotReloadManager Unit Tests", () => {
         expect.objectContaining({
           err: expect.objectContaining({ message: "Watcher Error" }),
         }),
-        "fs.watch failed",
+        LOG_MESSAGES.HOT_RELOAD_WATCH_ERROR,
       );
     }, 10000);
 
@@ -509,7 +516,7 @@ describe("HotReloadManager Unit Tests", () => {
       await waitForCondition(
         () =>
           loggerMock.error.mock.calls.some(
-            (c) => c[1] === "fs.watch hot-reload failed",
+            (c) => c[1] === LOG_MESSAGES.HOT_RELOAD_WATCH_FAILED,
           ),
         2000,
         100,
@@ -519,7 +526,7 @@ describe("HotReloadManager Unit Tests", () => {
         expect.objectContaining({
           err: expect.objectContaining({ message: "FS Watch Reload Fail" }),
         }),
-        "fs.watch hot-reload failed",
+        LOG_MESSAGES.HOT_RELOAD_WATCH_FAILED,
       );
       mockWatcher.end();
     });

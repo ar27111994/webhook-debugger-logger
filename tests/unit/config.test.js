@@ -1,10 +1,12 @@
 import { describe, test, expect } from "@jest/globals";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
-import { loggerMock } from "../setup/helpers/shared-mocks.js";
+import { loggerMock, constsMock } from "../setup/helpers/shared-mocks.js";
+import { APP_CONSTS } from "../../src/consts/app.js";
+import { SIGNATURE_PROVIDERS } from "../../src/consts/security.js";
 
 // Mock logger before importing config module
-await setupCommonMocks({ logger: true });
+await setupCommonMocks({ logger: true, consts: true });
 
 const {
   parseWebhookOptions,
@@ -12,23 +14,6 @@ const {
   normalizeInput,
   getSafeResponseDelay,
 } = await import("../../src/utils/config.js");
-
-const {
-  DEFAULT_PAYLOAD_LIMIT,
-  MAX_ALLOWED_PAYLOAD_SIZE,
-  DEFAULT_URL_COUNT,
-  DEFAULT_RETENTION_HOURS,
-  DEFAULT_RATE_LIMIT_PER_MINUTE,
-  MAX_SAFE_RESPONSE_DELAY_MS,
-  MAX_SAFE_URL_COUNT,
-  MAX_SAFE_RETENTION_HOURS,
-  MAX_SAFE_RATE_LIMIT_PER_MINUTE,
-  MAX_SAFE_REPLAY_RETRIES,
-  MAX_SAFE_REPLAY_TIMEOUT_MS,
-  MAX_SAFE_FORWARD_RETRIES,
-} = await import("../../src/consts/app.js");
-
-const { HTTP_STATUS } = await import("../../src/consts/http.js");
 
 /**
  * @typedef {import('../../src/typedefs.js').SignatureProvider} SignatureProvider
@@ -85,15 +70,15 @@ describe("Config Utils", () => {
 
     test("should return valid delay unchanged", () => {
       expect(getSafeResponseDelay(100)).toBe(100);
-      expect(getSafeResponseDelay(MAX_SAFE_RESPONSE_DELAY_MS)).toBe(
-        MAX_SAFE_RESPONSE_DELAY_MS,
+      expect(getSafeResponseDelay(constsMock.MAX_SAFE_RESPONSE_DELAY_MS)).toBe(
+        10000,
       );
       expect(loggerMock.warn).not.toHaveBeenCalled();
     });
 
     test("should cap huge delay and warn via structured logger", () => {
-      const huge = MAX_SAFE_RESPONSE_DELAY_MS + 5000;
-      expect(getSafeResponseDelay(huge)).toBe(MAX_SAFE_RESPONSE_DELAY_MS);
+      const huge = constsMock.MAX_SAFE_RESPONSE_DELAY_MS + 5000;
+      expect(getSafeResponseDelay(huge)).toBe(10000);
       expect(loggerMock.warn).toHaveBeenCalledWith(
         expect.objectContaining({ name: "responseDelayMs" }),
         expect.stringContaining("exceeds safe max"),
@@ -104,9 +89,11 @@ describe("Config Utils", () => {
   describe("coerceRuntimeOptions", () => {
     test("should return defaults for empty/invalid input", () => {
       const result = coerceRuntimeOptions({});
-      expect(result.urlCount).toBe(DEFAULT_URL_COUNT);
-      expect(result.retentionHours).toBe(DEFAULT_RETENTION_HOURS);
-      expect(result.rateLimitPerMinute).toBe(DEFAULT_RATE_LIMIT_PER_MINUTE);
+      expect(result.urlCount).toBe(APP_CONSTS.DEFAULT_URL_COUNT);
+      expect(result.retentionHours).toBe(APP_CONSTS.DEFAULT_RETENTION_HOURS);
+      expect(result.rateLimitPerMinute).toBe(
+        APP_CONSTS.DEFAULT_RATE_LIMIT_PER_MINUTE,
+      );
       expect(result.authKey).toBe("");
     });
 
@@ -144,14 +131,22 @@ describe("Config Utils", () => {
         responseDelayMs: 999999,
       });
 
-      expect(result.urlCount).toBe(MAX_SAFE_URL_COUNT);
-      expect(result.retentionHours).toBe(MAX_SAFE_RETENTION_HOURS);
-      expect(result.rateLimitPerMinute).toBe(MAX_SAFE_RATE_LIMIT_PER_MINUTE);
-      expect(result.maxPayloadSize).toBe(MAX_ALLOWED_PAYLOAD_SIZE);
-      expect(result.replayMaxRetries).toBe(MAX_SAFE_REPLAY_RETRIES);
-      expect(result.replayTimeoutMs).toBe(MAX_SAFE_REPLAY_TIMEOUT_MS);
-      expect(result.maxForwardRetries).toBe(MAX_SAFE_FORWARD_RETRIES);
-      expect(result.responseDelayMs).toBe(MAX_SAFE_RESPONSE_DELAY_MS);
+      expect(result.urlCount).toBe(APP_CONSTS.MAX_SAFE_URL_COUNT);
+      expect(result.retentionHours).toBe(APP_CONSTS.MAX_SAFE_RETENTION_HOURS);
+      expect(result.rateLimitPerMinute).toBe(
+        APP_CONSTS.MAX_SAFE_RATE_LIMIT_PER_MINUTE,
+      );
+      expect(result.maxPayloadSize).toBe(APP_CONSTS.MAX_ALLOWED_PAYLOAD_SIZE);
+      expect(result.replayMaxRetries).toBe(APP_CONSTS.MAX_SAFE_REPLAY_RETRIES);
+      expect(result.replayTimeoutMs).toBe(
+        APP_CONSTS.MAX_SAFE_REPLAY_TIMEOUT_MS,
+      );
+      expect(result.maxForwardRetries).toBe(
+        APP_CONSTS.MAX_SAFE_FORWARD_RETRIES,
+      );
+      expect(result.responseDelayMs).toBe(
+        APP_CONSTS.MAX_SAFE_RESPONSE_DELAY_MS,
+      );
 
       // Verify warnings logged for clamped values
       expect(loggerMock.warn).toHaveBeenCalledTimes(8);
@@ -164,29 +159,29 @@ describe("Config Utils", () => {
 
   describe("parseWebhookOptions", () => {
     test("should clamp maxPayloadSize to default maximum", () => {
-      const huge = MAX_ALLOWED_PAYLOAD_SIZE + 10000;
+      const huge = APP_CONSTS.MAX_ALLOWED_PAYLOAD_SIZE + 10000;
       const opts = parseWebhookOptions({ maxPayloadSize: huge });
-      expect(opts.maxPayloadSize).toBe(MAX_ALLOWED_PAYLOAD_SIZE);
+      expect(opts.maxPayloadSize).toBe(APP_CONSTS.MAX_ALLOWED_PAYLOAD_SIZE);
 
       // @ts-expect-error - Invalid input type
       const opts3 = parseWebhookOptions({ maxPayloadSize: "invalid" });
-      expect(opts3.maxPayloadSize).toBe(DEFAULT_PAYLOAD_LIMIT);
+      expect(opts3.maxPayloadSize).toBe(APP_CONSTS.DEFAULT_PAYLOAD_LIMIT);
     });
 
     test("should use defaults when options are undefined", () => {
       const result = parseWebhookOptions(undefined);
-      expect(result.defaultResponseCode).toBe(HTTP_STATUS.OK);
+      expect(result.defaultResponseCode).toBe(constsMock.HTTP_STATUS.OK);
       expect(result.maskSensitiveData).toBe(true);
     });
 
     test("should pass through structured options (signature, alerts)", () => {
       const input = {
         signatureVerification: {
-          provider: /** @type {SignatureProvider} */ ("stripe"),
+          provider: SIGNATURE_PROVIDERS.STRIPE,
           secret: "test",
         },
         alerts: { slack: { webhookUrl: "https://slack..." } },
-        alertOn: /** @type {AlertTrigger[]} */ (["error"]),
+        alertOn: ["error"],
       };
       const result = parseWebhookOptions(input);
       expect(result.signatureVerification).toEqual(input.signatureVerification);

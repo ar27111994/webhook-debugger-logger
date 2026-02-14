@@ -185,7 +185,8 @@ export class ForwardingService {
         }
 
         const delay =
-          FORWARDING_CONSTS.RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
+          FORWARDING_CONSTS.RETRY_BASE_DELAY_MS *
+          Math.pow(FORWARDING_CONSTS.RETRY_BACKOFF_BASE, attempt - 1);
 
         log.error(
           {
@@ -351,8 +352,9 @@ export class ForwardingService {
             LOG_MESSAGES.FAILED_LOG_FORWARD,
           ),
         );
+        // eslint-disable-next-line sonarjs/no-ignored-exceptions
       } catch (_loggingErr) {
-        // Ignore logging errors
+        // Ignore logging errors to prevent infinite loops (since we are logging an error about logging)
       }
     }
   }

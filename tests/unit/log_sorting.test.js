@@ -12,7 +12,7 @@ import {
 } from "../setup/helpers/test-utils.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 import { resetDb } from "../setup/helpers/db-hooks.js";
-import { HTTP_STATUS } from "../../src/consts.js";
+import { constsMock } from "../setup/helpers/shared-mocks.js";
 
 // Initialize mocks BEFORE imports
 await setupCommonMocks({ apify: true, axios: false });
@@ -49,7 +49,7 @@ describe("Log Sorting Logic", () => {
       id: "item1",
       webhookId: "wh_1",
       timestamp: "2023-01-01T10:00:00Z",
-      statusCode: HTTP_STATUS.OK,
+      statusCode: constsMock.HTTP_STATUS.OK,
       processingTime: 100,
       method: "GET",
       requestId: "REQ-A",
@@ -59,7 +59,7 @@ describe("Log Sorting Logic", () => {
       id: "item2",
       webhookId: "wh_1",
       timestamp: "2023-01-01T10:00:02Z",
-      statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
+      statusCode: constsMock.HTTP_STATUS.INTERNAL_SERVER_ERROR,
       processingTime: 50,
       method: "POST",
       requestId: "REQ-C",
@@ -69,7 +69,7 @@ describe("Log Sorting Logic", () => {
       id: "item3",
       webhookId: "wh_1",
       timestamp: "2023-01-01T10:00:01Z",
-      statusCode: HTTP_STATUS.NOT_FOUND,
+      statusCode: constsMock.HTTP_STATUS.NOT_FOUND,
       processingTime: 200,
       method: "PUT",
       requestId: "REQ-B",
@@ -127,9 +127,9 @@ describe("Log Sorting Logic", () => {
       (/** @type {WebhookEvent} */ i) => i.statusCode,
     );
     expect(codes).toEqual([
-      HTTP_STATUS.INTERNAL_SERVER_ERROR,
-      HTTP_STATUS.NOT_FOUND,
-      HTTP_STATUS.OK,
+      constsMock.HTTP_STATUS.INTERNAL_SERVER_ERROR,
+      constsMock.HTTP_STATUS.NOT_FOUND,
+      constsMock.HTTP_STATUS.OK,
     ]);
   });
 
@@ -180,19 +180,19 @@ describe("Log Sorting Logic", () => {
     const multiItems = assertType([
       {
         id: "A",
-        statusCode: HTTP_STATUS.OK,
+        statusCode: constsMock.HTTP_STATUS.OK,
         timestamp: "2023-01-01T10:00:00Z",
         webhookId: "wh_1",
       },
       {
         id: "B",
-        statusCode: HTTP_STATUS.OK,
+        statusCode: constsMock.HTTP_STATUS.OK,
         timestamp: "2023-01-01T10:00:02Z",
         webhookId: "wh_1",
       },
       {
         id: "C",
-        statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        statusCode: constsMock.HTTP_STATUS.INTERNAL_SERVER_ERROR,
         timestamp: "2023-01-01T10:00:01Z",
         webhookId: "wh_1",
       },

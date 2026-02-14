@@ -33,6 +33,8 @@ export const APP_CONSTS = Object.freeze({
   KEY_SEPARATOR: ":",
   MS_PER_HOUR: 60 * 60 * 1000,
   MS_PER_SECOND: 1000,
+  BYTES_PER_KB: 1024,
+  JSON_INDENT: getInt("JSON_INDENT", 2),
   BASE_URL_TEMPLATE: "${protocol}://${host}${baseUrl}",
   DEFAULT_ID_LENGTH,
   MAX_SSE_CLIENTS,
@@ -206,6 +208,8 @@ export const FORWARDING_CONSTS = Object.freeze({
     "CIRCUIT_BREAKER_CLEANUP_INTERVAL_MS",
     60000,
   ),
+
+  RETRY_BACKOFF_BASE: getInt("RETRY_BACKOFF_BASE", 2),
   HTTP_PREFIX: "HTTP_",
 });
 

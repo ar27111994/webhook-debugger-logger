@@ -6,7 +6,7 @@ import {
   logRepositoryMock,
   loggerMock,
 } from "../setup/helpers/shared-mocks.js";
-import { HTTP_STATUS } from "../../src/consts.js";
+import { HTTP_STATUS } from "../../src/consts/index.js";
 
 // Setup mocks first
 // Ensure real SyncService consumes events while mocking the repository failure

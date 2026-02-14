@@ -6,12 +6,14 @@ import {
   createMockNextFunction,
   assertType,
 } from "../setup/helpers/test-utils.js";
-import { HTTP_STATUS } from "../../src/consts/http.js";
 import {
   createMockWebhookManager,
   loggerMock,
   fsPromisesMock as mockFs,
 } from "../setup/helpers/shared-mocks.js";
+import { LOG_MESSAGES } from "../../src/consts/messages.js";
+import { HTTP_STATUS } from "../../src/consts/http.js";
+import { ERROR_MESSAGES } from "../../src/consts/errors.js";
 
 // Setup common mocks (logger, fs)
 await setupCommonMocks({ logger: true, fs: true });
@@ -204,7 +206,9 @@ describe("Dashboard Handler", () => {
       expect(res.status).toHaveBeenCalledWith(
         HTTP_STATUS.INTERNAL_SERVER_ERROR,
       );
-      expect(res.send).toHaveBeenCalledWith("Internal Server Error");
+      expect(res.send).toHaveBeenCalledWith(
+        ERROR_MESSAGES.INTERNAL_SERVER_ERROR,
+      );
     });
   });
 
@@ -223,7 +227,7 @@ describe("Dashboard Handler", () => {
       expect(result).toBe("");
       expect(loggerMock.warn).toHaveBeenCalledWith(
         expect.objectContaining({ err: expect.any(Object) }),
-        "Failed to preload index.html",
+        LOG_MESSAGES.DASHBOARD_PRELOAD_FAILED,
       );
     });
   });

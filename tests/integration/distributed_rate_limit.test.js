@@ -8,7 +8,7 @@ import {
 } from "@jest/globals";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
-import { HTTP_STATUS } from "../../src/consts.js";
+import { HTTP_STATUS, HTTP_HEADERS } from "../../src/consts/index.js";
 
 // Setup mocks
 await setupCommonMocks({ apify: true, logger: true });
@@ -35,6 +35,9 @@ describe("Distributed Rate Limiting (X-Forwarded-For)", () => {
 
   beforeAll(async () => {
     ({ appClient, teardownApp } = await setupTestApp());
+    // Ensure app trusts proxies for X-Forwarded-For testing
+    const { app } = await import("../../src/main.js");
+    app.set("trust proxy", true);
     const ids = await webhookManager.generateWebhooks(1, 1);
     webhookId = ids[0];
   });
@@ -57,7 +60,7 @@ describe("Distributed Rate Limiting (X-Forwarded-For)", () => {
     // Fire a request from A
     await appClient
       .post(`/webhook/${webhookId}`)
-      .set("X-Forwarded-For", ipA)
+      .set(HTTP_HEADERS.X_FORWARDED_FOR, ipA)
       .send({ data: "A" })
       .expect(HTTP_STATUS.OK);
 
@@ -67,7 +70,7 @@ describe("Distributed Rate Limiting (X-Forwarded-For)", () => {
     // Fire a request from B
     await appClient
       .post(`/webhook/${webhookId}`)
-      .set("X-Forwarded-For", ipB)
+      .set(HTTP_HEADERS.X_FORWARDED_FOR, ipB)
       .send({ data: "B" })
       .expect(HTTP_STATUS.OK);
 
@@ -89,7 +92,7 @@ describe("Distributed Rate Limiting (X-Forwarded-For)", () => {
 
     await appClient
       .post(`/webhook/${webhookId}`)
-      .set("X-Forwarded-For", proxyChain)
+      .set(HTTP_HEADERS.X_FORWARDED_FOR, proxyChain)
       .send({ data: "proxy-chain" })
       .expect(HTTP_STATUS.OK);
 

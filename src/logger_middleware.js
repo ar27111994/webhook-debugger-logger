@@ -76,10 +76,12 @@ import { DEFAULT_ALERT_ON } from "./consts/alerting.js";
  * @typedef {import("./typedefs.js").WebhookEvent} WebhookEvent
  * @typedef {import('./typedefs.js').LoggerOptions} LoggerOptions
  * @typedef {import('./typedefs.js').CommonError} CommonError
+ * @typedef {import('./typedefs.js').CustomRequest} CustomRequest
  * @typedef {import('./typedefs.js').MiddlewareValidationResult} MiddlewareValidationResult
  * @typedef {import('./typedefs.js').AlertConfig} AlertConfig
  * @typedef {import('./utils/config.js').WebhookConfig} WebhookConfig
  * @typedef {import("./services/index.js").ForwardingService} ForwardingService
+ * @typedef {import("./typedefs.js").LoggerMiddlewareFunction} LoggerMiddlewareFunction
  */
 
 /** @type {AjvType} */
@@ -135,9 +137,11 @@ export class LoggerMiddleware {
     this.#serializeError = serializeErrorUtil;
 
     // Bind methods where necessary (middleware is used as value)
+    /** @type {LoggerMiddlewareFunction} */
     this.middleware = this.middleware.bind(this);
+    /** @type {RequestHandler} */
     this.ingestMiddleware = this.ingestMiddleware.bind(this);
-    /** @type {any} */ (this.middleware).updateOptions =
+    /** @type {LoggerMiddlewareFunction} */ (this.middleware).updateOptions =
       this.updateOptions.bind(this);
 
     // Initial compilation (uses #log internally)
@@ -221,6 +225,7 @@ export class LoggerMiddleware {
     ) {
       this.#compiledScript = this.#compileResource(
         newOptions.customScript,
+        // eslint-disable-next-line sonarjs/code-eval
         (src) => new vm.Script(src),
         LOG_MESSAGES.SCRIPT_COMPILED,
         LOG_TAGS.SCRIPT_ERROR,
@@ -284,7 +289,7 @@ export class LoggerMiddleware {
   /**
    * Ingest Middleware: Runs BEFORE body-parser.
    * Handles GB-scale payloads by streaming them directly to KVS.
-   * @param {Request} req
+   * @param {CustomRequest} req
    * @param {Response} res
    * @param {NextFunction} next
    */
@@ -410,7 +415,7 @@ export class LoggerMiddleware {
           const valid = finalizeStreamVerification(verifier);
 
           // Attach result to req for the main middleware to use
-          /** @type {any} */ (req).ingestSignatureResult = {
+          req.ingestSignatureResult = {
             valid,
             provider: options.signatureVerification?.provider,
             error: valid ? undefined : ERROR_LABELS.SIGNATURE_MISMATCH_STREAM,
@@ -430,8 +435,8 @@ export class LoggerMiddleware {
 
         // Replace body and flag to bypass body-parser
         req.body = referenceBody;
-        /** @type {any} */ (req)._body = true; // Signals body-parser to skip
-        /** @type {any} */ (req).isOffloaded = true; // Signal for later middlewares
+        req._body = true; // Signals body-parser to skip
+        req.isOffloaded = true; // Signal for later middlewares
 
         return next();
       } catch (err) {
@@ -451,9 +456,11 @@ export class LoggerMiddleware {
 
   /**
    * Main Middleware: Logic for logging, processing, and responding.
-   * @param {Request} req
+   * @param {CustomRequest} req
    * @param {Response} res
    * @param {NextFunction} next
+   *
+   * @returns {Promise<Response | void>}
    */
   async middleware(req, res, next) {
     const startTime = Date.now();
@@ -487,7 +494,7 @@ export class LoggerMiddleware {
       }
 
       // 2. Prepare
-      const isOffloaded = /** @type {any} */ (req).isOffloaded;
+      const isOffloaded = req.isOffloaded;
       let preparedData;
 
       if (isOffloaded) {
@@ -526,7 +533,7 @@ export class LoggerMiddleware {
         contentType,
         size: validation.contentLength,
         statusCode: LoggerMiddleware.getValidStatusCode(
-          /** @type {any} */ (req).forcedStatus,
+          req.forcedStatus,
           mergedOptions.defaultResponseCode ?? HTTP_STATUS.OK,
         ),
         responseBody: undefined, // Custom scripts can set this
@@ -534,7 +541,7 @@ export class LoggerMiddleware {
         processingTime: 0,
         remoteIp: validation.remoteIp,
         userAgent: req.headers[HTTP_HEADERS.USER_AGENT]?.toString(),
-        requestId: /** @type {any} */ (req).requestId,
+        requestId: req.requestId,
         requestUrl: req.originalUrl || req.url,
       };
 
@@ -544,7 +551,7 @@ export class LoggerMiddleware {
         mergedOptions.signatureVerification?.provider &&
         mergedOptions.signatureVerification?.secret
       ) {
-        const ingestResult = /** @type {any} */ (req).ingestSignatureResult;
+        const ingestResult = req.ingestSignatureResult;
 
         if (ingestResult) {
           // Use pre-validated result if available (from raw-body parser)
@@ -566,7 +573,7 @@ export class LoggerMiddleware {
           // Use preserved rawBody if available (critical for Shopify/Stripe signatures)
           // Fallback to re-stringifying body if necessary (though less reliable)
           const rawBody =
-            /** @type {any} */ (req).rawBody ||
+            req.rawBody ||
             (typeof req.body === "string"
               ? req.body
               : JSON.stringify(req.body));
@@ -754,14 +761,14 @@ export class LoggerMiddleware {
       parsedLength = Number.parseInt(String(headerStr), 10);
     }
 
-    const bodyLen =
-      typeof req.body === "string"
-        ? Buffer.byteLength(req.body)
-        : Buffer.isBuffer(req.body)
-          ? req.body.length
-          : req.body && typeof req.body === "object"
-            ? Buffer.byteLength(JSON.stringify(req.body))
-            : 0;
+    let bodyLen = 0;
+    if (typeof req.body === "string") {
+      bodyLen = Buffer.byteLength(req.body);
+    } else if (Buffer.isBuffer(req.body)) {
+      bodyLen = req.body.length;
+    } else if (req.body && typeof req.body === "object") {
+      bodyLen = Buffer.byteLength(JSON.stringify(req.body));
+    }
 
     const contentLength = Number.isFinite(parsedLength)
       ? parsedLength
@@ -929,7 +936,7 @@ export class LoggerMiddleware {
 
   /**
    * @param {WebhookEvent} event
-   * @param {Request} req
+   * @param {CustomRequest} req
    */
   #transformRequestData(event, req) {
     if (this.#compiledScript) {
@@ -941,9 +948,20 @@ export class LoggerMiddleware {
           warn: (...args) => this.#log.warn({ source: "script" }, ...args),
           info: (...args) => this.#log.info({ source: "script" }, ...args),
         };
+        // Create a safe subset of request to prevent prototype access or mutation of internal state
+        /** @type {Readonly<Partial<CustomRequest>>} */
+        const safeReq = {
+          method: req.method,
+          headers: { ...req.headers },
+          query: { ...req.query },
+          body: req.body,
+          url: req.url,
+          originalUrl: req.originalUrl,
+          requestId: req.requestId,
+        };
         const sandbox = {
           event,
-          req,
+          req: safeReq,
           console: limitedConsole,
           HTTP_STATUS,
         };

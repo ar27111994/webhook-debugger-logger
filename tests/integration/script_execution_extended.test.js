@@ -7,7 +7,8 @@ import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 // Mock Apify, Axios, and Logger
 await setupCommonMocks({ axios: true, apify: true, logger: true });
 
-const { SCRIPT_EXECUTION_TIMEOUT_MS } = await import("../../src/consts.js");
+const { APP_CONSTS } = await import("../../src/consts/index.js");
+const { SCRIPT_EXECUTION_TIMEOUT_MS } = APP_CONSTS;
 
 describe("Script Execution Extended", () => {
   useMockCleanup();

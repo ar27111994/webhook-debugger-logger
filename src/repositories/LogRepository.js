@@ -372,10 +372,7 @@ export class LogRepository {
     return {
       id: log.id,
       webhookId: log.webhookId || null,
-      timestamp:
-        typeof log.timestamp === "string"
-          ? log.timestamp
-          : new Date(log.timestamp).toISOString(),
+      timestamp: this.parseTimestamp(log.timestamp),
       method: log.method || null,
       statusCode: log.statusCode || null,
       size: log.size || 0,
@@ -572,6 +569,21 @@ export class LogRepository {
     }
 
     return { items, nextCursor };
+  }
+
+  /**
+   * Parse timestamp to ISO string
+   * @param {string | Date | number} timestamp
+   * @returns {string}
+   */
+  parseTimestamp(timestamp) {
+    if (typeof timestamp === "string") return timestamp;
+    try {
+      const d = timestamp ? new Date(timestamp) : new Date();
+      return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+    } catch {
+      return new Date().toISOString();
+    }
   }
 }
 

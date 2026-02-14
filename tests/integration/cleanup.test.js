@@ -15,11 +15,11 @@ await setupCommonMocks({ apify: true });
 const { setupTestApp } = await import("../setup/helpers/app-utils.js");
 const { webhookManager } = await import("../../src/main.js");
 const { Actor } = await import("apify");
-const { OFFLOAD_MARKER_SYNC } =
-  await import("../../src/utils/storage_helper.js");
 const { logRepository } =
   await import("../../src/repositories/LogRepository.js");
 import { assertType } from "../setup/helpers/test-utils.js";
+import { constsMock } from "../setup/helpers/shared-mocks.js";
+import { HTTP_METHODS } from "../../src/consts/index.js";
 
 /**
  * @typedef {import("../setup/helpers/app-utils.js").AppClient} AppClient
@@ -71,17 +71,17 @@ describe("Data Cleanup Service", () => {
         id: "log_normal",
         webhookId,
         timestamp: new Date().toISOString(),
-        method: "POST",
+        method: HTTP_METHODS.POST,
         body: JSON.stringify({ foo: "bar" }),
       },
       {
         id: "log_offloaded",
         webhookId,
         timestamp: new Date().toISOString(),
-        method: "POST",
+        method: HTTP_METHODS.POST,
         // Simulate stored JSON structure for offloaded body
         body: {
-          data: OFFLOAD_MARKER_SYNC,
+          data: constsMock.OFFLOAD_MARKER_SYNC,
           key: "payload_todelete_123",
         },
       },

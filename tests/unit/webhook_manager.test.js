@@ -20,6 +20,9 @@ await setupCommonMocks({
   db: true,
 });
 
+import { ERROR_MESSAGES } from "../../src/consts/errors.js";
+import { LOG_MESSAGES } from "../../src/consts/messages.js";
+
 const Actor = apifyMock;
 const { WebhookManager } = await import("../../src/webhook_manager.js");
 
@@ -111,8 +114,8 @@ describe("WebhookManager", () => {
 
   test("generateWebhooks() should throw if count exceeds MAX_BULK_CREATE", async () => {
     await webhookManager.init();
-    await expect(webhookManager.generateWebhooks(999, 24)).rejects.toThrow(
-      "Invalid count: 999. Max allowed is 10.",
+    await expect(webhookManager.generateWebhooks(1001, 24)).rejects.toThrow(
+      ERROR_MESSAGES.INVALID_COUNT_MAX(1001, 1000),
     );
   });
 
@@ -165,48 +168,48 @@ describe("WebhookManager", () => {
   test("generateWebhooks() should throw on invalid count (negative)", async () => {
     await webhookManager.init();
     await expect(webhookManager.generateWebhooks(-1, 24)).rejects.toThrow(
-      "Invalid count: -1. Must be a non-negative integer.",
+      ERROR_MESSAGES.INVALID_COUNT(-1),
     );
   });
 
   test("generateWebhooks() should throw on invalid count (non-integer)", async () => {
     await webhookManager.init();
     await expect(webhookManager.generateWebhooks(1.5, 24)).rejects.toThrow(
-      "Invalid count: 1.5. Must be a non-negative integer.",
+      ERROR_MESSAGES.INVALID_COUNT(1.5),
     );
   });
 
   test("generateWebhooks() should throw on invalid retentionHours (zero)", async () => {
     await webhookManager.init();
     await expect(webhookManager.generateWebhooks(1, 0)).rejects.toThrow(
-      "Invalid retentionHours: 0. Must be a positive number.",
+      ERROR_MESSAGES.INVALID_RETENTION(0),
     );
   });
 
   test("generateWebhooks() should throw on invalid retentionHours (negative)", async () => {
     await webhookManager.init();
     await expect(webhookManager.generateWebhooks(1, -5)).rejects.toThrow(
-      "Invalid retentionHours: -5. Must be a positive number.",
+      ERROR_MESSAGES.INVALID_RETENTION(-5),
     );
   });
 
   test("generateWebhooks() should throw on invalid retentionHours (Infinity)", async () => {
     await webhookManager.init();
     await expect(webhookManager.generateWebhooks(1, Infinity)).rejects.toThrow(
-      "Invalid retentionHours: Infinity. Must be a positive number.",
+      ERROR_MESSAGES.INVALID_RETENTION(Infinity),
     );
   });
 
   test("updateRetention() should throw on invalid retentionHours", async () => {
     await webhookManager.init();
     await expect(webhookManager.updateRetention(0)).rejects.toThrow(
-      "Invalid retentionHours: 0. Must be a positive number.",
+      ERROR_MESSAGES.INVALID_RETENTION(0),
     );
     await expect(webhookManager.updateRetention(-1)).rejects.toThrow(
-      "Invalid retentionHours: -1. Must be a positive number.",
+      ERROR_MESSAGES.INVALID_RETENTION(-1),
     );
     await expect(webhookManager.updateRetention(NaN)).rejects.toThrow(
-      "Invalid retentionHours: NaN. Must be a positive number.",
+      ERROR_MESSAGES.INVALID_RETENTION(NaN),
     );
   });
 
@@ -287,7 +290,7 @@ describe("WebhookManager", () => {
 
     expect(loggerMock.info).toHaveBeenCalledWith(
       expect.objectContaining({ retentionHours: 1 }),
-      "Refreshed webhook retention",
+      LOG_MESSAGES.RETENTION_REFRESHED,
     );
   });
 

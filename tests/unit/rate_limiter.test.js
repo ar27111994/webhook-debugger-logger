@@ -7,25 +7,24 @@ import {
   afterEach,
 } from "@jest/globals";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
-import { loggerMock } from "../setup/helpers/shared-mocks.js";
+import {
+  useFakeTimers,
+  useMockCleanup,
+} from "../setup/helpers/test-lifecycle.js";
 import {
   createMockRequest,
   createMockResponse,
   createMockNextFunction,
   assertType,
 } from "../setup/helpers/test-utils.js";
-import {
-  useFakeTimers,
-  useMockCleanup,
-} from "../setup/helpers/test-lifecycle.js";
+import { loggerMock, constsMock } from "../setup/helpers/shared-mocks.js";
 
 // Mock logger before importing RateLimiter
 await setupCommonMocks({ logger: true, consts: true });
-import { HTTP_STATUS } from "../../src/consts/http.js";
+
+import { LOG_MESSAGES } from "../../src/consts/messages.js";
 
 const { RateLimiter } = await import("../../src/utils/rate_limiter.js");
-const { DEFAULT_RATE_LIMIT_WINDOW_MS } =
-  await import("../../src/consts/app.js");
 
 /**
  * @typedef {import("net").Socket} Socket
@@ -39,7 +38,7 @@ describe("RateLimiter Unit Tests", () => {
   useFakeTimers();
 
   beforeEach(() => {
-    rateLimiter = new RateLimiter(2, DEFAULT_RATE_LIMIT_WINDOW_MS);
+    rateLimiter = new RateLimiter(2, constsMock.DEFAULT_RATE_LIMIT_WINDOW_MS);
   });
 
   useMockCleanup();
@@ -61,7 +60,9 @@ describe("RateLimiter Unit Tests", () => {
     expect(next).toHaveBeenCalledTimes(2);
 
     mw(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.TOO_MANY_REQUESTS);
+    expect(res.status).toHaveBeenCalledWith(
+      constsMock.HTTP_STATUS.TOO_MANY_REQUESTS,
+    );
     expect(next).toHaveBeenCalledTimes(2);
   });
 
@@ -83,7 +84,11 @@ describe("RateLimiter Unit Tests", () => {
 
   test("should evict oldest entry when maxEntries is reached", () => {
     // limit=10, window=1m, maxEntries=2
-    rateLimiter = new RateLimiter(10, DEFAULT_RATE_LIMIT_WINDOW_MS, 2);
+    rateLimiter = new RateLimiter(
+      10,
+      constsMock.DEFAULT_RATE_LIMIT_WINDOW_MS,
+      2,
+    );
     const mw = rateLimiter.middleware();
     const next = createMockNextFunction();
     const res = createMockResponse();
@@ -103,7 +108,11 @@ describe("RateLimiter Unit Tests", () => {
 
   test("should maintain LRU order: recently accessed entries are moved to end of eviction queue", () => {
     // limit=10, window=1m, maxEntries=2
-    rateLimiter = new RateLimiter(10, DEFAULT_RATE_LIMIT_WINDOW_MS, 2);
+    rateLimiter = new RateLimiter(
+      10,
+      constsMock.DEFAULT_RATE_LIMIT_WINDOW_MS,
+      2,
+    );
     const mw = rateLimiter.middleware();
     const next = createMockNextFunction();
     const res = createMockResponse();
@@ -138,7 +147,7 @@ describe("RateLimiter Unit Tests", () => {
     expect(rateLimiter.entryCount).toBe(1);
 
     // Advancing past the 60s hardcoded interval
-    jest.advanceTimersByTime(DEFAULT_RATE_LIMIT_WINDOW_MS + 1); // 60s + 1ms
+    jest.advanceTimersByTime(constsMock.DEFAULT_RATE_LIMIT_WINDOW_MS + 1); // 60s + 1ms
 
     expect(rateLimiter.entryCount).toBe(0);
   });
@@ -157,11 +166,11 @@ describe("RateLimiter Unit Tests", () => {
       // Advance past window so it's PRUNABLE
       jest.advanceTimersByTime(1100);
       // Background interval check
-      jest.advanceTimersByTime(DEFAULT_RATE_LIMIT_WINDOW_MS);
+      jest.advanceTimersByTime(constsMock.DEFAULT_RATE_LIMIT_WINDOW_MS);
 
       expect(loggerMock.info).toHaveBeenCalledWith(
         expect.objectContaining({ prunedCount: 1 }),
-        "RateLimiter pruned expired entries",
+        LOG_MESSAGES.RATELIMIT_PRUNED,
       );
     } finally {
       process.env.NODE_ENV = originalEnv;
@@ -198,7 +207,7 @@ describe("RateLimiter Unit Tests", () => {
 
     mw(req, res, next);
 
-    expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.BAD_REQUEST);
+    expect(res.status).toHaveBeenCalledWith(constsMock.HTTP_STATUS.BAD_REQUEST);
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
         error: "Bad Request",
@@ -278,7 +287,9 @@ describe("RateLimiter Unit Tests", () => {
     mw(createMockRequest({ ip: "userA", headers: {} }), res, next);
     expect(next).toHaveBeenCalledTimes(1);
     mw(createMockRequest({ ip: "userA", headers: {} }), res, next);
-    expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.TOO_MANY_REQUESTS);
+    expect(res.status).toHaveBeenCalledWith(
+      constsMock.HTTP_STATUS.TOO_MANY_REQUESTS,
+    );
 
     // User B should still be allowed (independent counter)
     mw(createMockRequest({ ip: "userB", headers: {} }), res, next);
@@ -293,7 +304,9 @@ describe("RateLimiter Unit Tests", () => {
     const next = createMockNextFunction();
 
     mw(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.TOO_MANY_REQUESTS);
+    expect(res.status).toHaveBeenCalledWith(
+      constsMock.HTTP_STATUS.TOO_MANY_REQUESTS,
+    );
     expect(next).not.toHaveBeenCalled();
   });
 
@@ -315,7 +328,7 @@ describe("RateLimiter Unit Tests", () => {
 
   test("should handle long windowMs", () => {
     // Long: 10 minutes
-    const windowMs = DEFAULT_RATE_LIMIT_WINDOW_MS * 10;
+    const windowMs = constsMock.DEFAULT_RATE_LIMIT_WINDOW_MS * 10;
     rateLimiter = new RateLimiter(1, windowMs);
     const mw = rateLimiter.middleware();
     const req = createMockRequest({ ip: "userL", headers: {} });
@@ -329,7 +342,9 @@ describe("RateLimiter Unit Tests", () => {
     const almostThere = 10000;
     jest.advanceTimersByTime(windowMs - almostThere);
     mw(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.TOO_MANY_REQUESTS);
+    expect(res.status).toHaveBeenCalledWith(
+      constsMock.HTTP_STATUS.TOO_MANY_REQUESTS,
+    );
 
     jest.advanceTimersByTime(almostThere + 1); // Expired
     mw(req, res, next);
@@ -428,7 +443,7 @@ describe("RateLimiter Unit Tests", () => {
       "RateLimiter: windowMs must be a finite number > 0",
     );
     expect(
-      () => new RateLimiter(10, -HTTP_STATUS.INTERNAL_SERVER_ERROR),
+      () => new RateLimiter(10, -constsMock.HTTP_STATUS.INTERNAL_SERVER_ERROR),
     ).toThrow("RateLimiter: windowMs must be a finite number > 0");
     expect(() => new RateLimiter(10, Infinity)).toThrow(
       "RateLimiter: windowMs must be a finite number > 0",
@@ -463,7 +478,11 @@ describe("RateLimiter Unit Tests", () => {
     process.env.NODE_ENV = "production";
 
     try {
-      rateLimiter = new RateLimiter(10, DEFAULT_RATE_LIMIT_WINDOW_MS, 1);
+      rateLimiter = new RateLimiter(
+        10,
+        constsMock.DEFAULT_RATE_LIMIT_WINDOW_MS,
+        1,
+      );
       const mw = rateLimiter.middleware();
       const next = createMockNextFunction();
       const res = createMockResponse();
@@ -477,7 +496,7 @@ describe("RateLimiter Unit Tests", () => {
       // Source uses structured pino logging via log.info
       expect(loggerMock.info).toHaveBeenCalledWith(
         expect.objectContaining({ evictedIp: expect.any(String) }),
-        "RateLimiter evicted entry",
+        LOG_MESSAGES.RATELIMIT_EVICTED,
       );
     } finally {
       process.env.NODE_ENV = originalEnv;

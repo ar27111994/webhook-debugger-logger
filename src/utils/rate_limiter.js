@@ -11,7 +11,7 @@ import {
   HTTP_STATUS,
   HTTP_STATUS_MESSAGES,
 } from "../consts/http.js";
-import { LOG_COMPONENTS } from "../consts/logging.js";
+import { LOG_COMPONENTS, LOG_CONSTS } from "../consts/logging.js";
 import { LOG_MESSAGES } from "../consts/messages.js";
 import { ERROR_MESSAGES } from "../consts/errors.js";
 import { createChildLogger } from "./logger.js";
@@ -146,12 +146,18 @@ export class RateLimiter {
   maskIp(ip) {
     if (!ip) return LOG_MESSAGES.MASK_HIDDEN;
     if (ip.includes(":")) {
-      // IPv6: Keep first 2 segments
+      // IPv6: Keep first significant segments
       const segments = ip.split(":");
-      return segments.slice(0, 2).join(":") + LOG_MESSAGES.MASK_IPV6_SUFFIX;
+      return (
+        segments.slice(0, LOG_CONSTS.IPV6_MASK_SEGMENTS).join(":") +
+        LOG_MESSAGES.MASK_IPV6_SUFFIX
+      );
     }
     // IPv4: Mask last octet
-    return ip.split(".").slice(0, 3).join(".") + LOG_MESSAGES.MASK_IPV4_SUFFIX;
+    return (
+      ip.split(".").slice(0, LOG_CONSTS.IPV4_MASK_OCTETS).join(".") +
+      LOG_MESSAGES.MASK_IPV4_SUFFIX
+    );
   }
 
   /**

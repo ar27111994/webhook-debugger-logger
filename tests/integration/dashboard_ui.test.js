@@ -2,7 +2,11 @@ import { describe, test, expect, beforeAll, afterAll } from "@jest/globals";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 import { setupTestApp } from "../setup/helpers/app-utils.js";
-import { HTTP_STATUS } from "../../src/consts.js";
+import {
+  HTTP_STATUS,
+  HTTP_HEADERS,
+  MIME_TYPES,
+} from "../../src/consts/index.js";
 
 // Setup mocks
 await setupCommonMocks({ apify: true, logger: true });
@@ -32,10 +36,10 @@ describe("Dashboard UI Integration", () => {
     const res = await appClient
       .get("/")
       .expect(HTTP_STATUS.OK)
-      .expect("Content-Type", /html/);
+      .expect(HTTP_HEADERS.CONTENT_TYPE, /html/);
 
     // Verify presence of critical UI elements or tokens
-    expect(res.text).toContain("Webhook Debugger");
+    expect(res.text).toContain("Webhook Debugger, Logger & API Mocking Suite");
     expect(res.text).toContain("Active Webhooks");
 
     // Test for the version and other placeholders being replaced
@@ -48,11 +52,11 @@ describe("Dashboard UI Integration", () => {
   test("should support text/plain for machine-readable status", async () => {
     const res = await appClient
       .get("/")
-      .set("Accept", "text/plain")
+      .set(HTTP_HEADERS.ACCEPT, MIME_TYPES.TEXT)
       .expect(HTTP_STATUS.OK)
-      .expect("Content-Type", /plain/);
+      .expect(HTTP_HEADERS.CONTENT_TYPE, /plain/);
 
-    expect(res.text).toContain("Webhook Debugger & Logger");
+    expect(res.text).toContain("Webhook Debugger, Logger & API Mocking Suite");
     expect(res.text).toContain("Active Webhooks:");
   });
 });

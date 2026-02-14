@@ -2,7 +2,7 @@ import { jest, describe, test, expect, afterEach } from "@jest/globals";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import { loggerMock } from "../setup/helpers/shared-mocks.js";
 import { createMiddlewareTestContext } from "../setup/helpers/middleware-test-utils.js";
-import { HTTP_STATUS } from "../../src/consts.js";
+import { HTTP_STATUS } from "../../src/consts/index.js";
 import {
   useFakeTimers,
   useMockCleanup,
@@ -15,8 +15,8 @@ import {
 // Mock logger and other dependencies before importing
 await setupCommonMocks({ axios: true, apify: true, logger: true });
 
-const { MAX_SAFE_RESPONSE_DELAY_MS: MAX_RESPONSE_DELAY_MS } =
-  await import("../../src/consts.js");
+const { APP_CONSTS } = await import("../../src/consts/index.js");
+const { MAX_SAFE_RESPONSE_DELAY_MS: MAX_RESPONSE_DELAY_MS } = APP_CONSTS;
 
 describe("Logger Middleware - Response Delay", () => {
   useFakeTimers();

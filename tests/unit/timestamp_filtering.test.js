@@ -1,7 +1,10 @@
 import { jest } from "@jest/globals";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
-import { createDatasetMock } from "../setup/helpers/shared-mocks.js";
+import {
+  createDatasetMock,
+  constsMock,
+} from "../setup/helpers/shared-mocks.js";
 import {
   createMockRequest,
   createMockResponse,
@@ -9,7 +12,6 @@ import {
   assertType,
 } from "../setup/helpers/test-utils.js";
 import { resetDb } from "../setup/helpers/db-hooks.js";
-import { HTTP_STATUS } from "../../src/consts/http.js";
 
 // Initialize mocks BEFORE imports
 await setupCommonMocks({ apify: true, axios: false });
@@ -46,21 +48,21 @@ describe("Unified Timestamp Filtering", () => {
       timestamp: "2023-01-01T10:00:00.000Z",
       webhookId: "w1",
       method: "POST",
-      statusCode: HTTP_STATUS.OK,
+      statusCode: constsMock.HTTP_STATUS.OK,
     },
     {
       id: "B",
       timestamp: "2023-01-02T10:00:00.000Z",
       webhookId: "w1",
       method: "POST",
-      statusCode: HTTP_STATUS.OK,
+      statusCode: constsMock.HTTP_STATUS.OK,
     },
     {
       id: "C",
       timestamp: "2023-01-03T10:00:00.000Z",
       webhookId: "w1",
       method: "POST",
-      statusCode: HTTP_STATUS.OK,
+      statusCode: constsMock.HTTP_STATUS.OK,
     },
   ]);
 

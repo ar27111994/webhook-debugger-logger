@@ -4,7 +4,9 @@ import {
   createMockRequest,
   createMockResponse,
 } from "../setup/helpers/test-utils.js";
-import { HTTP_STATUS } from "../../src/consts/http.js";
+import { constsMock } from "../setup/helpers/shared-mocks.js";
+import { STATUS_LABELS } from "../../src/consts/ui.js";
+import { ERROR_MESSAGES } from "../../src/consts/errors.js";
 
 // Mock duckdb dependency
 jest.unstable_mockModule("../../src/db/duckdb.js", () => ({
@@ -39,7 +41,7 @@ describe("Health Routes Unit Tests", () => {
 
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
-          status: "healthy",
+          status: STATUS_LABELS.HEALTHY,
           uptime: expect.any(Number),
           memory: expect.any(Object),
         }),
@@ -48,20 +50,20 @@ describe("Health Routes Unit Tests", () => {
   });
 
   describe("GET /ready", () => {
-    test(`should return ${HTTP_STATUS.OK} ready when DB and Webhooks are OK`, async () => {
+    test(`should return ${constsMock.HTTP_STATUS.OK} ready when DB and Webhooks are OK`, async () => {
       const req = createMockRequest();
       const res = createMockResponse();
 
       await routes.ready(req, res);
 
-      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
+      expect(res.status).toHaveBeenCalledWith(constsMock.HTTP_STATUS.OK);
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
-          status: "ready",
+          status: STATUS_LABELS.READY,
           checks: expect.objectContaining({
-            database: { status: "ok" },
+            database: { status: STATUS_LABELS.OK },
             webhooks: {
-              status: "ok",
+              status: STATUS_LABELS.OK,
               message: `${webhookCount} active webhook(s)`,
             },
           }),
@@ -69,19 +71,24 @@ describe("Health Routes Unit Tests", () => {
       );
     });
 
-    test(`should return ${HTTP_STATUS.SERVICE_UNAVAILABLE} when DB is missing`, async () => {
+    test(`should return ${constsMock.HTTP_STATUS.SERVICE_UNAVAILABLE} when DB is missing`, async () => {
       jest.mocked(getDbInstance).mockResolvedValue(assertType(null));
       const req = createMockRequest();
       const res = createMockResponse();
 
       await routes.ready(req, res);
 
-      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.SERVICE_UNAVAILABLE);
+      expect(res.status).toHaveBeenCalledWith(
+        constsMock.HTTP_STATUS.SERVICE_UNAVAILABLE,
+      );
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
-          status: "not_ready",
+          status: STATUS_LABELS.NOT_READY,
           checks: expect.objectContaining({
-            database: { status: "error", message: "Database not initialized" },
+            database: {
+              status: STATUS_LABELS.ERROR,
+              message: ERROR_MESSAGES.DB_NOT_INITIALIZED,
+            },
           }),
         }),
       );
@@ -96,11 +103,16 @@ describe("Health Routes Unit Tests", () => {
 
       await routes.ready(req, res);
 
-      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.SERVICE_UNAVAILABLE);
+      expect(res.status).toHaveBeenCalledWith(
+        constsMock.HTTP_STATUS.SERVICE_UNAVAILABLE,
+      );
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
           checks: expect.objectContaining({
-            database: { status: "error", message: "Connection failed" },
+            database: {
+              status: STATUS_LABELS.ERROR,
+              message: "Connection failed",
+            },
           }),
         }),
       );
@@ -115,11 +127,13 @@ describe("Health Routes Unit Tests", () => {
 
       await routes.ready(req, res);
 
-      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.SERVICE_UNAVAILABLE);
+      expect(res.status).toHaveBeenCalledWith(
+        constsMock.HTTP_STATUS.SERVICE_UNAVAILABLE,
+      );
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
           checks: expect.objectContaining({
-            webhooks: { status: "error", message: "Count error" },
+            webhooks: { status: STATUS_LABELS.ERROR, message: "Count error" },
           }),
         }),
       );

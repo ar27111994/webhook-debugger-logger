@@ -53,14 +53,19 @@ export const SSRF_LOG_MESSAGES = Object.freeze({
   VALIDATION_ERROR: "SSRF validation error",
 });
 
-export const DNS_RESOLUTION_TIMEOUT_MS = getInt(
-  "DNS_RESOLUTION_TIMEOUT_MS",
-  5000,
-);
-
 export const DELIMITERS = Object.freeze({
   QUERY_SORT: ":",
   QUERY_LIST: ",",
+});
+
+export const NETWORK_TIMEOUTS = Object.freeze({
+  DNS_RESOLUTION: getInt("DNS_RESOLUTION_TIMEOUT_MS", 5000),
+  IDLE_SOCKET: getInt("IDLE_SOCKET_TIMEOUT_MS", 30000),
+});
+
+export const CIDR_PREFIX_BITS = Object.freeze({
+  IPV4: 32,
+  IPV6: 128,
 });
 
 export const PROTOCOL_PREFIXES = Object.freeze({

@@ -104,7 +104,7 @@ describe("Main.js Lifecycle Limits", () => {
           const cacheBust = Date.now();
           const main = await import(`../../src/main.js?t=${cacheBust}`);
           const { HTTP_STATUS, STARTUP_TEST_EXIT_DELAY_MS } = await import(
-            `../../src/consts.js?t=${cacheBust}`
+            `../../src/consts/index.js?t=${cacheBust}`
           );
 
           await fn({

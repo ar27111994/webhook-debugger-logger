@@ -26,6 +26,7 @@ const log = createChildLogger({ component: LOG_COMPONENTS.ALERTING });
  * @typedef {import("../typedefs.js").AlertChannelConfig} AlertChannelConfig
  * @typedef {import("../typedefs.js").AlertConfig} AlertConfig
  * @typedef {import("../typedefs.js").AlertContext} AlertContext
+ * @typedef {DISCORD_COLORS[keyof typeof DISCORD_COLORS]} DiscordColor
  */
 
 /**
@@ -150,16 +151,19 @@ async function sendSlackAlert(webhookUrl, context) {
       ERROR_MESSAGES.ALERT_URL_BLOCKED_BY_SSRF_POLICY(String(ssrfCheck.error)),
     );
   }
-  const emoji = context.error
-    ? "🚨"
-    : context.signatureValid === false
-      ? "⚠️"
-      : "📩";
-  const status = context.error
-    ? `Error: ${context.error}`
-    : context.signatureValid === false
-      ? `Signature Invalid: ${context.signatureError}`
-      : `Status: ${context.statusCode}`;
+  let emoji = "📩";
+  if (context.error) {
+    emoji = "🚨";
+  } else if (context.signatureValid === false) {
+    emoji = "⚠️";
+  }
+
+  let status = `Status: ${context.statusCode}`;
+  if (context.error) {
+    status = `Error: ${context.error}`;
+  } else if (context.signatureValid === false) {
+    status = `Signature Invalid: ${context.signatureError}`;
+  }
 
   /** @type {AlertPayload} */
   const payload = {
@@ -224,16 +228,20 @@ async function sendDiscordAlert(webhookUrl, context) {
       ERROR_MESSAGES.ALERT_URL_BLOCKED_BY_SSRF_POLICY(String(ssrfCheck.error)),
     );
   }
-  const color = context.error
-    ? DISCORD_COLORS.RED
-    : context.signatureValid === false
-      ? DISCORD_COLORS.ORANGE
-      : DISCORD_COLORS.GREEN;
-  const status = context.error
-    ? `Error: ${context.error}`
-    : context.signatureValid === false
-      ? `Signature Invalid: ${context.signatureError}`
-      : `Status: ${context.statusCode}`;
+  /** @type {DiscordColor} */
+  let color = DISCORD_COLORS.GREEN;
+  if (context.error) {
+    color = DISCORD_COLORS.RED;
+  } else if (context.signatureValid === false) {
+    color = DISCORD_COLORS.ORANGE;
+  }
+
+  let status = `Status: ${context.statusCode}`;
+  if (context.error) {
+    status = `Error: ${context.error}`;
+  } else if (context.signatureValid === false) {
+    status = `Signature Invalid: ${context.signatureError}`;
+  }
 
   const payload = {
     embeds: [

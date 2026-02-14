@@ -4,15 +4,18 @@ import { dnsPromisesMock, loggerMock } from "../setup/helpers/shared-mocks.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 
 // Mock logger and dns/promises
-await setupCommonMocks({ logger: true, dns: true });
+await setupCommonMocks({ logger: true, dns: true, consts: true });
 
 // Import utils after mocking
 // SSRF_INTERNAL_ERRORS is NOT exported by ssrf.js, it is imported from consts.js
 // We must import it from consts.js directly for the test.
-const { checkIpInRanges, validateUrlForSsrf, SSRF_ERRORS } =
+const { checkIpInRanges, validateUrlForSsrf } =
   await import("../../src/utils/ssrf.js");
-const { SSRF_INTERNAL_ERRORS, SSRF_LOG_MESSAGES } =
-  await import("../../src/consts.js");
+import { SSRF_ERRORS } from "../../src/consts/security.js";
+import {
+  SSRF_INTERNAL_ERRORS,
+  SSRF_LOG_MESSAGES,
+} from "../../src/consts/network.js";
 
 describe("SSRF Coverage Tests", () => {
   useMockCleanup();
@@ -122,8 +125,10 @@ describe("SSRF Coverage Tests", () => {
 
       // Source uses structured pino logger
       expect(loggerMock.error).toHaveBeenCalledWith(
-        expect.objectContaining({ error: SSRF_LOG_MESSAGES.DNS_TIMEOUT }),
-        "SSRF validation error",
+        expect.objectContaining({
+          error: SSRF_LOG_MESSAGES.DNS_TIMEOUT,
+        }),
+        SSRF_LOG_MESSAGES.VALIDATION_ERROR,
       );
     });
 
@@ -137,8 +142,10 @@ describe("SSRF Coverage Tests", () => {
       expect(result.safe).toBe(false);
 
       expect(loggerMock.error).toHaveBeenCalledWith(
-        expect.objectContaining({ error: SSRF_LOG_MESSAGES.RESOLUTION_FAILED }),
-        "SSRF validation error",
+        expect.objectContaining({
+          error: SSRF_LOG_MESSAGES.RESOLUTION_FAILED,
+        }),
+        SSRF_LOG_MESSAGES.VALIDATION_ERROR,
       );
     });
 

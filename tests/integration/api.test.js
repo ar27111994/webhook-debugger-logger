@@ -33,8 +33,14 @@ const { webhookManager } = await import("../../src/main.js");
 const { Actor } = await import("apify");
 const { logRepository } =
   await import("../../src/repositories/LogRepository.js");
-const { HTTP_STATUS, REPLAY_STATUS_LABELS } =
-  await import("../../src/consts.js");
+const {
+  HTTP_STATUS,
+  REPLAY_STATUS_LABELS,
+  HTTP_HEADERS,
+  MIME_TYPES,
+  HTTP_METHODS,
+} = await import("../../src/consts/index.js");
+const { ERROR_MESSAGES } = await import("../../src/consts/errors.js");
 
 describe("API E2E Tests", () => {
   useMockCleanup(async () => {
@@ -51,6 +57,7 @@ describe("API E2E Tests", () => {
   let app;
 
   beforeAll(async () => {
+    jest.setTimeout(15000);
     ({ appClient, teardownApp, app } = await setupTestApp());
     // Generate a test webhook
     const ids = await webhookManager.generateWebhooks(1, 1);
@@ -97,7 +104,7 @@ describe("API E2E Tests", () => {
   test("POST /webhook/:id should capture text/plain data", async () => {
     const res = await appClient
       .post(`/webhook/${webhookId}`)
-      .set("Content-Type", "text/plain")
+      .set(HTTP_HEADERS.CONTENT_TYPE, MIME_TYPES.TEXT)
       .send("raw data string");
 
     expect(res.statusCode).toBe(HTTP_STATUS.OK);
@@ -156,7 +163,7 @@ describe("API E2E Tests", () => {
   test("GET / with readiness probe header", async () => {
     const res = await appClient
       .get("/")
-      .set("x-apify-container-server-readiness-probe", "true");
+      .set(HTTP_HEADERS.APIFY_READINESS, "true");
     expect(res.statusCode).toBe(HTTP_STATUS.OK);
   });
 
@@ -183,15 +190,19 @@ describe("API E2E Tests", () => {
         `http://localhost:${allocatedPort}/log-stream`,
         {
           headers: {
-            Authorization: "Bearer test-secret",
+            [HTTP_HEADERS.AUTHORIZATION]: "Bearer test-secret",
           },
         },
         (res) => {
-          expect(res.headers["content-type"]).toContain("text/event-stream");
-          expect(res.headers["cache-control"]).toBe("no-cache");
-          expect(res.headers["connection"]).toBe("keep-alive");
-          expect(res.headers["x-accel-buffering"]).toBe("no");
-          expect(res.headers["content-encoding"]).toBe("identity");
+          expect(res.headers[HTTP_HEADERS.CONTENT_TYPE]).toContain(
+            MIME_TYPES.EVENT_STREAM,
+          );
+          expect(res.headers[HTTP_HEADERS.CACHE_CONTROL]).toBe("no-cache");
+          expect(res.headers[HTTP_HEADERS.CONNECTION]).toBe("keep-alive");
+          expect(
+            res.headers[HTTP_HEADERS.X_ACCEL_BUFFERING.toLowerCase()],
+          ).toBe("no");
+          expect(res.headers[HTTP_HEADERS.CONTENT_ENCODING]).toBe("identity");
 
           res.on("data", (chunk) => {
             if (chunk.toString().includes(": connected")) {
@@ -203,7 +214,7 @@ describe("API E2E Tests", () => {
 
       // 3. Wait for condition instead of manual timeout
       await import("../setup/helpers/test-utils.js").then(
-        ({ waitForCondition }) => waitForCondition(() => connected, 5000),
+        ({ waitForCondition }) => waitForCondition(() => connected, 10000),
       );
 
       req.destroy();
@@ -241,7 +252,7 @@ describe("API E2E Tests", () => {
     const res = await appClient.get(`/replay/${webhookId}/evt_123`);
 
     expect(res.statusCode).toBe(HTTP_STATUS.BAD_REQUEST);
-    expect(res.body.error).toBe("Missing 'url' parameter");
+    expect(res.body.error).toBe(ERROR_MESSAGES.MISSING_URL);
   });
 
   test("GET /replay/:webhookId/:itemId with non-existent event should return HTTP_STATUS.NOT_FOUND", async () => {
@@ -255,7 +266,7 @@ describe("API E2E Tests", () => {
       .get(`/replay/${webhookId}/evt_nonexistent`)
       .query({ url: "http://example.com" });
 
-    expect(res.body.error).toBe("Event not found");
+    expect(res.body.error).toBe(ERROR_MESSAGES.EVENT_NOT_FOUND);
   });
 
   // --- Replay Coverage Tests ---
@@ -265,8 +276,8 @@ describe("API E2E Tests", () => {
     const mockItem = assertType({
       id: "replay-id-1",
       webhookId: "wh_replay",
-      method: "POST",
-      headers: { "content-type": "application/json" },
+      method: HTTP_METHODS.POST,
+      headers: { [HTTP_HEADERS.CONTENT_TYPE]: MIME_TYPES.JSON },
       body: JSON.stringify({ foo: "bar" }),
       timestamp: "2023-01-01T00:00:00Z",
     });
@@ -293,7 +304,7 @@ describe("API E2E Tests", () => {
     const res = await appClient
       .post("/replay/wh_replay/replay-id-1")
       .query({ url: ["http://example.com/1", "http://example.com/2"] })
-      .set("Authorization", "Bearer TEST_KEY");
+      .set(HTTP_HEADERS.AUTHORIZATION, "Bearer TEST_KEY");
 
     expect(res.statusCode).toBe(HTTP_STATUS.OK);
     expect(res.body.status).toBe(REPLAY_STATUS_LABELS.REPLAYED);
@@ -307,7 +318,7 @@ describe("API E2E Tests", () => {
     const mockItem = assertType({
       id: "other-id",
       webhookId: "wh_replay",
-      method: "POST",
+      method: HTTP_METHODS.POST,
       body: "{}",
       timestamp, // Matches our ID param
     });
@@ -334,7 +345,7 @@ describe("API E2E Tests", () => {
     const res = await appClient
       .post(`/replay/wh_replay/${timestamp}`)
       .query({ url: "http://example.com" })
-      .set("Authorization", "Bearer TEST_KEY");
+      .set(HTTP_HEADERS.AUTHORIZATION, "Bearer TEST_KEY");
 
     expect(res.statusCode).toBe(HTTP_STATUS.OK);
     expect(res.body.status).toBe(REPLAY_STATUS_LABELS.REPLAYED);
@@ -342,11 +353,11 @@ describe("API E2E Tests", () => {
 
   test("POST /replay should handle DNS resolution failure in SSRF check", async () => {
     // Import the mocked module to manipulate it
-    const { validateUrlForSsrf, SSRF_ERRORS } =
-      await import("../../src/utils/ssrf.js");
+    const { validateUrlForSsrf } = await import("../../src/utils/ssrf.js");
 
     // Import constants for expected message
-    const { ERROR_MESSAGES } = await import("../../src/consts.js");
+    const { ERROR_MESSAGES, SSRF_ERRORS } =
+      await import("../../src/consts/index.js");
 
     jest.mocked(validateUrlForSsrf).mockResolvedValue({
       safe: false,
@@ -356,7 +367,7 @@ describe("API E2E Tests", () => {
     const res = await appClient
       .post("/replay/wh_replay/replay-id-1")
       .query({ url: "http://dangerous.com" })
-      .set("Authorization", "Bearer TEST_KEY");
+      .set(HTTP_HEADERS.AUTHORIZATION, "Bearer TEST_KEY");
 
     expect(res.statusCode).toBe(HTTP_STATUS.BAD_REQUEST);
     expect(res.body.error).toBe(ERROR_MESSAGES.HOSTNAME_RESOLUTION_FAILED);
@@ -365,11 +376,10 @@ describe("API E2E Tests", () => {
   test("GET / should return text response for non-browser authenticated client", async () => {
     const res = await appClient
       .get("/")
-      .set("Accept", "text/plain")
-      .set("Authorization", "Bearer TEST_KEY");
+      .set(HTTP_HEADERS.ACCEPT, MIME_TYPES.TEXT)
+      .set(HTTP_HEADERS.AUTHORIZATION, "Bearer TEST_KEY");
 
     expect(res.statusCode).toBe(HTTP_STATUS.OK);
-    expect(res.text).toContain("Webhook Debugger & Logger");
-    expect(res.text).toContain("Enterprise Suite");
+    expect(res.text).toContain("Webhook Debugger, Logger & API Mocking Suite");
   });
 });

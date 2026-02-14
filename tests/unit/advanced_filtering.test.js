@@ -1,8 +1,10 @@
 import { jest } from "@jest/globals";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
-import { HTTP_STATUS } from "../../src/consts/http.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
-import { createDatasetMock } from "../setup/helpers/shared-mocks.js";
+import {
+  createDatasetMock,
+  constsMock,
+} from "../setup/helpers/shared-mocks.js";
 import {
   createMockRequest,
   createMockResponse,
@@ -50,7 +52,7 @@ describe("Advanced Filtering", () => {
     const items = assertType([
       {
         id: "A",
-        statusCode: HTTP_STATUS.OK,
+        statusCode: constsMock.HTTP_STATUS.OK,
         processingTime: 50,
         size: 100,
         timestamp: "2023-01-01T10:00:00Z",
@@ -64,7 +66,7 @@ describe("Advanced Filtering", () => {
       },
       {
         id: "B",
-        statusCode: HTTP_STATUS.NOT_FOUND,
+        statusCode: constsMock.HTTP_STATUS.NOT_FOUND,
         processingTime: 150,
         size: 500,
         timestamp: "2023-01-01T10:00:01Z",
@@ -78,7 +80,7 @@ describe("Advanced Filtering", () => {
       },
       {
         id: "C",
-        statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        statusCode: constsMock.HTTP_STATUS.INTERNAL_SERVER_ERROR,
         processingTime: 300,
         size: 1000,
         timestamp: "2023-01-01T10:00:02Z",
@@ -103,9 +105,9 @@ describe("Advanced Filtering", () => {
     });
 
     it("should filter by statusCode greater than (gt)", async () => {
-      // statusCode[gt]=HTTP_STATUS.OK -> should match HTTP_STATUS.NOT_FOUND, HTTP_STATUS.INTERNAL_SERVER_ERROR
+      // statusCode[gt]=constsMock.HTTP_STATUS.OK -> should match constsMock.HTTP_STATUS.NOT_FOUND, constsMock.HTTP_STATUS.INTERNAL_SERVER_ERROR
       req = createMockRequest({
-        query: { statusCode: { gt: HTTP_STATUS.OK.toString() } },
+        query: { statusCode: { gt: constsMock.HTTP_STATUS.OK.toString() } },
       });
       await handler(req, res, next);
       const output = jest.mocked(res.json).mock.calls[0][0];
@@ -115,9 +117,9 @@ describe("Advanced Filtering", () => {
     });
 
     it("should filter by statusCode legacy exact match", async () => {
-      // statusCode=HTTP_STATUS.NOT_FOUND -> should match HTTP_STATUS.NOT_FOUND
+      // statusCode=constsMock.HTTP_STATUS.NOT_FOUND -> should match constsMock.HTTP_STATUS.NOT_FOUND
       req = createMockRequest({
-        query: { statusCode: HTTP_STATUS.NOT_FOUND.toString() },
+        query: { statusCode: constsMock.HTTP_STATUS.NOT_FOUND.toString() },
       });
       await handler(req, res, next);
       const output = jest.mocked(res.json).mock.calls[0][0];
@@ -138,7 +140,7 @@ describe("Advanced Filtering", () => {
     });
 
     it("should filter by size range (gt AND lt)", async () => {
-      // size[gt]=100 & size[lt]=1000 -> B(HTTP_STATUS.INTERNAL_SERVER_ERROR) only
+      // size[gt]=100 & size[lt]=1000 -> B(constsMock.HTTP_STATUS.INTERNAL_SERVER_ERROR) only
       req = createMockRequest({ query: { size: { gt: "100", lt: "1000" } } });
       await handler(req, res, next);
       const output = jest.mocked(res.json).mock.calls[0][0];
@@ -152,7 +154,7 @@ describe("Advanced Filtering", () => {
 
       const commonFields = {
         method: "POST",
-        statusCode: HTTP_STATUS.OK,
+        statusCode: constsMock.HTTP_STATUS.OK,
         processingTime: 10,
         size: 100,
         remoteIp: "127.0.0.1",
@@ -213,9 +215,9 @@ describe("Advanced Filtering", () => {
     });
 
     it("should handle not equal (ne)", async () => {
-      // statusCode[ne]=HTTP_STATUS.OK -> B(HTTP_STATUS.NOT_FOUND), C(HTTP_STATUS.INTERNAL_SERVER_ERROR)
+      // statusCode[ne]=constsMock.HTTP_STATUS.OK -> B(constsMock.HTTP_STATUS.NOT_FOUND), C(constsMock.HTTP_STATUS.INTERNAL_SERVER_ERROR)
       req = createMockRequest({
-        query: { statusCode: { ne: HTTP_STATUS.OK.toString() } },
+        query: { statusCode: { ne: constsMock.HTTP_STATUS.OK.toString() } },
       });
       await handler(req, res, next);
       const output = jest.mocked(res.json).mock.calls[0][0];
@@ -225,9 +227,9 @@ describe("Advanced Filtering", () => {
     });
 
     it("should filter by greater than or equal (gte)", async () => {
-      // statusCode[gte]=HTTP_STATUS.OK -> A(HTTP_STATUS.OK), B(HTTP_STATUS.NOT_FOUND), C(HTTP_STATUS.INTERNAL_SERVER_ERROR)
+      // statusCode[gte]=constsMock.HTTP_STATUS.OK -> A(constsMock.HTTP_STATUS.OK), B(constsMock.HTTP_STATUS.NOT_FOUND), C(constsMock.HTTP_STATUS.INTERNAL_SERVER_ERROR)
       req = createMockRequest({
-        query: { statusCode: { gte: HTTP_STATUS.OK.toString() } },
+        query: { statusCode: { gte: constsMock.HTTP_STATUS.OK.toString() } },
       });
       await handler(req, res, next);
       const output = jest.mocked(res.json).mock.calls[0][0];
@@ -237,10 +239,10 @@ describe("Advanced Filtering", () => {
     });
 
     it("should filter by less than (lt)", async () => {
-      // statusCode[lt]=HTTP_STATUS.OK -> None (A is HTTP_STATUS.OK)
+      // statusCode[lt]=constsMock.HTTP_STATUS.OK -> None (A is constsMock.HTTP_STATUS.OK)
       // Let's verify boundary strictness
       req = createMockRequest({
-        query: { statusCode: { lt: HTTP_STATUS.OK.toString() } },
+        query: { statusCode: { lt: constsMock.HTTP_STATUS.OK.toString() } },
       });
       await handler(req, res, next);
       const output = jest.mocked(res.json).mock.calls[0][0];
@@ -248,9 +250,9 @@ describe("Advanced Filtering", () => {
     });
 
     it("should filter by explicit equal (eq)", async () => {
-      // statusCode[eq]=HTTP_STATUS.OK -> A(HTTP_STATUS.OK)
+      // statusCode[eq]=constsMock.HTTP_STATUS.OK -> A(constsMock.HTTP_STATUS.OK)
       req = createMockRequest({
-        query: { statusCode: { eq: HTTP_STATUS.OK.toString() } },
+        query: { statusCode: { eq: constsMock.HTTP_STATUS.OK.toString() } },
       });
       await handler(req, res, next);
       const output = jest.mocked(res.json).mock.calls[0][0];
@@ -304,7 +306,7 @@ describe("Advanced Filtering", () => {
         timestamp: "2023-01-01",
         webhookId: "w1",
         method: "GET",
-        statusCode: HTTP_STATUS.OK,
+        statusCode: constsMock.HTTP_STATUS.OK,
         processingTime: 10,
         size: 100,
         headers: {},

@@ -6,7 +6,8 @@ import {
   createMockResponse,
   createMockNextFunction,
 } from "../setup/helpers/test-utils.js";
-import { HTTP_STATUS } from "../../src/consts/http.js";
+import { constsMock } from "../setup/helpers/shared-mocks.js";
+import { HTTP_STATUS } from "../../src/consts/index.js";
 
 // Setup mocks
 await setupCommonMocks({ logger: true, auth: true });
@@ -45,7 +46,7 @@ describe("Auth Middleware", () => {
   test("should pass if readiness probe header is present", () => {
     req.headers["x-apify-container-server-readiness-probe"] = "1";
     handler(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
+    expect(res.status).toHaveBeenCalledWith(constsMock.HTTP_STATUS.OK);
     expect(res.send).toHaveBeenCalledWith("OK");
     expect(next).not.toHaveBeenCalled();
   });
@@ -63,7 +64,9 @@ describe("Auth Middleware", () => {
       error: "Invalid Key",
     });
     handler(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.UNAUTHORIZED);
+    expect(res.status).toHaveBeenCalledWith(
+      constsMock.HTTP_STATUS.UNAUTHORIZED,
+    );
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
         error: "Unauthorized",

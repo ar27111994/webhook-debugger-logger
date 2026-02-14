@@ -4,7 +4,6 @@
  */
 import { jest, describe, test, expect } from "@jest/globals";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
-import { HTTP_STATUS } from "../../src/consts.js";
 import {
   assertType,
   createMockRequest,
@@ -21,6 +20,8 @@ await setupCommonMocks({
 // Import dependencies
 import { createLogsHandler } from "../../src/routes/logs.js";
 import { logRepositoryMock } from "../setup/helpers/shared-mocks.js";
+import { HTTP_STATUS } from "../../src/consts/http.js";
+import { SORT_DIRECTIONS } from "../../src/consts/app.js";
 
 describe("Logs Route Listing", () => {
   const mockWebhookManager = assertType({});
@@ -91,7 +92,7 @@ describe("Logs Route Listing", () => {
       });
       const req = createMockRequest({
         query: {
-          sort: "size:asc,timestamp:desc",
+          sort: `size:${SORT_DIRECTIONS.ASC},timestamp:${SORT_DIRECTIONS.DESC}`,
         },
       });
       const res = createMockResponse();
@@ -104,8 +105,8 @@ describe("Logs Route Listing", () => {
       expect(logRepositoryMock.findLogs).toHaveBeenCalledWith(
         expect.objectContaining({
           sort: [
-            { field: "size", dir: "asc" },
-            { field: "timestamp", dir: "desc" },
+            { field: "size", dir: SORT_DIRECTIONS.ASC },
+            { field: "timestamp", dir: SORT_DIRECTIONS.DESC },
           ],
         }),
       );
@@ -125,7 +126,7 @@ describe("Logs Route Listing", () => {
 
       expect(logRepositoryMock.findLogs).toHaveBeenCalledWith(
         expect.objectContaining({
-          sort: [{ field: "timestamp", dir: "desc" }],
+          sort: [{ field: "timestamp", dir: SORT_DIRECTIONS.DESC }],
         }),
       );
     });
@@ -224,7 +225,7 @@ describe("Logs Route Listing", () => {
 
       expect(res.status).toHaveBeenCalledWith(500);
       expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ error: "Logs failed" }),
+        expect.objectContaining({ error: "Logs Failed" }),
       );
     });
   });

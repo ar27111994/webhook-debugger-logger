@@ -28,7 +28,8 @@
  */
 
 /**
- * @typedef {import('./utils/config.js').WebhookConfig} LoggerOptions
+ * @typedef {WebhookConfig} LoggerOptions
+ * @typedef {WebhookConfig} ActorInput
  */
 
 /**
@@ -201,6 +202,81 @@
  * @property {Object|string} [body]
  * @property {Object|string} [responseHeaders]
  * @property {Object|string} [responseBody]
+ */
+
+/**
+ * @typedef {import('express').Request} ExpressRequest
+ */
+
+/**
+ * @typedef {Object} CustomRequestProps
+ * @property {string} [requestId] - Unique ID for the request
+ * @property {string} [rawBody] - Raw request body (for signature verification)
+ * @property {number} [forcedStatus] - Forced HTTP status code (for testing/simulation)
+ * @property {boolean} [isOffloaded] - Whether the payload was offloaded to KVS
+ * @property {boolean} [_body] - Internal Express flag indicating body is processed
+ * @property {SignatureResult} [ingestSignatureResult] - Pre-calculated signature result
+ */
+
+/**
+ * @typedef {ExpressRequest & CustomRequestProps} CustomRequest
+ */
+
+/**
+ * @typedef {Object} OffloadMarker
+ * @property {string} type
+ * @property {string} key
+ * @property {string} url
+ * @property {string} data
+ */
+
+/**
+ * @typedef {import('express').RequestHandler & { updateOptions: function(Object): void }} LoggerMiddlewareFunction
+ */
+
+/**
+ * @typedef {Object} WebhookConfig
+ * @property {string} [authKey]
+ * @property {string[]} [allowedIps]
+ * @property {number} [defaultResponseCode]
+ * @property {string} [defaultResponseBody]
+ * @property {Object.<string, string>} [defaultResponseHeaders]
+ * @property {number} [responseDelayMs]
+ * @property {string} [forwardUrl]
+ * @property {boolean} [forwardHeaders]
+ * @property {string[]} [redactBodyPaths]
+ * @property {Object} [jsonSchema]
+ * @property {string} [customScript]
+ * @property {boolean} [maskSensitiveData]
+ * @property {number} [maxPayloadSize]
+ * @property {number} [rateLimitPerMinute]
+ * @property {boolean} [enableJSONParsing]
+ * @property {number} [urlCount]
+ * @property {number} [retentionHours]
+ * @property {number} [replayMaxRetries]
+ * @property {number} [replayTimeoutMs]
+ * @property {number} [maxForwardRetries]
+ * @property {boolean} [useFixedMemory]
+ * @property {number} [fixedMemoryMbytes]
+ * @property {SignatureConfig} [signatureVerification]
+ * @property {AlertConfig} [alerts]
+ * @property {AlertTrigger[]} [alertOn]
+ * @property {boolean} [testAndExit]
+ */
+
+/**
+ * @typedef {Object} RuntimeOptions
+ * @property {number} urlCount
+ * @property {number} retentionHours
+ * @property {number} rateLimitPerMinute
+ * @property {string} authKey
+ * @property {number} maxPayloadSize
+ * @property {number} responseDelayMs
+ * @property {number} replayMaxRetries
+ * @property {number} replayTimeoutMs
+ * @property {number} maxForwardRetries
+ * @property {boolean} useFixedMemory
+ * @property {number} fixedMemoryMbytes
  */
 
 export {};

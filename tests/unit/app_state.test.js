@@ -1,11 +1,6 @@
 import { jest, describe, test, expect, beforeEach } from "@jest/globals";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
-import {
-  DEFAULT_FIXED_MEMORY_MBYTES,
-  DEFAULT_PAYLOAD_LIMIT,
-  DEFAULT_RATE_LIMIT_PER_MINUTE,
-} from "../../src/consts/app.js";
 import { assertType } from "../setup/helpers/test-utils.js";
 
 // 1. Setup Common Mocks
@@ -22,7 +17,9 @@ import {
   webhookManagerMock,
   loggerMiddlewareMock,
   loggerMock,
+  constsMock,
 } from "../setup/helpers/shared-mocks.js";
+import { LOG_MESSAGES } from "../../src/consts/messages.js";
 
 /**
  * @typedef {import("../../src/utils/app_state.js").AppState} AppState
@@ -88,10 +85,14 @@ describe("AppState", () => {
         loggerMiddlewareMock,
       );
 
-      expect(emptyState.maxPayloadSize).toBe(DEFAULT_PAYLOAD_LIMIT);
-      expect(emptyState.rateLimiter.limit).toBe(DEFAULT_RATE_LIMIT_PER_MINUTE);
+      expect(emptyState.maxPayloadSize).toBe(constsMock.DEFAULT_PAYLOAD_LIMIT);
+      expect(emptyState.rateLimiter.limit).toBe(
+        constsMock.DEFAULT_RATE_LIMIT_PER_MINUTE,
+      );
       expect(emptyState.useFixedMemory).toBe(false);
-      expect(emptyState.fixedMemoryMbytes).toBe(DEFAULT_FIXED_MEMORY_MBYTES);
+      expect(emptyState.fixedMemoryMbytes).toBe(
+        constsMock.DEFAULT_FIXED_MEMORY_MBYTES,
+      );
     });
   });
 
@@ -113,7 +114,7 @@ describe("AppState", () => {
       expect(appState.maxPayloadSize).toBe(2048);
       expect(loggerMock.info).toHaveBeenCalledWith(
         expect.objectContaining({ maxPayloadSize: 2048 }),
-        "Updating max payload size",
+        LOG_MESSAGES.UPDATE_MAX_PAYLOAD,
       );
     });
 
@@ -124,7 +125,7 @@ describe("AppState", () => {
       expect(appState.rateLimiter.limit).toBe(120);
       expect(loggerMock.info).toHaveBeenCalledWith(
         expect.objectContaining({ rateLimit: 120 }),
-        "Updating rate limit",
+        LOG_MESSAGES.UPDATE_RATE_LIMIT,
       );
     });
 
@@ -133,7 +134,9 @@ describe("AppState", () => {
       await appState.applyConfigUpdate({}, update);
 
       expect(appState.authKey).toBe("new-key");
-      expect(loggerMock.info).toHaveBeenCalledWith("Auth key updated");
+      expect(loggerMock.info).toHaveBeenCalledWith(
+        LOG_MESSAGES.AUTH_KEY_UPDATED,
+      );
     });
 
     test("should trigger webhook generation if urlCount increases", async () => {
@@ -153,12 +156,12 @@ describe("AppState", () => {
       expect(webhookManagerMock.generateWebhooks).toHaveBeenCalledWith(2, 24);
       expect(loggerMock.info).toHaveBeenCalledWith(
         expect.objectContaining({ count: 2 }),
-        "Dynamic scale-up: generating additional webhook(s)",
+        LOG_MESSAGES.DYNAMIC_SCALE_UP,
       );
     });
 
     test("should use default retention (24h) if retentionHours is missing", async () => {
-      appState.retentionHours = undefined;
+      appState.retentionHours = assertType(undefined);
       jest.mocked(webhookManagerMock.getAllActive).mockReturnValue([]);
       const update = createUpdateConfig({
         urlCount: 1,
@@ -204,7 +207,7 @@ describe("AppState", () => {
       expect(appState.replayMaxRetries).toBe(5);
       expect(loggerMock.info).toHaveBeenCalledWith(
         expect.objectContaining({ replayMaxRetries: 5 }),
-        "Updating replay max retries",
+        LOG_MESSAGES.UPDATE_REPLAY_RETRIES,
       );
     });
 
@@ -215,7 +218,7 @@ describe("AppState", () => {
       expect(appState.replayTimeoutMs).toBe(5000);
       expect(loggerMock.info).toHaveBeenCalledWith(
         expect.objectContaining({ replayTimeoutMs: 5000 }),
-        "Updating replay timeout",
+        LOG_MESSAGES.UPDATE_REPLAY_TIMEOUT,
       );
     });
 
@@ -227,19 +230,19 @@ describe("AppState", () => {
       expect(appState.useFixedMemory).toBe(true);
       expect(loggerMock.info).toHaveBeenCalledWith(
         expect.objectContaining({ useFixedMemory: true }),
-        "Updating fixed memory toggle",
+        LOG_MESSAGES.UPDATE_FIXED_MEMORY,
       );
     });
 
     test("should update fixedMemoryMbytes", async () => {
-      appState.fixedMemoryMbytes = DEFAULT_FIXED_MEMORY_MBYTES;
+      appState.fixedMemoryMbytes = constsMock.DEFAULT_FIXED_MEMORY_MBYTES;
       const update = createUpdateConfig({ fixedMemoryMbytes: 8192 });
       await appState.applyConfigUpdate({}, update);
 
       expect(appState.fixedMemoryMbytes).toBe(8192);
       expect(loggerMock.info).toHaveBeenCalledWith(
         expect.objectContaining({ fixedMemoryMbytes: 8192 }),
-        "Updating manual memory target",
+        LOG_MESSAGES.UPDATE_MANUAL_MEMORY,
       );
     });
   });

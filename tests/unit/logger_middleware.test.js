@@ -38,8 +38,10 @@ import {
   webhookManagerMock,
   mockScriptRun,
   loggerMock,
+  constsMock,
 } from "../setup/helpers/shared-mocks.js";
-import { HTTP_STATUS } from "../../src/consts.js";
+import { LOG_MESSAGES } from "../../src/consts/messages.js";
+import { ERROR_LABELS } from "../../src/consts/errors.js";
 
 const mockActor = apifyMock;
 
@@ -92,7 +94,9 @@ describe("LoggerMiddleware Coverage Tests", () => {
 
       await middleware.ingestMiddleware(req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.TOO_MANY_REQUESTS);
+      expect(res.status).toHaveBeenCalledWith(
+        constsMock.HTTP_STATUS.TOO_MANY_REQUESTS,
+      );
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({ error: "Too Many Requests" }),
       );
@@ -112,7 +116,11 @@ describe("LoggerMiddleware Coverage Tests", () => {
 
       await middleware.ingestMiddleware(req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.PAYLOAD_TOO_LARGE);
+      await middleware.ingestMiddleware(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(
+        constsMock.HTTP_STATUS.PAYLOAD_TOO_LARGE,
+      );
     });
   });
 
@@ -125,7 +133,7 @@ describe("LoggerMiddleware Coverage Tests", () => {
 
       await middleware.middleware(req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.NOT_FOUND);
+      expect(res.status).toHaveBeenCalledWith(constsMock.HTTP_STATUS.NOT_FOUND);
     });
 
     test("should return 403 if IP is not whitelisted", async () => {
@@ -140,7 +148,7 @@ describe("LoggerMiddleware Coverage Tests", () => {
 
       await middleware.middleware(req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.FORBIDDEN);
+      expect(res.status).toHaveBeenCalledWith(constsMock.HTTP_STATUS.FORBIDDEN);
     });
 
     test("should return 401 if auth fails", async () => {
@@ -154,7 +162,11 @@ describe("LoggerMiddleware Coverage Tests", () => {
 
       await middleware.middleware(req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.UNAUTHORIZED);
+      await middleware.middleware(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(
+        constsMock.HTTP_STATUS.UNAUTHORIZED,
+      );
     });
   });
 
@@ -229,9 +241,15 @@ describe("LoggerMiddleware Coverage Tests", () => {
 
       await middleware.middleware(req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.BAD_REQUEST);
+      await middleware.middleware(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(
+        constsMock.HTTP_STATUS.BAD_REQUEST,
+      );
       expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ error: "JSON Schema Validation Failed" }),
+        expect.objectContaining({
+          error: LOG_MESSAGES.JSON_SCHEMA_VALIDATION_FAILED,
+        }),
       );
     });
   });
@@ -335,9 +353,13 @@ describe("LoggerMiddleware Coverage Tests", () => {
 
       await middleware.middleware(req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.UNAUTHORIZED);
+      await middleware.middleware(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(
+        constsMock.HTTP_STATUS.UNAUTHORIZED,
+      );
       expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ error: "Invalid signature" }),
+        expect.objectContaining({ error: ERROR_LABELS.INVALID_SIGNATURE }),
       );
       expect(mockActor.pushData).toHaveBeenCalled();
     });
@@ -359,7 +381,10 @@ describe("LoggerMiddleware Coverage Tests", () => {
       await middleware.middleware(req, res, next);
 
       const pushCall = mockActor.pushData.mock.calls[0][0];
-      const body = JSON.parse(pushCall.body);
+      const body =
+        typeof pushCall.body === "string"
+          ? JSON.parse(pushCall.body)
+          : pushCall.body;
       expect(body.isReference).toBe(true);
     });
   });

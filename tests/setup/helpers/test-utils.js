@@ -1,5 +1,5 @@
 import { jest } from "@jest/globals";
-import { HTTP_STATUS } from "../../../src/consts/http.js";
+import { HTTP_METHODS, HTTP_STATUS } from "../../../src/consts/http.js";
 
 /**
  * @typedef {import("express").Request} Request
@@ -96,6 +96,7 @@ export const createMockResponse = (overrides = {}) => {
     }),
     json: jest.fn(),
     send: jest.fn(),
+    writeHead: jest.fn(),
     type: jest.fn(
       /** @this {any} */ function () {
         return this;
@@ -197,16 +198,16 @@ export const waitForCondition = async (
  * Gets the last call to axios mock for a specific method.
  *
  * @param {jest.Mocked<AxiosStatic> | any} axios - Axios mock
- * @param {'get'|'post'|'put'|'delete'|null} [method='post'] - HTTP method. Pass null for direct axios() calls.
+ * @param {HTTP_METHODS | null} [method='POST'] - HTTP method. Pass null for direct axios() calls.
  * @returns {any[] | undefined} Call arguments
  *
  * @example
- * const lastPost = getLastAxiosCall(axiosMock, 'post');
+ * const lastPost = getLastAxiosCall(axiosMock, 'POST');
  * const lastDirect = getLastAxiosCall(axiosMock, null);
  */
-export function getLastAxiosCall(axios, method = "post") {
+export function getLastAxiosCall(axios, method = HTTP_METHODS.POST) {
   const mockFn = method
-    ? /** @type {jest.Mock} */ (axios[method])
+    ? /** @type {jest.Mock} */ (axios[method.toLowerCase()])
     : /** @type {jest.Mock} */ (axios);
   const calls = mockFn.mock.calls;
   return calls[calls.length - 1];
@@ -216,14 +217,15 @@ export function getLastAxiosCall(axios, method = "post") {
  * Gets config from last axios call.
  *
  * @param {jest.Mocked<AxiosStatic> | any} axios
- * @param {'get'|'post'|'put'|'delete'|null} [method='post']
+ * @param {HTTP_METHODS | null} [method='POST']
  * @returns {any}
  *
  * @example
  * const config = getLastAxiosConfig(axiosMock);
  */
-export function getLastAxiosConfig(axios, method = "post") {
+export function getLastAxiosConfig(axios, method = HTTP_METHODS.POST) {
   const call = getLastAxiosCall(axios, method);
-  if (!method) return call?.[0]; // axios(config) -> config is 1st arg
-  return call?.[method === "get" ? 1 : 2];
+  if (!method || method.toUpperCase() === HTTP_METHODS.REQUEST)
+    return call?.[0]; // axios(config) or axios.request(config) -> config is 1st arg
+  return call?.[method.toUpperCase() === HTTP_METHODS.GET ? 1 : 2];
 }

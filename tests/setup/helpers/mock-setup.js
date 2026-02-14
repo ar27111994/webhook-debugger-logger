@@ -9,6 +9,9 @@
  */
 
 import { jest } from "@jest/globals";
+import nodeFs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   apifyMock,
   constsMock,
@@ -37,6 +40,8 @@ import {
   fsMock,
   ssrfMock,
   eventsMock,
+  createMockWithGetters,
+  servicesFileMock,
 } from "./shared-mocks.js";
 
 /**
@@ -70,6 +75,7 @@ import {
  * @property {boolean} [events=false] - Register Events util mock
  * @property {boolean} [vm=false] - Register VM module mock
  * @property {boolean} [repositories=false] - Register LogRepository mock
+ * @property {boolean} [services=false] - Register ForwardingService mock
  * @property {boolean} [fs=false] - Register fs/promises and fs mock
  */
 
@@ -122,6 +128,7 @@ export async function setupCommonMocks(options = {}) {
     events = false,
     vm = false,
     repositories = false,
+    services = false,
     fs = false,
   } = options;
 
@@ -254,18 +261,26 @@ export async function setupCommonMocks(options = {}) {
   }
 
   if (consts) {
-    jest.unstable_mockModule("../../../src/consts.js", () => {
-      /** @type {Record<string, any>} */
-      const mockModule = {};
-      // Use getters for every property to support live bindings of primitives in destructured imports
-      for (const key of Object.keys(constsMock)) {
-        Object.defineProperty(mockModule, key, {
-          get: () => constsMock[key],
-          enumerable: true,
-        });
-      }
-      return mockModule;
-    });
+    // Dynamically discover and mock all constant modules
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    const constsDir = path.resolve(__dirname, "../../../src/consts");
+
+    const constModules = nodeFs
+      .readdirSync(constsDir)
+      .filter((file) => file.endsWith(".js"));
+
+    // Mock both the direct modules and the index aggregator
+    const modulesToMock = [
+      "index.js",
+      ...constModules.filter((m) => m !== "index.js"),
+    ];
+
+    for (const moduleName of modulesToMock) {
+      jest.unstable_mockModule(`../../../src/consts/${moduleName}`, () => {
+        return createMockWithGetters({}, constsMock);
+      });
+    }
   }
 
   if (webhookManager) {
@@ -323,5 +338,11 @@ export async function setupCommonMocks(options = {}) {
       "../../../src/repositories/LogRepository.js",
       () => ({ logRepository: logRepositoryMock }),
     );
+  }
+
+  if (services) {
+    jest.unstable_mockModule("../../../src/services/index.js", () => ({
+      ...servicesFileMock,
+    }));
   }
 }

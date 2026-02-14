@@ -62,6 +62,8 @@ export const LOG_CONSTS = Object.freeze({
     "body.apiKey",
     "body.api_key",
   ],
+  IPV6_MASK_SEGMENTS: 2,
+  IPV4_MASK_OCTETS: 3,
 });
 
 /**

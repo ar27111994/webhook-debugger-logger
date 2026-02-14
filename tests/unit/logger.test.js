@@ -7,6 +7,8 @@ import { describe, test, expect, jest } from "@jest/globals";
  * @typedef {import("pino").Bindings} Bindings
  */
 
+import { NODE_ERROR_CODES } from "../../src/consts/errors.js";
+
 // Mock pino to avoid transport issues with pino-pretty
 jest.unstable_mockModule("pino", () => {
   const createMockLogger = (bindings = {}) => ({
@@ -74,10 +76,10 @@ describe("Logger Utility", () => {
 
       /** @type {CommonError} */
       const err = new Error("not found");
-      err.code = "ENOENT";
+      err.code = NODE_ERROR_CODES.ENOENT;
 
       const result = serializeError(err);
-      expect(result.code).toBe("ENOENT");
+      expect(result.code).toBe(NODE_ERROR_CODES.ENOENT);
     });
 
     test("should handle non-Error inputs", async () => {

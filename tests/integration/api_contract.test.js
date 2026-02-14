@@ -26,11 +26,14 @@ const { resetNetworkMocks } = await import("../setup/helpers/shared-mocks.js");
 
 import { createRequire } from "module";
 import {
-  APIFY_HOMEPAGE_URL,
+  APP_CONSTS,
   HTTP_STATUS,
   REPLAY_STATUS_LABELS,
-  ERROR_LABELS,
-} from "../../src/consts.js";
+  HTTP_HEADERS,
+  MIME_TYPES,
+  HTTP_METHODS,
+} from "../../src/consts/index.js";
+const { APIFY_HOMEPAGE_URL } = APP_CONSTS;
 
 const require = createRequire(import.meta.url);
 const { version } = require("../../package.json");
@@ -71,7 +74,7 @@ describe("API Contract & Regression Tests", () => {
     test("should return ALL required metadata fields", async () => {
       const res = await appClient
         .get("/info")
-        .set("Authorization", "Bearer test-secret");
+        .set(HTTP_HEADERS.AUTHORIZATION, "Bearer test-secret");
 
       expect(res.statusCode).toBe(HTTP_STATUS.OK);
       const body = res.body;
@@ -114,11 +117,11 @@ describe("API Contract & Regression Tests", () => {
       const mockItems = [
         {
           id: "log_2",
-          contentType: "application/json",
+          contentType: MIME_TYPES.JSON,
           processingTime: 10,
           remoteIp: "127.0.0.1",
           webhookId,
-          method: "POST",
+          method: HTTP_METHODS.POST,
           statusCode: HTTP_STATUS.CREATED,
           timestamp: new Date().toISOString(),
           headers: {},
@@ -128,9 +131,9 @@ describe("API Contract & Regression Tests", () => {
         },
         {
           webhookId,
-          method: "GET",
+          method: HTTP_METHODS.GET,
           id: "log_1",
-          contentType: "application/json",
+          contentType: MIME_TYPES.JSON,
           processingTime: 10,
           remoteIp: "127.0.0.1",
           statusCode: HTTP_STATUS.OK,
@@ -148,21 +151,17 @@ describe("API Contract & Regression Tests", () => {
         .get("/logs")
         .query({
           webhookId,
-          method: "POST",
+          method: HTTP_METHODS.POST,
           statusCode: "HTTP_STATUS.CREATED",
         })
-        .set("Authorization", "Bearer test-secret");
+        .set(HTTP_HEADERS.AUTHORIZATION, "Bearer test-secret");
 
       expect(res.statusCode).toBe(HTTP_STATUS.OK);
-      expect(res.body.filters.method).toBe("POST");
+      expect(res.body.filters.method).toBe(HTTP_METHODS.POST);
       expect(res.body.items).toHaveLength(1);
-      expect(res.body.items[0].method).toBe("POST");
+      expect(res.body.items[0].method).toBe(HTTP_METHODS.POST);
       expect(res.body.items[0].statusCode).toBe(HTTP_STATUS.CREATED);
     });
-
-    // Obsolete tests: New LogRepository uses SQL LIMIT directly, not in-memory filtering with over-fetching.
-    // test("should fetch with limit * 5 when filters are present", async () => { ... });
-    // test("should fetch with limit * 1 when NO filters are present", async () => { ... });
   });
 
   describe("Global Error Handler Contract", () => {
@@ -171,7 +170,7 @@ describe("API Contract & Regression Tests", () => {
 
       expect(res.statusCode).toBe(HTTP_STATUS.BAD_REQUEST);
       expect(res.body.status).toBe(HTTP_STATUS.BAD_REQUEST);
-      expect(res.body.error).toBe(ERROR_LABELS.BAD_REQUEST);
+      expect(res.body.error).toBe("Bad Request");
     });
   });
 
@@ -184,14 +183,14 @@ describe("API Contract & Regression Tests", () => {
       const mockItem = assertType({
         id: "evt_strip",
         webhookId,
-        method: "POST",
+        method: HTTP_METHODS.POST,
         body: "{}",
         headers: {
-          "content-type": "application/json",
-          "keep-alive": "timeout=5",
-          upgrade: "websocket",
-          host: "local",
-          authorization: "[MASKED]", // Masked ones should also be stripped
+          [HTTP_HEADERS.CONTENT_TYPE]: MIME_TYPES.JSON,
+          [HTTP_HEADERS.KEEP_ALIVE]: "timeout=5",
+          [HTTP_HEADERS.UPGRADE]: "websocket",
+          [HTTP_HEADERS.HOST]: "local",
+          [HTTP_HEADERS.AUTHORIZATION]: "[MASKED]", // Masked ones should also be stripped
         },
         timestamp: new Date().toISOString(),
         query: {},
@@ -203,16 +202,24 @@ describe("API Contract & Regression Tests", () => {
       const res = await appClient
         .get(`/replay/${webhookId}/evt_strip`)
         .query({ url: "http://target.com" })
-        .set("Authorization", "Bearer test-secret");
+        .set(HTTP_HEADERS.AUTHORIZATION, "Bearer test-secret");
 
       expect(res.statusCode).toBe(HTTP_STATUS.OK);
       expect(res.body.status).toBe(REPLAY_STATUS_LABELS.REPLAYED);
       expect(res.body.targetUrl).toBe("http://target.com");
       expect(res.body.targetResponseBody).toBeDefined();
-      expect(res.headers["x-apify-replay-warning"]).toMatch(/Headers stripped/);
-      expect(res.headers["x-apify-replay-warning"]).toContain("keep-alive");
-      expect(res.headers["x-apify-replay-warning"]).toContain("upgrade");
-      expect(res.headers["x-apify-replay-warning"]).toContain("authorization");
+      expect(
+        res.headers[HTTP_HEADERS.APIFY_REPLAY_WARNING.toLowerCase()],
+      ).toMatch(/Headers stripped/);
+      expect(
+        res.headers[HTTP_HEADERS.APIFY_REPLAY_WARNING.toLowerCase()],
+      ).toContain("keep-alive");
+      expect(
+        res.headers[HTTP_HEADERS.APIFY_REPLAY_WARNING.toLowerCase()],
+      ).toContain("upgrade");
+      expect(
+        res.headers[HTTP_HEADERS.APIFY_REPLAY_WARNING.toLowerCase()],
+      ).toContain("authorization");
     });
 
     test("should prioritize exact ID match over timestamp match when both exist", async () => {
@@ -224,26 +231,26 @@ describe("API Contract & Regression Tests", () => {
         {
           id: "evt_duplicate_timestamp",
           webhookId,
-          method: "POST",
+          method: HTTP_METHODS.POST,
           body: '{"msg": "i am the correct one"}',
           timestamp,
           headers: {},
           query: {},
           size: 10,
-          contentType: "application/json",
+          contentType: MIME_TYPES.JSON,
           remoteIp: "127.0.0.1",
           processingTime: 5,
         },
         {
           id: "evt_collided",
           webhookId,
-          method: "POST",
+          method: HTTP_METHODS.POST,
           body: '{"msg": "i am an interloper with same timestamp"}',
           timestamp,
           headers: {},
           query: {},
           size: 10,
-          contentType: "application/json",
+          contentType: MIME_TYPES.JSON,
           remoteIp: "127.0.0.1",
           processingTime: 5,
         },
@@ -258,7 +265,7 @@ describe("API Contract & Regression Tests", () => {
       const res = await appClient
         .get(`/replay/${webhookId}/evt_duplicate_timestamp`)
         .query({ url: "http://target.com" })
-        .set("Authorization", "Bearer test-secret");
+        .set(HTTP_HEADERS.AUTHORIZATION, "Bearer test-secret");
 
       expect(res.statusCode).toBe(HTTP_STATUS.OK);
 
@@ -271,7 +278,7 @@ describe("API Contract & Regression Tests", () => {
       const res2 = await appClient
         .get(`/replay/${webhookId}/evt_collided`)
         .query({ url: "http://target.com" })
-        .set("Authorization", "Bearer test-secret");
+        .set(HTTP_HEADERS.AUTHORIZATION, "Bearer test-secret");
 
       expect(res2.statusCode).toBe(HTTP_STATUS.OK);
 
@@ -287,13 +294,13 @@ describe("API Contract & Regression Tests", () => {
       const mockItem = {
         id: "evt_timeout",
         webhookId,
-        method: "POST",
+        method: HTTP_METHODS.POST,
         body: "{}",
         timestamp: new Date().toISOString(),
-        headers: { "content-type": "application/json" },
+        headers: { [HTTP_HEADERS.CONTENT_TYPE]: MIME_TYPES.JSON },
         query: {},
         size: 2,
-        contentType: "application/json",
+        contentType: MIME_TYPES.JSON,
         remoteIp: "127.0.0.1",
         processingTime: 5,
         statusCode: HTTP_STATUS.OK,
@@ -309,10 +316,10 @@ describe("API Contract & Regression Tests", () => {
       const res = await appClient
         .get(`/replay/${webhookId}/evt_timeout`)
         .query({ url: "http://timeout.com" })
-        .set("Authorization", "Bearer test-secret");
+        .set(HTTP_HEADERS.AUTHORIZATION, "Bearer test-secret");
 
       expect(res.statusCode).toBe(HTTP_STATUS.GATEWAY_TIMEOUT);
-      expect(res.body.error).toBe(ERROR_LABELS.REPLAY_FAILED);
+      expect(res.body.error).toBe("Replay Failed");
       expect(res.body.message).toContain("Target destination timed out");
 
       expect(axiosMock).toHaveBeenCalledTimes(3);

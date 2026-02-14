@@ -8,6 +8,7 @@ import {
   createMockRequest,
   createMockResponse,
 } from "../setup/helpers/test-utils.js";
+import { constsMock } from "../setup/helpers/shared-mocks.js";
 
 // Setup mocks
 await setupCommonMocks({ logger: true, consts: true });
@@ -53,10 +54,10 @@ describe("Stream Route (SSE)", () => {
 
     // Check Headers
     expect(res.setHeader).toHaveBeenCalledWith(
-      "Content-Type",
+      "content-type",
       "text/event-stream",
     );
-    expect(res.setHeader).toHaveBeenCalledWith("Connection", "keep-alive");
+    expect(res.setHeader).toHaveBeenCalledWith("connection", "keep-alive");
     expect(res.flushHeaders).toHaveBeenCalled();
 
     // Check content writing (connection message + padding)
@@ -79,7 +80,9 @@ describe("Stream Route (SSE)", () => {
     const handler = createLogStreamHandler(clients);
     handler(req, res, next);
 
-    expect(res.status).toHaveBeenCalledWith(503);
+    expect(res.status).toHaveBeenCalledWith(
+      constsMock.HTTP_STATUS.SERVICE_UNAVAILABLE,
+    );
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({ error: "Service Unavailable" }),
     );

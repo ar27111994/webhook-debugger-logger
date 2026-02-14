@@ -23,6 +23,7 @@ import { HTTP_HEADERS } from "../consts/http.js";
 /**
  * @typedef {import("../webhook_manager.js").WebhookManager} WebhookManager
  * @typedef {import("../typedefs.js").LogFilters} LogFilters
+ * @typedef {import("../typedefs.js").OffloadMarker} OffloadMarker
  * @typedef {import("../typedefs.js").SortRule} SortRule
  * @typedef {import("express").Request} Request
  * @typedef {import("express").Response} Response
@@ -169,6 +170,8 @@ export const createLogsHandler = (
 
         // Transform items (add detailUrl)
         const baseUrl = `${req.protocol}://${req.get("host")}${req.baseUrl}`;
+        /** @type {Record<string, any>} */
+        const reqQuery = req.query;
 
         // Cursor-based pagination (more efficient for large datasets)
         if (cursor) {
@@ -181,9 +184,7 @@ export const createLogsHandler = (
 
           let nextPageUrl = null;
           if (nextCursor) {
-            const nextParams = new URLSearchParams(
-              /** @type {Record<string, any>} */ (req.query),
-            );
+            const nextParams = new URLSearchParams(reqQuery);
             nextParams.set("cursor", nextCursor);
             nextParams.delete("offset");
             nextPageUrl = `${baseUrl}?${nextParams.toString()}`;
@@ -217,9 +218,7 @@ export const createLogsHandler = (
 
         let nextPageUrl = null;
         if (nextOffset !== null) {
-          const nextParams = new URLSearchParams(
-            /** @type {Record<string, any>} */ (req.query),
-          );
+          const nextParams = new URLSearchParams(reqQuery);
           nextParams.set("offset", String(nextOffset));
           nextPageUrl = `${baseUrl}?${nextParams.toString()}`;
         }
@@ -234,6 +233,7 @@ export const createLogsHandler = (
             nextPageUrl,
           }),
         );
+        // eslint-disable-next-line sonarjs/no-ignored-exceptions
       } catch (_e) {
         res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
           error: ERROR_LABELS.LOGS_FAILED,
@@ -300,7 +300,9 @@ export const createLogDetailHandler = (webhookManager) =>
         }
 
         res.json(validatedItem);
+        // eslint-disable-next-line sonarjs/no-ignored-exceptions
       } catch (_e) {
+        // Ignore errors during streaming (e.g. client disconnect)
         res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
           error: ERROR_MESSAGES.LOG_DETAIL_FAILED,
           message: ERROR_LABELS.INTERNAL_SERVER_ERROR,
@@ -337,7 +339,7 @@ export const createLogPayloadHandler = (webhookManager) =>
           return;
         }
 
-        /** @type {any} */
+        /** @type {any|OffloadMarker} */
         let bodyToSend = item.body;
         let isOffloaded = false;
         let kvsKey = null;
@@ -390,6 +392,7 @@ export const createLogPayloadHandler = (webhookManager) =>
             res.send(bodyToSend);
           }
         }
+        // eslint-disable-next-line sonarjs/no-ignored-exceptions
       } catch (_e) {
         res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
           error: ERROR_MESSAGES.PAYLOAD_FETCH_FAILED,

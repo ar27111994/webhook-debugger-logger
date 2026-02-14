@@ -7,9 +7,13 @@ import {
 } from "../setup/helpers/test-utils.js";
 import {
   HTTP_STATUS,
-  MAX_ITEMS_FOR_BATCH,
   REQUEST_ID_PREFIX,
-} from "../../src/consts.js";
+  HTTP_METHODS,
+  MIME_TYPES,
+  HTTP_HEADERS,
+} from "../../src/consts/index.js";
+
+const MAX_ITEMS_FOR_BATCH = 100;
 
 /**
  * @typedef {import("apify").DatasetDataOptions} DatasetDataOptions
@@ -47,9 +51,9 @@ describe("Log Optimization Tests", () => {
         id: "log_1",
         webhookId: "wh_1",
         timestamp: "2023-01-01T10:00:00Z",
-        method: "POST",
+        method: HTTP_METHODS.POST,
         statusCode: HTTP_STATUS.OK,
-        headers: { "content-type": "application/json" },
+        headers: { [HTTP_HEADERS.CONTENT_TYPE]: MIME_TYPES.JSON },
         body: '{"foo":"bar"}',
         remoteIp: "1.2.3.4",
         userAgent: "GoogleBot",
@@ -57,24 +61,24 @@ describe("Log Optimization Tests", () => {
         processingTime: 10,
         query: {},
         size: 100,
-        contentType: "application/json",
+        contentType: MIME_TYPES.JSON,
         requestId: `${REQUEST_ID_PREFIX}1`,
       },
       {
         id: "log_2",
         webhookId: "wh_1",
         timestamp: "2023-01-01T11:00:00Z", // LOG_2 IS NEWER (11:00 vs 10:00)
-        method: "POST",
+        method: HTTP_METHODS.POST,
         statusCode: HTTP_STATUS.BAD_REQUEST,
-        headers: { "content-type": "application/json" },
+        headers: { [HTTP_HEADERS.CONTENT_TYPE]: MIME_TYPES.JSON },
         body: '{"error":"bad_request"}',
         remoteIp: "5.6.7.8",
         userAgent: "Mozilla/5.0",
-        signatureValid: false,
+        signatureValid: false, // Default logic in repository might be null, usually handled by validation mw
         processingTime: 10,
         query: {},
         size: 100,
-        contentType: "application/json",
+        contentType: MIME_TYPES.JSON,
         requestId: `${REQUEST_ID_PREFIX}2`,
       },
     ]);

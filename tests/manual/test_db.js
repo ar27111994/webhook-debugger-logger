@@ -1,5 +1,5 @@
 import assert from "node:assert";
-import { HTTP_STATUS } from "../../src/consts.js";
+import { HTTP_STATUS } from "../../src/consts/index.js";
 import { executeQuery, closeDb } from "../../src/db/duckdb.js";
 
 async function testDatabase() {

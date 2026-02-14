@@ -10,7 +10,12 @@ import {
   useFakeTimers,
   useMockCleanup,
 } from "../setup/helpers/test-lifecycle.js";
-import { HTTP_STATUS } from "../../src/consts.js";
+import {
+  HTTP_STATUS,
+  HTTP_HEADERS,
+  MIME_TYPES,
+  HTTP_METHODS,
+} from "../../src/consts/index.js";
 
 /**
  * @typedef {import('../../src/webhook_manager.js').WebhookManager} WebhookManager
@@ -41,9 +46,9 @@ const mockItem = {
   id: "log_recent",
   webhookId: "wh_1",
   timestamp: new Date("2023-01-02T12:00:00Z").toISOString(),
-  method: "POST",
+  method: HTTP_METHODS.POST,
   statusCode: HTTP_STATUS.OK,
-  headers: { "content-type": "application/json" },
+  headers: { [HTTP_HEADERS.CONTENT_TYPE]: MIME_TYPES.JSON },
   body: '{"foo":"bar"}',
   remoteIp: "1.2.3.4",
 };
@@ -71,8 +76,14 @@ describe("Replay Optimization Tests", () => {
 
     expect(axiosMock).toHaveBeenCalledTimes(1);
     const config = getLastAxiosConfig(axiosMock, null);
-    expect(config.headers).toHaveProperty("Idempotency-Key", "log_recent");
-    expect(config.headers).toHaveProperty("X-Original-Webhook-Id", "wh_1");
+    expect(config.headers).toHaveProperty(
+      HTTP_HEADERS.IDEMPOTENCY_KEY,
+      "log_recent",
+    );
+    expect(config.headers).toHaveProperty(
+      HTTP_HEADERS.ORIGINAL_WEBHOOK_ID,
+      "wh_1",
+    );
   });
 
   test("should respect configurable max retries", async () => {

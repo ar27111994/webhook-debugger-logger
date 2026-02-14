@@ -46,7 +46,11 @@ export const createInfoHandler =
       system: {
         authActive: !!getAuthKey(),
         retentionHours: getRetentionHours(),
-        maxPayloadLimit: `${((getMaxPayloadSize() || 0) / 1024 / 1024).toFixed(1)}${UNIT_LABELS.MB}`,
+        maxPayloadLimit: `${(
+          (getMaxPayloadSize() || 0) /
+          APP_CONSTS.BYTES_PER_KB /
+          APP_CONSTS.BYTES_PER_KB
+        ).toFixed(1)}${UNIT_LABELS.MB}`,
         webhookCount: activeWebhooks.length,
         activeWebhooks,
       },

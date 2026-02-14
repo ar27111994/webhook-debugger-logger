@@ -17,6 +17,7 @@ await setupCommonMocks({
 const { setupTestApp } = await import("../setup/helpers/app-utils.js");
 const { webhookManager } = await import("../../src/main.js");
 const { ssrfMock } = await import("../setup/helpers/shared-mocks.js");
+import { HTTP_HEADERS } from "../../src/consts/index.js";
 
 /**
  * @typedef {import("../setup/helpers/app-utils.js").AppClient} AppClient
@@ -128,7 +129,9 @@ describe("Replay Flow E2E", () => {
 
     expect(replayed.method).toBe("POST");
     expect(replayed.url).toBe("/callback");
-    expect(replayed.headers["x-apify-replay"]).toBe("true");
+    expect(replayed.headers[HTTP_HEADERS.APIFY_REPLAY.toLowerCase()]).toBe(
+      "true",
+    );
 
     const body = JSON.parse(replayed.body);
     expect(body).toEqual({ foo: "bar" });

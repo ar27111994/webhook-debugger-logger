@@ -21,7 +21,12 @@ import {
   setupBasicApifyMock,
   apifyMock,
 } from "../setup/helpers/shared-mocks.js";
-import { MAX_SAFE_RESPONSE_DELAY_MS } from "../../src/consts.js";
+import {
+  APP_CONSTS,
+  HTTP_HEADERS,
+  MIME_TYPES,
+} from "../../src/consts/index.js";
+const { MAX_SAFE_RESPONSE_DELAY_MS } = APP_CONSTS;
 
 /**
  * @typedef {import("../setup/helpers/app-utils.js").App} App
@@ -62,7 +67,7 @@ describe("Edge Case Tests", () => {
   test("Should handle empty request body gracefully", async () => {
     const res = await appClient
       .post(`/webhook/${webhookId}`)
-      .set("Content-Type", "text/plain")
+      .set(HTTP_HEADERS.CONTENT_TYPE, MIME_TYPES.TEXT)
       .send("");
 
     expect(res.statusCode).toBe(200);
@@ -73,7 +78,7 @@ describe("Edge Case Tests", () => {
     const largeBody = "a".repeat(2048); // 2KB, limit is 1KB
     const res = await appClient
       .post(`/webhook/${webhookId}`)
-      .set("Content-Type", "text/plain")
+      .set(HTTP_HEADERS.CONTENT_TYPE, MIME_TYPES.TEXT)
       .send(largeBody);
 
     expect(res.statusCode).toBe(413);
@@ -88,7 +93,7 @@ describe("Edge Case Tests", () => {
     // Note: main.js has logic to fallback to string if JSON parsing fails
     const res = await appClient
       .post(`/webhook/${webhookId}`)
-      .set("Content-Type", "application/json")
+      .set(HTTP_HEADERS.CONTENT_TYPE, MIME_TYPES.JSON)
       .send("{ invalid: json }");
 
     expect(res.statusCode).toBe(200);

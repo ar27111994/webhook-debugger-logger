@@ -114,7 +114,7 @@ export const sendUnauthorizedResponse = (req, res, options = {}) => {
 
   res.status(HTTP_STATUS.UNAUTHORIZED).json({
     status: HTTP_STATUS.UNAUTHORIZED,
-    error,
+    error: ERROR_LABELS.UNAUTHORIZED,
     id,
     docs,
     message: error,

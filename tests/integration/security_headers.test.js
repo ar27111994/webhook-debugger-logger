@@ -4,6 +4,7 @@ await setupCommonMocks({ axios: true, apify: true });
 
 const { setupTestApp } = await import("../setup/helpers/app-utils.js");
 const { Actor } = await import("apify");
+const { HTTP_HEADERS } = await import("../../src/consts/index.js");
 
 /**
  * @typedef {import("../setup/helpers/app-utils.js").AppClient} AppClient
@@ -32,17 +33,19 @@ describe("Security Headers", () => {
   describe("Request ID", () => {
     test("should add X-Request-ID header to responses", async () => {
       const res = await appClient.get("/info");
-      expect(res.headers["x-request-id"]).toBeDefined();
-      expect(typeof res.headers["x-request-id"]).toBe("string");
-      expect(res.headers["x-request-id"].startsWith("req_")).toBe(true);
+      const requestIdLower = HTTP_HEADERS.X_REQUEST_ID.toLowerCase();
+      expect(res.headers[requestIdLower]).toBeDefined();
+      expect(typeof res.headers[requestIdLower]).toBe("string");
+      expect(res.headers[requestIdLower].startsWith("req_")).toBe(true);
     });
 
     test("should respect incoming X-Request-ID header", async () => {
       const customRequestId = "custom-trace-id-12345";
       const res = await appClient
         .get("/info")
-        .set("X-Request-ID", customRequestId);
-      expect(res.headers["x-request-id"]).toBe(customRequestId);
+        .set(HTTP_HEADERS.X_REQUEST_ID, customRequestId);
+      const requestIdLower = HTTP_HEADERS.X_REQUEST_ID.toLowerCase();
+      expect(res.headers[requestIdLower]).toBe(customRequestId);
     });
   });
 
@@ -60,24 +63,30 @@ describe("Security Headers", () => {
 
     test("should add X-Content-Type-Options to dashboard", async () => {
       const res = await appClient.get("/");
-      expect(res.headers["x-content-type-options"]).toBe("nosniff");
+      expect(
+        res.headers[HTTP_HEADERS.X_CONTENT_TYPE_OPTIONS.toLowerCase()],
+      ).toBe("nosniff");
     });
 
     test("should add X-Frame-Options to dashboard", async () => {
       const res = await appClient.get("/");
-      expect(res.headers["x-frame-options"]).toBe("DENY");
+      expect(res.headers[HTTP_HEADERS.X_FRAME_OPTIONS.toLowerCase()]).toBe(
+        "DENY",
+      );
     });
 
     test("should add Referrer-Policy to dashboard", async () => {
       const res = await appClient.get("/");
-      expect(res.headers["referrer-policy"]).toBe(
+      expect(res.headers[HTTP_HEADERS.REFERRER_POLICY.toLowerCase()]).toBe(
         "strict-origin-when-cross-origin",
       );
     });
 
     test("should NOT add CSP headers to API endpoints", async () => {
       const res = await appClient.get("/info");
-      expect(res.headers["content-security-policy"]).toBeUndefined();
+      expect(
+        res.headers[HTTP_HEADERS.CONTENT_SECURITY_POLICY.toLowerCase()],
+      ).toBeUndefined();
     });
   });
 
@@ -98,7 +107,7 @@ describe("Security Headers", () => {
 
       await appClient
         .post(`/webhook/${webhookId}`)
-        .set("X-Request-ID", customRequestId)
+        .set(HTTP_HEADERS.X_REQUEST_ID, customRequestId)
         .send(testPayload);
 
       const logsRes = await appClient.get(

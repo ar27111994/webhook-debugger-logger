@@ -70,6 +70,8 @@ const packageJson = require(FILE_NAMES.PACKAGE_JSON);
  * @typedef {import("http").Server} Server
  * @typedef {import("http").ServerResponse} ServerResponse
  * @typedef {import("./typedefs.js").CommonError} CommonError
+ * @typedef {import("./typedefs.js").CustomRequest} CustomRequest
+ * @typedef {import("./typedefs.js").ActorInput} ActorInput
  * @typedef {ReturnType<typeof setInterval> | undefined} Interval
  */
 
@@ -181,7 +183,7 @@ const handleShutdownSignal = (signal) => {
 
 /**
  * Main initialization logic.
- * @param {Object} testOptions - Options for testing purposes.
+ * @param {Object.<string, boolean>} testOptions - Options for testing purposes.
  * @returns {Promise<Application>}
  */
 // Exported for tests to allow dependency injection
@@ -196,7 +198,9 @@ export async function initialize(testOptions = {}) {
   // Ensure local INPUT.json exists for better DX (when running locally/npx)
   // Only create artifact if NOT running on the Apify Platform (Stateless vs Stateful)
   // We want to preserve local artifacts for hot-reload dev workflows.
-  const rawInput = /** @type {any} */ ((await Actor.getInput()) || {});
+  /** @type {ActorInput} */
+  const rawInput = (await Actor.getInput()) || {};
+  /** @type {ActorInput} */
   let input = { ...rawInput, ...testOptions };
 
   if (!Actor.isAtHome()) {
@@ -351,6 +355,7 @@ export async function initialize(testOptions = {}) {
     ),
   );
 
+  // eslint-disable-next-line sonarjs/cors
   app.use(cors());
 
   // Dynamic Body Parser managed by AppState
@@ -408,7 +413,7 @@ export async function initialize(testOptions = {}) {
   app.all(
     APP_ROUTES.WEBHOOK,
     (
-      /** @type {Request} */ req,
+      /** @type {CustomRequest} */ req,
       /** @type {Response} */ _res,
       /** @type {NextFunction} */ next,
     ) => {
@@ -417,7 +422,7 @@ export async function initialize(testOptions = {}) {
         10,
       );
       if (validateStatusCode(statusOverride)) {
-        /** @type {any} */ (req).forcedStatus = statusOverride;
+        req.forcedStatus = statusOverride;
       }
       next();
     },

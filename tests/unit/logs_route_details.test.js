@@ -7,14 +7,20 @@ import {
   createMockNextFunction,
   assertType,
 } from "../setup/helpers/test-utils.js";
-import { HTTP_STATUS } from "../../src/consts/http.js";
 import {
   apifyMock,
   webhookManagerMock,
   logRepositoryMock,
   createKeyValueStoreMock,
   storageHelperMock,
+  constsMock,
 } from "../setup/helpers/shared-mocks.js";
+import {
+  HTTP_STATUS,
+  HTTP_HEADERS,
+  MIME_TYPES,
+} from "../../src/consts/http.js";
+import { ERROR_MESSAGES } from "../../src/consts/errors.js";
 
 // 1. Setup Common Mocks
 await setupCommonMocks({
@@ -63,7 +69,7 @@ describe("Logs Route Details & Payload", () => {
 
       await handler()(req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.NOT_FOUND);
+      expect(res.status).toHaveBeenCalledWith(constsMock.HTTP_STATUS.NOT_FOUND);
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({ error: "Log entry not found" }),
       );
@@ -84,7 +90,7 @@ describe("Logs Route Details & Payload", () => {
       expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.NOT_FOUND);
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
-          error: "Log entry belongs to invalid webhook",
+          error: ERROR_MESSAGES.INVALID_LOG_ACCESS,
         }),
       );
     });
@@ -156,7 +162,7 @@ describe("Logs Route Details & Payload", () => {
 
       expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.NOT_FOUND);
       expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ error: "Log entry not found" }),
+        expect.objectContaining({ error: ERROR_MESSAGES.LOG_NOT_FOUND }),
       );
     });
   });
@@ -179,8 +185,8 @@ describe("Logs Route Details & Payload", () => {
       await handler()(req, res, next);
 
       expect(res.setHeader).toHaveBeenCalledWith(
-        "Content-Type",
-        "application/json",
+        HTTP_HEADERS.CONTENT_TYPE,
+        MIME_TYPES.JSON,
       );
       expect(res.json).toHaveBeenCalledWith({ foo: "bar" });
     });
@@ -208,7 +214,10 @@ describe("Logs Route Details & Payload", () => {
       await handler()(req, res, next);
 
       expect(mockStore.getValue).toHaveBeenCalledWith("kvs_key");
-      expect(res.setHeader).toHaveBeenCalledWith("Content-Type", "text/plain");
+      expect(res.setHeader).toHaveBeenCalledWith(
+        HTTP_HEADERS.CONTENT_TYPE,
+        MIME_TYPES.TEXT,
+      );
       expect(res.send).toHaveBeenCalledWith("Hydrated Content");
     });
 
@@ -235,7 +244,9 @@ describe("Logs Route Details & Payload", () => {
 
       expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.NOT_FOUND);
       expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ error: "Payload not found in KVS" }),
+        expect.objectContaining({
+          error: ERROR_MESSAGES.PAYLOAD_NOT_FOUND_KVS,
+        }),
       );
     });
 
@@ -249,7 +260,7 @@ describe("Logs Route Details & Payload", () => {
         HTTP_STATUS.INTERNAL_SERVER_ERROR,
       );
       expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ error: "Failed to fetch log payload" }),
+        expect.objectContaining({ error: ERROR_MESSAGES.PAYLOAD_FETCH_FAILED }),
       );
     });
   });

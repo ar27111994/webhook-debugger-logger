@@ -3,7 +3,12 @@ import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import { createMiddlewareTestContext } from "../setup/helpers/middleware-test-utils.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 import { assertType } from "../setup/helpers/test-utils.js";
-import { HTTP_STATUS } from "../../src/consts.js";
+import {
+  HTTP_STATUS,
+  MIME_TYPES,
+  HTTP_HEADERS,
+  HTTP_METHODS,
+} from "../../src/consts/index.js";
 
 /**
  * @typedef {import('../../src/typedefs.js').WebhookEvent} WebhookEvent
@@ -65,7 +70,7 @@ describe("Logger Middleware", () => {
       request: {
         params: { id: "wh_123" },
         query: { key: "secret" },
-        headers: { "content-length": "2048" },
+        headers: { [HTTP_HEADERS.CONTENT_LENGTH]: "2048" },
       },
     });
 
@@ -82,9 +87,9 @@ describe("Logger Middleware", () => {
       },
       request: {
         params: { id: "wh_123" },
-        method: "POST",
+        method: HTTP_METHODS.POST,
         query: { key: "secret" },
-        headers: { "content-type": "application/json" },
+        headers: { [HTTP_HEADERS.CONTENT_TYPE]: MIME_TYPES.JSON },
         body: { bar: 1 },
       },
     });
@@ -120,7 +125,7 @@ describe("Logger Middleware", () => {
       request: {
         params: { id: "wh_123" },
         query: { key: "secret" },
-        headers: { "content-type": "application/json" },
+        headers: { [HTTP_HEADERS.CONTENT_TYPE]: MIME_TYPES.JSON },
         body: bufferContent,
       },
     });
@@ -144,7 +149,7 @@ describe("Logger Middleware", () => {
       request: {
         params: { id: "wh_123" },
         query: { key: "secret" },
-        headers: { "content-type": "application/json" },
+        headers: { [HTTP_HEADERS.CONTENT_TYPE]: MIME_TYPES.JSON },
         body: bodyObj,
       },
     });

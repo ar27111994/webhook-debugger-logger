@@ -7,7 +7,13 @@ import {
   afterAll,
   afterEach,
 } from "@jest/globals";
-import { HTTP_STATUS, OFFLOAD_MARKER_SYNC } from "../../src/consts.js";
+import {
+  HTTP_STATUS,
+  STORAGE_CONSTS,
+  HTTP_METHODS,
+  MIME_TYPES,
+} from "../../src/consts/index.js";
+const { OFFLOAD_MARKER_SYNC } = STORAGE_CONSTS;
 
 // Setup mocks before imports
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
@@ -75,7 +81,7 @@ describe("GET /logs/:logId/payload", () => {
         webhookId: "invalid-webhook",
         body: "some body",
         timestamp: new Date().toISOString(),
-        method: "POST",
+        method: HTTP_METHODS.POST,
         headers: {},
         query: {},
         statusCode: HTTP_STATUS.OK,
@@ -94,9 +100,9 @@ describe("GET /logs/:logId/payload", () => {
         id: "123",
         webhookId: "valid-webhook",
         body: { foo: "bar" },
-        contentType: "application/json",
+        contentType: MIME_TYPES.JSON,
         timestamp: new Date().toISOString(),
-        method: "POST",
+        method: HTTP_METHODS.POST,
         headers: {},
         query: {},
         statusCode: HTTP_STATUS.OK,
@@ -124,9 +130,9 @@ describe("GET /logs/:logId/payload", () => {
           key: kvsKey,
           kvsUrl: "http://example.com",
         },
-        contentType: "application/json",
+        contentType: MIME_TYPES.JSON,
         timestamp: new Date().toISOString(),
-        method: "POST",
+        method: HTTP_METHODS.POST,
         headers: {},
         query: {},
         statusCode: HTTP_STATUS.OK,

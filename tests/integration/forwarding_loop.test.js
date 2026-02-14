@@ -6,7 +6,7 @@ import {
   RECURSION_HEADER_NAME,
   RECURSION_HEADER_VALUE,
   HTTP_STATUS,
-} from "../../src/consts.js";
+} from "../../src/consts/index.js";
 
 // Setup mocks first
 await setupCommonMocks({ apify: true, logger: true });

@@ -7,12 +7,12 @@ import {
   afterEach,
 } from "@jest/globals";
 import path from "node:path";
-import { HTTP_STATUS, MIME_TYPES } from "../../src/consts/http.js";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import {
   apifyMock,
   ssrfMock,
   webhookManagerMock,
+  constsMock,
 } from "../setup/helpers/shared-mocks.js";
 import {
   createMockRequest,
@@ -27,6 +27,7 @@ import {
  * @typedef {import("@duckdb/node-api").DuckDBInstance} DuckDBInstance
  * @typedef {typeof import("../../src/db/duckdb.js")} DuckDB
  * @typedef {import("../../src/typedefs.js").CommonError} CommonError
+ * @typedef {import("../../src/services/index.js").ForwardingService} ForwardingService
  */
 
 // 1. Mock dependencies that aren't in shared-mocks or need specific low-level behavior
@@ -108,9 +109,15 @@ describe("Audit Unit Coverage", () => {
     });
 
     test("should include forwarding fields in allowed overrides", async () => {
-      const mockForwardingService = {
+      /** @type {ForwardingService} */
+      const mockForwardingService = assertType({
         forwardWebhook: assertType(jest.fn()).mockResolvedValue(undefined),
-      };
+        circuitBreaker: {},
+        axiosInstance: {},
+        sendSafeRequest: jest.fn(),
+        isIpBlocked: jest.fn(),
+        isLocalUrl: jest.fn(),
+      });
 
       const middleware = new LoggerMiddleware(
         webhookManagerMock,
@@ -138,7 +145,7 @@ describe("Audit Unit Coverage", () => {
       const req = createMockRequest({
         params: { id: "wh_1" },
         method: "POST",
-        headers: { "content-type": MIME_TYPES.JSON },
+        headers: { "content-type": constsMock.MIME_TYPES.JSON },
         body: { test: true },
       });
       const res = createMockResponse();
@@ -148,7 +155,7 @@ describe("Audit Unit Coverage", () => {
       await middleware.middleware(req, res, next);
 
       // Background tasks are async, wait for them to finish (they are raced with 100ms timeout in test)
-      await sleep(HTTP_STATUS.OK);
+      await sleep(constsMock.HTTP_STATUS.OK);
 
       expect(mockForwardingService.forwardWebhook).toHaveBeenCalledWith(
         expect.anything(),
@@ -254,7 +261,9 @@ describe("Audit Unit Coverage", () => {
       });
 
       // Verify HTTP_STATUS.PAYLOAD_TOO_LARGE Payload Too Large
-      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.PAYLOAD_TOO_LARGE);
+      expect(res.status).toHaveBeenCalledWith(
+        constsMock.HTTP_STATUS.PAYLOAD_TOO_LARGE,
+      );
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
           error: expect.stringMatching(/too large/i),

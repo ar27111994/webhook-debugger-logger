@@ -10,6 +10,7 @@ import {
   SECURITY_HEADERS_VALUES,
 } from "../consts/security.js";
 import { HTTP_HEADERS, MIME_TYPES } from "../consts/http.js";
+import { validateUUID } from "../utils/common.js";
 
 /**
  * @typedef {import("express").Request} Request
@@ -30,7 +31,12 @@ export const createRequestIdMiddleware =
   () =>
   /** @param {Request} req @param {Response} res @param {NextFunction} next */
   (req, res, next) => {
-    const requestId = `${REQUEST_ID_PREFIX}${nanoid()}`;
+    const idHeader = req.headers[HTTP_HEADERS.X_REQUEST_ID.toLowerCase()];
+    const existingId = Array.isArray(idHeader) ? idHeader[0] : String(idHeader);
+    const validId =
+      existingId.startsWith(REQUEST_ID_PREFIX) &&
+      validateUUID(existingId.slice(REQUEST_ID_PREFIX.length));
+    const requestId = validId ? existingId : `${REQUEST_ID_PREFIX}${nanoid()}`;
 
     // Safely attach without type casting
     Object.defineProperty(req, "requestId", {

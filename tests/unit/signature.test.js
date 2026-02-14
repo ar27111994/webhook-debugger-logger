@@ -4,8 +4,8 @@ import {
   verifySignature,
   createStreamVerifier,
   finalizeStreamVerification,
-  SUPPORTED_PROVIDERS,
 } from "../../src/utils/signature.js";
+import { SUPPORTED_PROVIDERS } from "../../src/consts/security.js";
 import {
   createStripeSignature,
   createShopifySignature,
@@ -13,6 +13,7 @@ import {
   createSlackSignature,
 } from "../setup/helpers/signature-utils.js";
 import { assertType } from "../setup/helpers/test-utils.js";
+import { HTTP_HEADERS } from "../../src/consts/http.js";
 
 describe("Signature Verification", () => {
   describe("Stripe", () => {
@@ -25,7 +26,7 @@ describe("Signature Verification", () => {
     test("should verify valid Stripe signature", () => {
       const timestamp = Math.floor(Date.now() / 1000);
       const sigHeader = createStripeSignature(timestamp, payload, secret);
-      const headers = { "stripe-signature": sigHeader };
+      const headers = { [HTTP_HEADERS.STRIPE_SIGNATURE]: sigHeader };
 
       const result = verifySignature(
         { provider: "stripe", secret },
@@ -43,7 +44,7 @@ describe("Signature Verification", () => {
         payload,
         "wrong_secret",
       );
-      const headers = { "stripe-signature": sigHeader };
+      const headers = { [HTTP_HEADERS.STRIPE_SIGNATURE]: sigHeader };
 
       const result = verifySignature(
         { provider: "stripe", secret },
@@ -58,7 +59,7 @@ describe("Signature Verification", () => {
       const result = verifySignature(
         { provider: "stripe", secret },
         payload,
-        { "stripe-signature": "v1=abc" }, // Missing 't'
+        { [HTTP_HEADERS.STRIPE_SIGNATURE]: "v1=abc" }, // Missing 't'
       );
       expect(result.valid).toBe(false);
       expect(result.error).toContain("format");
@@ -67,7 +68,7 @@ describe("Signature Verification", () => {
     test("should reject expired Stripe timestamp", () => {
       const timestamp = Math.floor(Date.now() / 1000) - 400; // 400 seconds ago
       const sigHeader = createStripeSignature(timestamp, payload, secret);
-      const headers = { "stripe-signature": sigHeader };
+      const headers = { [HTTP_HEADERS.STRIPE_SIGNATURE]: sigHeader };
 
       const result = verifySignature(
         { provider: "stripe", secret, tolerance: 300 },
@@ -95,7 +96,7 @@ describe("Signature Verification", () => {
 
     test("should verify valid Shopify signature", () => {
       const signature = createShopifySignature(payload, secret);
-      const headers = { "x-shopify-hmac-sha256": signature };
+      const headers = { [HTTP_HEADERS.SHOPIFY_HMAC_SHA256]: signature };
 
       const result = verifySignature(
         { provider: "shopify", secret },
@@ -109,8 +110,8 @@ describe("Signature Verification", () => {
     test("should verify Shopify with timestamp validation", () => {
       const signature = createShopifySignature(payload, secret);
       const headers = {
-        "x-shopify-hmac-sha256": signature,
-        "x-shopify-triggered-at": new Date().toISOString(),
+        [HTTP_HEADERS.SHOPIFY_HMAC_SHA256]: signature,
+        [HTTP_HEADERS.SHOPIFY_TRIGGERED_AT]: new Date().toISOString(),
       };
 
       const result = verifySignature(
@@ -124,8 +125,10 @@ describe("Signature Verification", () => {
     test("should reject Shopify with expired timestamp", () => {
       const signature = createShopifySignature(payload, secret);
       const headers = {
-        "x-shopify-hmac-sha256": signature,
-        "x-shopify-triggered-at": new Date(Date.now() - 100000).toISOString(),
+        [HTTP_HEADERS.SHOPIFY_HMAC_SHA256]: signature,
+        [HTTP_HEADERS.SHOPIFY_TRIGGERED_AT]: new Date(
+          Date.now() - 100000,
+        ).toISOString(),
       };
 
       const result = verifySignature(
@@ -154,7 +157,7 @@ describe("Signature Verification", () => {
 
     test("should verify valid GitHub signature", () => {
       const signature = createGitHubSignature(payload, secret);
-      const headers = { "x-hub-signature-256": signature };
+      const headers = { [HTTP_HEADERS.HUB_SIGNATURE_256]: signature };
 
       const result = verifySignature(
         { provider: "github", secret },
@@ -167,7 +170,7 @@ describe("Signature Verification", () => {
 
     test("should reject GitHub signature with invalid format", () => {
       const result = verifySignature({ provider: "github", secret }, payload, {
-        "x-hub-signature-256": "plain-text-sig",
+        [HTTP_HEADERS.HUB_SIGNATURE_256]: "plain-text-sig",
       });
       expect(result.valid).toBe(false);
       expect(result.error).toContain("format");
@@ -192,8 +195,8 @@ describe("Signature Verification", () => {
       const timestamp = Math.floor(Date.now() / 1000);
       const signature = createSlackSignature(timestamp, payload, secret);
       const headers = {
-        "x-slack-request-timestamp": String(timestamp),
-        "x-slack-signature": signature,
+        [HTTP_HEADERS.SLACK_TIMESTAMP]: String(timestamp),
+        [HTTP_HEADERS.SLACK_SIGNATURE]: signature,
       };
 
       const result = verifySignature(
@@ -207,8 +210,8 @@ describe("Signature Verification", () => {
 
     test("should reject Slack signature with invalid format", () => {
       const result = verifySignature({ provider: "slack", secret }, payload, {
-        "x-slack-request-timestamp": String(Math.floor(Date.now() / 1000)),
-        "x-slack-signature": "v1=abc",
+        [HTTP_HEADERS.SLACK_TIMESTAMP]: String(Math.floor(Date.now() / 1000)),
+        [HTTP_HEADERS.SLACK_SIGNATURE]: "v1=abc",
       });
       expect(result.valid).toBe(false);
       expect(result.error).toContain("format");
@@ -234,7 +237,9 @@ describe("Signature Verification", () => {
         .createHmac("sha256", secret)
         .update(payload)
         .digest("hex");
-      const headers = { "x-custom-signature": signature };
+      const headers = {
+        [HTTP_HEADERS.CUSTOM_SIGNATURE.toLowerCase()]: signature,
+      };
 
       const result = verifySignature(
         {
@@ -315,7 +320,9 @@ describe("Signature Verification", () => {
         .createHmac("sha256", secret)
         .update(payload)
         .digest("hex");
-      const headers = { "x-custom-signature": signature };
+      const headers = {
+        [HTTP_HEADERS.CUSTOM_SIGNATURE.toLowerCase()]: signature,
+      };
       const config = {
         provider: assertType("custom"),
         secret,
@@ -359,8 +366,8 @@ describe("Signature Verification", () => {
           tolerance: 60,
         },
         {
-          "x-slack-request-timestamp": ts,
-          "x-slack-signature": "v0=abc",
+          [HTTP_HEADERS.SLACK_TIMESTAMP]: ts,
+          [HTTP_HEADERS.SLACK_SIGNATURE]: "v0=abc",
         },
       );
       expect(verifier.hmac).toBeNull();
@@ -372,8 +379,8 @@ describe("Signature Verification", () => {
       const config = { provider: assertType("slack"), secret: "slack_secret" };
       const sig = createSlackSignature(ts, payload.toString(), config.secret);
       const headers = {
-        "x-slack-request-timestamp": ts,
-        "x-slack-signature": sig,
+        [HTTP_HEADERS.SLACK_TIMESTAMP]: ts,
+        [HTTP_HEADERS.SLACK_SIGNATURE]: sig,
       };
 
       const verifier = createStreamVerifier(config, headers);
@@ -401,8 +408,8 @@ describe("Signature Verification", () => {
         { provider: "shopify", secret: "test" },
         "{}",
         {
-          "x-shopify-hmac-sha256": "abc",
-          "x-shopify-triggered-at": "not-a-date",
+          [HTTP_HEADERS.SHOPIFY_HMAC_SHA256]: "abc",
+          [HTTP_HEADERS.SHOPIFY_TRIGGERED_AT]: "not-a-date",
         },
       );
       // It should fall through to false in validateTimestamp
@@ -446,7 +453,7 @@ describe("Signature Verification", () => {
         {},
       );
       expect(result.valid).toBe(false);
-      expect(result.error).toContain("No signing secret");
+      expect(result.error).toContain("No secret");
     });
 
     test("createStreamVerifier should catch crypto errors", () => {

@@ -17,6 +17,7 @@ export const DASHBOARD_PLACEHOLDERS = Object.freeze({
   VERSION: "{{VERSION}}",
   ACTIVE_COUNT: "{{ACTIVE_COUNT}}",
   SIGNATURE_BADGE: "{{SIGNATURE_BADGE}}",
+  BRAND_HEADER: "{{BRAND_HEADER}}",
 });
 
 export const DASHBOARD_CONSTS = Object.freeze({
@@ -81,7 +82,7 @@ export const UNAUTHORIZED_HTML_TEMPLATE = `
     <div class="container">
         <h1>401 Unauthorized</h1>
         <p>{{ERROR_MESSAGE}}</p>
-        <p>Please check your API key and try again.</p>
+        <p>Please check your API key and try again. (Strict Mode)</p>
         <a href="{{APIFY_HOMEPAGE_URL}}" class="btn">Learn More</a>
     </div>
 </body>

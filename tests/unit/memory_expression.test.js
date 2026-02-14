@@ -2,7 +2,7 @@ import { describe, test, expect } from "@jest/globals";
 import { calculateRunDynamicMemory } from "@apify/actor-memory-expression";
 import { createRequire } from "module";
 import { assertType } from "../setup/helpers/test-utils.js";
-import { DEFAULT_FIXED_MEMORY_MBYTES } from "../../src/consts.js";
+import { constsMock } from "../setup/helpers/shared-mocks.js";
 
 const require = createRequire(import.meta.url);
 const actorJson = require("../../.actor/actor.json");
@@ -54,7 +54,7 @@ describe("Actor Memory Expression", () => {
       }),
     );
     // Should be default fixed: 2048
-    expect(memory).toBe(DEFAULT_FIXED_MEMORY_MBYTES);
+    expect(memory).toBe(constsMock.DEFAULT_FIXED_MEMORY_MBYTES);
   });
 
   test("should respect manual fixedMemoryMbytes override", async () => {

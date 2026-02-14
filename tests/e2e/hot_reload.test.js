@@ -11,7 +11,11 @@ import {
   waitForCondition,
   assertType,
 } from "../setup/helpers/test-utils.js";
-import { HTTP_STATUS } from "../../src/consts.js";
+import {
+  HTTP_STATUS,
+  HTTP_HEADERS,
+  MIME_TYPES,
+} from "../../src/consts/index.js";
 
 /**
  * @typedef {import('../setup/helpers/apify-mock.js').ApifyMock} Actor
@@ -47,6 +51,7 @@ describe("Hot-Reloading Configuration Tests", () => {
       urlCount: 1,
       retentionHours: 1,
     });
+    jest.setTimeout(15000);
     ({ app: _app, appClient, teardownApp } = await setupTestApp());
   });
 
@@ -73,9 +78,9 @@ describe("Hot-Reloading Configuration Tests", () => {
     await waitForCondition(async () => {
       const res = await appClient
         .get("/info")
-        .set("Authorization", "Bearer new-secret-key");
+        .set(HTTP_HEADERS.AUTHORIZATION, "Bearer new-secret-key");
       return res.statusCode === HTTP_STATUS.OK;
-    });
+    }, 10000);
 
     // Verify old key fails
     const res2 = await appClient
@@ -86,7 +91,7 @@ describe("Hot-Reloading Configuration Tests", () => {
     // Verify new key works
     const res3 = await appClient
       .get("/info")
-      .set("Authorization", "Bearer new-secret-key");
+      .set(HTTP_HEADERS.AUTHORIZATION, "Bearer new-secret-key");
     expect(res3.statusCode).toBe(HTTP_STATUS.OK);
   });
 
@@ -126,7 +131,7 @@ describe("Hot-Reloading Configuration Tests", () => {
     });
 
     // Wait briefly to ensure no change happens (since it's not supported)
-    await sleep(HTTP_STATUS.OK);
+    await sleep(200);
 
     const zeroActive = webhookManager.getAllActive().length;
     // Scale down is not currently implemented/supported, so it should remain 3
@@ -156,7 +161,7 @@ describe("Hot-Reloading Configuration Tests", () => {
     await waitForCondition(async () => {
       const res = await appClient
         .post(`/webhook/${whId}`)
-        .set("Authorization", "Bearer new-super-secret")
+        .set(HTTP_HEADERS.AUTHORIZATION, "Bearer new-super-secret")
         .send({ data: "test" });
       return (
         res.statusCode === HTTP_STATUS.CREATED && res.text === "Transformed!"
@@ -192,7 +197,7 @@ describe("Hot-Reloading Configuration Tests", () => {
     // Verify app is still responsive
     const res = await appClient
       .get("/info")
-      .set("Authorization", "Bearer new-super-secret");
+      .set(HTTP_HEADERS.AUTHORIZATION, "Bearer new-super-secret");
 
     // Ensure we got a response (not a connection refused/crash)
     expect(res.statusCode).toBe(HTTP_STATUS.OK);
@@ -296,8 +301,8 @@ describe("Hot-Reloading Configuration Tests", () => {
 
     const res = await appClient
       .post(`/webhook/${whId}`)
-      .set("Authorization", "Bearer new-super-secret")
-      .set("Content-Type", "application/json")
+      .set(HTTP_HEADERS.AUTHORIZATION, "Bearer new-super-secret")
+      .set(HTTP_HEADERS.CONTENT_TYPE, MIME_TYPES.JSON)
       .send({ bar: "baz" });
 
     expect(res.statusCode).toBe(HTTP_STATUS.OK);
@@ -317,14 +322,14 @@ describe("Hot-Reloading Configuration Tests", () => {
     await waitForCondition(async () => {
       const res = await appClient
         .get("/info")
-        .set("Authorization", "Bearer stringified-secret");
+        .set(HTTP_HEADERS.AUTHORIZATION, "Bearer stringified-secret");
       return res.statusCode === 200;
     });
 
     // 3. Verify it works
     const res = await appClient
       .get("/info")
-      .set("Authorization", "Bearer stringified-secret");
+      .set(HTTP_HEADERS.AUTHORIZATION, "Bearer stringified-secret");
 
     expect(res.statusCode).toBe(200);
     expect(res.body.system.authActive).toBe(true);

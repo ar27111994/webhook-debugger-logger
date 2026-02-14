@@ -5,7 +5,7 @@ import {
   createMockNextFunction,
 } from "../setup/helpers/test-utils.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
-import { HTTP_STATUS, ERROR_LABELS } from "../../src/consts.js";
+import { HTTP_STATUS } from "../../src/consts/index.js";
 
 /**
  * @typedef {import("express").Request} Request
@@ -21,6 +21,7 @@ import { loggerMock } from "../setup/helpers/shared-mocks.js";
 await setupCommonMocks({ logger: true });
 
 const { createErrorHandler } = await import("../../src/middleware/error.js");
+import { ERROR_LABELS } from "../../src/consts/errors.js";
 
 describe("Error Middleware - Edge Cases", () => {
   /**
@@ -75,7 +76,7 @@ describe("Error Middleware - Edge Cases", () => {
       expect(res.json).toHaveBeenCalledWith({
         requestId: "test_req_123",
         status: HTTP_STATUS.FORBIDDEN,
-        error: "Client Error",
+        error: ERROR_LABELS.CLIENT_ERROR,
         message: "Test error",
       });
     });
@@ -91,7 +92,7 @@ describe("Error Middleware - Edge Cases", () => {
       expect(res.json).toHaveBeenCalledWith({
         requestId: "test_req_123",
         status: HTTP_STATUS.INTERNAL_SERVER_ERROR,
-        error: "Internal Server Error",
+        error: ERROR_LABELS.INTERNAL_SERVER_ERROR,
         message: ERROR_LABELS.INTERNAL_SERVER_ERROR,
       });
     });
@@ -495,7 +496,7 @@ describe("Error Middleware - Edge Cases", () => {
       expect(res.json).toHaveBeenCalledWith({
         requestId: "test_req_123",
         status: -1,
-        error: "Error",
+        error: ERROR_LABELS.GENERIC,
         message: "Negative status",
       });
     });
@@ -509,7 +510,7 @@ describe("Error Middleware - Edge Cases", () => {
       expect(res.json).toHaveBeenCalledWith({
         requestId: "test_req_123",
         status: 100,
-        error: "Error",
+        error: ERROR_LABELS.GENERIC,
         message: "Informational",
       });
     });
@@ -523,7 +524,7 @@ describe("Error Middleware - Edge Cases", () => {
       expect(res.json).toHaveBeenCalledWith({
         requestId: "test_req_123",
         status: HTTP_STATUS.OK,
-        error: "Error",
+        error: ERROR_LABELS.GENERIC,
         message: "Success error",
       });
     });
@@ -537,7 +538,7 @@ describe("Error Middleware - Edge Cases", () => {
       expect(res.json).toHaveBeenCalledWith({
         requestId: "test_req_123",
         status: 302,
-        error: "Error",
+        error: ERROR_LABELS.GENERIC,
         message: "Redirect error",
       });
     });

@@ -16,8 +16,9 @@ await setupCommonMocks({ axios: true, apify: true });
 const { Actor } = await import("apify");
 const { setupTestApp } = await import("../setup/helpers/app-utils.js");
 const { webhookManager } = await import("../../src/main.js");
-const { HTTP_STATUS, OFFLOAD_MARKER_STREAM, MAX_DATASET_ITEM_BYTES } =
-  await import("../../src/consts.js");
+const { HTTP_STATUS, STORAGE_CONSTS, MIME_TYPES, HTTP_HEADERS } =
+  await import("../../src/consts/index.js");
+const { OFFLOAD_MARKER_STREAM, MAX_DATASET_ITEM_BYTES } = STORAGE_CONSTS;
 
 /**
  * @typedef {import("../setup/helpers/app-utils.js").AppClient} AppClient
@@ -72,7 +73,7 @@ describe("Large Payload Stability", () => {
 
     const res = await appClient
       .post(`/webhook/${webhookId}`)
-      .set("Content-Type", "text/plain")
+      .set(HTTP_HEADERS.CONTENT_TYPE, MIME_TYPES.PLAIN)
       .send(largeBody);
 
     expect(res.statusCode).toBe(HTTP_STATUS.OK);
@@ -88,7 +89,7 @@ describe("Large Payload Stability", () => {
     // The value passed to setValue should be the request stream (object)
     expect(typeof args?.[1]).toBe("object");
     // Options are in the 3rd argument (index 2)
-    expect(args?.[2]).toEqual({ contentType: "text/plain" });
+    expect(args?.[2]).toEqual({ contentType: MIME_TYPES.PLAIN });
 
     // Verify Public URL generation was attempted
     expect(kvStoreMock.getPublicUrl).toHaveBeenCalledWith(args?.[0]);
@@ -117,7 +118,7 @@ describe("Large Payload Stability", () => {
 
     const res = await appClient
       .post(`/webhook/${webhookId}`)
-      .set("Content-Type", "text/plain")
+      .set(HTTP_HEADERS.CONTENT_TYPE, MIME_TYPES.PLAIN)
       .send(smallBody);
 
     expect(res.statusCode).toBe(HTTP_STATUS.OK);
@@ -130,7 +131,7 @@ describe("Large Payload Stability", () => {
 
     const res = await appClient
       .post(`/webhook/${webhookId}`)
-      .set("Content-Type", "image/png")
+      .set(HTTP_HEADERS.CONTENT_TYPE, "image/png")
       .send(pngBuffer);
 
     expect(res.statusCode).toBe(HTTP_STATUS.OK);
@@ -163,7 +164,7 @@ describe("Large Payload Stability", () => {
     try {
       const res = await appClient
         .post(`/webhook/${webhookId}`)
-        .set("Content-Type", "application/json")
+        .set(HTTP_HEADERS.CONTENT_TYPE, MIME_TYPES.JSON)
         .send(nested);
 
       expect([

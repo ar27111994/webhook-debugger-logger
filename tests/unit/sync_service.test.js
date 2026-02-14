@@ -19,7 +19,9 @@ import {
   eventsMock,
   createDatasetMock,
   loggerMock,
+  constsMock,
 } from "../setup/helpers/shared-mocks.js";
+import { LOG_MESSAGES } from "../../src/consts/messages.js";
 
 const { appEvents } = eventsMock; // Destructure for test usage
 
@@ -88,9 +90,7 @@ describe("SyncService", () => {
         "log:received",
         expect.any(Function),
       );
-      expect(loggerMock.info).toHaveBeenCalledWith(
-        "SyncService starting (Event-Driven)",
-      );
+      expect(loggerMock.info).toHaveBeenCalledWith(LOG_MESSAGES.SYNC_START);
     });
 
     test("should not start if already running", async () => {
@@ -108,7 +108,7 @@ describe("SyncService", () => {
         expect.any(Function),
       );
       expect(mockLimiter.stop).toHaveBeenCalled();
-      expect(loggerMock.info).toHaveBeenCalledWith("SyncService stopped");
+      expect(loggerMock.info).toHaveBeenCalledWith(LOG_MESSAGES.SYNC_STOP);
     });
   });
 
@@ -152,7 +152,7 @@ describe("SyncService", () => {
 
       expect(loggerMock.error).toHaveBeenCalledWith(
         expect.objectContaining({ err: expect.anything() }),
-        "Real-time insert failed",
+        LOG_MESSAGES.REALTIME_INSERT_FAILED,
       );
     });
 
@@ -231,7 +231,7 @@ describe("SyncService", () => {
 
       expect(loggerMock.error).toHaveBeenCalledWith(
         expect.objectContaining({ err: expect.anything() }),
-        "Sync error",
+        LOG_MESSAGES.SYNC_ERROR_GENERAL,
       );
 
       const metrics = service.getMetrics();
@@ -240,8 +240,7 @@ describe("SyncService", () => {
 
     test("should trigger recursive sync if batch limit reached", async () => {
       // Verify constant execution and values
-      const { SYNC_BATCH_SIZE } = await import("../../src/consts.js");
-      expect(SYNC_BATCH_SIZE).toBe(10); // Sanity check
+      expect(constsMock.SYNC_BATCH_SIZE).toBe(10); // Sanity check
 
       const batch = Array(10)
         .fill(null)
@@ -323,7 +322,7 @@ describe("SyncService", () => {
 
       expect(loggerMock.error).toHaveBeenCalledWith(
         expect.objectContaining({ err: expect.anything() }),
-        "Sync scheduling error",
+        LOG_MESSAGES.SYNC_SCHEDULE_ERROR,
       );
     });
   });

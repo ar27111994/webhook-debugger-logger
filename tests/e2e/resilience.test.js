@@ -11,7 +11,7 @@ import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 
 // Mock Apify and axios using shared components
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
-await setupCommonMocks({ axios: true, apify: true, logger: true });
+await setupCommonMocks({ axios: true, apify: true, logger: true, ssrf: true });
 
 const { createDatasetMock } = await import("../setup/helpers/shared-mocks.js");
 
@@ -20,6 +20,7 @@ const { webhookManager } = await import("../../src/main.js");
 const axios = (await import("axios")).default;
 const { Actor } = await import("apify");
 import { logRepository } from "../../src/repositories/LogRepository.js";
+import { MIME_TYPES } from "../../src/consts/index.js";
 
 /**
  * @typedef {import("../setup/helpers/app-utils.js").AppClient} AppClient
@@ -69,7 +70,7 @@ describe("Resilience & Retry Tests", () => {
         requestId: "req_retry",
         remoteIp: "127.0.0.1",
         query: {},
-        contentType: "application/json",
+        contentType: MIME_TYPES.JSON,
         size: 2,
         statusCode: 200,
         processingTime: 10,
@@ -87,7 +88,7 @@ describe("Resilience & Retry Tests", () => {
         .query({ url: "http://target.com" });
 
       expect(res.statusCode).toBe(200);
-      expect(res.body.status).toBe("Replayed");
+      expect(res.body.status).toBe("replayed");
       expect(res.body.targetUrl).toBe("http://target.com");
       expect(res.body.targetResponseBody).toBe("OK");
       // Initial call + 2 retries = 3 calls total
@@ -113,7 +114,7 @@ describe("Resilience & Retry Tests", () => {
         requestId: "req_fail",
         remoteIp: "127.0.0.1",
         query: {},
-        contentType: "application/json",
+        contentType: MIME_TYPES.JSON,
         size: 2,
         statusCode: 200,
         processingTime: 10,
@@ -127,7 +128,7 @@ describe("Resilience & Retry Tests", () => {
         .query({ url: "http://target.com" });
 
       expect(res.statusCode).toBe(504);
-      expect(res.body.error).toBe("Replay failed");
+      expect(res.body.error).toBe("Replay Failed");
       expect(axios).toHaveBeenCalledTimes(3);
     }, 15000);
 
@@ -150,7 +151,7 @@ describe("Resilience & Retry Tests", () => {
         requestId: "req_generic",
         remoteIp: "127.0.0.1",
         query: {},
-        contentType: "application/json",
+        contentType: MIME_TYPES.JSON,
         size: 2,
         statusCode: 200,
         processingTime: 10,

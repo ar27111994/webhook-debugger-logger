@@ -1,6 +1,6 @@
 import { describe, test, beforeAll, afterAll } from "@jest/globals";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
-import { HTTP_STATUS } from "../../src/consts.js";
+import { HTTP_STATUS, HTTP_HEADERS } from "../../src/consts/index.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 import { sleep } from "../setup/helpers/test-utils.js";
 import {
@@ -59,13 +59,13 @@ describe("Hot Reload E2E - Dynamic Config Updates", () => {
     // Should succeed with initial key
     await appClient
       .get("/info")
-      .set("Authorization", "Bearer initial-secret")
+      .set(HTTP_HEADERS.AUTHORIZATION, "Bearer initial-secret")
       .expect(HTTP_STATUS.OK);
 
     // Should fail with future key
     await appClient
       .get("/info")
-      .set("Authorization", "Bearer new-secret")
+      .set(HTTP_HEADERS.AUTHORIZATION, "Bearer new-secret")
       .expect(HTTP_STATUS.UNAUTHORIZED);
 
     // Step 2: Update Input in KV Store (Simulate external update)
@@ -82,13 +82,13 @@ describe("Hot Reload E2E - Dynamic Config Updates", () => {
     // Old key should now fail
     await appClient
       .get("/info")
-      .set("Authorization", "Bearer initial-secret")
+      .set(HTTP_HEADERS.AUTHORIZATION, "Bearer initial-secret")
       .expect(HTTP_STATUS.UNAUTHORIZED);
 
     // New key should succeed
     await appClient
       .get("/info")
-      .set("Authorization", "Bearer new-secret")
+      .set(HTTP_HEADERS.AUTHORIZATION, "Bearer new-secret")
       .expect(HTTP_STATUS.OK);
   });
 });

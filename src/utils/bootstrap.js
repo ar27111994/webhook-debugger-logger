@@ -20,14 +20,18 @@ import {
   SCHEMA_KEYS,
 } from "../consts/storage.js";
 import { NODE_ERROR_CODES } from "../consts/errors.js";
-import { ENV_VARS } from "../consts/app.js";
+import { ENV_VARS, APP_CONSTS } from "../consts/app.js";
+
+/**
+ * @typedef {import("../typedefs.js").ActorInput} ActorInput
+ */
 
 const log = createChildLogger({ component: LOG_COMPONENTS.BOOTSTRAP });
 
 /**
  * Helper to build the full configuration object by merging defaults.
- * @param {Record<string, any>} defaultInput
- * @returns {Promise<Record<string, any>>}
+ * @param {ActorInput} defaultInput
+ * @returns {Promise<ActorInput>}
  */
 async function buildFullConfig(defaultInput) {
   const defaults = await getDefaultsFromSchema();
@@ -39,7 +43,7 @@ async function buildFullConfig(defaultInput) {
 
 /**
  * Ensures the local storage input file exists for hot-reloading.
- * @param {Record<string, any>} defaultInput
+ * @param {ActorInput} defaultInput
  * @returns {Promise<void>}
  */
 export async function ensureLocalInputExists(defaultInput) {
@@ -72,7 +76,7 @@ export async function ensureLocalInputExists(defaultInput) {
 
         await fs.writeFile(
           tmpPath,
-          JSON.stringify(fullConfig, null, 2),
+          JSON.stringify(fullConfig, null, APP_CONSTS.JSON_INDENT),
           ENCODINGS.UTF8,
         );
         await fs.rename(tmpPath, inputPath);
@@ -105,7 +109,7 @@ export async function ensureLocalInputExists(defaultInput) {
 
         await fs.writeFile(
           tmpPath,
-          JSON.stringify(fullConfig, null, 2),
+          JSON.stringify(fullConfig, null, APP_CONSTS.JSON_INDENT),
           ENCODINGS.UTF8,
         );
 
@@ -135,7 +139,7 @@ export async function ensureLocalInputExists(defaultInput) {
 
 /**
  * Reads .actor/input_schema.json and extracts default/prefill values.
- * @returns {Promise<Record<string, any>>}
+ * @returns {Promise<ActorInput>}
  */
 export async function getDefaultsFromSchema() {
   try {
@@ -155,14 +159,14 @@ export async function getDefaultsFromSchema() {
     const raw = await fs.readFile(schemaPath, ENCODINGS.UTF8);
     const schema = JSON.parse(raw);
 
-    /** @type {Record<string, any>} */
+    /** @type {ActorInput} */
     const defaults = {};
 
     if (schema.properties) {
       for (const [
         key,
         config,
-      ] of /** @type {[string, {editor?: string, prefill?: any, default?: any}][]} */ (
+      ] of /** @type {[keyof ActorInput, {editor?: string, prefill?: any, default?: any}][]} */ (
         Object.entries(schema.properties)
       )) {
         // Skip hidden sections or non-input fields

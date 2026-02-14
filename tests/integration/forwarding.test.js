@@ -21,8 +21,10 @@ import {
   RECURSION_HEADER_NAME,
   RECURSION_HEADER_VALUE,
   HTTP_STATUS,
-  ERROR_LABELS,
-} from "../../src/consts.js";
+  HTTP_HEADERS,
+  MIME_TYPES,
+} from "../../src/consts/index.js";
+import { LOG_MESSAGES } from "../../src/consts/messages.js";
 const axios = (await import("axios")).default;
 const { Actor } = await import("apify");
 
@@ -44,11 +46,11 @@ describe("Forwarding Security", () => {
       request: {
         params: { id: "wh_123" },
         headers: {
-          "content-type": "application/json",
-          authorization: "Bearer secret",
-          cookie: "session=123",
-          "x-api-key": "my-key",
-          "user-agent": "test-agent",
+          [HTTP_HEADERS.CONTENT_TYPE]: MIME_TYPES.JSON,
+          [HTTP_HEADERS.AUTHORIZATION]: "Bearer secret",
+          [HTTP_HEADERS.COOKIE]: "session=123",
+          [HTTP_HEADERS.X_API_KEY]: "my-key",
+          [HTTP_HEADERS.USER_AGENT]: "test-agent",
         },
         body: { foo: "bar" },
       },
@@ -60,10 +62,10 @@ describe("Forwarding Security", () => {
     expect(config).toBeDefined();
 
     const sentHeaders = /** @type {Record<string, string>} */ (config.headers);
-    expect(sentHeaders["authorization"]).toBeUndefined();
-    expect(sentHeaders["cookie"]).toBeUndefined();
-    expect(sentHeaders["x-api-key"]).toBeUndefined();
-    expect(sentHeaders["user-agent"]).toBe("test-agent");
+    expect(sentHeaders[HTTP_HEADERS.AUTHORIZATION]).toBeUndefined();
+    expect(sentHeaders[HTTP_HEADERS.COOKIE]).toBeUndefined();
+    expect(sentHeaders[HTTP_HEADERS.X_API_KEY]).toBeUndefined();
+    expect(sentHeaders[HTTP_HEADERS.USER_AGENT]).toBe("test-agent");
     expect(sentHeaders[RECURSION_HEADER_NAME]).toBe(RECURSION_HEADER_VALUE);
   });
 
@@ -77,10 +79,10 @@ describe("Forwarding Security", () => {
       request: {
         params: { id: "wh_123" },
         headers: {
-          "content-type": "application/json",
-          authorization: "Bearer secret",
-          "content-length": "15",
-          "user-agent": "test-agent",
+          [HTTP_HEADERS.CONTENT_TYPE]: MIME_TYPES.JSON,
+          [HTTP_HEADERS.AUTHORIZATION]: "Bearer secret",
+          [HTTP_HEADERS.CONTENT_LENGTH]: "15",
+          [HTTP_HEADERS.USER_AGENT]: "test-agent",
           "x-custom": "value",
         },
         body: { foo: "bar" },
@@ -92,9 +94,9 @@ describe("Forwarding Security", () => {
     const config = getLastAxiosConfig(axios);
     const sentHeaders = /** @type {Record<string, string>} */ (config.headers);
 
-    expect(sentHeaders["content-type"]).toBe("application/json");
-    expect(sentHeaders["content-length"]).toBeUndefined();
-    expect(sentHeaders["user-agent"]).toBeUndefined();
+    expect(sentHeaders[HTTP_HEADERS.CONTENT_TYPE]).toBe(MIME_TYPES.JSON);
+    expect(sentHeaders[HTTP_HEADERS.CONTENT_LENGTH]).toBeUndefined();
+    expect(sentHeaders[HTTP_HEADERS.USER_AGENT]).toBeUndefined();
     expect(sentHeaders["x-custom"]).toBeUndefined();
     expect(sentHeaders[RECURSION_HEADER_NAME]).toBe(RECURSION_HEADER_VALUE);
   });
@@ -110,10 +112,10 @@ describe("Forwarding Security", () => {
       request: {
         params: { id: "wh_123" },
         headers: {
-          authorization: "Bearer secret",
-          cookie: "session=123",
-          "x-api-key": "my-key",
-          "user-agent": "test-agent",
+          [HTTP_HEADERS.AUTHORIZATION]: "Bearer secret",
+          [HTTP_HEADERS.COOKIE]: "session=123",
+          [HTTP_HEADERS.X_API_KEY]: "my-key",
+          [HTTP_HEADERS.USER_AGENT]: "test-agent",
         },
         body: {},
       },
@@ -129,10 +131,10 @@ describe("Forwarding Security", () => {
       jest.mocked(Actor.pushData).mock.calls[0][0]
     );
 
-    expect(pushedData.headers["authorization"]).toBe("[MASKED]");
-    expect(pushedData.headers["cookie"]).toBe("[MASKED]");
-    expect(pushedData.headers["x-api-key"]).toBe("[MASKED]");
-    expect(pushedData.headers["user-agent"]).toBe("test-agent");
+    expect(pushedData.headers[HTTP_HEADERS.AUTHORIZATION]).toBe("[MASKED]");
+    expect(pushedData.headers[HTTP_HEADERS.COOKIE]).toBe("[MASKED]");
+    expect(pushedData.headers[HTTP_HEADERS.X_API_KEY]).toBe("[MASKED]");
+    expect(pushedData.headers[HTTP_HEADERS.USER_AGENT]).toBe("test-agent");
   });
 
   test("should handle missing forwardUrl gracefully (no forwarding)", async () => {
@@ -154,7 +156,7 @@ describe("Forwarding Security", () => {
 
   test("should block forwarding to internal IP (SSRF)", async () => {
     // Override mock to return unsafe for this test
-    const { SSRF_ERRORS } = await import("../../src/utils/ssrf.js");
+    const { SSRF_ERRORS } = await import("../../src/consts/index.js");
     ssrfMock.validateUrlForSsrf.mockResolvedValueOnce({
       safe: false,
       error: SSRF_ERRORS.INTERNAL_IP,
@@ -167,7 +169,7 @@ describe("Forwarding Security", () => {
       },
       request: {
         params: { id: "wh_ssrf" },
-        headers: { authorization: "Bearer secret" },
+        headers: { [HTTP_HEADERS.AUTHORIZATION]: "Bearer secret" },
         body: { data: "test" },
       },
     });
@@ -188,7 +190,7 @@ describe("Forwarding Security", () => {
     // Source uses structured pino logging via log.error
     expect(loggerMock.error).toHaveBeenCalledWith(
       expect.objectContaining({ error: SSRF_ERRORS.INTERNAL_IP }),
-      "SSRF blocked forward URL",
+      LOG_MESSAGES.SSRF_BLOCKED,
     );
   });
 
@@ -211,7 +213,7 @@ describe("Forwarding Security", () => {
         request: {
           params: { id: "wh_retry" },
           body: { data: "test" },
-          headers: { authorization: "Bearer secret" },
+          headers: { [HTTP_HEADERS.AUTHORIZATION]: "Bearer secret" },
         },
       });
 
@@ -231,7 +233,7 @@ describe("Forwarding Security", () => {
       const calls = jest.mocked(Actor.pushData).mock.calls;
       const errorLog = calls.find(
         (c) =>
-          assertType(c[0]).type === ERROR_LABELS.FORWARD_ERROR &&
+          assertType(c[0]).type === "Forward Error" &&
           assertType(c[0]).statusCode === HTTP_STATUS.INTERNAL_SERVER_ERROR,
       );
       expect(errorLog).toBeDefined();
@@ -252,13 +254,13 @@ describe("Forwarding Security", () => {
         request: {
           params: { id: "wh_fail_fast" },
           body: {},
-          headers: { authorization: "Bearer secret" },
+          headers: { [HTTP_HEADERS.AUTHORIZATION]: "Bearer secret" },
         },
       });
 
       await ctx.middleware(ctx.req, ctx.res, ctx.next);
 
-      expect(axios.post).toHaveBeenCalledTimes(1);
+      expect(axios.request).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -277,7 +279,7 @@ describe("Forwarding Security", () => {
         request: {
           params: { id: "wh_limit" },
           body: {},
-          headers: { authorization: "Bearer secret" },
+          headers: { [HTTP_HEADERS.AUTHORIZATION]: "Bearer secret" },
         },
       });
 
@@ -290,7 +292,7 @@ describe("Forwarding Security", () => {
           isPlatformError: true,
           err: expect.objectContaining({ message: "Dataset quota exceeded" }),
         }),
-        "Platform limit error",
+        LOG_MESSAGES.PLATFORM_LIMIT_ERROR,
       );
     });
   });

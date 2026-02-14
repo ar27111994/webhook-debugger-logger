@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeAll, afterAll } from "@jest/globals";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
-import { HTTP_STATUS } from "../../src/consts.js";
+import { HTTP_STATUS } from "../../src/consts/index.js";
 import { sleep } from "../setup/helpers/test-utils.js";
 
 // Setup mocks

@@ -9,9 +9,10 @@ import ipaddr from "ipaddr.js";
 import {
   SSRF_INTERNAL_ERRORS,
   SSRF_LOG_MESSAGES,
-  DNS_RESOLUTION_TIMEOUT_MS,
+  NETWORK_TIMEOUTS,
   SSRF_BLOCKED_RANGES,
   ALLOWED_PROTOCOLS,
+  CIDR_PREFIX_BITS,
 } from "../consts/network.js";
 import { SSRF_ERRORS } from "../consts/security.js";
 import { LOG_COMPONENTS } from "../consts/logging.js";
@@ -60,7 +61,10 @@ export function checkIpInRanges(ipStr, ranges) {
       } else {
         // Treat as a single IP address
         rangeIp = ipaddr.parse(rangeStr);
-        prefix = rangeIp.kind() === "ipv4" ? 32 : 128;
+        prefix =
+          rangeIp.kind() === "ipv4"
+            ? CIDR_PREFIX_BITS.IPV4
+            : CIDR_PREFIX_BITS.IPV6;
       }
 
       // Ensure IP families match before comparing
@@ -137,11 +141,11 @@ export async function validateUrlForSsrf(urlString) {
       const [ipv4Results, ipv6Results] = await Promise.allSettled([
         Promise.race([
           dns.resolve4(hostname),
-          timeoutPromise(DNS_RESOLUTION_TIMEOUT_MS),
+          timeoutPromise(NETWORK_TIMEOUTS.DNS_RESOLUTION),
         ]),
         Promise.race([
           dns.resolve6(hostname),
-          timeoutPromise(DNS_RESOLUTION_TIMEOUT_MS),
+          timeoutPromise(NETWORK_TIMEOUTS.DNS_RESOLUTION),
         ]),
       ]);
       ipsToCheck = [

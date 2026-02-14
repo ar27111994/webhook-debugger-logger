@@ -19,13 +19,16 @@ import {
 } from "../consts/storage.js";
 import { LOG_COMPONENTS } from "../consts/logging.js";
 import { LOG_MESSAGES } from "../consts/messages.js";
+import { NODE_ERROR_CODES } from "../consts/errors.js";
 import { createChildLogger, serializeError } from "./logger.js";
 
 const log = createChildLogger({ component: LOG_COMPONENTS.HOT_RELOAD_MANAGER });
 
 /**
  * @typedef {import("../typedefs.js").CommonError} CommonError
- * @typedef {(newConfig: any, validated: any) => Promise<void>} OnConfigChange
+ * @typedef {import("../typedefs.js").ActorInput} ActorInput
+ * @typedef {(newConfig: ActorInput, validated: any) => Promise<void>} OnConfigChange
+ * @typedef {import("apify").KeyValueStore} ApifyKeyValueStore
  */
 
 export class HotReloadManager {
@@ -43,7 +46,7 @@ export class HotReloadManager {
   /** @type {AbortController | undefined} */
   #fileWatcherAbortController;
 
-  /** @type {any} */
+  /** @type {ApifyKeyValueStore | null} */
   #store = null;
 
   /**
@@ -116,10 +119,8 @@ export class HotReloadManager {
 
     this.#activePollPromise = (async () => {
       try {
-        const newInput = /** @type {Record<string, any> | null} */ (
-          await this.#store.getValue(KVS_KEYS.INPUT)
-        );
-        if (!newInput) return;
+        /** @type {ActorInput} */
+        const newInput = (await this.#store?.getValue(KVS_KEYS.INPUT)) || {};
 
         // Normalize input if it's a string (fixes hot-reload from raw KV updates)
         const normalizedInput = normalizeInput(newInput);
@@ -186,7 +187,7 @@ export class HotReloadManager {
           }
         } catch (err) {
           const error = /** @type {CommonError} */ (err);
-          if (error.name !== "AbortError") {
+          if (error.name !== NODE_ERROR_CODES.ABORT_ERROR) {
             log.error(
               { err: serializeError(error) },
               LOG_MESSAGES.HOT_RELOAD_WATCH_ERROR,

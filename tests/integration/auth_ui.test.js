@@ -8,7 +8,11 @@ import {
 } from "@jest/globals";
 
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
-import { HTTP_STATUS } from "../../src/consts.js";
+import {
+  HTTP_STATUS,
+  MIME_TYPES,
+  HTTP_HEADERS,
+} from "../../src/consts/index.js";
 await setupCommonMocks({ apify: true });
 
 const { setupTestApp } = await import("../setup/helpers/app-utils.js");
@@ -49,10 +53,12 @@ describe("Auth UI Hardening Tests", () => {
   });
 
   test("should show 'Locked' HTML for browser unauthorized access", async () => {
-    const res = await appClient.get("/").set("Accept", "text/html");
+    const res = await appClient
+      .get("/")
+      .set(HTTP_HEADERS.ACCEPT, MIME_TYPES.HTML);
 
     expect(res.statusCode).toBe(HTTP_STATUS.UNAUTHORIZED);
-    expect(res.text).toContain("Access Restricted");
+    expect(res.text).toContain("401 Unauthorized");
     expect(res.text).toContain("Strict Mode");
   });
 
@@ -67,10 +73,10 @@ describe("Auth UI Hardening Tests", () => {
     const res = await appClient
       .get("/")
       .query({ key: authKey })
-      .set("Accept", "text/html");
+      .set(HTTP_HEADERS.ACCEPT, MIME_TYPES.HTML);
 
     expect(res.statusCode).toBe(HTTP_STATUS.OK);
-    expect(res.text).toContain("Webhook Debugger");
+    expect(res.text).toContain("Webhook Debugger, Logger & API Mocking Suite");
     // Verify NO link propagation (Security requirement)
     expect(res.text).not.toContain(`?key=${authKey}`);
     expect(res.text).toContain('href="/info"');
@@ -79,11 +85,11 @@ describe("Auth UI Hardening Tests", () => {
   test("should allow access but NOT propagate key when authenticated via Bearer header", async () => {
     const res = await appClient
       .get("/")
-      .set("Authorization", `Bearer ${authKey}`)
-      .set("Accept", "text/html");
+      .set(HTTP_HEADERS.AUTHORIZATION, `Bearer ${authKey}`)
+      .set(HTTP_HEADERS.ACCEPT, MIME_TYPES.HTML);
 
     expect(res.statusCode).toBe(HTTP_STATUS.OK);
-    expect(res.text).toContain("Webhook Debugger");
+    expect(res.text).toContain("Webhook Debugger, Logger & API Mocking Suite");
     expect(res.text).not.toContain(authKey);
     expect(res.text).toContain('href="/info"');
   });
@@ -91,7 +97,7 @@ describe("Auth UI Hardening Tests", () => {
   test("should NOT leak key in /info JSON response when authed via header", async () => {
     const res = await appClient
       .get("/info")
-      .set("Authorization", `Bearer ${authKey}`);
+      .set(HTTP_HEADERS.AUTHORIZATION, `Bearer ${authKey}`);
 
     expect(res.statusCode).toBe(HTTP_STATUS.OK);
     expect(res.body.endpoints.logs).not.toContain("key=");
@@ -124,11 +130,11 @@ describe("Auth UI Hardening Tests", () => {
     const res = await appClient
       .get("/")
       .query({ key: "malformed-key" })
-      .set("Accept", "text/html");
+      .set(HTTP_HEADERS.ACCEPT, MIME_TYPES.HTML);
 
     expect(res.statusCode).toBe(HTTP_STATUS.UNAUTHORIZED);
-    expect(res.text).toContain("Access Restricted");
+    expect(res.text).toContain("Please check your API key");
     expect(res.text).toContain("Strict Mode");
-    expect(res.text).toContain("Unauthorized: Invalid API key");
+    expect(res.text).not.toContain("Webhook Debugger Dashboard");
   });
 });

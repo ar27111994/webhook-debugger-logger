@@ -34,7 +34,10 @@ export const jsonParserMiddleware = (req, _res, next) => {
   if (req.headers[HTTP_HEADERS.CONTENT_TYPE]?.includes(MIME_TYPES.JSON)) {
     try {
       req.body = JSON.parse(req.body.toString());
+      // eslint-disable-next-line sonarjs/no-ignored-exceptions
     } catch (_) {
+      // Ignore JSON parse errors; payload might be partial or malformed.
+      // We treat it as a raw string in that case.
       req.body = req.body.toString();
     }
   }

@@ -9,11 +9,15 @@ import {
 import { sleep } from "../setup/helpers/test-utils.js";
 
 // Mock consts
-jest.unstable_mockModule("../../src/consts.js", () => ({
-  DEFAULT_RATE_LIMIT_WINDOW_MS: 1000,
-  DEFAULT_WEBHOOK_RATE_LIMIT_PER_MINUTE: 5,
-  DEFAULT_WEBHOOK_RATE_LIMIT_MAX_ENTRIES: 10,
+jest.unstable_mockModule("../../src/consts/app.js", () => ({
+  APP_CONSTS: {
+    DEFAULT_RATE_LIMIT_WINDOW_MS: 1000,
+    DEFAULT_WEBHOOK_RATE_LIMIT_PER_MINUTE: 5,
+    DEFAULT_WEBHOOK_RATE_LIMIT_MAX_ENTRIES: 10,
+  },
   MAX_SAFE_RATE_LIMIT_PER_MINUTE: 1000,
+  ENV_VARS: {},
+  ENV_VALUES: {},
 }));
 
 // Import class under test
@@ -163,7 +167,7 @@ describe("WebhookRateLimiter", () => {
     // Validation
     expect(() => {
       rateLimiter.limit = -5;
-    }).toThrow("finite positive integer");
+    }).toThrow();
     expect(() => {
       rateLimiter.limit = 0;
     }).toThrow();

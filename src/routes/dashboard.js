@@ -94,7 +94,11 @@ export const createDashboardHandler =
       const html = template
         .replaceAll(DASHBOARD_PLACEHOLDERS.VERSION, `v${version}`)
         .replaceAll(DASHBOARD_PLACEHOLDERS.ACTIVE_COUNT, String(activeCount))
-        .replaceAll(DASHBOARD_PLACEHOLDERS.SIGNATURE_BADGE, sigBadge);
+        .replaceAll(DASHBOARD_PLACEHOLDERS.SIGNATURE_BADGE, sigBadge)
+        .replaceAll(
+          DASHBOARD_PLACEHOLDERS.BRAND_HEADER,
+          DASHBOARD_CONSTS.BRAND_HEADER,
+        );
 
       res.send(html);
     } catch (err) {

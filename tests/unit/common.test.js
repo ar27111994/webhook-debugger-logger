@@ -30,9 +30,9 @@ describe("Common Utils", () => {
       expect(getInt("TEST_INT", 5)).toBe(5);
     });
 
-    test("should return fallback if input is zero or negative (parsed > 0 check)", () => {
+    test("should return fallback if input is negative (parsed >= 0 check)", () => {
       process.env.TEST_INT = "0";
-      expect(getInt("TEST_INT", 5)).toBe(5); // 0 is not > 0
+      expect(getInt("TEST_INT", 5)).toBe(0); // 0 is valid non-negative integer
 
       process.env.TEST_INT = "-10";
       expect(getInt("TEST_INT", 5)).toBe(5);

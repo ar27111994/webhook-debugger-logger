@@ -10,19 +10,19 @@ import { APP_CONSTS } from "./app.js";
  * @enum {string}
  */
 export const ERROR_LABELS = Object.freeze({
-  INTERNAL_SERVER_ERROR: "INTERNAL_SERVER_ERROR",
-  PAYLOAD_TOO_LARGE: "PAYLOAD_TOO_LARGE",
-  BAD_REQUEST: "BAD_REQUEST",
-  UNAUTHORIZED: "UNAUTHORIZED",
-  NOT_FOUND: "NOT_FOUND",
-  FORBIDDEN: "FORBIDDEN",
-  SERVICE_UNAVAILABLE: "SERVICE_UNAVAILABLE",
-  GATEWAY_TIMEOUT: "GATEWAY_TIMEOUT",
-  UNPROCESSABLE_ENTITY: "UNPROCESSABLE_ENTITY",
-  REPLAY_FAILED: "REPLAY_FAILED",
-  LOGS_FAILED: "LOGS_FAILED",
-  FORWARD_ERROR: "FORWARD_ERROR",
-  CLIENT_ERROR: "CLIENT_ERROR",
+  INTERNAL_SERVER_ERROR: "Internal Server Error",
+  PAYLOAD_TOO_LARGE: "Payload Too Large",
+  BAD_REQUEST: "Bad Request",
+  UNAUTHORIZED: "Unauthorized",
+  NOT_FOUND: "Not Found",
+  FORBIDDEN: "Forbidden",
+  SERVICE_UNAVAILABLE: "Service Unavailable",
+  GATEWAY_TIMEOUT: "Gateway Timeout",
+  UNPROCESSABLE_ENTITY: "Unprocessable Entity",
+  REPLAY_FAILED: "Replay Failed",
+  LOGS_FAILED: "Logs Failed",
+  FORWARD_ERROR: "Forward Error",
+  CLIENT_ERROR: "Client Error",
   INVALID_SIGNATURE: "Invalid signature",
   SIGNATURE_MISMATCH_STREAM: "Signature mismatch (stream verified)",
   GENERIC: "Error",
@@ -174,6 +174,13 @@ export const SIGNATURE_ERRORS = Object.freeze({
   MISMATCH: "Signature mismatch",
   UNKNOWN_PROVIDER: "Unknown provider",
   MISSING_TIMESTAMP: "Missing timestamp header",
+  CUSTOM_HEADER_REQUIRED: "Custom provider requires headerName",
+  MISSING_CUSTOM_HEADER:
+    /**
+     * @param {string} headerName
+     * @returns {string}
+     */
+    (headerName) => `Missing ${headerName} header`,
 });
 
 /**
@@ -185,4 +192,5 @@ export const NODE_ERROR_CODES = Object.freeze({
   EEXIST: "EEXIST",
   ERR_BAD_REQUEST: "ERR_BAD_REQUEST",
   ERR_BAD_RESPONSE: "ERR_BAD_RESPONSE",
+  ABORT_ERROR: "AbortError",
 });

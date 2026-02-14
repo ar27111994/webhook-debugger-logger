@@ -1,8 +1,9 @@
 import { jest, describe, test, expect, beforeEach } from "@jest/globals";
 import { assertType } from "../setup/helpers/test-utils.js";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
-import { duckDbMock } from "../setup/helpers/shared-mocks.js";
-import { HTTP_STATUS } from "../../src/consts/http.js";
+import { duckDbMock, constsMock } from "../setup/helpers/shared-mocks.js";
+import { DUCKDB_TABLES } from "../../src/consts/database.js";
+import { SORT_DIRECTIONS } from "../../src/consts/app.js";
 
 await setupCommonMocks({ db: true });
 
@@ -37,12 +38,14 @@ describe("LogRepository Unit Tests", () => {
       duckDbMock.executeQuery.mockResolvedValue([]);
       await repo.findLogs({
         sort: [
-          { field: "size", dir: "asc" },
-          { field: "statusCode", dir: "desc" },
+          { field: "size", dir: SORT_DIRECTIONS.ASC },
+          { field: "statusCode", dir: SORT_DIRECTIONS.DESC },
         ],
       });
       expect(duckDbMock.executeQuery).toHaveBeenCalledWith(
-        expect.stringContaining("ORDER BY size ASC, statusCode DESC"),
+        expect.stringContaining(
+          `ORDER BY size ${SORT_DIRECTIONS.ASC}, statusCode ${SORT_DIRECTIONS.DESC}`,
+        ),
         expect.any(Object),
       );
     });
@@ -50,10 +53,10 @@ describe("LogRepository Unit Tests", () => {
     test("should ignore invalid sort fields", async () => {
       duckDbMock.executeQuery.mockResolvedValue([]);
       await repo.findLogs({
-        sort: [{ field: "invalid", dir: "asc" }],
+        sort: [{ field: "invalid", dir: SORT_DIRECTIONS.ASC }],
       });
       expect(duckDbMock.executeQuery).toHaveBeenCalledWith(
-        expect.stringContaining("ORDER BY timestamp DESC"),
+        expect.stringContaining(`ORDER BY timestamp ${SORT_DIRECTIONS.DESC}`),
         expect.any(Object),
       );
     });
@@ -64,7 +67,7 @@ describe("LogRepository Unit Tests", () => {
       duckDbMock.executeQuery.mockResolvedValue([]);
       await repo.findLogs({
         method: "POST",
-        statusCode: HTTP_STATUS.OK,
+        statusCode: constsMock.HTTP_STATUS.OK,
         webhookId: "wh_1",
         requestId: "req_1",
         signatureValid: true,
@@ -78,7 +81,7 @@ describe("LogRepository Unit Tests", () => {
       const callParams = duckDbMock.executeQuery.mock.calls[0][1];
       expect(callParams).toMatchObject({
         method: "POST",
-        statusCode: HTTP_STATUS.OK,
+        statusCode: constsMock.HTTP_STATUS.OK,
         webhookId: "wh_1",
         requestId: "req_1",
         signatureValid: true,
@@ -92,10 +95,10 @@ describe("LogRepository Unit Tests", () => {
 
     test("should filter by simple statusCode", async () => {
       duckDbMock.executeQuery.mockResolvedValue([]);
-      await repo.findLogs({ statusCode: HTTP_STATUS.CREATED });
+      await repo.findLogs({ statusCode: constsMock.HTTP_STATUS.CREATED });
       expect(duckDbMock.executeQuery).toHaveBeenCalledWith(
         expect.stringContaining("statusCode = $statusCode"),
-        expect.objectContaining({ statusCode: HTTP_STATUS.CREATED }),
+        expect.objectContaining({ statusCode: constsMock.HTTP_STATUS.CREATED }),
       );
     });
 
@@ -143,8 +146,11 @@ describe("LogRepository Unit Tests", () => {
       duckDbMock.executeQuery.mockResolvedValue([]);
       await repo.findLogs({
         statusCode: [
-          { operator: "gte", value: HTTP_STATUS.BAD_REQUEST },
-          { operator: "lt", value: HTTP_STATUS.INTERNAL_SERVER_ERROR },
+          { operator: "gte", value: constsMock.HTTP_STATUS.BAD_REQUEST },
+          {
+            operator: "lt",
+            value: constsMock.HTTP_STATUS.INTERNAL_SERVER_ERROR,
+          },
         ],
       });
       expect(duckDbMock.executeQuery).toHaveBeenCalledWith(
@@ -152,8 +158,8 @@ describe("LogRepository Unit Tests", () => {
           "statusCode >= $statusCode_0 AND statusCode < $statusCode_1",
         ),
         expect.objectContaining({
-          statusCode_0: HTTP_STATUS.BAD_REQUEST,
-          statusCode_1: HTTP_STATUS.INTERNAL_SERVER_ERROR,
+          statusCode_0: constsMock.HTTP_STATUS.BAD_REQUEST,
+          statusCode_1: constsMock.HTTP_STATUS.INTERNAL_SERVER_ERROR,
         }),
       );
     });
@@ -218,7 +224,7 @@ describe("LogRepository Unit Tests", () => {
       expect(log).toBeDefined();
       expect(log?.id).toBe("1");
       expect(duckDbMock.executeQuery).toHaveBeenCalledWith(
-        expect.stringContaining("SELECT * FROM logs"),
+        expect.stringContaining(`SELECT * FROM ${DUCKDB_TABLES.LOGS}`),
         { id: "1" },
       );
     });
@@ -227,7 +233,7 @@ describe("LogRepository Unit Tests", () => {
       duckDbMock.executeQuery.mockResolvedValue([{ id: "1", method: "GET" }]);
       await repo.getLogById("1", ["id", "method", "invalid_col"]);
       expect(duckDbMock.executeQuery).toHaveBeenCalledWith(
-        expect.stringContaining("SELECT id, method FROM logs"),
+        expect.stringContaining(`SELECT id, method FROM ${DUCKDB_TABLES.LOGS}`),
         { id: "1" },
       );
     });
@@ -268,7 +274,7 @@ describe("LogRepository Unit Tests", () => {
       });
       await repo.insertLog(log);
       expect(duckDbMock.executeWrite).toHaveBeenCalledWith(
-        expect.stringContaining("INSERT INTO logs"),
+        expect.stringContaining(`INSERT INTO ${DUCKDB_TABLES.LOGS}`),
         expect.objectContaining({
           id: "1",
           requestUrl: "http://test",
@@ -308,7 +314,7 @@ describe("LogRepository Unit Tests", () => {
       await repo.deleteLogsByWebhookId("wh_1");
       expect(duckDbMock.executeWrite).toHaveBeenCalledWith(
         expect.stringContaining(
-          "DELETE FROM logs WHERE webhookId = $webhookId",
+          `DELETE FROM ${DUCKDB_TABLES.LOGS} WHERE webhookId = $webhookId`,
         ),
         { webhookId: "wh_1" },
       );

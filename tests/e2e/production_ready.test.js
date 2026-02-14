@@ -24,7 +24,11 @@ const { app, webhookManager, sseHeartbeat, initialize, shutdown } =
 const { Actor } = await import("apify");
 const { createDatasetMock } = await import("../setup/helpers/shared-mocks.js");
 import { logRepository } from "../../src/repositories/LogRepository.js";
-import { HTTP_STATUS } from "../../src/consts.js";
+import {
+  HTTP_STATUS,
+  HTTP_HEADERS,
+  MIME_TYPES,
+} from "../../src/consts/index.js";
 
 describe("Production Readiness Tests (v2.6.0)", () => {
   /** @type {string} */
@@ -33,6 +37,7 @@ describe("Production Readiness Tests (v2.6.0)", () => {
   useMockCleanup();
 
   beforeAll(async () => {
+    jest.setTimeout(15000);
     jest.mocked(Actor.getInput).mockResolvedValue({
       authKey: "top-secret",
       rateLimitPerMinute: 2,
@@ -64,20 +69,20 @@ describe("Production Readiness Tests (v2.6.0)", () => {
       // 1st request - Success
       await agent
         .get("/info")
-        .set("Authorization", "Bearer top-secret")
-        .set("X-Forwarded-For", testIp)
+        .set(HTTP_HEADERS.AUTHORIZATION, "Bearer top-secret")
+        .set(HTTP_HEADERS.X_FORWARDED_FOR, testIp)
         .expect(HTTP_STATUS.OK);
       // 2nd request - Success
       await agent
         .get("/info")
-        .set("Authorization", "Bearer top-secret")
-        .set("X-Forwarded-For", testIp)
+        .set(HTTP_HEADERS.AUTHORIZATION, "Bearer top-secret")
+        .set(HTTP_HEADERS.X_FORWARDED_FOR, testIp)
         .expect(HTTP_STATUS.OK);
       // 3rd request - Failure (Rate Limit Exceeded)
       const res = await agent
         .get("/info")
-        .set("Authorization", "Bearer top-secret")
-        .set("X-Forwarded-For", testIp);
+        .set(HTTP_HEADERS.AUTHORIZATION, "Bearer top-secret")
+        .set(HTTP_HEADERS.X_FORWARDED_FOR, testIp);
       expect(res.statusCode).toBe(HTTP_STATUS.TOO_MANY_REQUESTS);
     });
   });
@@ -88,9 +93,9 @@ describe("Production Readiness Tests (v2.6.0)", () => {
 
       await agent
         .post(`/webhook/${webhookId}`)
-        .set("Authorization", "Bearer top-secret") // Use the correct key
-        .set("Cookie", "session=123")
-        .set("X-API-Key", "my-key")
+        .set(HTTP_HEADERS.AUTHORIZATION, "Bearer top-secret") // Use the correct key
+        .set(HTTP_HEADERS.COOKIE, "session=123")
+        .set(HTTP_HEADERS.X_API_KEY, "my-key")
         .send({ foo: "bar" });
 
       const matchedCallArgs = assertType(
@@ -109,10 +114,12 @@ describe("Production Readiness Tests (v2.6.0)", () => {
       if (!matchedCall)
         throw new Error("Test setup failed: no matching call found");
       expect(matchedCall?.headers).toBeDefined();
-      expect(matchedCall?.headers?.authorization).toBe("[MASKED]");
-      expect(matchedCall?.headers?.cookie).toBe("[MASKED]");
-      expect(matchedCall?.headers?.["x-api-key"]).toBe("[MASKED]");
-      expect(matchedCall?.headers?.host).toBeDefined();
+      expect(matchedCall?.headers?.[HTTP_HEADERS.AUTHORIZATION]).toBe(
+        "[MASKED]",
+      );
+      expect(matchedCall?.headers?.[HTTP_HEADERS.COOKIE]).toBe("[MASKED]");
+      expect(matchedCall?.headers?.[HTTP_HEADERS.X_API_KEY]).toBe("[MASKED]");
+      expect(matchedCall?.headers?.[HTTP_HEADERS.HOST]).toBeDefined();
     });
   });
 
@@ -120,8 +127,8 @@ describe("Production Readiness Tests (v2.6.0)", () => {
     test("Should allow IP within CIDR range", async () => {
       const res = await request(app)
         .post(`/webhook/${webhookId}`)
-        .set("Authorization", "Bearer top-secret")
-        .set("X-Forwarded-For", "192.168.1.50")
+        .set(HTTP_HEADERS.AUTHORIZATION, "Bearer top-secret")
+        .set(HTTP_HEADERS.X_FORWARDED_FOR, "192.168.1.50")
         .send({});
       expect(res.statusCode).toBe(HTTP_STATUS.OK);
     });
@@ -129,8 +136,8 @@ describe("Production Readiness Tests (v2.6.0)", () => {
     test("Should reject IP outside CIDR range", async () => {
       const res = await request(app)
         .post(`/webhook/${webhookId}`)
-        .set("Authorization", "Bearer top-secret")
-        .set("X-Forwarded-For", "8.8.8.8")
+        .set(HTTP_HEADERS.AUTHORIZATION, "Bearer top-secret")
+        .set(HTTP_HEADERS.X_FORWARDED_FOR, "8.8.8.8")
         .send({});
       expect(res.statusCode).toBe(HTTP_STATUS.FORBIDDEN);
     });
@@ -147,11 +154,11 @@ describe("Production Readiness Tests (v2.6.0)", () => {
         method: "POST",
         webhookId,
         headers: {
-          "content-type": "application/json",
-          "content-length": "10", // Obviously too small for the body below
-          authorization: "[MASKED]",
-          host: "original.com",
-          connection: "keep-alive",
+          [HTTP_HEADERS.CONTENT_TYPE]: MIME_TYPES.JSON,
+          [HTTP_HEADERS.CONTENT_LENGTH]: "10", // Obviously too small for the body below
+          [HTTP_HEADERS.AUTHORIZATION]: "[MASKED]",
+          [HTTP_HEADERS.HOST]: "original.com",
+          [HTTP_HEADERS.CONNECTION]: "keep-alive",
         },
         body: '{\n  "hello": "world"\n}', // 22 characters
       };
@@ -167,7 +174,7 @@ describe("Production Readiness Tests (v2.6.0)", () => {
         requestId: "req_test",
         remoteIp: "127.0.0.1",
         query: {},
-        contentType: "application/json",
+        contentType: MIME_TYPES.JSON,
         size: mockEvent.body.length,
         statusCode: HTTP_STATUS.OK,
         processingTime: 10,
@@ -175,7 +182,7 @@ describe("Production Readiness Tests (v2.6.0)", () => {
 
       const res = await request(app)
         .post(`/replay/${webhookId}/${eventId}?url=${targetUrl}`)
-        .set("Authorization", "Bearer top-secret")
+        .set(HTTP_HEADERS.AUTHORIZATION, "Bearer top-secret")
         .expect(HTTP_STATUS.OK);
 
       const { default: axiosMock } = await import("axios");
@@ -187,20 +194,20 @@ describe("Production Readiness Tests (v2.6.0)", () => {
       const matchedHeaders = axiosConfig.headers;
 
       // Transmission headers should be stripped
-      expect(matchedHeaders["content-length"]).toBeUndefined();
-      expect(matchedHeaders["content-encoding"]).toBeUndefined();
-      expect(matchedHeaders["connection"]).toBeUndefined();
+      expect(matchedHeaders[HTTP_HEADERS.CONTENT_LENGTH]).toBeUndefined();
+      expect(matchedHeaders[HTTP_HEADERS.CONTENT_ENCODING]).toBeUndefined();
+      expect(matchedHeaders[HTTP_HEADERS.CONNECTION]).toBeUndefined();
 
       // Host should be overridden
-      expect(matchedHeaders["host"]).toBe("example.com");
-
-      // Masked headers should be stripped
-      expect(matchedHeaders["authorization"]).toBeUndefined();
+      expect(matchedHeaders[HTTP_HEADERS.HOST]).toBe("example.com");
+      expect(matchedHeaders[HTTP_HEADERS.AUTHORIZATION]).toBeUndefined();
 
       // Response warning should be present
-      expect(res.headers["x-apify-replay-warning"]).toMatch(/Headers stripped/);
-      expect(res.body.strippedHeaders).toContain("content-length");
-      expect(res.body.strippedHeaders).toContain("authorization");
+      expect(
+        res.headers[HTTP_HEADERS.APIFY_REPLAY_WARNING.toLowerCase()],
+      ).toMatch(/Headers stripped/);
+      expect(res.body.strippedHeaders).toContain(HTTP_HEADERS.CONTENT_LENGTH);
+      expect(res.body.strippedHeaders).toContain(HTTP_HEADERS.AUTHORIZATION);
     });
   });
 });

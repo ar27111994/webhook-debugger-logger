@@ -7,7 +7,6 @@
 import { Actor } from "apify";
 import { ENV_VARS } from "./app.js";
 import { getInt } from "../utils/env.js";
-import { validateStatusCode } from "../utils/common.js";
 import { createRequire } from "module";
 
 const require = createRequire(import.meta.url);
@@ -104,6 +103,7 @@ export const HTTP_METHODS = Object.freeze({
   CONNECT: "CONNECT",
   TRACE: "TRACE",
   SYSTEM: "SYSTEM",
+  REQUEST: "REQUEST",
 });
 
 /**
@@ -175,13 +175,14 @@ export const HTTP_HEADERS = Object.freeze({
   UPGRADE: "upgrade",
   PROXY_CONNECTION: "proxy-connection",
   X_FORWARDED_BY: "x-forwarded-by",
+  CUSTOM_SIGNATURE: "x-custom-signature",
 });
 
 /**
  * @enum {string}
  */
 export const ENCODINGS = Object.freeze({
-  UTF8: "utf8",
+  UTF8: "utf-8",
   BASE64: "base64",
 });
 
@@ -304,8 +305,6 @@ export const HTTP_CONSTS = Object.freeze({
   DEFAULT_SUCCESS_BODY: HTTP_STATUS_MESSAGES[HTTP_STATUS.OK],
   DEFAULT_RESPONSE_CODE: getInt(
     "DEFAULT_RESPONSE_CODE",
-    validateStatusCode(inputSchema.properties.defaultResponseCode.default)
-      ? inputSchema.properties.defaultResponseCode.default
-      : HTTP_STATUS.OK,
+    inputSchema.properties.defaultResponseCode.default ?? HTTP_STATUS.OK,
   ),
 });

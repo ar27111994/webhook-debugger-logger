@@ -1,14 +1,16 @@
 import { jest } from "@jest/globals";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
-import { createDatasetMock } from "../setup/helpers/shared-mocks.js";
+import {
+  createDatasetMock,
+  constsMock,
+} from "../setup/helpers/shared-mocks.js";
 import {
   createMockRequest,
   createMockResponse,
   createMockNextFunction,
   assertType,
 } from "../setup/helpers/test-utils.js";
-import { HTTP_STATUS } from "../../src/consts.js";
 
 // Initialize mocks
 await setupCommonMocks({ apify: true, axios: false });
@@ -49,7 +51,7 @@ describe("Robust Sorting Logic", () => {
     body: "{}",
     query: {},
     contentType: "application/json",
-    statusCode: HTTP_STATUS.OK,
+    statusCode: constsMock.HTTP_STATUS.OK,
     processingTime: 10,
     requestId: `req_${i}`,
     remoteIp: "127.0.0.1",
