@@ -11,3 +11,7 @@ coverage
 .prettier*
 tsconfig.json
 storage
+.env
+:memory:
+*.log
+*.txt

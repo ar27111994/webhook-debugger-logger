@@ -13,7 +13,7 @@ import {
   HTTP_STATUS,
   HTTP_HEADERS,
 } from "../consts/http.js";
-import { ERROR_MESSAGES, ERROR_LABELS } from "../consts/errors.js";
+import { ERROR_MESSAGES, ERROR_LABELS, NODE_ERROR_CODES } from "../consts/errors.js";
 import {
   REPLAY_STATUS_LABELS,
   APP_CONSTS,
@@ -189,6 +189,7 @@ export const createReplayHandler = (getReplayMaxRetries, getReplayTimeoutMs) =>
               maxRetries,
               hostHeader: target.host,
               forwardHeaders: true, // We manually filtered headers above
+              timeout: replayTimeout,
             },
             replayAbort.signal,
           );
@@ -232,8 +233,10 @@ export const createReplayHandler = (getReplayMaxRetries, getReplayTimeoutMs) =>
       } catch (error) {
         const axiosError = /** @type {CommonError} */ (error);
         const isTimeout =
-          axiosError.code &&
-          FORWARDING_CONSTS.TIMEOUT_CODES.includes(axiosError.code);
+          (axiosError.code &&
+            FORWARDING_CONSTS.TIMEOUT_CODES.includes(axiosError.code)) ||
+          axiosError.message === ERROR_MESSAGES.ABORTED ||
+          axiosError.name === NODE_ERROR_CODES.ABORT_ERROR;
         res
           .status(
             isTimeout

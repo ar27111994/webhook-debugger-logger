@@ -273,10 +273,15 @@ export class LoggerMiddleware {
       "forwardUrl",
       "forwardHeaders",
       "maxForwardRetries",
+      "jsonSchema",
+      "signatureVerification",
+      "enableJSONParsing",
+      "redactBodyPaths",
+      "maskSensitiveData",
     ];
     const webhookOverrides = Object.fromEntries(
       Object.entries(webhookData).filter(([key]) =>
-        allowedOverrides.includes(/** @type {keyof WebhookConfig} */ (key)),
+        allowedOverrides.includes(/** @type {keyof WebhookConfig} */(key)),
       ),
     );
 
@@ -380,7 +385,7 @@ export class LoggerMiddleware {
         ) {
           const result = createStreamVerifier(
             options.signatureVerification,
-            /** @type {Record<string, string>} */ (req.headers),
+            /** @type {Record<string, string>} */(req.headers),
           );
           if (result.hmac) {
             verifier = result;
@@ -491,6 +496,45 @@ export class LoggerMiddleware {
             id: webhookId,
             docs: APP_CONSTS.APIFY_HOMEPAGE_URL,
           });
+      }
+
+      // Automatic body parsing if enabled
+      if (
+        mergedOptions.enableJSONParsing &&
+        typeof req.body === "string" &&
+        req.headers[HTTP_HEADERS.CONTENT_TYPE]?.includes(MIME_TYPES.JSON)
+      ) {
+        try {
+          req.body = JSON.parse(req.body);
+        } catch (err) {
+          // If parsing fails again (even though header says JSON), just log it and proceed as string.
+          // This avoids "crashing" or rejecting the webhook, allowing debugging of malformed payloads.
+          this.#log.warn(
+            { err: this.#serializeError(err), id: webhookId },
+            ERROR_MESSAGES.JSON_PARSE_ERROR(LOG_MESSAGES.JSON_PARSE_FAILED_FALLBACK),
+          );
+        }
+      }
+
+      // Schema Validation
+      if (mergedOptions.jsonSchema) {
+        const validate = this.#compileResource(
+          mergedOptions.jsonSchema,
+          (src) => {
+            const schema = typeof src === "string" ? JSON.parse(src) : src;
+            return ajv.compile(schema);
+          },
+          LOG_MESSAGES.SCHEMA_COMPILED,
+          ERROR_MESSAGES.SCHEMA_COMPILATION_FAILED,
+        );
+        const valid =
+          typeof validate === "function" ? validate(req.body) : false;
+        if (!valid) {
+          return res.status(HTTP_STATUS.BAD_REQUEST).json({
+            error: ajv.errorsText(validate?.errors),
+            id: webhookId,
+          });
+        }
       }
 
       // 2. Prepare
@@ -981,8 +1025,8 @@ export class LoggerMiddleware {
           },
           isTimeout
             ? LOG_MESSAGES.SCRIPT_EXECUTION_TIMED_OUT(
-                APP_CONSTS.SCRIPT_EXECUTION_TIMEOUT_MS,
-              )
+              APP_CONSTS.SCRIPT_EXECUTION_TIMEOUT_MS,
+            )
             : LOG_MESSAGES.SCRIPT_EXECUTION_FAILED,
         );
       }

@@ -115,6 +115,7 @@ describe("HotReloadManager Unit Tests", () => {
       pollIntervalMs: constsMock.INPUT_POLL_INTERVAL_TEST_MS, // Fast polling for tests
       onConfigChange,
     });
+    delete process.env.DISABLE_HOT_RELOAD;
   });
 
   afterEach(async () => {
@@ -198,7 +199,7 @@ describe("HotReloadManager Unit Tests", () => {
       const uninitializedManager = new HotReloadManager({
         initialInput: {},
         pollIntervalMs: constsMock.INPUT_POLL_INTERVAL_TEST_MS,
-        onConfigChange: async () => {},
+        onConfigChange: async () => { },
       });
       uninitializedManager.start();
       expect(loggerMock.warn).toHaveBeenCalledWith(
@@ -292,7 +293,7 @@ describe("HotReloadManager Unit Tests", () => {
       // Disable polling for this test to isolate watcher
       jest
         .spyOn(global, "setInterval")
-        .mockReturnValue(assertType({ unref: () => {} }));
+        .mockReturnValue(assertType({ unref: () => { } }));
 
       const mockWatcher = createControllableIterator();
       mockFsPromises.watch.mockReturnValue(mockWatcher);

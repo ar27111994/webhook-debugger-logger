@@ -33,7 +33,7 @@ describe("Concurrency Tests", () => {
     ({ appClient, teardownApp } = await setupTestApp());
     const ids = await webhookManager.generateWebhooks(1, 1);
     webhookId = ids[0];
-  });
+  }, 30000);
 
   afterAll(async () => {
     await teardownApp();

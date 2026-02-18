@@ -25,6 +25,7 @@ export const ERROR_LABELS = Object.freeze({
   CLIENT_ERROR: "Client Error",
   INVALID_SIGNATURE: "Invalid signature",
   SIGNATURE_MISMATCH_STREAM: "Signature mismatch (stream verified)",
+  INVALID_JSON_SCHEMA: "Invalid JSON schema",
   GENERIC: "Error",
 });
 
@@ -48,6 +49,7 @@ export const ERROR_MESSAGES = Object.freeze({
   LOG_DETAIL_FAILED: "Failed to fetch log detail",
   FORWARD_REQUEST_FAILED: "Request Failed",
   ABORTED: "Aborted",
+  SCHEMA_COMPILATION_FAILED: "Schema compilation failed",
   FORWARD_REQUEST_FAILED_STATUS:
     /**
      * @param {number} status
@@ -89,8 +91,7 @@ export const ERROR_MESSAGES = Object.freeze({
      * @returns {string}
      */
     (attempts, timeoutMs) =>
-      `Target destination timed out after ${attempts} attempts (${
-        timeoutMs / APP_CONSTS.MS_PER_SECOND
+      `Target destination timed out after ${attempts} attempts (${timeoutMs / APP_CONSTS.MS_PER_SECOND
       }s timeout per attempt)`,
   REPLAY_ATTEMPTS_EXHAUSTED:
     /**
@@ -132,8 +133,7 @@ export const ERROR_MESSAGES = Object.freeze({
      * @returns {string}
      */
     (url, isTransient, attempts, error) =>
-      `Forwarding to ${url} failed${
-        !isTransient ? " (Non-transient error)" : ""
+      `Forwarding to ${url} failed${!isTransient ? " (Non-transient error)" : ""
       } after ${attempts} attempts. Last error: ${error}`,
   BOTTLENECK_STOPPED: "has been stopped",
   RATE_LIMITER_INVALID_WINDOW:
@@ -161,6 +161,18 @@ export const ERROR_MESSAGES = Object.freeze({
      * @returns {string}
      */
     (error) => `Alert URL blocked by SSRF policy: ${error}`,
+  JSON_PARSE_ERROR:
+    /**
+     * @param {string} err
+     * @returns {string}
+     */
+    (err) => `JSON parse error: ${err}`,
+  SYNC_VERSION_FAILED:
+    /**
+     * @param {string} error
+     * @returns {string}
+     */
+    (error) => `Failed to sync version: ${error}`,
 });
 
 /**

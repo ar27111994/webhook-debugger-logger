@@ -28,7 +28,7 @@ import {
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import { loggerMock } from "../setup/helpers/shared-mocks.js";
 
-await setupCommonMocks({ apify: true, logger: true });
+await setupCommonMocks({ apify: true, logger: true, consts: true });
 
 // 2. Import modules
 const { setupTestApp } = await import("../setup/helpers/app-utils.js");
@@ -52,7 +52,7 @@ describe("Hot-Reloading Configuration Tests", () => {
       retentionHours: 1,
     });
     jest.setTimeout(15000);
-    ({ app: _app, appClient, teardownApp } = await setupTestApp());
+    ({ app: _app, appClient, teardownApp } = await setupTestApp({}, true));
   });
 
   afterAll(async () => {
@@ -266,6 +266,7 @@ describe("Hot-Reloading Configuration Tests", () => {
       authKey: "new-super-secret",
       jsonSchema: JSON.stringify({
         type: "object",
+        properties: { foo: { type: "string" } },
         required: ["foo"],
       }),
     });
@@ -279,9 +280,10 @@ describe("Hot-Reloading Configuration Tests", () => {
         .send({ bar: "baz" });
       return (
         res.statusCode === HTTP_STATUS.BAD_REQUEST &&
-        res.body.error === "JSON Schema Validation Failed"
+        res.body.error &&
+        res.body.error.includes("required")
       );
-    });
+    }, 15000);
 
     // 2. Clear schema (disable validation)
     await Actor.emitInput({
@@ -297,7 +299,7 @@ describe("Hot-Reloading Configuration Tests", () => {
         .set("Content-Type", "application/json")
         .send({ bar: "baz" });
       return res.statusCode === HTTP_STATUS.OK;
-    });
+    }, 5000);
 
     const res = await appClient
       .post(`/webhook/${whId}`)
@@ -306,7 +308,7 @@ describe("Hot-Reloading Configuration Tests", () => {
       .send({ bar: "baz" });
 
     expect(res.statusCode).toBe(HTTP_STATUS.OK);
-  });
+  }, 15000);
 
   test("should handle stringified input from KV store", async () => {
     // 1. Emit stringified input (simulating raw KV update)

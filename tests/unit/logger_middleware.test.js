@@ -1,92 +1,274 @@
-import { jest, describe, test, expect } from "@jest/globals";
+/**
+ * @file tests/unit/logger_middleware.test.js
+ * @description Comprehensive unit tests for LoggerMiddleware covering all logic paths.
+ * Consolidates previous split test files into a single source of truth.
+ */
+import {
+  jest,
+  describe,
+  test,
+  expect,
+  beforeAll,
+  beforeEach,
+} from "@jest/globals";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 import {
-  assertType,
-  createMockNextFunction,
   createMockRequest,
   createMockResponse,
+  createMockNextFunction,
+  assertType,
   sleep,
 } from "../setup/helpers/test-utils.js";
+import { PassThrough } from "stream";
 
-/**
- * @typedef {import('../../src/webhook_manager.js').WebhookManager} WebhookManager
- * @typedef {import('../../src/typedefs.js').CommonError} CommonError
- * @typedef {import('../../src/logger_middleware.js').LoggerMiddleware} LoggerMiddlewareType
- * @typedef {import('../../src/services/ForwardingService.js').ForwardingService} ForwardingService
- */
-
-// 1. Setup Common Mocks
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
-await setupCommonMocks({
-  axios: true,
-  apify: true,
-  ssrf: true,
-  logger: true,
-  auth: true,
-  signature: true,
-  rateLimit: true,
-  storage: true,
-  config: true,
-  alerting: true,
-  events: true,
-  vm: true,
-});
-
 import {
-  apifyMock,
-  ssrfMock,
   webhookManagerMock,
-  mockScriptRun,
+  webhookRateLimiterMock,
+  storageHelperMock,
+  signatureMock,
+  axiosMock,
+  ssrfMock,
   loggerMock,
+  mockScriptRun,
   constsMock,
 } from "../setup/helpers/shared-mocks.js";
-import { LOG_MESSAGES } from "../../src/consts/messages.js";
-import { ERROR_LABELS } from "../../src/consts/errors.js";
 
-const mockActor = apifyMock;
+const BACKGROUND_SETTLE_MS = 100;
+const TEST_PAYLOAD_SIZE_LARGE = 5500000;
+const TEST_MAX_PAYLOAD_LMT = 10000000;
 
-// Import class under test
-const { LoggerMiddleware } = await import("../../src/logger_middleware.js");
-const { webhookRateLimiter } =
-  await import("../../src/utils/webhook_rate_limiter.js");
+/**
+ * @typedef {import('../../src/logger_middleware.js').LoggerMiddleware} LoggerMiddlewareType
+ * @typedef {import('../../src/typedefs.js').WebhookData} WebhookData
+ * @typedef {import('../../src/typedefs.js').SsrfValidationResult} VerificationResult
+ * @typedef {import('../../src/typedefs.js').CustomRequest} Request
 
-describe("LoggerMiddleware Coverage Tests", () => {
+ */
+
+describe("LoggerMiddleware Comprehensive", () => {
   /** @type {LoggerMiddlewareType} */
   let middleware;
   /** @type {jest.Mock} */
   let onEvent;
-  /** @type {ForwardingService} */
-  let mockForwardingService;
+  /** @type {typeof import('../../src/logger_middleware.js').LoggerMiddleware} */
+  let LoggerMiddleware;
 
-  useMockCleanup(() => {
-    onEvent = jest.fn();
-    mockForwardingService = assertType({
-      forwardWebhook: assertType(jest.fn()).mockResolvedValue(undefined),
+  useMockCleanup();
+
+  beforeAll(async () => {
+    // 1. Register mocks via setupCommonMocks
+    await setupCommonMocks({
+      axios: true,
+      apify: true,
+      dns: true,
+      ssrf: true,
+      logger: true,
+      express: true,
+      db: true,
+      sync: true,
+      consts: true,
+      webhookManager: true,
+      auth: true,
+      signature: true,
+      rateLimit: true,
+      storage: true,
+      config: true,
+      alerting: true,
+      events: true,
+      vm: true,
+      repositories: true,
+      services: true,
+      fs: true,
     });
 
-    middleware = new LoggerMiddleware(
-      webhookManagerMock,
-      {},
-      onEvent,
-      mockForwardingService,
+    // 2. Import modules AFTER mocks are established
+    const loggerMiddlewareModule =
+      await import("../../src/logger_middleware.js");
+    LoggerMiddleware = loggerMiddlewareModule.LoggerMiddleware;
+  });
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    onEvent = jest.fn();
+    // Constructor requires: webhookManager, options, onEvent
+    middleware = new LoggerMiddleware(webhookManagerMock, {}, onEvent);
+
+    webhookRateLimiterMock.webhookRateLimiter.check.mockReturnValue({
+      allowed: true,
+      remaining: 100,
+      resetMs: 0,
+    });
+
+    signatureMock.verifySignature.mockReturnValue({
+      valid: true,
+      provider: assertType("test"),
+    });
+    ssrfMock.validateUrlForSsrf.mockResolvedValue({
+      safe: true,
+      href: "https://safe.com",
+      host: "safe.com",
+    });
+
+    // Reset signature stream mocks to defaults
+    signatureMock.createStreamVerifier.mockReturnValue(
+      assertType({
+        hmac: { update: jest.fn() },
+      }),
     );
+    signatureMock.finalizeStreamVerification.mockReturnValue(true);
+
+    // Reset storage mocks
+    storageHelperMock.generateKvsKey.mockReturnValue("mock-kvs-key");
+    storageHelperMock.getKvsUrl.mockResolvedValue(
+      "https://api.apify.com/v2/key-value-stores/mock-store/records/mock-kvs-key",
+    );
+    storageHelperMock.createReferenceBody.mockImplementation((data) => data);
+    storageHelperMock.offloadToKvs.mockResolvedValue(undefined);
+
+    jest.mocked(webhookManagerMock.getWebhookData).mockImplementation(
+      /**
+       * @param {string} id
+       * @returns {WebhookData | undefined}
+       */
+      (id) => {
+        if (id === "wh_none") return undefined;
+        if (id === "wh_1") {
+          return assertType({
+            id: "wh_1",
+            options: {},
+            signatureVerification: {
+              provider: "test",
+              header: "x-custom-signature",
+              secret: "secret",
+            },
+          });
+        }
+        return assertType({ id, options: {} });
+      },
+    );
+    jest.mocked(webhookManagerMock.isValid).mockImplementation(
+      /**
+       * @param {string} id
+       * @returns {boolean}
+       */
+      (id) => id !== "wh_none",
+    );
+
+    axiosMock.post.mockResolvedValue({
+      status: constsMock.HTTP_STATUS.OK,
+      data: {},
+    });
+  });
+
+  describe("Static Helper: getValidStatusCode", () => {
+    test("should return default code for invalid inputs", () => {
+      expect(LoggerMiddleware.getValidStatusCode(undefined)).toBe(
+        constsMock.HTTP_STATUS.OK,
+      );
+      expect(LoggerMiddleware.getValidStatusCode("invalid")).toBe(
+        constsMock.HTTP_STATUS.OK,
+      );
+    });
+
+    test("should return default code for out-of-bounds inputs", () => {
+      const LOW_CODE = 99;
+      const HIGH_CODE = 600;
+      expect(LoggerMiddleware.getValidStatusCode(LOW_CODE)).toBe(
+        constsMock.HTTP_STATUS.OK,
+      );
+      expect(LoggerMiddleware.getValidStatusCode(HIGH_CODE)).toBe(
+        constsMock.HTTP_STATUS.OK,
+      );
+    });
+
+    test("should return valid status code", () => {
+      expect(
+        LoggerMiddleware.getValidStatusCode(constsMock.HTTP_STATUS.CREATED),
+      ).toBe(constsMock.HTTP_STATUS.CREATED);
+    });
+  });
+
+  describe("Core Features & Config", () => {
+    test("options getter/setter work correctly", () => {
+      expect(middleware.options).toBeDefined();
+      const DELAY_MS = 50;
+      middleware.updateOptions({ responseDelayMs: DELAY_MS });
+      expect(middleware.options.responseDelayMs).toBe(DELAY_MS);
+    });
+
+    test("resource compilation success (script & schema)", () => {
+      middleware.updateOptions({ customScript: "event.test = 1;" });
+      expect(middleware.hasCompiledScript()).toBe(true);
+      middleware.updateOptions({ jsonSchema: { type: "object" } });
+      expect(middleware.hasValidator()).toBe(true);
+    });
+
+    test("resource compilation handles errors gracefully", () => {
+      middleware.updateOptions({ customScript: "throw" });
+      expect(middleware.hasCompiledScript()).toBe(false);
+      expect(loggerMock.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          errorPrefix: expect.stringContaining("SCRIPT"),
+        }),
+        expect.stringContaining("Invalid"),
+      );
+    });
   });
 
   describe("Ingest Middleware", () => {
-    test("should skip non-POST/PUT/DELETE methods", async () => {
+    test("GET requests should be skipped", async () => {
       const req = createMockRequest({ method: "GET" });
       const res = createMockResponse();
       const next = createMockNextFunction();
-
       await middleware.ingestMiddleware(req, res, next);
       expect(next).toHaveBeenCalled();
     });
 
-    test("should handle rate limit exceeded", async () => {
-      jest.mocked(webhookRateLimiter.check).mockReturnValueOnce({
+    test("should block recursive forwarding loops", async () => {
+      const req = createMockRequest({
+        method: "POST",
+        params: { id: "wh_1" },
+        headers: {
+          [constsMock.RECURSION_HEADER_NAME.toLowerCase()]:
+            constsMock.RECURSION_HEADER_VALUE,
+        },
+      });
+      const res = createMockResponse();
+      const next = createMockNextFunction();
+      await middleware.ingestMiddleware(req, res, next);
+      expect(res.status).toHaveBeenCalledWith(
+        constsMock.HTTP_STATUS.UNPROCESSABLE_ENTITY,
+      );
+      expect(loggerMock.warn).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.stringContaining("Recursive forwarding loop detected"),
+      );
+    });
+
+    test("should block recursive forwarding loops (suffixed)", async () => {
+      const req = createMockRequest({
+        method: "POST",
+        params: { id: "wh_1" },
+        headers: {
+          [constsMock.RECURSION_HEADER_NAME.toLowerCase()]:
+            constsMock.RECURSION_HEADER_VALUE +
+            constsMock.RECURSION_HEADER_LOOP_SUFFIX,
+        },
+      });
+      const res = createMockResponse();
+      const next = createMockNextFunction();
+      await middleware.ingestMiddleware(req, res, next);
+      expect(res.status).toHaveBeenCalledWith(
+        constsMock.HTTP_STATUS.UNPROCESSABLE_ENTITY,
+      );
+    });
+
+    test("rate limiting (429)", async () => {
+      webhookRateLimiterMock.webhookRateLimiter.check.mockReturnValue({
         allowed: false,
-        remaining: 0,
         resetMs: 1000,
+        remaining: 0,
       });
       const req = createMockRequest({ method: "POST", params: { id: "wh_1" } });
       const res = createMockResponse();
@@ -97,24 +279,17 @@ describe("LoggerMiddleware Coverage Tests", () => {
       expect(res.status).toHaveBeenCalledWith(
         constsMock.HTTP_STATUS.TOO_MANY_REQUESTS,
       );
-      expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ error: "Too Many Requests" }),
-      );
     });
 
-    test("should reject payload too large via Content-Length", async () => {
+    test("large payload rejection (413)", async () => {
+      middleware.updateOptions({ maxPayloadSize: 10 });
       const req = createMockRequest({
         method: "POST",
         params: { id: "wh_1" },
-        headers: { "content-length": "2000" }, // > default 1024 mock
+        headers: { "content-length": "100" },
       });
-      // Set maxPayloadSize in options (mock resolveOptions logic or pass in constructor opts)
-      middleware.updateOptions({ maxPayloadSize: 1000 });
-
       const res = createMockResponse();
       const next = createMockNextFunction();
-
-      await middleware.ingestMiddleware(req, res, next);
 
       await middleware.ingestMiddleware(req, res, next);
 
@@ -122,270 +297,461 @@ describe("LoggerMiddleware Coverage Tests", () => {
         constsMock.HTTP_STATUS.PAYLOAD_TOO_LARGE,
       );
     });
-  });
 
-  describe("Validation Logic (via main middleware)", () => {
-    test("should return 404 if webhook ID is invalid", async () => {
-      jest.mocked(webhookManagerMock.isValid).mockReturnValue(false);
-      const req = createMockRequest({ params: { id: "invalid" } });
-      const res = createMockResponse();
-      const next = createMockNextFunction();
+    test("streaming offload to KVS", async () => {
+      const { Actor } = await import("apify");
+      jest.mocked(Actor.isAtHome).mockReturnValue(true);
+      jest.mocked(Actor.getEnv).mockReturnValue(assertType({ isAtHome: true }));
 
-      await middleware.middleware(req, res, next);
+      const largeSize = 5500000; // > threshold
+      const largeBody = "a".repeat(largeSize);
+      middleware.updateOptions({ maxPayloadSize: 10000000 });
 
-      expect(res.status).toHaveBeenCalledWith(constsMock.HTTP_STATUS.NOT_FOUND);
-    });
-
-    test("should return 403 if IP is not whitelisted", async () => {
-      middleware.updateOptions({ allowedIps: ["1.2.3.4"] });
-      ssrfMock.checkIpInRanges.mockReturnValue(false);
-
-      const req = createMockRequest({ ip: "5.6.7.8", params: { id: "wh_1" } });
-      const res = createMockResponse();
-      const next = createMockNextFunction();
-
-      jest.mocked(webhookManagerMock.isValid).mockReturnValue(true);
-
-      await middleware.middleware(req, res, next);
-
-      expect(res.status).toHaveBeenCalledWith(constsMock.HTTP_STATUS.FORBIDDEN);
-    });
-
-    test("should return 401 if auth fails", async () => {
-      middleware.updateOptions({ authKey: "invalid-key" }); // triggers mock logic
-
-      const req = createMockRequest({ params: { id: "wh_1" } });
-      const res = createMockResponse();
-      const next = createMockNextFunction();
-
-      jest.mocked(webhookManagerMock.isValid).mockReturnValue(true);
-
-      await middleware.middleware(req, res, next);
-
-      await middleware.middleware(req, res, next);
-
-      expect(res.status).toHaveBeenCalledWith(
-        constsMock.HTTP_STATUS.UNAUTHORIZED,
-      );
-    });
-  });
-
-  describe("Preparation & Transformation", () => {
-    test("should mask sensitive headers", async () => {
-      middleware.updateOptions({ maskSensitiveData: true });
-
-      const req = createMockRequest({
+      // Use proper stream construction
+      const reqBase = createMockRequest({
+        method: "POST",
         params: { id: "wh_1" },
         headers: {
-          authorization: "secret",
+          "content-length": String(largeSize),
           "content-type": "application/json",
         },
+      });
+
+      const req = new PassThrough();
+      Object.assign(req, reqBase);
+      req.push(largeBody);
+      req.push(null);
+
+      storageHelperMock.createReferenceBody.mockReturnValue({ $kvs: "key" });
+
+      const res = createMockResponse();
+      const next = createMockNextFunction();
+      await middleware.ingestMiddleware(/** @type {any} */(req), res, next);
+
+      expect(storageHelperMock.offloadToKvs).toHaveBeenCalled();
+      expect(next).toHaveBeenCalled();
+      // @ts-expect-error - property added by middleware
+      expect(req.isOffloaded).toBe(true);
+    });
+
+    test("streaming offload failure handles error gracefully", async () => {
+      const largeSize = 5500000;
+      middleware.updateOptions({ maxPayloadSize: 10000000 });
+
+      const reqBase = createMockRequest({
+        method: "POST",
+        params: { id: "wh_1" },
+        headers: { "content-length": String(largeSize) },
+      });
+      const req = new PassThrough();
+      Object.assign(req, reqBase);
+      req.push("data");
+      req.push(null); // End stream
+
+      // Mock offload failure
+      storageHelperMock.offloadToKvs.mockRejectedValue(new Error("KVS Failed"));
+
+      const res = createMockResponse();
+      const next = createMockNextFunction();
+      await middleware.ingestMiddleware(/** @type {any} */(req), res, next);
+
+      expect(res.status).toHaveBeenCalledWith(
+        constsMock.HTTP_STATUS.INTERNAL_SERVER_ERROR,
+      );
+      expect(loggerMock.error).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.stringContaining("Streaming offload failed"),
+      );
+    });
+
+    test("streaming offload with verification logic", async () => {
+      middleware.updateOptions({
+        maxPayloadSize: TEST_MAX_PAYLOAD_LMT,
+        signatureVerification: { provider: "test", secret: "secret" },
+      });
+
+      // Mock createStreamVerifier to return object with hmac having update method
+      const mockHmac = {
+        update: jest.fn(),
+      };
+      signatureMock.createStreamVerifier.mockReturnValue({
+        hmac: assertType(mockHmac),
+        error: undefined,
+        expectedSignature: "sig",
+        encoding: "hex",
+      });
+      // Mock finalizeStreamVerification
+      signatureMock.finalizeStreamVerification.mockReturnValue(true);
+
+      const reqBase = createMockRequest({
+        method: "POST",
+        params: { id: "wh_1" },
+        headers: {
+          "content-length": String(TEST_PAYLOAD_SIZE_LARGE),
+          "content-type": constsMock.MIME_TYPES.JSON,
+        },
+      });
+
+      /** @type {Request} */
+      const req = assertType(new PassThrough());
+      Object.assign(req, reqBase);
+
+      const res = createMockResponse();
+      const next = createMockNextFunction();
+
+      const promise = middleware.ingestMiddleware(req, res, next);
+
+      storageHelperMock.offloadToKvs.mockImplementation((_k, stream) => {
+        return new Promise((resolve, reject) => {
+          stream.on("end", resolve);
+          stream.on("error", reject);
+          // Resume the stream to ensure 'end' is emitted if it's a PassThrough
+          stream.resume();
+        });
+      });
+      // Emit data properly
+      setImmediate(() => {
+        req.push(Buffer.from("chunk"));
+        req.push(null);
+      });
+
+      await promise;
+
+      expect(signatureMock.createStreamVerifier).toHaveBeenCalled();
+      expect(req.ingestSignatureResult).toEqual({
+        valid: true,
+        provider: "test",
+        error: undefined,
+      });
+    });
+  });
+
+  describe("Main Middleware", () => {
+    test("signature verification failure (HTTP_STATUS.UNAUTHORIZED)", async () => {
+      middleware.updateOptions({
+        signatureVerification: { provider: "test", secret: "test" },
+      });
+      signatureMock.verifySignature.mockReturnValue(
+        assertType({
+          valid: false,
+          error: "Bad sig",
+        }),
+      );
+      const req = createMockRequest({
+        method: "POST",
+        params: { id: "wh_1" },
         body: {},
       });
       const res = createMockResponse();
       const next = createMockNextFunction();
-
-      jest.mocked(webhookManagerMock.isValid).mockReturnValue(true);
-
       await middleware.middleware(req, res, next);
-      expect(mockActor.pushData.mock.calls[0][0].headers["authorization"]).toBe(
-        "[MASKED]",
+      expect(res.status).toHaveBeenCalledWith(
+        constsMock.HTTP_STATUS.UNAUTHORIZED,
       );
     });
 
-    test("should deeply redact body paths", async () => {
+    test("schema validation failure (400)", async () => {
       middleware.updateOptions({
-        redactBodyPaths: ["body.user.password", "body.creditCard.number"],
+        jsonSchema: { type: "object", required: ["a"] },
       });
-
       const req = createMockRequest({
+        method: constsMock.HTTP_METHODS.POST,
         params: { id: "wh_1" },
-        body: {
-          user: { name: "John", password: "secret_password" },
-          creditCard: { number: "1234-5678", expiry: "12/24" },
-          other: "safe",
-        },
+        headers: { "content-type": constsMock.MIME_TYPES.JSON },
+        body: { b: 2 },
       });
       const res = createMockResponse();
       const next = createMockNextFunction();
-
-      jest.mocked(webhookManagerMock.isValid).mockReturnValue(true);
-
       await middleware.middleware(req, res, next);
-
-      // Verify Actor.pushData call
-      const pushCall = mockActor.pushData.mock.calls[0][0];
-      const body = JSON.parse(pushCall.body);
-
-      expect(body.user.password).toBe("[REDACTED]");
-      expect(body.user.name).toBe("John");
-      expect(body.creditCard.number).toBe("[REDACTED]");
-      expect(body.creditCard.expiry).toBe("12/24");
-      expect(body.other).toBe("safe");
-    });
-
-    test("should validate JSON schema if configured", async () => {
-      middleware.updateOptions({
-        jsonSchema: { type: "object", required: ["foo"] },
-      });
-
-      const req = createMockRequest({
-        params: { id: "wh_1" },
-        headers: { "content-type": "application/json" },
-        body: { bar: 1 }, // missing foo
-      });
-      const res = createMockResponse();
-      const next = createMockNextFunction();
-
-      jest.mocked(webhookManagerMock.isValid).mockReturnValue(true);
-
-      await middleware.middleware(req, res, next);
-
-      await middleware.middleware(req, res, next);
-
       expect(res.status).toHaveBeenCalledWith(
         constsMock.HTTP_STATUS.BAD_REQUEST,
       );
-      expect(res.json).toHaveBeenCalledWith(
+    });
+
+    test("custom script execution", async () => {
+      middleware.updateOptions({
+        customScript:
+          "console.log('test'); event.custom = 'done'; event.responseBody = { ok: 1 };",
+      });
+      mockScriptRun.mockImplementation((/** @type {any} */ context) => {
+        // For custom script tests
+        if (context.event) {
+          context.console.log("Wrapper Test");
+          context.event.custom = "done";
+          context.event.responseBody = { ok: 1 };
+        }
+      });
+      const req = createMockRequest({
+        method: constsMock.HTTP_METHODS.POST,
+        params: { id: "wh_1" },
+        body: {},
+      });
+      const res = createMockResponse();
+      const next = createMockNextFunction();
+      await middleware.middleware(req, res, next);
+
+      expect(onEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ webhookId: "wh_1" }),
+      );
+      expect(res.json).toHaveBeenCalledWith({ ok: 1 });
+      // Assert limitedConsole log mapped to loggerMock.debug
+      expect(loggerMock.debug).toHaveBeenCalledWith(
+        expect.objectContaining({ source: "script" }),
+        "Wrapper Test",
+      );
+    });
+  });
+
+  describe("Data Transformation Coverage", () => {
+    test("should mask headers", async () => {
+      const req = createMockRequest({
+        method: constsMock.HTTP_METHODS.POST,
+        params: { id: "wh_1" },
+        headers: {
+          [constsMock.HTTP_HEADERS.AUTHORIZATION]: "secret",
+          [constsMock.HTTP_HEADERS.X_API_KEY]: "secret",
+          "public-header": "public",
+        },
+        body: {},
+      });
+      // Default options include masking
+
+      const res = createMockResponse();
+      const next = createMockNextFunction();
+      await middleware.middleware(req, res, next);
+
+      expect(onEvent).toHaveBeenCalledWith(
         expect.objectContaining({
-          error: LOG_MESSAGES.JSON_SCHEMA_VALIDATION_FAILED,
+          headers: expect.objectContaining({
+            authorization: expect.stringContaining("MASKED"),
+            "public-header": "public",
+          }),
+        }),
+      );
+    });
+
+    test("should redact body fields", async () => {
+      middleware.updateOptions({ redactBodyPaths: ["body.sensitive"] });
+      const req = createMockRequest({
+        method: constsMock.HTTP_METHODS.POST,
+        params: { id: "wh_1" },
+        headers: { "content-type": constsMock.MIME_TYPES.JSON },
+        body: { sensitive: "secret", public: "value" },
+      });
+
+      const res = createMockResponse();
+      const next = createMockNextFunction();
+      await middleware.middleware(req, res, next);
+
+      expect(onEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: expect.stringContaining("[REDACTED]"),
+        }),
+      );
+    });
+
+    test("should handle binary buffer body", async () => {
+      const binBody = Buffer.from("test");
+      const req = createMockRequest({
+        method: constsMock.HTTP_METHODS.POST,
+        params: { id: "wh_1" },
+        headers: { "content-type": constsMock.MIME_TYPES.OCTET_STREAM },
+        body: binBody,
+      });
+
+      const res = createMockResponse();
+      const next = createMockNextFunction();
+      await middleware.middleware(req, res, next);
+
+      expect(onEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: binBody.toString("base64"),
+          bodyEncoding: "base64",
+        }),
+      );
+    });
+
+    test("should sync offload large payloads (if ingestion skipped it)", async () => {
+      // Use size larger than STORAGE_CONSTS.KVS_OFFLOAD_THRESHOLD (5MB)
+      const hugeString = "a".repeat(TEST_PAYLOAD_SIZE_LARGE);
+      storageHelperMock.offloadToKvs.mockResolvedValue(undefined);
+      storageHelperMock.createReferenceBody.mockReturnValue({
+        $kvs: "sync_key",
+      });
+
+      const req = createMockRequest({
+        method: constsMock.HTTP_METHODS.POST,
+        params: { id: "wh_1" },
+        headers: { "content-type": constsMock.MIME_TYPES.TEXT_PLAIN },
+        body: hugeString,
+      });
+
+      const res = createMockResponse();
+      const next = createMockNextFunction();
+      await middleware.middleware(req, res, next);
+
+      expect(storageHelperMock.offloadToKvs).toHaveBeenCalled();
+      expect(onEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: expect.objectContaining({ $kvs: "sync_key" }),
+        }),
+      );
+    });
+
+    test("should handle sync offload failure", async () => {
+      // Use size larger than STORAGE_CONSTS.KVS_OFFLOAD_THRESHOLD (5MB)
+      const hugeString = "a".repeat(TEST_PAYLOAD_SIZE_LARGE);
+      storageHelperMock.offloadToKvs.mockRejectedValue(new Error("KVS Error"));
+      const req = createMockRequest({
+        method: constsMock.HTTP_METHODS.POST,
+        params: { id: "wh_1" },
+        headers: { "content-type": constsMock.MIME_TYPES.TEXT_PLAIN },
+        body: hugeString,
+      });
+
+      const res = createMockResponse();
+      const next = createMockNextFunction();
+      await middleware.middleware(req, res, next);
+
+      expect(loggerMock.error).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.stringContaining("offload large payload"),
+      );
+      // Check truncation logic
+      expect(onEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: expect.stringContaining("TRUNCATED"),
         }),
       );
     });
   });
 
-  describe("Custom Scripts", () => {
-    test("should run custom script and log error on timeout", async () => {
-      middleware.updateOptions({ customScript: "example" });
-      mockScriptRun.mockImplementation(() => {
-        /** @type {CommonError} */
-        const e = new Error("Script execution timed out");
-        e.code = "ERR_SCRIPT_EXECUTION_TIMEOUT";
-        throw e;
+  describe("Background Processing", () => {
+    test("platform limit error detection", async () => {
+      const { Actor } = await import("apify");
+      jest
+        .mocked(Actor.pushData)
+        .mockRejectedValueOnce(new Error("Quota Exceeded"));
+      const req = createMockRequest({
+        method: constsMock.HTTP_METHODS.POST,
+        params: { id: "wh_1" },
       });
-
-      const req = createMockRequest({ params: { id: "wh_1" }, body: {} });
       const res = createMockResponse();
       const next = createMockNextFunction();
-
-      jest.mocked(webhookManagerMock.isValid).mockReturnValue(true);
-
       await middleware.middleware(req, res, next);
-
-      expect(mockScriptRun).toHaveBeenCalled();
-      expect(loggerMock.error).toHaveBeenCalledWith(
-        expect.objectContaining({ isTimeout: true }),
-        expect.stringContaining("timed out"),
-      );
-    });
-  });
-
-  describe("Background Tasks", () => {
-    test("should log warn on platform execution error", async () => {
-      mockActor.pushData.mockRejectedValue(new Error("Dataset quota exceeded"));
-
-      const req = createMockRequest({ params: { id: "wh_1" }, body: {} });
-      const res = createMockResponse();
-      const next = createMockNextFunction();
-
-      jest.mocked(webhookManagerMock.isValid).mockReturnValue(true);
-
-      await middleware.middleware(req, res, next);
-
-      // Wait for background tasks (they are race-protected but we want to assert log)
-      await sleep(10);
-
+      await sleep(BACKGROUND_SETTLE_MS);
       expect(loggerMock.error).toHaveBeenCalledWith(
         expect.objectContaining({ isPlatformError: true }),
         "Platform limit error",
       );
     });
-  });
 
-  describe("Signature Verification", () => {
-    test("should pass valid signature", async () => {
-      middleware.updateOptions({
-        signatureVerification: { provider: "github", secret: "foo" },
-      });
-      // Mock verifySignature to return valid (already default in mock-setup but explicit here)
-      const { verifySignature } = await import("../../src/utils/signature.js");
-      jest.mocked(verifySignature).mockReturnValue({
-        valid: true,
-        provider: "github",
-      });
-
+    test("forwarding trigger", async () => {
+      middleware.updateOptions({ forwardUrl: "https://forward.com" });
       const req = createMockRequest({
+        method: constsMock.HTTP_METHODS.POST,
         params: { id: "wh_1" },
-        headers: { "x-hub-signature": "sha256=valid" },
-        body: "{}",
+        body: { a: 1 },
       });
       const res = createMockResponse();
       const next = createMockNextFunction();
-
-      jest.mocked(webhookManagerMock.isValid).mockReturnValue(true);
-
       await middleware.middleware(req, res, next);
-
-      // Verify event has signature info
-      const pushCall = mockActor.pushData.mock.calls[0][0];
-      expect(pushCall.signatureValid).toBe(true);
+      await sleep(BACKGROUND_SETTLE_MS);
+      const { forwardingServiceMock } =
+        await import("../setup/helpers/shared-mocks.js");
+      expect(forwardingServiceMock.forwardWebhook).toHaveBeenCalled();
     });
 
-    test("should record error on invalid signature", async () => {
-      middleware.updateOptions({
-        signatureVerification: { provider: "github", secret: "foo" },
+    test("SSRF blocking for forwarding", async () => {
+      middleware.updateOptions({ forwardUrl: "https://internal.com" });
+      ssrfMock.validateUrlForSsrf.mockResolvedValueOnce({
+        safe: false,
+        error: "Internal",
       });
-      const { verifySignature } = await import("../../src/utils/signature.js");
-      jest.mocked(verifySignature).mockReturnValue({
-        valid: false,
-        error: "Mismatch",
-        provider: "github",
-      });
-
       const req = createMockRequest({
+        method: constsMock.HTTP_METHODS.POST,
         params: { id: "wh_1" },
-        body: "{}",
       });
       const res = createMockResponse();
       const next = createMockNextFunction();
-
-      jest.mocked(webhookManagerMock.isValid).mockReturnValue(true);
-
       await middleware.middleware(req, res, next);
+      await sleep(BACKGROUND_SETTLE_MS);
+      expect(axiosMock.post).not.toHaveBeenCalled();
+    });
+  });
 
+  describe("Edge Cases & Error Handling", () => {
+    test("non-existent webhooks (404)", async () => {
+      const req = createMockRequest({ params: { id: "wh_none" } });
+      const res = createMockResponse();
+      const next = createMockNextFunction();
       await middleware.middleware(req, res, next);
+      expect(res.status).toHaveBeenCalledWith(constsMock.HTTP_STATUS.NOT_FOUND);
+    });
 
+    test("JSON parse error in body (HTTP_STATUS.BAD_REQUEST)", async () => {
+      const EXPECTED_STATUS = constsMock.HTTP_STATUS.BAD_REQUEST;
+      middleware.updateOptions({ jsonSchema: { type: "object" } });
+      const req = createMockRequest({
+        headers: { "content-type": constsMock.MIME_TYPES.JSON },
+        body: "{ invalid }",
+      });
+      const res = createMockResponse();
+      const next = createMockNextFunction();
+      await middleware.middleware(req, res, next);
+      expect(res.status).toHaveBeenCalledWith(EXPECTED_STATUS);
+    });
+
+    test("should use pre-calculated signature result if present", async () => {
+      /** @type {Request} */
+      const req = createMockRequest({
+        method: constsMock.HTTP_METHODS.POST,
+        params: { id: "wh_1" },
+        body: {},
+      });
+      /** @type {any} */ (req).ingestSignatureResult = {
+        valid: false,
+        error: "Pre-validated failure",
+        provider: "stream",
+      };
+
+      // Enable signature verification to trigger the check
+      middleware.updateOptions({
+        signatureVerification: { provider: "stream", secret: "test" },
+      });
+
+      const res = createMockResponse();
+      const next = createMockNextFunction();
+      await middleware.middleware(req, res, next);
       expect(res.status).toHaveBeenCalledWith(
         constsMock.HTTP_STATUS.UNAUTHORIZED,
       );
-      expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ error: ERROR_LABELS.INVALID_SIGNATURE }),
-      );
-      expect(mockActor.pushData).toHaveBeenCalled();
-    });
-  });
 
-  describe("Payload Offloading", () => {
-    test("should offload to KVS if body (sync) exceeds threshold", async () => {
-      // Threshold is 5MB in code, let's force a large body simulation
-      const largeBody = "a".repeat(5 * 1024 * 1024 + 100); // 5MB + 100
+      const jsonMock = jest.mocked(res.json);
+      expect(jsonMock.mock.calls[0][0].details).toBe("Pre-validated failure");
+    });
+
+    test("should handle error after headers sent", async () => {
       const req = createMockRequest({
+        method: constsMock.HTTP_METHODS.POST,
         params: { id: "wh_1" },
-        body: largeBody,
       });
       const res = createMockResponse();
       const next = createMockNextFunction();
+      res.headersSent = true;
 
-      jest.mocked(webhookManagerMock.isValid).mockReturnValue(true);
+      const { configMock } = await import("../setup/helpers/shared-mocks.js");
+      jest
+        .mocked(configMock.getSafeResponseDelay)
+        .mockImplementationOnce(() => {
+          throw new Error("Boom");
+        });
 
       await middleware.middleware(req, res, next);
-
-      const pushCall = mockActor.pushData.mock.calls[0][0];
-      const body =
-        typeof pushCall.body === "string"
-          ? JSON.parse(pushCall.body)
-          : pushCall.body;
-      expect(body.isReference).toBe(true);
+      expect(loggerMock.error).toHaveBeenCalledWith(
+        expect.objectContaining({ err: expect.anything() }),
+        "Internal middleware error after headers sent",
+      );
     });
   });
 });

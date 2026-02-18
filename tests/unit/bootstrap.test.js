@@ -7,9 +7,14 @@ import {
   fsPromisesMock as mockFs,
   loggerMock,
 } from "../setup/helpers/shared-mocks.js";
-import { FILE_NAMES } from "../../src/consts/storage.js";
+import {
+  FILE_EXTENSIONS,
+  FILE_NAMES,
+  STORAGE_CONSTS,
+} from "../../src/consts/storage.js";
 import { LOG_MESSAGES } from "../../src/consts/messages.js";
 import { ENV_VARS } from "../../src/consts/app.js";
+import { ENCODINGS } from "../../src/consts/http.js";
 
 await setupCommonMocks({ logger: true, fs: true });
 
@@ -38,7 +43,12 @@ describe("Bootstrap Utilities", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    process.env[ENV_VARS.APIFY_LOCAL_STORAGE_DIR] = "/tmp/storage";
+    process.env[ENV_VARS.APIFY_LOCAL_STORAGE_DIR] = STORAGE_CONSTS.TEMP_STORAGE;
+    delete process.env[ENV_VARS.APIFY_ACTOR_DIR];
+  });
+
+  afterEach(() => {
+    delete process.env[ENV_VARS.APIFY_LOCAL_STORAGE_DIR];
     delete process.env[ENV_VARS.APIFY_ACTOR_DIR];
   });
 
@@ -74,14 +84,14 @@ describe("Bootstrap Utilities", () => {
       });
       // Should write merged config (defaults from schema + passed defaultInput)
       expect(mockFs.writeFile).toHaveBeenCalledWith(
-        expect.stringContaining(FILE_NAMES.CONFIG + ".tmp"),
+        expect.stringContaining(FILE_NAMES.CONFIG + FILE_EXTENSIONS.TMP),
         expect.stringContaining('"urlCount": 1'),
-        "utf8",
+        ENCODINGS.UTF8,
       );
       expect(mockFs.writeFile).toHaveBeenCalledWith(
-        expect.stringContaining(FILE_NAMES.CONFIG + ".tmp"),
+        expect.stringContaining(FILE_NAMES.CONFIG + FILE_EXTENSIONS.TMP),
         expect.stringContaining('"secret": "secret-value"'), // Prefill priority
-        "utf8",
+        ENCODINGS.UTF8,
       );
       expect(mockFs.rename).toHaveBeenCalled();
       expect(loggerMock.info).toHaveBeenCalledWith(
@@ -117,7 +127,7 @@ describe("Bootstrap Utilities", () => {
       expect(mockFs.writeFile).not.toHaveBeenCalled();
       expect(loggerMock.warn).toHaveBeenCalledWith(
         expect.objectContaining({ err: expect.any(Object) }),
-        LOG_MESSAGES.INPUT_READ_FAILED,
+        LOG_MESSAGES.INPUT_ACCESS_ERROR,
       );
     });
 
@@ -160,9 +170,10 @@ describe("Bootstrap Utilities", () => {
       await bootstrapRe.ensureLocalInputExists(mockInput);
 
       // Verify rm was called for cleanup (twice: once for target, once for tmp on error)
-      expect(mockFs.rm).toHaveBeenCalledTimes(2);
+      const rmCalls = 2;
+      expect(mockFs.rm).toHaveBeenCalledTimes(rmCalls);
       expect(mockFs.rm).toHaveBeenCalledWith(
-        expect.stringContaining(".tmp"),
+        expect.stringContaining(FILE_EXTENSIONS.TMP),
         expect.any(Object),
       );
 
@@ -214,7 +225,7 @@ describe("Bootstrap Utilities", () => {
 
       expect(mockFs.readFile).toHaveBeenCalledWith(
         expect.stringContaining("/custom/actor/dir/.actor/input_schema.json"),
-        "utf8",
+        ENCODINGS.UTF8,
       );
       delete process.env[ENV_VARS.APIFY_ACTOR_DIR];
     });
@@ -234,7 +245,7 @@ describe("Bootstrap Utilities", () => {
       expect(mockFs.writeFile).toHaveBeenCalledWith(
         expect.any(String),
         expect.stringContaining('"some": "default"'),
-        "utf8",
+        ENCODINGS.UTF8,
       );
     });
   });

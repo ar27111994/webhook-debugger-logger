@@ -57,6 +57,7 @@ export default [
     rules: {
       "no-magic-numbers": "off",
       "sonarjs/no-hardcoded-ip": "off",
+      "sonarjs/publicly-writable-directories": "off",
     },
   },
   {

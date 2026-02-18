@@ -39,7 +39,6 @@ const require = createRequire(import.meta.url);
 const { version } = require("../../package.json");
 
 const { setupTestApp } = await import("../setup/helpers/app-utils.js");
-const { webhookManager } = await import("../../src/main.js");
 const { Actor } = await import("apify");
 const { logRepository } =
   await import("../../src/repositories/LogRepository.js");
@@ -47,6 +46,7 @@ const { logRepository } =
 describe("API Contract & Regression Tests", () => {
   /** @type {string} */
   let webhookId;
+  let webhookManager;
 
   /** @type {AppClient} */
   let appClient;
@@ -61,6 +61,8 @@ describe("API Contract & Regression Tests", () => {
 
   beforeAll(async () => {
     jest.mocked(Actor.getInput).mockResolvedValue({ authKey: "test-secret" });
+    const { webhookManager: wm } = await import("../../src/main.js");
+    webhookManager = wm;
     ({ appClient, teardownApp, app: _app } = await setupTestApp());
     const ids = await webhookManager.generateWebhooks(1, 1);
     webhookId = ids[0];

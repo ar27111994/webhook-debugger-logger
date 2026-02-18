@@ -103,7 +103,7 @@ describe("Edge Case Tests", () => {
     /** @type {{body: unknown}} */
     const lastCall = assertType(
       jest.mocked(Actor.pushData).mock.calls[
-        jest.mocked(Actor.pushData).mock.calls.length - 1
+      jest.mocked(Actor.pushData).mock.calls.length - 1
       ][0],
     );
     expect(typeof lastCall.body).toBe("string");

@@ -16,9 +16,11 @@ import { getLastAxiosConfig, assertType } from "../setup/helpers/test-utils.js";
 // Mock Apify and Axios
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
-await setupCommonMocks({ axios: true, apify: true });
+await setupCommonMocks({ axios: true, apify: true, consts: true });
 
 const request = (await import("supertest")).default;
+const { ENV_VARS } = await import("../../src/consts/app.js");
+process.env[ENV_VARS.DISABLE_HOT_RELOAD] = "true";
 const { app, webhookManager, sseHeartbeat, initialize, shutdown } =
   await import("../../src/main.js");
 const { Actor } = await import("apify");
@@ -56,7 +58,7 @@ describe("Production Readiness Tests (v2.6.0)", () => {
     } catch (e) {
       console.warn(
         "Cleanup shutdown failed:",
-        /** @type {Error} */ (e).message,
+        /** @type {Error} */(e).message,
       );
     }
   });

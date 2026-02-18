@@ -106,6 +106,8 @@ describe("Slack Signature Verification", () => {
 
     const result = verifySignature(config, PAYLOAD, headers);
     expect(result.valid).toBe(false);
-    expect(result.error).toBe("Missing Slack signature headers");
+    expect(result.error).toBe(
+      "Missing signature header: x-slack-request-timestamp or x-slack-signature",
+    );
   });
 });

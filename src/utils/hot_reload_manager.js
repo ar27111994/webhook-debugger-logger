@@ -99,7 +99,10 @@ export class HotReloadManager {
     }
 
     // 2. Use fs.watch for instant hot-reload in local development
-    if (!Actor.isAtHome()) {
+    if (
+      !Actor.isAtHome() &&
+      process.env[ENV_VARS.DISABLE_HOT_RELOAD] !== "true"
+    ) {
       this.#startFsWatch();
     }
   }

@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeAll, afterAll } from "@jest/globals";
+import { describe, test, expect, beforeAll, afterAll, jest } from "@jest/globals";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 import { sleep } from "../setup/helpers/test-utils.js";
@@ -35,13 +35,14 @@ describe("Disk Full / Write Failure Resilience", () => {
   useMockCleanup();
 
   beforeAll(async () => {
+    jest.setTimeout(30000);
     ({ appClient, teardownApp } = await setupTestApp());
     const ids = await webhookManager.generateWebhooks(1, 1);
     webhookId = ids[0];
-  });
+  }, 30000);
 
   afterAll(async () => {
-    await teardownApp();
+    if (teardownApp) await teardownApp();
   });
 
   test("should handle DuckDB write failure gracefully (LogRepository)", async () => {

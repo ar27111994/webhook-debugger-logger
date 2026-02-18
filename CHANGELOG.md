@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.2.0] - 2026-02-18
+
+### Refactored (3.2.0)
+
+- **Project Configuration**: Extracted inline configurations from `package.json` into dedicated files:
+  - `jest.config.mjs`: Centralized Jest testing configuration.
+  - `.lintstagedrc.json`: Extracted lint-staged rules.
+  - `scripts/sync-version.js`: Moved complex version synchronization logic to a standalone script.
+- **Script Deduplication**: Refactored `package.json` scripts to use `npm run` composition, reducing duplication for `test:coverage`, `lint:fix`, and `test:stress`.
+- **Test Infrastructure**:
+  - Added `--forceExit` to all test scripts to resolve hanging processes in CI/CD environments.
+  - Removed hundreds of redundant `eslint-disable` comments across the test suite, enforcing cleaner code standards.
+  - Standardized linting rules for test files.
+
+### Improved (3.2.0)
+
+- **Metadata**: Enriched `package.json` with comprehensive metadata (`author`, `keywords`, `bugs`, `homepage`) for better package registry integration.
+- **Linting**: Expanded `lint-staged` coverage to include `.json`, `.md`, `.yml`, and `.html` files for consistent formatting.
+- **Error Handling**: Enhanced `sync-version.js` with structured logging and proper exit codes.
+
+### Fixes (3.2.0)
+
+- **Test Stability**: Resolved hanging test runs by enforcing exit behavior in Jest.
+- **Linting Errors**: Fixed numerous `sonarjs` and code quality warnings across the test suite.
+
 ## [3.1.4] - 2026-02-05
 
 ### Added (3.1.4)

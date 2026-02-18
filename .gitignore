@@ -1,5 +1,6 @@
 node_modules/
 storage/
+:memory:/
 .apify/
 .DS_Store
 *.log

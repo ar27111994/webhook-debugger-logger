@@ -1,6 +1,6 @@
 import { describe, test, beforeAll, afterAll } from "@jest/globals";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
-import { HTTP_STATUS, HTTP_HEADERS } from "../../src/consts/index.js";
+import { HTTP_STATUS, HTTP_HEADERS, ENV_VARS } from "../../src/consts/index.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 import { sleep } from "../setup/helpers/test-utils.js";
 import {
@@ -15,6 +15,7 @@ await setupCommonMocks({
   logger: true,
   // ensure other components are real where possible for E2E feel
   hotReload: false,
+  consts: true,
 });
 
 const { setupTestApp } = await import("../setup/helpers/app-utils.js");
@@ -33,6 +34,8 @@ describe("Hot Reload E2E - Dynamic Config Updates", () => {
   let teardownApp;
   /** @type {KeyValueStoreMock} */
   let kvStoreMock;
+  /** @type {string} */
+  const authKey = "initial-secret";
 
   useMockCleanup();
 
@@ -41,13 +44,27 @@ describe("Hot Reload E2E - Dynamic Config Updates", () => {
     // We access the singleton mock used by the app
     const { kvStore } = setupBasicApifyMock(apifyMock, {
       input: {
-        authKey: "initial-secret",
+        authKey,
         defaultResponseCode: HTTP_STATUS.OK,
       },
     });
     kvStoreMock = kvStore;
+    kvStoreMock.getValue.mockImplementation(async (key) => {
+      if (key === ENV_VARS.INPUT) {
+        return {
+          authKey,
+          defaultResponseCode: HTTP_STATUS.OK,
+        };
+      }
+      return null;
+    });
 
-    ({ appClient, teardownApp } = await setupTestApp());
+    // Prevent INPUT env var from polluting tests
+    delete process.env[ENV_VARS.INPUT];
+
+    ({ appClient, teardownApp } = await setupTestApp({
+      authKey,
+    }, true));
   });
 
   afterAll(async () => {
@@ -59,7 +76,7 @@ describe("Hot Reload E2E - Dynamic Config Updates", () => {
     // Should succeed with initial key
     await appClient
       .get("/info")
-      .set(HTTP_HEADERS.AUTHORIZATION, "Bearer initial-secret")
+      .set(HTTP_HEADERS.AUTHORIZATION, `Bearer ${authKey}`)
       .expect(HTTP_STATUS.OK);
 
     // Should fail with future key
@@ -82,7 +99,7 @@ describe("Hot Reload E2E - Dynamic Config Updates", () => {
     // Old key should now fail
     await appClient
       .get("/info")
-      .set(HTTP_HEADERS.AUTHORIZATION, "Bearer initial-secret")
+      .set(HTTP_HEADERS.AUTHORIZATION, `Bearer ${authKey}`)
       .expect(HTTP_STATUS.UNAUTHORIZED);
 
     // New key should succeed

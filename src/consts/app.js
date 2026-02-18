@@ -153,7 +153,10 @@ export const APP_CONSTS = Object.freeze({
     "MIN_FIXED_MEMORY_MBYTES",
     inputSchema.properties.fixedMemoryMbytes.minimum,
   ),
-  DEFAULT_PORT: getInt("ACTOR_WEB_SERVER_PORT", 8080),
+  DEFAULT_PORT: getInt(
+    "ACTOR_WEB_SERVER_PORT",
+    parseInt(actorJson.environmentVariables.ACTOR_WEB_SERVER_PORT),
+  ),
   MAX_BULK_CREATE: getInt("MAX_BULK_CREATE", 1000),
   RETENTION_LOG_SUPPRESSION_MS: getInt(
     "RETENTION_LOG_SUPPRESSION_MS",
@@ -259,6 +262,7 @@ export const SHUTDOWN_SIGNALS = Object.freeze({
 
 export const ENV_VALUES = Object.freeze({
   TEST: "test",
+  PRODUCTION: "production",
 });
 
 export const STREAM_EVENTS = Object.freeze({

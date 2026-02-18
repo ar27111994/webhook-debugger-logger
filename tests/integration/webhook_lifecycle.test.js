@@ -7,7 +7,6 @@ import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
  */
 
 // 1. Define mocks before any imports
-// 1. Define mocks before any imports
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 await setupCommonMocks({ apify: true });
 
@@ -24,7 +23,7 @@ describe("Webhook Lifecycle & Scaling Tests", () => {
     mockKV = /** @type {KeyValueStore} */ ({
       getValue: /** @type {KeyValueStore['getValue']} */ (jest.fn()),
       setValue: /** @type {KeyValueStore['setValue']} */ (
-        jest.fn().mockResolvedValue(/** @type {never} */ (undefined))
+        jest.fn().mockResolvedValue(/** @type {never} */(undefined))
       ),
     });
     jest.mocked(Actor.openKeyValueStore).mockResolvedValue(mockKV);
@@ -100,7 +99,7 @@ describe("Webhook Lifecycle & Scaling Tests", () => {
 
     expect(webhook?.expiresAt).toBeDefined();
     const newExpiry = new Date(
-      /** @type {string} */ (webhook?.expiresAt),
+      /** @type {string} */(webhook?.expiresAt),
     ).getTime();
     const threshold = Date.now() + 23 * 3600000; // Should be at least 23h+ out
     expect(newExpiry).toBeGreaterThan(threshold);

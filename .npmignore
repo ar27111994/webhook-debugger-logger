@@ -13,11 +13,12 @@ Dockerfile
 .github
 .agent
 
-# Apify Platform Specifics
+# Apify Platform & DuckDB Specifics
 .actor
 storage
 storage_v2
 apify_storage
+:memory:
 
 # Documentation & Assets
 docs

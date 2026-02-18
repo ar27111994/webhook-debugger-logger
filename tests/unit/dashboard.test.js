@@ -12,8 +12,7 @@ import {
   fsPromisesMock as mockFs,
 } from "../setup/helpers/shared-mocks.js";
 import { LOG_MESSAGES } from "../../src/consts/messages.js";
-import { HTTP_STATUS } from "../../src/consts/http.js";
-import { ERROR_MESSAGES } from "../../src/consts/errors.js";
+import { HTTP_STATUS, HTTP_STATUS_MESSAGES } from "../../src/consts/http.js";
 
 // Setup common mocks (logger, fs)
 await setupCommonMocks({ logger: true, fs: true });
@@ -207,7 +206,7 @@ describe("Dashboard Handler", () => {
         HTTP_STATUS.INTERNAL_SERVER_ERROR,
       );
       expect(res.send).toHaveBeenCalledWith(
-        ERROR_MESSAGES.INTERNAL_SERVER_ERROR,
+        HTTP_STATUS_MESSAGES[HTTP_STATUS.INTERNAL_SERVER_ERROR],
       );
     });
   });

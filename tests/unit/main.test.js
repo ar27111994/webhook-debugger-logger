@@ -18,7 +18,12 @@ await setupCommonMocks({
   webhookManager: true,
 });
 
-import { ENV_VARS, SHUTDOWN_SIGNALS } from "../../src/consts/app.js";
+import {
+  ENV_VARS,
+  SHUTDOWN_SIGNALS,
+  APP_CONSTS,
+  ENV_VALUES,
+} from "../../src/consts/app.js";
 import { LOG_MESSAGES } from "../../src/consts/messages.js";
 
 import {
@@ -93,7 +98,7 @@ describe("Main Entry Point", () => {
       jest.mocked(webhookManagerMock.getAllActive).mockReturnValue([]);
       // config mock returns empty defaults, but we pass options to initialize
       const urlCount = 5;
-      const retentionHours = 24;
+      const retentionHours = APP_CONSTS.DEFAULT_RETENTION_HOURS;
       await main.initialize({ urlCount, retentionHours });
 
       expect(webhookManagerMock.generateWebhooks).toHaveBeenCalledWith(
@@ -113,7 +118,9 @@ describe("Main Entry Point", () => {
     });
 
     test("should sync retention hours", async () => {
-      const retentionHours = 48;
+      const RETENTION_MULTIPLIER = 2;
+      const retentionHours =
+        APP_CONSTS.DEFAULT_RETENTION_HOURS * RETENTION_MULTIPLIER;
       await main.initialize({ retentionHours });
       expect(webhookManagerMock.updateRetention).toHaveBeenCalledWith(
         retentionHours,
@@ -192,7 +199,7 @@ describe("Main Entry Point", () => {
       const exitSpy = jest
         .spyOn(process, "exit")
         .mockImplementation(() => assertType(undefined));
-      process.env[ENV_VARS.NODE_ENV] = "production";
+      process.env[ENV_VARS.NODE_ENV] = ENV_VALUES.PRODUCTION;
       await main.shutdown(SHUTDOWN_SIGNALS.TEST_COMPLETE);
 
       expect(hotReloadManagerMock.stop).toHaveBeenCalled();
@@ -208,20 +215,21 @@ describe("Main Entry Point", () => {
       jest.mocked(Actor.pushData).mockRejectedValue(new Error("Push Failed"));
       jest.mocked(Actor.isAtHome).mockReturnValue(true);
       process.env.APIFY_IS_AT_HOME = "true";
+      const exitError = "EXIT_0";
 
       // Force logic to run (skip "test" guard)
       const oldEnv = process.env[ENV_VARS.NODE_ENV];
-      process.env[ENV_VARS.NODE_ENV] = "production";
+      process.env[ENV_VARS.NODE_ENV] = ENV_VALUES.PRODUCTION;
 
       // Prevent exit so we can assert
       jest.spyOn(Actor, "exit").mockImplementation(async () => {
-        throw new Error("EXIT_0");
+        throw new Error(exitError);
       });
 
       try {
         await main.initialize();
       } catch (e) {
-        if (!(/** @type {Error} */ (e).message.includes("EXIT"))) throw e;
+        if (!(/** @type {Error} */ (e).message.includes(exitError))) throw e;
       }
 
       expect(loggerMock.warn).toHaveBeenCalledWith(
@@ -247,21 +255,22 @@ describe("Main Entry Point", () => {
     });
 
     test("should exit process if not in test mode", async () => {
-      process.env[ENV_VARS.NODE_ENV] = "production";
+      process.env[ENV_VARS.NODE_ENV] = ENV_VALUES.PRODUCTION;
 
       // FIX LEAK: Override Actor.exit to resolve, masking previous test's throw
       jest.spyOn(Actor, "exit").mockResolvedValue(undefined);
 
+      const exitError = "Process Exited";
       const exitSpy = jest
         .spyOn(process, "exit")
         .mockImplementation((_code) => {
-          throw new Error("Process Exited");
+          throw new Error(exitError);
         });
 
       try {
         await main.shutdown(SHUTDOWN_SIGNALS.SIGINT);
       } catch (e) {
-        expect(/** @type {Error} */ (e).message).toBe("Process Exited");
+        expect(/** @type {Error} */(e).message).toBe(exitError);
       }
 
       expect(exitSpy).toHaveBeenCalledWith(0);
@@ -307,7 +316,10 @@ describe("Main Entry Point", () => {
         capturedClients.add(mockClient);
       }
 
-      jest.advanceTimersByTime(110); // > 100ms interval
+      const HEARTBEAT_OFFSET_MS = 5000;
+      const HEARTBEAT_TIMEOUT_MS =
+        APP_CONSTS.SSE_HEARTBEAT_INTERVAL_MS + HEARTBEAT_OFFSET_MS;
+      jest.advanceTimersByTime(HEARTBEAT_TIMEOUT_MS); // > interval
 
       expect(mockClient.write).toHaveBeenCalled();
       if (capturedClients) expect(capturedClients.has(mockClient)).toBe(false);
@@ -334,6 +346,7 @@ describe("Main Entry Point", () => {
       await main.initialize();
 
       expect(capturedCb).toBeDefined();
+      const MOCK_WEBHOOK_COUNT = 3;
       jest
         .mocked(webhookManagerMock.getAllActive)
         .mockReturnValue([
@@ -343,7 +356,9 @@ describe("Main Entry Point", () => {
         ]);
 
       if (capturedCb) {
-        expect(/** @type {HealthCallback} */ (capturedCb)?.()).toBe(3);
+        expect(/** @type {HealthCallback} */(capturedCb)?.()).toBe(
+          MOCK_WEBHOOK_COUNT,
+        );
       }
     });
   });

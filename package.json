@@ -13,15 +13,15 @@
   },
   "scripts": {
     "start": "node src/main.js",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
-    "test:stress": "node --experimental-vm-modules --expose-gc node_modules/jest/bin/jest.js tests/e2e/stress.test.js",
-    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
+    "test": "node --experimental-vm-modules --max-old-space-size=8192 node_modules/jest/bin/jest.js --runInBand --detectOpenHandles --forceExit",
+    "test:stress": "NODE_OPTIONS=\"$NODE_OPTIONS --expose-gc\" npm run test -- tests/e2e/stress.test.js",
+    "test:coverage": "npm run test -- --coverage",
     "lint": "eslint src tests",
-    "lint:fix": "eslint src tests --fix",
+    "lint:fix": "npm run lint -- --fix",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "sync:version": "node -e \"const fs=require('fs');const p='.actor/actor.json';const a=JSON.parse(fs.readFileSync(p,'utf8'));a.version=JSON.parse(fs.readFileSync('package.json','utf8')).version;fs.writeFileSync(p,JSON.stringify(a,null,2)+'\\n');console.log('Synced actor.json to v'+a.version)\"",
+    "sync:version": "node scripts/sync-version.js",
     "prepare": "husky"
   },
   "dependencies": {
@@ -38,8 +38,20 @@
     "pino": "^10.3.0",
     "pino-http": "^11.0.0"
   },
-  "author": "",
+  "keywords": [
+    "apify",
+    "webhook",
+    "debugger",
+    "logger",
+    "serverless",
+    "actor"
+  ],
+  "author": "Apify",
   "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ar27111994/webhook-debugger-logger/issues"
+  },
+  "homepage": "https://github.com/ar27111994/webhook-debugger-logger#readme",
   "engines": {
     "node": ">=18"
   },
@@ -63,38 +75,8 @@
     "ts-api-utils": "^2.4.0",
     "typescript": "^5.9.3"
   },
-  "jest": {
-    "transform": {},
-    "coveragePathIgnorePatterns": [
-      "/node_modules/",
-      "/tests/setup/",
-      "/tests/fixtures/",
-      "/tests/manual/"
-    ],
-    "coverageThreshold": {
-      "global": {
-        "branches": 90,
-        "functions": 90,
-        "lines": 90,
-        "statements": 90
-      }
-    },
-    "setupFiles": [
-      "./tests/setup/env.js"
-    ]
-  },
   "publishConfig": {
     "access": "public",
     "provenance": true
-  },
-  "lint-staged": {
-    "*.js": [
-      "eslint --fix",
-      "prettier --write"
-    ],
-    "package.json": [
-      "npm run sync:version",
-      "git add .actor/actor.json"
-    ]
   }
 }

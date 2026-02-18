@@ -79,7 +79,11 @@ export function shouldAlert(config, context) {
           return true;
         break;
       case ALERT_TRIGGERS.TIMEOUT:
-        if (context.error?.toLowerCase().includes(ALERT_TRIGGERS.TIMEOUT))
+        if (
+          String(context.error || "")
+            .toLowerCase()
+            .includes(ALERT_TRIGGERS.TIMEOUT)
+        )
           return true;
         break;
       case ALERT_TRIGGERS.SIGNATURE_INVALID:

@@ -122,7 +122,7 @@ describe("Audit Unit Coverage", () => {
       const middleware = new LoggerMiddleware(
         webhookManagerMock,
         {},
-        () => {},
+        () => { },
         mockForwardingService,
       );
 
@@ -165,6 +165,7 @@ describe("Audit Unit Coverage", () => {
           forwardHeaders: false,
         }),
         "http://override.com",
+        expect.anything(),
       );
     });
   });

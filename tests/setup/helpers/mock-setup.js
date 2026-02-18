@@ -294,10 +294,10 @@ export async function setupCommonMocks(options = {}) {
   }
 
   if (signature) {
-    jest.unstable_mockModule(
-      "../../../src/utils/signature.js",
-      () => signatureMock,
-    );
+    jest.unstable_mockModule("../../../src/utils/signature.js", () => ({
+      ...signatureMock,
+      __esModule: true,
+    }));
   }
 
   if (rateLimit) {

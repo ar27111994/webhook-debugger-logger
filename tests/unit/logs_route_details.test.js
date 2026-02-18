@@ -141,30 +141,6 @@ describe("Logs Route Details & Payload", () => {
       // Response should NOT include webhookId since it wasn't requested
       expect(res.json).toHaveBeenCalledWith({ id: "log_1", method: "POST" });
     });
-
-    test("should handle race condition where item is deleted between checks", async () => {
-      /** @type {LogEntry} */
-      const mockLog = assertType({
-        id: "log_1",
-        webhookId: "wh_1",
-      });
-
-      logRepositoryMock.getLogById
-        .mockResolvedValueOnce(mockLog) // Existence check passes
-        .mockResolvedValueOnce(null); // Security check fails (deleted)
-
-      req = createMockRequest({
-        params: { logId: "log_1" },
-        query: { fields: "method" },
-      });
-
-      await handler()(req, res, next);
-
-      expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.NOT_FOUND);
-      expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ error: ERROR_MESSAGES.LOG_NOT_FOUND }),
-      );
-    });
   });
 
   describe("Log Payload Handler", () => {

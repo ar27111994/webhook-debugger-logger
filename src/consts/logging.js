@@ -30,6 +30,7 @@ export const LOG_COMPONENTS = Object.freeze({
   WEBHOOK_RATE_LIMITER: "WebhookRateLimiter",
   CONFIG: "Config",
   RATE_LIMITER: "RateLimiter",
+  SYNC_VERSION: "SyncVersion",
 });
 
 export const LOG_CONSTS = Object.freeze({

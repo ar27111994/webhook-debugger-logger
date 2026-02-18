@@ -29,17 +29,7 @@ const { appEvents } = eventsMock; // Destructure for test usage
 /** @type {Promise<void>} */
 let pendingSyncPromise;
 const mockLimiter = {
-  schedule: jest.fn(
-    /**
-     * @param {() => Promise<void>} fn
-     * @returns {Promise<void>}
-     */
-    (fn) => {
-      const result = fn();
-      pendingSyncPromise = result;
-      return result;
-    },
-  ),
+  schedule: jest.fn(),
   stop: jest.fn(),
 };
 
@@ -54,6 +44,10 @@ const { SyncService } = await import("../../src/services/SyncService.js");
  * @typedef {import("../../src/services/SyncService.js").SyncService} SyncService
  * @typedef {import("apify").Dataset} Dataset
  */
+
+const MOCK_DATASET_SIZE = 100;
+const BATCH_SIZE = 10;
+const RECURSIVE_CALLS = 2;
 
 describe("SyncService", () => {
   useMockCleanup();
@@ -71,10 +65,22 @@ describe("SyncService", () => {
     duckDbMock.executeQuery.mockReset();
     logRepositoryMock.insertLog.mockReset();
     logRepositoryMock.batchInsertLogs.mockReset();
-    mockLimiter.schedule.mockClear();
+    logRepositoryMock.batchInsertLogs.mockReset();
+    mockLimiter.schedule.mockReset();
+    mockLimiter.schedule.mockImplementation(
+      /**
+       * @param {() => Promise<void>} fn
+       * @returns {Promise<void>}
+       */
+      (fn) => {
+        const result = fn();
+        pendingSyncPromise = result;
+        return result;
+      },
+    );
 
     mockDataset = assertType(
-      createDatasetMock(new Array(100).fill({}), {
+      createDatasetMock(new Array(MOCK_DATASET_SIZE).fill({}), {
         autoRegister: true,
       }),
     );
@@ -199,10 +205,10 @@ describe("SyncService", () => {
         expect.objectContaining({ id: "log_11", sourceOffset: 11 }),
       ]);
 
-      // Verify Metrics
+      // Verify Verify Metrics
       const metrics = service.getMetrics();
       expect(metrics.syncCount).toBe(1);
-      expect(metrics.itemsSynced).toBe(2);
+      expect(metrics.itemsSynced).toBe(2); // Only 2 items in response
     });
 
     test("should handle empty dataset or up-to-date state", async () => {
@@ -240,9 +246,9 @@ describe("SyncService", () => {
 
     test("should trigger recursive sync if batch limit reached", async () => {
       // Verify constant execution and values
-      expect(constsMock.SYNC_BATCH_SIZE).toBe(10); // Sanity check
+      expect(constsMock.SYNC_BATCH_SIZE).toBe(BATCH_SIZE); // Sanity check
 
-      const batch = Array(10)
+      const batch = Array(BATCH_SIZE)
         .fill(null)
         .map((_, i) => ({ id: `log_${i}` }));
 
@@ -250,9 +256,11 @@ describe("SyncService", () => {
       mockDataset.getData.mockReset(); // Clear previous
       mockDataset.getData
         .mockResolvedValueOnce(
-          assertType({ items: batch, count: 10, limit: 10 }),
+          assertType({ items: batch, count: BATCH_SIZE, limit: BATCH_SIZE }),
         ) // Call 1 (Start) -> returns batch
-        .mockResolvedValueOnce(assertType({ items: [], count: 0, limit: 10 })); // Call 2 (Recursive) -> returns empty
+        .mockResolvedValueOnce(
+          assertType({ items: [], count: 0, limit: BATCH_SIZE }),
+        ); // Call 2 (Recursive) -> returns empty
 
       duckDbMock.executeQuery.mockResolvedValue([{ maxOffset: null }]);
 
@@ -263,8 +271,8 @@ describe("SyncService", () => {
       // Call 1: start() -> triggerSync() -> schedule() -> syncLogs() -> getData() (10 items) -> triggerSync() -> schedule()
       // Call 2: syncLogs() -> getData() (0 items) -> finish.
 
-      expect(mockLimiter.schedule).toHaveBeenCalledTimes(2);
-      expect(mockDataset.getData).toHaveBeenCalledTimes(2);
+      expect(mockLimiter.schedule).toHaveBeenCalledTimes(RECURSIVE_CALLS);
+      expect(mockDataset.getData).toHaveBeenCalledTimes(RECURSIVE_CALLS);
       expect(logRepositoryMock.batchInsertLogs).toHaveBeenCalledTimes(1);
     });
 
@@ -324,6 +332,17 @@ describe("SyncService", () => {
         expect.objectContaining({ err: expect.anything() }),
         LOG_MESSAGES.SYNC_SCHEDULE_ERROR,
       );
+    });
+
+    test("should suppress BOTTLENECK_STOPPED errors during shutdown", async () => {
+      await service.start();
+      const stoppedError = new Error("This limiter has been stopped");
+      mockLimiter.schedule.mockRejectedValue(stoppedError);
+
+      const handler = appEvents.on.mock.calls[0][1];
+      await handler({ id: "log_shutdown" });
+
+      expect(loggerMock.error).not.toHaveBeenCalled();
     });
   });
 });

@@ -31,6 +31,7 @@ const {
   HTTP_HEADERS,
   MIME_TYPES,
   HTTP_METHODS,
+  ENV_VARS,
 } = await import("../../src/consts/index.js");
 
 const createMockLog = (overrides = {}) => ({
@@ -70,6 +71,10 @@ describe("Log Filtering Routes", () => {
   let _app;
 
   beforeAll(async () => {
+    // Prevent INPUT env var from polluting tests (from main_lifecycle.test.js)
+    delete process.env[ENV_VARS.INPUT];
+    process.env[ENV_VARS.DISABLE_HOT_RELOAD] = "true";
+
     // Enforce auth to test 401 scenarios
     jest.mocked(Actor.getInput).mockResolvedValue({ authKey });
     ({ app: _app, appClient, teardownApp } = await setupTestApp());

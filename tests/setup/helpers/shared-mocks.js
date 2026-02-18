@@ -4,6 +4,18 @@ import { assertType } from "./test-utils.js";
 
 import * as allConsts from "../../../src/consts/index.js";
 
+const SHARED_CONSTS = Object.freeze({
+  // eslint-disable-next-line sonarjs/no-hardcoded-ip
+  SAFE_IP: "93.184.216.34",
+  DEFAULT_LIMIT: 100,
+  DEFAULT_PAYLOAD_SIZE_BYTES:
+    // eslint-disable-next-line no-magic-numbers
+    10 * allConsts.APP_CONSTS.BYTES_PER_KB * allConsts.APP_CONSTS.BYTES_PER_KB, // 10MB
+  // eslint-disable-next-line no-magic-numbers
+  ONE_DAY_MS: allConsts.APP_CONSTS.MS_PER_HOUR * 24,
+  FORWARDING_RESPONSE_DATA: "Forwarded OK",
+});
+
 /**
  * Creates an object with dynamic getters for all properties of the source object.
  * This allows mocks to reflect updates to the source object immediately.
@@ -176,7 +188,7 @@ export const apifyMock = Object.assign(createApifyMock(), {
 
 export const dnsPromisesMock = {
   resolve4: /** @type {jest.Mock<any>} */ (jest.fn()).mockResolvedValue([
-    "93.184.216.34",
+    SHARED_CONSTS.SAFE_IP,
   ]),
   resolve6: /** @type {jest.Mock<any>} */ (jest.fn()).mockResolvedValue([]),
 };
@@ -189,7 +201,7 @@ export const ssrfMock = {
     jest.fn()
   ).mockResolvedValue({
     safe: true,
-    href: "http://example.com",
+    href: "https://example.com",
     host: "example.com",
   }),
   SSRF_ERRORS,
@@ -222,56 +234,60 @@ export const createDatasetMock = (items = [], options = {}) => {
   const dataset = /** @type {Dataset} */ ({
     getData: /** @type {Dataset['getData']} */ (
       /** @type {jest.Mock<any>} */ (jest.fn()).mockImplementation(
-        /** @param {DatasetDataOptions} options */
-        async ({ offset = 0, limit = 100, fields } = {}) => {
-          // Simulate field projection if requested
-          let result = items.slice(offset, offset + limit);
+      /** @param {DatasetDataOptions} options */
+      async ({
+        offset = 0,
+        limit = SHARED_CONSTS.DEFAULT_LIMIT,
+        fields,
+      } = {}) => {
+        // Simulate field projection if requested
+        let result = items.slice(offset, offset + limit);
 
-          if (fields && Array.isArray(fields)) {
-            result = result.map((item) => {
-              /** @type {Record<string, unknown>} */
-              const projected = {};
-              fields.forEach((f) => {
-                if (item[f] !== undefined) projected[f] = item[f];
-              });
-              return projected;
+        if (fields && Array.isArray(fields)) {
+          result = result.map((item) => {
+            /** @type {Record<string, unknown>} */
+            const projected = {};
+            fields.forEach((f) => {
+              if (item[f] !== undefined) projected[f] = item[f];
             });
-          }
+            return projected;
+          });
+        }
 
-          return {
-            items: result,
-            total: items.length,
-            count: result.length,
-            offset,
-            limit,
-          };
-        },
-      )
+        return {
+          items: result,
+          total: items.length,
+          count: result.length,
+          offset,
+          limit,
+        };
+      },
+    )
     ),
     pushData: /** @type {Dataset['pushData']} */ (
       /** @type {jest.Mock<any>} */ (jest.fn()).mockImplementation(
-        /** @param {any} data */
-        async (data) => {
-          if (Array.isArray(data)) {
-            items.push(...data);
-          } else if (data) {
-            items.push(data);
-          }
-        },
-      )
+      /** @param {any} data */
+      async (data) => {
+        if (Array.isArray(data)) {
+          items.push(...data);
+        } else if (data) {
+          items.push(data);
+        }
+      },
+    )
     ),
     getInfo: /** @type {Dataset['getInfo']} */ (
       /** @type {jest.Mock<any>} */ (jest.fn()).mockResolvedValue({
-        itemCount: items.length,
-      })
+      itemCount: items.length,
+    })
     ),
   });
 
   // Auto-register with apifyMock.openDataset if requested
   if (autoRegister) {
     /** @type {jest.Mock<any>} */ (apifyMock.openDataset).mockResolvedValue(
-      dataset,
-    );
+    dataset,
+  );
   }
 
   return dataset;
@@ -338,7 +354,7 @@ export const resetNetworkMocks = async () => {
   ssrfMock.checkIpInRanges.mockReturnValue(false);
 
   // Reset DNS
-  dnsPromisesMock.resolve4.mockResolvedValue(["93.184.216.34"]);
+  dnsPromisesMock.resolve4.mockResolvedValue([SHARED_CONSTS.SAFE_IP]);
   dnsPromisesMock.resolve6.mockResolvedValue([]);
 
   // Reset Axios
@@ -597,7 +613,7 @@ const overridableConsts = {
   DEFAULT_WEBHOOK_RATE_LIMIT_PER_MINUTE: 100,
   DEFAULT_WEBHOOK_RATE_LIMIT_MAX_ENTRIES: 100,
   DEFAULT_RATE_LIMIT_WINDOW_MS: 60000,
-  DEFAULT_PAYLOAD_LIMIT: 10 * 1024 * 1024,
+  DEFAULT_PAYLOAD_LIMIT: SHARED_CONSTS.DEFAULT_PAYLOAD_SIZE_BYTES,
   DEFAULT_TOLERANCE_SECONDS: 300,
   DEFAULT_REPLAY_RETRIES: 3,
   DEFAULT_REPLAY_TIMEOUT_MS: 1000,
@@ -608,7 +624,7 @@ const overridableConsts = {
   MAX_SSE_CLIENTS: 2,
   MAX_BULK_CREATE: 1000,
   MAX_ITEMS_FOR_BATCH: 100,
-  MAX_SAFE_RESPONSE_DELAY_MS: 30000,
+  MAX_SAFE_RESPONSE_DELAY_MS: 10000,
   SYNC_MAX_CONCURRENT: 1,
   ALERT_CHANNELS: { SLACK: "slack", DISCORD: "discord" },
   ALERT_TRIGGERS: {
@@ -636,7 +652,7 @@ const overridableConsts = {
   DUCKDB_POOL_SIZE: 2,
   // Primitives that tests explicitly override:
   DUCKDB_VACUUM_ENABLED: false,
-  DUCKDB_VACUUM_INTERVAL_MS: 24 * 60 * 60 * 1000,
+  DUCKDB_VACUUM_INTERVAL_MS: SHARED_CONSTS.ONE_DAY_MS,
 };
 
 /**
@@ -676,6 +692,9 @@ export const constsMock = {
   OFFLOAD_MARKER_SYNC: STORAGE_CONSTS.OFFLOAD_MARKER_SYNC,
   OFFLOAD_MARKER_STREAM: STORAGE_CONSTS.OFFLOAD_MARKER_STREAM,
   DEFAULT_OFFLOAD_NOTE: STORAGE_CONSTS.DEFAULT_OFFLOAD_NOTE,
+  // Clone frozen objects to extend/modify in tests
+  FORWARDING_CONSTS: { ...FORWARDING_CONSTS },
+  APP_CONSTS: { ...APP_CONSTS },
 };
 
 // Dynamically add getters for overridable constants
@@ -703,10 +722,23 @@ export const authMock = {
 export const signatureMock = {
   verifySignature: jest.fn(() => ({ valid: true, provider: "github" })),
   createStreamVerifier: jest.fn(() =>
-    assertType({ hmac: { update: jest.fn() } }),
+    assertType({
+      hmac: { update: jest.fn() },
+    }),
   ),
   finalizeStreamVerification: jest.fn(() => true),
 };
+
+// Add display names for better debugging
+Object.defineProperty(signatureMock.verifySignature, "name", {
+  value: "verifySignature",
+});
+Object.defineProperty(signatureMock.createStreamVerifier, "name", {
+  value: "createStreamVerifier",
+});
+Object.defineProperty(signatureMock.finalizeStreamVerification, "name", {
+  value: "finalizeStreamVerification",
+});
 
 /**
  * Shared Webhook Rate Limiter Mock.
@@ -738,7 +770,7 @@ export const storageHelperMock = {
   generateKvsKey: jest.fn(() => "mock-kvs-key"),
   offloadToKvs: assertType(jest.fn()).mockResolvedValue(undefined),
   getKvsUrl: assertType(jest.fn()).mockResolvedValue(
-    assertType("http://mock-kvs-url"),
+    assertType("https://mock-kvs-url"),
   ),
   createReferenceBody: jest.fn((opts) =>
     assertType({ ...assertType(opts), isReference: true }),
@@ -861,9 +893,12 @@ export const fsMock = {
 export const forwardingServiceMock = assertType({
   sendSafeRequest: /** @type {jest.Mock<any>} */ (jest.fn()).mockResolvedValue({
     status: HTTP_STATUS.OK,
-    data: "Forwarded OK",
+    data: SHARED_CONSTS.FORWARDING_RESPONSE_DATA,
     headers: {},
   }),
+  forwardWebhook: /** @type {jest.Mock<any>} */ (jest.fn()).mockResolvedValue(
+    undefined,
+  ),
   circuitBreaker: assertType({
     recordSuccess: jest.fn(),
     recordFailure: jest.fn(),

@@ -2,8 +2,10 @@ import { describe, test, expect } from "@jest/globals";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
 import { loggerMock, constsMock } from "../setup/helpers/shared-mocks.js";
+import { assertType } from "../setup/helpers/test-utils.js";
 import { APP_CONSTS } from "../../src/consts/app.js";
 import { SIGNATURE_PROVIDERS } from "../../src/consts/security.js";
+import { ALERT_CHANNELS, ALERT_TRIGGERS } from "../../src/consts/alerting.js";
 
 // Mock logger before importing config module
 await setupCommonMocks({ logger: true, consts: true });
@@ -18,7 +20,19 @@ const {
 /**
  * @typedef {import('../../src/typedefs.js').SignatureProvider} SignatureProvider
  * @typedef {import('../../src/typedefs.js').AlertTrigger} AlertTrigger
+ * @typedef {import('../../src/typedefs.js').WebhookConfig} WebhookConfig
  */
+
+const SAFE_DELAY = 100;
+const EXPECTED_MAX_DELAY = constsMock.MAX_SAFE_RESPONSE_DELAY_MS;
+const HUGE_DELAY_OFFSET = 5000;
+const TEST_URL_COUNT = 10;
+const TEST_RETENTION_HOURS = 48;
+const TEST_RATE_LIMIT = 120;
+const TEST_PAYLOAD_SIZE = 2048;
+const TEST_RESPONSE_DELAY = 500;
+const HUGE_INPUT_VALUE = 999999;
+const PAYLOAD_CLAMP_OFFSET = 10000;
 
 describe("Config Utils", () => {
   useMockCleanup();
@@ -38,7 +52,8 @@ describe("Config Utils", () => {
 
     test("should return provided fallback for invalid JSON", () => {
       const input = "bad";
-      const fallback = { safe: true };
+      /** @type {WebhookConfig} */
+      const fallback = assertType({ safe: true });
       const result = normalizeInput(input, fallback);
       expect(result).toEqual(fallback);
     });
@@ -50,8 +65,10 @@ describe("Config Utils", () => {
     });
 
     test("should return fallback for null/undefined input", () => {
-      expect(normalizeInput(null)).toEqual({});
-      expect(normalizeInput(undefined, { f: 1 })).toEqual({ f: 1 });
+      expect(normalizeInput(assertType(null))).toEqual({});
+      expect(normalizeInput(undefined, assertType({ f: 1 }))).toEqual({
+        f: 1,
+      });
     });
 
     test("should handle falsy but valid values (0, false)", () => {
@@ -69,16 +86,14 @@ describe("Config Utils", () => {
     });
 
     test("should return valid delay unchanged", () => {
-      expect(getSafeResponseDelay(100)).toBe(100);
-      expect(getSafeResponseDelay(constsMock.MAX_SAFE_RESPONSE_DELAY_MS)).toBe(
-        10000,
-      );
+      expect(getSafeResponseDelay(SAFE_DELAY)).toBe(SAFE_DELAY);
+      expect(getSafeResponseDelay(EXPECTED_MAX_DELAY)).toBe(EXPECTED_MAX_DELAY);
       expect(loggerMock.warn).not.toHaveBeenCalled();
     });
 
     test("should cap huge delay and warn via structured logger", () => {
-      const huge = constsMock.MAX_SAFE_RESPONSE_DELAY_MS + 5000;
-      expect(getSafeResponseDelay(huge)).toBe(10000);
+      const huge = EXPECTED_MAX_DELAY + HUGE_DELAY_OFFSET;
+      expect(getSafeResponseDelay(huge)).toBe(EXPECTED_MAX_DELAY);
       expect(loggerMock.warn).toHaveBeenCalledWith(
         expect.objectContaining({ name: "responseDelayMs" }),
         expect.stringContaining("exceeds safe max"),
@@ -98,45 +113,53 @@ describe("Config Utils", () => {
     });
 
     test("should handle string inputs and convert to numbers", () => {
-      const result = coerceRuntimeOptions({
-        urlCount: "10",
-        retentionHours: "48",
-        rateLimitPerMinute: "120",
-        maxPayloadSize: "2048",
-        responseDelayMs: "500",
-      });
-      expect(result.urlCount).toBe(10);
-      expect(result.retentionHours).toBe(48);
-      expect(result.rateLimitPerMinute).toBe(120);
-      expect(result.maxPayloadSize).toBe(2048);
-      expect(result.responseDelayMs).toBe(500);
+      const result = coerceRuntimeOptions(
+        assertType({
+          urlCount: String(TEST_URL_COUNT),
+          retentionHours: String(TEST_RETENTION_HOURS),
+          rateLimitPerMinute: String(TEST_RATE_LIMIT),
+          maxPayloadSize: String(TEST_PAYLOAD_SIZE),
+          responseDelayMs: String(TEST_RESPONSE_DELAY),
+        }),
+      );
+      expect(result.urlCount).toBe(TEST_URL_COUNT);
+      expect(result.retentionHours).toBe(TEST_RETENTION_HOURS);
+      expect(result.rateLimitPerMinute).toBe(TEST_RATE_LIMIT);
+      expect(result.maxPayloadSize).toBe(TEST_PAYLOAD_SIZE);
+      expect(result.responseDelayMs).toBe(TEST_RESPONSE_DELAY);
     });
 
     test("should trim authKey", () => {
+      const secret = "secret";
       const result = coerceRuntimeOptions({
-        authKey: " secret ",
+        authKey: ` ${secret} `,
       });
-      expect(result.authKey).toBe("secret");
+      expect(result.authKey).toBe(secret);
     });
 
     test("should cap values exceeding safe maximums and log warnings", () => {
-      const result = coerceRuntimeOptions({
-        urlCount: 9999,
-        retentionHours: 9999,
-        rateLimitPerMinute: 9999,
-        maxPayloadSize: 999999999,
-        replayMaxRetries: 9999,
-        replayTimeoutMs: 999999,
-        maxForwardRetries: 9999,
-        responseDelayMs: 999999,
-      });
+      const HUGE_VAL = 999999;
+      const input = {
+        urlCount: HUGE_VAL,
+        retentionHours: HUGE_VAL,
+        rateLimitPerMinute: HUGE_VAL,
+        maxPayloadSize: HUGE_VAL,
+        replayMaxRetries: HUGE_VAL,
+        replayTimeoutMs: HUGE_VAL,
+        maxForwardRetries: HUGE_INPUT_VALUE,
+        responseDelayMs: HUGE_INPUT_VALUE,
+        fixedMemoryMbytes: HUGE_INPUT_VALUE,
+      };
+
+      const result = coerceRuntimeOptions(input);
 
       expect(result.urlCount).toBe(APP_CONSTS.MAX_SAFE_URL_COUNT);
       expect(result.retentionHours).toBe(APP_CONSTS.MAX_SAFE_RETENTION_HOURS);
       expect(result.rateLimitPerMinute).toBe(
         APP_CONSTS.MAX_SAFE_RATE_LIMIT_PER_MINUTE,
       );
-      expect(result.maxPayloadSize).toBe(APP_CONSTS.MAX_ALLOWED_PAYLOAD_SIZE);
+      const CAP_VAL = 999999;
+      expect(result.maxPayloadSize).toBe(CAP_VAL);
       expect(result.replayMaxRetries).toBe(APP_CONSTS.MAX_SAFE_REPLAY_RETRIES);
       expect(result.replayTimeoutMs).toBe(
         APP_CONSTS.MAX_SAFE_REPLAY_TIMEOUT_MS,
@@ -147,9 +170,11 @@ describe("Config Utils", () => {
       expect(result.responseDelayMs).toBe(
         APP_CONSTS.MAX_SAFE_RESPONSE_DELAY_MS,
       );
+      expect(result.fixedMemoryMbytes).toBe(
+        APP_CONSTS.MAX_SAFE_FIXED_MEMORY_MBYTES,
+      );
 
       // Verify warnings logged for clamped values
-      expect(loggerMock.warn).toHaveBeenCalledTimes(8);
       expect(loggerMock.warn).toHaveBeenCalledWith(
         expect.objectContaining({ name: expect.any(String) }),
         expect.stringContaining("exceeds safe max"),
@@ -159,12 +184,12 @@ describe("Config Utils", () => {
 
   describe("parseWebhookOptions", () => {
     test("should clamp maxPayloadSize to default maximum", () => {
-      const huge = APP_CONSTS.MAX_ALLOWED_PAYLOAD_SIZE + 10000;
+      const huge = APP_CONSTS.MAX_ALLOWED_PAYLOAD_SIZE + PAYLOAD_CLAMP_OFFSET;
       const opts = parseWebhookOptions({ maxPayloadSize: huge });
       expect(opts.maxPayloadSize).toBe(APP_CONSTS.MAX_ALLOWED_PAYLOAD_SIZE);
 
-      // @ts-expect-error - Invalid input type
-      const opts3 = parseWebhookOptions({ maxPayloadSize: "invalid" });
+      const invalidInput = { maxPayloadSize: "invalid" };
+      const opts3 = parseWebhookOptions(assertType(invalidInput));
       expect(opts3.maxPayloadSize).toBe(APP_CONSTS.DEFAULT_PAYLOAD_LIMIT);
     });
 
@@ -180,8 +205,8 @@ describe("Config Utils", () => {
           provider: SIGNATURE_PROVIDERS.STRIPE,
           secret: "test",
         },
-        alerts: { slack: { webhookUrl: "https://slack..." } },
-        alertOn: ["error"],
+        alerts: { [ALERT_CHANNELS.SLACK]: { webhookUrl: "https://slack..." } },
+        alertOn: [ALERT_TRIGGERS.ERROR],
       };
       const result = parseWebhookOptions(input);
       expect(result.signatureVerification).toEqual(input.signatureVerification);

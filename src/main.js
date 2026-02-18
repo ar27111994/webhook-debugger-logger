@@ -56,6 +56,7 @@ import { createChildLogger, serializeError } from "./utils/logger.js";
 import { LOG_MESSAGES } from "./consts/messages.js";
 import { validateStatusCode } from "./utils/common.js";
 import { SSE_CONSTS } from "./consts/ui.js";
+import { exit as systemExit, on as systemOn } from "./utils/system.js";
 
 const log = createChildLogger({ component: LOG_COMPONENTS.MAIN });
 
@@ -128,7 +129,7 @@ const shutdown = async (signal) => {
   log.info({ signal }, LOG_MESSAGES.SHUTDOWN_START);
   const forceExitTimer = setTimeout(() => {
     log.error(LOG_MESSAGES.FORCE_SHUTDOWN);
-    process.exit(EXIT_CODES.FAILURE);
+    systemExit(EXIT_CODES.FAILURE);
   }, APP_CONSTS.SHUTDOWN_TIMEOUT_MS);
 
   const finalCleanup = async () => {
@@ -136,7 +137,7 @@ const shutdown = async (signal) => {
     if (process.env[ENV_VARS.NODE_ENV] !== ENV_VALUES.TEST) await Actor.exit();
     clearTimeout(forceExitTimer);
     if (process.env[ENV_VARS.NODE_ENV] !== ENV_VALUES.TEST)
-      process.exit(EXIT_CODES.SUCCESS);
+      systemExit(EXIT_CODES.SUCCESS);
   };
 
   if (server && server.listening) {
@@ -174,7 +175,7 @@ const handleShutdownSignal = (signal) => {
           { err: serializeError(error), signal },
           LOG_MESSAGES.SHUTDOWN_FAILED_AFTER_RETRIES,
         );
-        process.exit(EXIT_CODES.FAILURE); // Force exit if retries fail
+        systemExit(EXIT_CODES.FAILURE); // Force exit if retries fail
       }
     }
   };
@@ -183,7 +184,7 @@ const handleShutdownSignal = (signal) => {
 
 /**
  * Main initialization logic.
- * @param {Object.<string, boolean>} testOptions - Options for testing purposes.
+ * @param {Partial<ActorInput>} testOptions - Options for testing purposes.
  * @returns {Promise<Application>}
  */
 // Exported for tests to allow dependency injection
@@ -418,7 +419,7 @@ export async function initialize(testOptions = {}) {
       /** @type {NextFunction} */ next,
     ) => {
       const statusOverride = Number.parseInt(
-        /** @type {string} */ (req.query[QUERY_PARAMS.STATUS]),
+        String(req.query[QUERY_PARAMS.STATUS]),
         10,
       );
       if (validateStatusCode(statusOverride)) {
@@ -521,10 +522,10 @@ export async function initialize(testOptions = {}) {
     Actor.on("aborting", () => shutdown(SHUTDOWN_SIGNALS.ABORTING));
 
     // Refactored shutdown signals to include retry logic
-    process.on(SHUTDOWN_SIGNALS.SIGTERM, () =>
+    systemOn(SHUTDOWN_SIGNALS.SIGTERM, () =>
       handleShutdownSignal(SHUTDOWN_SIGNALS.SIGTERM),
     );
-    process.on(SHUTDOWN_SIGNALS.SIGINT, () =>
+    systemOn(SHUTDOWN_SIGNALS.SIGINT, () =>
       handleShutdownSignal(SHUTDOWN_SIGNALS.SIGINT),
     );
   }
@@ -535,7 +536,7 @@ export async function initialize(testOptions = {}) {
 if (process.env[ENV_VARS.NODE_ENV] !== ENV_VALUES.TEST) {
   initialize().catch((err) => {
     log.error({ err: serializeError(err) }, LOG_MESSAGES.SERVER_START_FAILED);
-    process.exit(EXIT_CODES.FAILURE);
+    systemExit(EXIT_CODES.FAILURE);
   });
 }
 

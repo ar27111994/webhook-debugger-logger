@@ -108,7 +108,7 @@ export function useConsoleSpy(...methods) {
 
   beforeEach(() => {
     methods.forEach((method) => {
-      spies[method] = jest.spyOn(console, method).mockImplementation(() => {});
+      spies[method] = jest.spyOn(console, method).mockImplementation(() => { });
     });
   });
 

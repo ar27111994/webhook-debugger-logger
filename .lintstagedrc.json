@@ -1,0 +1,7 @@
+{
+  "*.js, *.json, *.md, *.yml, *.yaml, *.html": [
+    "eslint --fix",
+    "prettier --write"
+  ],
+  "package.json": ["npm run sync:version", "git add .actor/actor.json"]
+}

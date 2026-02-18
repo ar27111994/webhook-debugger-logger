@@ -146,7 +146,7 @@ describe("Replay Optimization Tests", () => {
       await handlerPromise;
 
       expect(axiosMock).toHaveBeenCalled();
-      const config = getLastAxiosConfig(axiosMock, null);
+      const config = getLastAxiosConfig(axiosMock, HTTP_METHODS.REQUEST);
       expect(config.timeout).toBe(1234);
 
       expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.GATEWAY_TIMEOUT);

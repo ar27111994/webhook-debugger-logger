@@ -126,17 +126,18 @@ describe("Middleware Suite", () => {
       handler(req, res, next);
       expect(assertType(req).requestId).toBeDefined();
       expect(res.setHeader).toHaveBeenCalledWith(
-        "X-Request-ID",
+        "x-request-id",
         assertType(req).requestId,
       );
       expect(next).toHaveBeenCalled();
     });
 
     test("should preserve existing request ID", () => {
-      req.headers["x-request-id"] = "trace-123";
+      const validId = "req_12345678901234567890D";
+      req.headers["x-request-id"] = validId;
       handler(req, res, next);
-      expect(assertType(req).requestId).toBe("trace-123");
-      expect(res.setHeader).toHaveBeenCalledWith("X-Request-ID", "trace-123");
+      expect(assertType(req).requestId).toBe(validId);
+      expect(res.setHeader).toHaveBeenCalledWith("x-request-id", validId);
     });
   });
 

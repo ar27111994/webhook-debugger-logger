@@ -78,6 +78,7 @@ export class ForwardingService {
    * @param {number} [options.maxRetries]
    * @param {string} [options.hostHeader]
    * @param {boolean} [options.forwardHeaders]
+   * @param {number} [options.timeout]
    * @param {AbortSignal} [signal]
    * @returns {Promise<AxiosResponse>}
    */
@@ -90,6 +91,7 @@ export class ForwardingService {
       maxRetries = APP_CONSTS.DEFAULT_FORWARD_RETRIES,
       hostHeader,
       forwardHeaders,
+      timeout, // Support per-request timeout
     },
     signal,
   ) {
@@ -111,13 +113,13 @@ export class ForwardingService {
         const requestHeaders =
           forwardHeaders !== false
             ? Object.fromEntries(
-                Object.entries(headers).filter(
-                  ([key]) => !sensitiveHeaders.includes(key.toLowerCase()),
-                ),
-              )
+              Object.entries(headers).filter(
+                ([key]) => !sensitiveHeaders.includes(key.toLowerCase()),
+              ),
+            )
             : {
-                [HTTP_HEADERS.CONTENT_TYPE]: headers[HTTP_HEADERS.CONTENT_TYPE],
-              };
+              [HTTP_HEADERS.CONTENT_TYPE]: headers[HTTP_HEADERS.CONTENT_TYPE],
+            };
 
         // Execute Request
         const response = await this.axiosInstance.request({
@@ -129,6 +131,7 @@ export class ForwardingService {
             [RECURSION_HEADER_NAME]: RECURSION_HEADER_VALUE,
             ...(hostHeader ? { [HTTP_HEADERS.HOST]: hostHeader } : {}),
           },
+          timeout, // Apply per-request timeout
           signal, // Pass abort signal to axios
         });
 
@@ -331,6 +334,23 @@ export class ForwardingService {
         safeErrorMessage = ERROR_MESSAGES.FORWARD_REQUEST_FAILED;
       }
 
+      let isTransientFailure = false;
+      if (isHttpError) {
+        const status = axiosError.response?.status;
+        if (
+          status === HTTP_STATUS.INTERNAL_SERVER_ERROR ||
+          status === HTTP_STATUS.BAD_GATEWAY ||
+          status === HTTP_STATUS.SERVICE_UNAVAILABLE ||
+          status === HTTP_STATUS.GATEWAY_TIMEOUT
+        ) {
+          isTransientFailure = true;
+        }
+      } else {
+        isTransientFailure = FORWARDING_CONSTS.TRANSIENT_ERROR_CODES.includes(
+          String(axiosError.code),
+        );
+      }
+
       try {
         await Actor.pushData({
           id: nanoid(APP_CONSTS.DEFAULT_ID_LENGTH),
@@ -340,8 +360,8 @@ export class ForwardingService {
           type: ERROR_LABELS.FORWARD_ERROR,
           body: ERROR_MESSAGES.FORWARD_FAILURE_DETAILS(
             validatedUrl,
-            true, // Is permanent failure if we reached here (retries exhausted inside sendSafeRequest)
-            maxRetries, // We exhausted attempts
+            isTransientFailure,
+            maxRetries,
             String(safeErrorMessage),
           ),
           statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,

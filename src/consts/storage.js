@@ -24,6 +24,7 @@ export const STORAGE_CONSTS = Object.freeze({
   MAX_DATASET_ITEM_BYTES: getInt("MAX_DATASET_ITEM_BYTES", 9 * 1024 * 1024),
   PUBLIC_DIR: "public",
   FONTS_DIR_NAME: "fonts",
+  TEMP_STORAGE: "/tmp/storage",
   DEFAULT_STORAGE_DIR,
 });
 
@@ -36,6 +37,7 @@ export const FILE_NAMES = Object.freeze({
   CONFIG: STORAGE_CONSTS.INPUT_JSON,
   SCHEMA: "input_schema.json",
   PACKAGE_JSON: "../package.json",
+  ACTOR_JSON: `../${ACTOR_CONFIG_DIR}/actor.json`,
 });
 
 /** @enum {string} */

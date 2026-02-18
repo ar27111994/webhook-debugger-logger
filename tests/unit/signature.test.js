@@ -224,7 +224,7 @@ describe("Signature Verification", () => {
         {},
       );
       expect(result.valid).toBe(false);
-      expect(result.error).toContain("Missing Slack");
+      expect(result.error).toContain("Missing signature header");
     });
   });
 
@@ -345,7 +345,7 @@ describe("Signature Verification", () => {
         {},
       );
       expect(verifier.hmac).toBeNull();
-      expect(verifier.error).toContain("No secret");
+      expect(verifier.error).toContain("signing secret");
     });
 
     test("should fail stream if provider context has error", () => {
@@ -453,7 +453,7 @@ describe("Signature Verification", () => {
         {},
       );
       expect(result.valid).toBe(false);
-      expect(result.error).toContain("No secret");
+      expect(result.error).toContain("signing secret");
     });
 
     test("createStreamVerifier should catch crypto errors", () => {

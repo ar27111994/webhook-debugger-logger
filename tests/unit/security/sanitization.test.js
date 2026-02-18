@@ -38,9 +38,9 @@ describe("Security & Sanitization", () => {
 
       expect(result).toEqual({ validkey: "value" });
       // Ensure prototype is not modified and key is ignored
-      expect(/** @type {any} */ (result).admin).toBeUndefined();
+      expect(/** @type {any} */(result).admin).toBeUndefined();
       expect(
-        /** @type {Object<string, any>} */ (result).__proto__.admin,
+        /** @type {Object<string, any>} */(result).__proto__.admin,
       ).toBeUndefined();
     });
 

@@ -12,6 +12,7 @@ import {
   HTTP_STATUS,
   MIME_TYPES,
   HTTP_HEADERS,
+  ENV_VARS,
 } from "../../src/consts/index.js";
 await setupCommonMocks({ apify: true });
 
@@ -32,6 +33,9 @@ describe("Auth UI Hardening Tests", () => {
   let teardownApp;
 
   beforeAll(async () => {
+    // Prevent INPUT env var from polluting tests
+    delete process.env[ENV_VARS.INPUT];
+
     jest.mocked(Actor.getInput).mockResolvedValue({
       authKey,
       urlCount: 1,

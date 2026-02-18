@@ -129,6 +129,7 @@ export const LOG_MESSAGES = Object.freeze({
   MASK_IPV4_SUFFIX: ".****",
 
   JSON_SCHEMA_VALIDATION_FAILED: "JSON Schema Validation Failed",
+  JSON_PARSE_FAILED_FALLBACK: "JSON parsing failed, treating as raw string",
   KVS_OFFLOAD_THRESHOLD_EXCEEDED: "Body exceeds threshold, offloading to KVS",
   KVS_OFFLOAD_FAILED_LARGE_PAYLOAD: "Failed to offload large payload to KVS",
   TRUNCATED_AND_KVS_FAILED: "\n...[TRUNCATED_AND_KVS_FAILED]",
@@ -154,4 +155,11 @@ export const LOG_MESSAGES = Object.freeze({
   FORWARD_PAYLOAD_TOO_LARGE: "Forwarding payload too large, skipping",
   FORWARD_ABORTED: "Forwarding aborted by signal",
   BINARY_OBJECT_PLACEHOLDER: "[Binary Object]",
+  SYNC_VERSION_SUCCESS:
+    /**
+     * @param {string} version
+     * @returns {string}
+     */
+    (version) => `Synced actor.json to v${version}`,
+  SYNC_VERSION_ALREADY_SYNCED: "Versions are already in sync.",
 });
