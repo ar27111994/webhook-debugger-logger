@@ -1,110 +1,139 @@
 /**
  * @file tests/unit/storage_helper.test.js
- * @description Unit tests for storage_helper utility to ensure 100% coverage.
+ * @description Unit tests for storage utilities.
  */
-import { jest, describe, test, expect } from "@jest/globals";
-import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
-import { useMockCleanup } from "../setup/helpers/test-lifecycle.js";
-import { assertType } from "../setup/helpers/test-utils.js";
-import { constsMock } from "../setup/helpers/shared-mocks.js";
 
-// Mock Apify and Logger
-await setupCommonMocks({ apify: true, logger: true, consts: true });
+import { jest } from '@jest/globals';
+import { STORAGE_CONSTS } from '../../src/consts/storage.js';
+import { setupCommonMocks } from '../setup/helpers/mock-setup.js';
+import { apifyMock } from '../setup/helpers/shared-mocks.js';
+import { assertType } from '../setup/helpers/test-utils.js';
+import { MIME_TYPES } from '../../src/consts/http.js';
 
-const { getKvsUrl, offloadToKvs, createReferenceBody, generateKvsKey } =
-  await import("../../src/utils/storage_helper.js");
-const { Actor } = await import("apify");
+// Mock dependencies
+const mockNanoid = jest.fn(() => 'mock-id');
+jest.unstable_mockModule('nanoid', () => ({ nanoid: mockNanoid }));
 
-describe("StorageHelper Coverage Tests", () => {
-  useMockCleanup();
+// Setup shared mocks (includes apify)
+await setupCommonMocks({ apify: true });
 
-  test("generateKvsKey should return a string starting with payload_", () => {
-    const key = generateKvsKey();
-    expect(key).toMatch(/^payload_[a-zA-Z0-9_-]{10,64}$/);
-  });
+// Import module under test
+const {
+    generateKvsKey,
+    offloadToKvs,
+    getKvsUrl,
+    createReferenceBody
+} = await import('../../src/utils/storage_helper.js');
 
-  test("offloadToKvs should call store.setValue", async () => {
-    const mockStore = {
-      setValue: jest.fn().mockResolvedValue(assertType(undefined)),
-    };
-    Actor.openKeyValueStore = assertType(
-      jest.fn().mockResolvedValue(assertType(mockStore)),
-    );
-
-    await offloadToKvs("test-key", "test-value", "text/plain");
-
-    expect(Actor.openKeyValueStore).toHaveBeenCalled();
-    expect(mockStore.setValue).toHaveBeenCalledWith("test-key", "test-value", {
-      contentType: "text/plain",
-    });
-  });
-
-  describe("getKvsUrl", () => {
-    test("should return public URL if getPublicUrl is present", async () => {
-      const mockStore = {
-        getPublicUrl: jest
-          .fn()
-          .mockReturnValue(
-            "https://api.apify.com/v2/key-value-stores/default/records/key",
-          ),
-      };
-      Actor.openKeyValueStore = assertType(
-        jest.fn().mockResolvedValue(assertType(mockStore)),
-      );
-
-      const url = await getKvsUrl("key");
-      expect(mockStore.getPublicUrl).toHaveBeenCalled();
-      expect(url).toBe(
-        "https://api.apify.com/v2/key-value-stores/default/records/key",
-      );
+describe('Storage Helper Utils', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        // Reset defaults
+        mockNanoid.mockReturnValue('mock-id');
+        apifyMock.openKeyValueStore.mockResolvedValue({
+            setValue: jest.fn(),
+            getPublicUrl: assertType(jest.fn(() => 'https://api.apify.com/v2/key-value-stores/default/records/mock-key')),
+            getValue: jest.fn()
+        });
     });
 
-    test("should return fallback description if getPublicUrl is not a function", async () => {
-      const mockStore = {
-        // No getPublicUrl
-      };
-      Actor.openKeyValueStore = assertType(
-        jest.fn().mockResolvedValue(assertType(mockStore)),
-      );
-
-      const url = await getKvsUrl("key");
-      expect(url).toContain("Use Actor.getValue('key') to retrieve");
+    describe('generateKvsKey', () => {
+        it('should generate a key with the correct prefix and id', () => {
+            const key = generateKvsKey();
+            expect(key).toBe(`${STORAGE_CONSTS.KVS_KEY_PREFIX}mock-id`);
+            expect(mockNanoid).toHaveBeenCalled();
+        });
     });
 
-    test("should return fallback description if openKeyValueStore throws", async () => {
-      Actor.openKeyValueStore = assertType(
-        jest.fn().mockRejectedValue(assertType(new Error("KVS Error"))),
-      );
+    describe('offloadToKvs', () => {
+        it('should offload content to the key value store', async () => {
+            const key = 'test-key';
+            const value = 'some-content';
+            const contentType = MIME_TYPES.TEXT;
 
-      const url = await getKvsUrl("key");
-      expect(url).toContain("Use Actor.getValue('key') to retrieve");
-    });
-  });
+            const mockSetValue = jest.fn();
+            apifyMock.openKeyValueStore.mockResolvedValueOnce(assertType({
+                setValue: mockSetValue
+            }));
 
-  test("createReferenceBody should return standardized object", () => {
-    const result = createReferenceBody({
-      key: "k1",
-      kvsUrl: "u1",
-      originalSize: 100,
-    });
+            await offloadToKvs(key, value, contentType);
 
-    expect(result).toEqual({
-      data: constsMock.OFFLOAD_MARKER_SYNC,
-      key: "k1",
-      note: constsMock.DEFAULT_OFFLOAD_NOTE,
-      originalSize: 100,
-      kvsUrl: "u1",
+            expect(apifyMock.openKeyValueStore).toHaveBeenCalled();
+            expect(mockSetValue).toHaveBeenCalledWith(key, value, { contentType });
+        });
     });
 
-    // Custom data/note
-    const custom = createReferenceBody({
-      key: "k2",
-      kvsUrl: "u2",
-      originalSize: 200,
-      note: "custom note",
-      data: "custom marker",
+    describe('getKvsUrl', () => {
+        it('should return public URL from KV store', async () => {
+            const key = 'test-key';
+            const url = await getKvsUrl(key);
+            expect(url).toBe('https://api.apify.com/v2/key-value-stores/default/records/mock-key');
+        });
+
+        it('should fallback if openKeyValueStore fails', async () => {
+            apifyMock.openKeyValueStore.mockRejectedValueOnce(new Error('KVS Error'));
+            const key = 'test-key';
+
+            const url = await getKvsUrl(key);
+
+            expect(url).toBe(STORAGE_CONSTS.KVS_URL_FALLBACK.replaceAll('${key}', key));
+        });
+
+        it('should fallback if getPublicUrl is not a function', async () => {
+            apifyMock.openKeyValueStore.mockResolvedValueOnce(assertType({})); // No getPublicUrl method
+            const key = 'test-key';
+
+            const url = await getKvsUrl(key);
+
+            expect(url).toBe(STORAGE_CONSTS.KVS_URL_FALLBACK.replaceAll('${key}', key));
+        });
     });
-    expect(custom.note).toBe("custom note");
-    expect(custom.data).toBe("custom marker");
-  });
+
+    describe('createReferenceBody', () => {
+        it('should create a correctly formatted reference object', () => {
+            const key = 'test-key';
+            const kvsUrl = 'http://example.com/item';
+            const originalSize = 1024;
+            const opts = {
+                key,
+                kvsUrl,
+                originalSize
+            };
+
+            const result = createReferenceBody(opts);
+
+            expect(result).toEqual({
+                data: STORAGE_CONSTS.OFFLOAD_MARKER_SYNC,
+                key,
+                note: STORAGE_CONSTS.DEFAULT_OFFLOAD_NOTE,
+                originalSize,
+                kvsUrl
+            });
+        });
+
+        it('should allow overriding defaults', () => {
+            const key = 'test-key';
+            const kvsUrl = 'http://example.com/item';
+            const originalSize = 500;
+            const note = 'Custom Note';
+            const data = 'CUSTOM_MARKER';
+            const opts = {
+                key,
+                kvsUrl,
+                originalSize,
+                note,
+                data
+            };
+
+            const result = createReferenceBody(opts);
+
+            expect(result).toEqual({
+                data,
+                key,
+                note,
+                originalSize,
+                kvsUrl
+            });
+        });
+    });
 });
