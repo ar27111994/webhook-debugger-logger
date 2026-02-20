@@ -5,7 +5,7 @@
 
 import { jest } from '@jest/globals';
 import { CircuitBreaker } from '../../../src/services/CircuitBreaker.js';
-import { FORWARDING_CONSTS } from '../../../src/consts/app.js';
+import { APP_CONSTS, FORWARDING_CONSTS } from '../../../src/consts/app.js';
 import { assertType } from '../../setup/helpers/test-utils.js';
 
 describe('CircuitBreaker', () => {
@@ -38,6 +38,16 @@ describe('CircuitBreaker', () => {
             const bufferMs = 100;
             jest.advanceTimersByTime(FORWARDING_CONSTS.CIRCUIT_BREAKER_CLEANUP_INTERVAL_MS + bufferMs);
             expect(spyPrune).toHaveBeenCalled();
+        });
+
+        it('should handle environments where setInterval unref is not available', () => {
+            const originalSetInterval = global.setInterval;
+            global.setInterval = () => assertType({}); // Returns object without unref
+            expect(() => {
+                const cb = new CircuitBreaker();
+                cb.destroy();
+            }).not.toThrow();
+            global.setInterval = originalSetInterval;
         });
     });
 
@@ -87,8 +97,16 @@ describe('CircuitBreaker', () => {
             expect(() => circuitBreaker.recordSuccess(INVALID_URL)).not.toThrow();
         });
 
+        it('should do nothing if recordSuccess is called for a hostname not in states', () => {
+            expect(() => circuitBreaker.recordSuccess('https://not-in-state.com')).not.toThrow();
+        });
+
         it('should handle invalid URLs gracefully in isOpen', () => {
             expect(circuitBreaker.isOpen(INVALID_URL)).toBe(false);
+        });
+
+        it('should return false for isOpen when state does not exist', () => {
+            expect(circuitBreaker.isOpen('https://nonexistent.com')).toBe(false);
         });
     });
 
@@ -157,7 +175,7 @@ describe('CircuitBreaker', () => {
             circuitBreaker.recordFailure(TARGET_URL);
 
             const originalNow = Date.now;
-            const hourMs = 3600000;
+            const hourMs = APP_CONSTS.MS_PER_HOUR;
             Date.now = () => originalNow() - hourMs; // 1 hour in the past
 
             // Open shouldn't crash, it just evaluates the math
@@ -223,6 +241,14 @@ describe('CircuitBreaker', () => {
             if (!state) throw new Error(STATE_ERROR);
             expect(state.failures).toBe(ITERATIONS);
             expect(circuitBreaker.isOpen(STRESS_HOST)).toBe(true);
+        });
+    });
+
+    describe('destroy', () => {
+        it('should handle destroy when cleanupInterval is missing securely', () => {
+            const cb = new CircuitBreaker();
+            cb.cleanupInterval = assertType(undefined);
+            expect(() => cb.destroy()).not.toThrow();
         });
     });
 });
