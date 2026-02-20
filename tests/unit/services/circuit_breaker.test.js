@@ -6,10 +6,16 @@
 import { jest } from '@jest/globals';
 import { CircuitBreaker } from '../../../src/services/CircuitBreaker.js';
 import { FORWARDING_CONSTS } from '../../../src/consts/app.js';
+import { assertType } from '../../setup/helpers/test-utils.js';
 
 describe('CircuitBreaker', () => {
+    const STATE_ERROR = 'State should be defined';
+    const INVALID_TEST_URL = "invalid-url";
     /** @type {CircuitBreaker} */
     let circuitBreaker;
+
+    const TARGET_HOSTNAME = 'api.example.com';
+    const TARGET_URL = `https://${TARGET_HOSTNAME}/webhook`;
 
     beforeEach(() => {
         jest.useFakeTimers();
@@ -36,14 +42,11 @@ describe('CircuitBreaker', () => {
     });
 
     describe('state management', () => {
-        const HOST = 'https://api.example.com/webhook';
-        const HOSTNAME = 'api.example.com';
-        const STATE_ERROR = 'State should be defined';
-        const INVALID_URL = 'invalid-url';
+        const INVALID_URL = INVALID_TEST_URL;
 
         it('should record failures correctly', () => {
-            circuitBreaker.recordFailure(HOST);
-            const state = circuitBreaker.states.get(HOSTNAME);
+            circuitBreaker.recordFailure(TARGET_URL);
+            const state = circuitBreaker.states.get(TARGET_HOSTNAME);
             if (!state) throw new Error(STATE_ERROR);
             expect(state).toBeDefined();
             expect(state.failures).toBe(1);
@@ -51,9 +54,9 @@ describe('CircuitBreaker', () => {
         });
 
         it('should increment failure count on consecutive failures', () => {
-            circuitBreaker.recordFailure(HOST);
-            circuitBreaker.recordFailure(HOST);
-            const state = circuitBreaker.states.get(HOSTNAME);
+            circuitBreaker.recordFailure(TARGET_URL);
+            circuitBreaker.recordFailure(TARGET_URL);
+            const state = circuitBreaker.states.get(TARGET_HOSTNAME);
             if (!state) throw new Error(STATE_ERROR);
             expect(state.failures).toBe(1 + 1);
         });
@@ -66,18 +69,18 @@ describe('CircuitBreaker', () => {
         it('should open circuit when threshold exceeded', () => {
             // Threshold is typically 5
             for (let i = 0; i < FORWARDING_CONSTS.CIRCUIT_BREAKER_FAILURE_THRESHOLD; i++) {
-                circuitBreaker.recordFailure(HOST);
+                circuitBreaker.recordFailure(TARGET_URL);
             }
 
-            expect(circuitBreaker.isOpen(HOST)).toBe(true);
+            expect(circuitBreaker.isOpen(TARGET_URL)).toBe(true);
         });
 
         it('should reset state on success', () => {
-            circuitBreaker.recordFailure(HOST);
-            expect(circuitBreaker.states.has(HOSTNAME)).toBe(true);
+            circuitBreaker.recordFailure(TARGET_URL);
+            expect(circuitBreaker.states.has(TARGET_HOSTNAME)).toBe(true);
 
-            circuitBreaker.recordSuccess(HOST);
-            expect(circuitBreaker.states.has(HOSTNAME)).toBe(false);
+            circuitBreaker.recordSuccess(TARGET_URL);
+            expect(circuitBreaker.states.has(TARGET_HOSTNAME)).toBe(false);
         });
 
         it('should handle invalid URLs gracefully in recordSuccess', () => {
@@ -90,27 +93,25 @@ describe('CircuitBreaker', () => {
     });
 
     describe('prune', () => {
-        const PRUNE_HOST = 'api.example.com';
-
         it('should remove expired entries with no failures', () => {
             // Mock state manually
-            circuitBreaker.states.set(PRUNE_HOST, {
+            circuitBreaker.states.set(TARGET_HOSTNAME, {
                 failures: 0,
                 nextAttempt: Date.now() - FORWARDING_CONSTS.CIRCUIT_BREAKER_CLEANUP_INTERVAL_MS // In the past
             });
 
             circuitBreaker.prune();
-            expect(circuitBreaker.states.has(PRUNE_HOST)).toBe(false);
+            expect(circuitBreaker.states.has(TARGET_HOSTNAME)).toBe(false);
         });
 
         it('should NOT remove active failed states', () => {
-            circuitBreaker.states.set(PRUNE_HOST, {
+            circuitBreaker.states.set(TARGET_HOSTNAME, {
                 failures: 1,
                 nextAttempt: Date.now() + FORWARDING_CONSTS.CIRCUIT_BREAKER_RESET_TIMEOUT_MS // In the future
             });
 
             circuitBreaker.prune();
-            expect(circuitBreaker.states.has(PRUNE_HOST)).toBe(true);
+            expect(circuitBreaker.states.has(TARGET_HOSTNAME)).toBe(true);
         });
 
         it('should enforce maxSize limit via LRU-ish eviction', () => {
@@ -130,6 +131,98 @@ describe('CircuitBreaker', () => {
             expect(circuitBreaker.states.has('a.com')).toBe(false);
             expect(circuitBreaker.states.has('b.com')).toBe(true);
             expect(circuitBreaker.states.has('c.com')).toBe(true);
+        });
+    });
+
+    describe('Half-Open Recovery and Time Drift', () => {
+        it('should allow a request after reset timeout, but re-open on immediate failure', () => {
+            for (let i = 0; i < FORWARDING_CONSTS.CIRCUIT_BREAKER_FAILURE_THRESHOLD; i++) {
+                circuitBreaker.recordFailure(TARGET_URL);
+            }
+            expect(circuitBreaker.isOpen(TARGET_URL)).toBe(true);
+
+            // Advance time past the reset timeout
+            const bufferMs = 10;
+            jest.advanceTimersByTime(FORWARDING_CONSTS.CIRCUIT_BREAKER_RESET_TIMEOUT_MS + bufferMs);
+
+            // Should now be closed (half-open state allowing a test request)
+            expect(circuitBreaker.isOpen(TARGET_URL)).toBe(false);
+
+            // If the request fails again, it should re-open immediately
+            circuitBreaker.recordFailure(TARGET_URL);
+            expect(circuitBreaker.isOpen(TARGET_URL)).toBe(true);
+        });
+
+        it('should handle system clock moving backwards (NTP skew) without crashing', () => {
+            circuitBreaker.recordFailure(TARGET_URL);
+
+            const originalNow = Date.now;
+            const hourMs = 3600000;
+            Date.now = () => originalNow() - hourMs; // 1 hour in the past
+
+            // Open shouldn't crash, it just evaluates the math
+            expect(() => circuitBreaker.isOpen(TARGET_URL)).not.toThrow();
+
+            Date.now = originalNow;
+        });
+    });
+
+    describe('Security and Sanitation Checks', () => {
+        it('should handle incredibly long URLs without catastrophic unhandled ReDoS', () => {
+            const longUrlLength = 100000;
+            const longUrl = `https://${'a'.repeat(longUrlLength)}.com`;
+            // V8 URL parser is very fast, just making sure we don't blow up our own states
+            expect(() => circuitBreaker.recordFailure(longUrl)).not.toThrow();
+        });
+
+        it('should handle non-string types safely through the catch block', () => {
+            expect(() => circuitBreaker.recordFailure(assertType(null))).not.toThrow();
+            expect(() => circuitBreaker.recordFailure(assertType(undefined))).not.toThrow();
+            expect(() => circuitBreaker.recordFailure(assertType({}))).not.toThrow();
+
+            expect(circuitBreaker.isOpen(assertType(null))).toBe(false);
+            expect(circuitBreaker.isOpen(assertType(undefined))).toBe(false);
+            expect(circuitBreaker.isOpen(assertType({}))).toBe(false);
+        });
+
+        it('should handle prototype pollution attempts gracefully in hostname', () => {
+            const protoUrl = 'https://__proto__/';
+            circuitBreaker.recordFailure(protoUrl);
+            // Map handles __proto__ seamlessly
+            expect(circuitBreaker.isOpen(protoUrl)).toBe(false); // Since it's 1 failure
+        });
+
+        it('should normalize hostnames irrespective of casing or port', () => {
+            // Note: Node URL parsing lowercases hostnames automatically
+            circuitBreaker.recordFailure(`HTTPS://${TARGET_HOSTNAME.toUpperCase()}:8080/foo`);
+            circuitBreaker.recordFailure(`https://${TARGET_HOSTNAME}/bar`);
+
+            const state = circuitBreaker.states.get(TARGET_HOSTNAME);
+            if (!state) throw new Error('State should be defined');
+            expect(state).toBeDefined();
+            expect(state.failures).toBe(1 + 1);
+        });
+    });
+
+    describe('Stress and Concurrency Limitations', () => {
+        it('should handle rapid synchronous failures without blocking event loop', () => {
+            const STRESS_HOST = 'https://stress.com';
+            const STRESS_HOSTNAME = 'stress.com';
+            const ITERATIONS = 10000;
+            const start = Date.now();
+
+            for (let i = 0; i < ITERATIONS; i++) {
+                circuitBreaker.recordFailure(STRESS_HOST);
+            }
+
+            const duration = Date.now() - start;
+            const durationThresholdMs = 500;
+            expect(duration).toBeLessThan(durationThresholdMs);
+
+            const state = circuitBreaker.states.get(STRESS_HOSTNAME);
+            if (!state) throw new Error(STATE_ERROR);
+            expect(state.failures).toBe(ITERATIONS);
+            expect(circuitBreaker.isOpen(STRESS_HOST)).toBe(true);
         });
     });
 });
