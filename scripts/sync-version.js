@@ -20,18 +20,29 @@ const log = createChildLogger({ component: LOG_COMPONENTS.SYNC_VERSION });
 const actorJsonPath = fileURLToPath(new URL(FILE_NAMES.ACTOR_JSON, import.meta.url));
 const packageJsonPath = fileURLToPath(new URL(FILE_NAMES.PACKAGE_JSON, import.meta.url));
 
-try {
-    const actorJson = JSON.parse(readFileSync(actorJsonPath, ENCODINGS.UTF_8));
-    const packageVersion = JSON.parse(readFileSync(packageJsonPath, ENCODINGS.UTF_8)).version;
+export const syncVersion = () => {
+    try {
+        const actorJson = JSON.parse(readFileSync(actorJsonPath, ENCODINGS.UTF8));
+        const packageJson = JSON.parse(readFileSync(packageJsonPath, ENCODINGS.UTF8));
+        const packageVersion = packageJson.version;
 
-    if (actorJson.version !== packageVersion) {
-        actorJson.version = packageVersion;
-        writeFileSync(actorJsonPath, JSON.stringify(actorJson, null, APP_CONSTS.JSON_INDENT) + '\n');
-        log.info(LOG_MESSAGES.SYNC_VERSION_SUCCESS(packageVersion));
-    } else {
-        log.info(LOG_MESSAGES.SYNC_VERSION_ALREADY_SYNCED);
+        if (!packageVersion) {
+            throw new Error(ERROR_MESSAGES.SYNC_VERSION_MISSING_PACKAGE_VERSION);
+        }
+
+        if (actorJson.version !== packageVersion) {
+            actorJson.version = packageVersion;
+            writeFileSync(actorJsonPath, JSON.stringify(actorJson, null, APP_CONSTS.JSON_INDENT) + '\n');
+            log.info(LOG_MESSAGES.SYNC_VERSION_SUCCESS(packageVersion));
+        } else {
+            log.info(LOG_MESSAGES.SYNC_VERSION_ALREADY_SYNCED);
+        }
+    } catch (error) {
+        log.error({ err: serializeError(error) }, ERROR_MESSAGES.SYNC_VERSION_FAILED(/** @type {Error} */(error).message));
+        exit(EXIT_CODES.FAILURE);
     }
-} catch (error) {
-    log.error({ err: serializeError(error) }, ERROR_MESSAGES.SYNC_VERSION_FAILED(/** @type {Error} */(error).message));
-    exit(EXIT_CODES.FAILURE);
+};
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+    syncVersion();
 }

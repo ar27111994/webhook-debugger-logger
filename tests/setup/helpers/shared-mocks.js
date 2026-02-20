@@ -4,6 +4,35 @@ import { assertType } from "./test-utils.js";
 
 import * as allConsts from "../../../src/consts/index.js";
 
+/**
+ * @typedef {import("apify").Dataset} Dataset
+ * @typedef {import("apify").DatasetDataOptions} DatasetDataOptions
+ * @typedef {import("express").Application} Application
+ * @typedef {import("@duckdb/node-api").DuckDBInstance} DuckDBInstance
+ * @typedef {import("@duckdb/node-api").DuckDBValue} DuckDBValue
+ * @typedef {import("vm").Script} VMScript
+ * @typedef {jest.MockedFunction<any> & { get: jest.Mock; post: jest.Mock; delete: jest.Mock; put: jest.Mock }} AxiosMock
+ * @typedef {import("./apify-mock.js").KeyValueStoreMock} KeyValueStoreMock
+ * @typedef {import("./apify-mock.js").ApifyMock} ApifyMock
+ * @typedef {import("../../../src/logger_middleware.js").LoggerMiddleware} LoggerMiddleware
+ * @typedef {import("../../../src/utils/app_state.js").AppState} AppState
+ * @typedef {import("../../../src/utils/hot_reload_manager.js").HotReloadManager} HotReloadManager
+ * @typedef {import("../../../src/typedefs.js").SignatureProvider} SignatureProvider
+ * @typedef {import("../../../src/utils/webhook_rate_limiter.js").WebhookRateLimiter} WebhookRateLimiter
+ * @typedef {import("../../../src/repositories/LogRepository.js").LogRepository} LogRepository
+ * @typedef {import('../../../src/consts/index.js')} ConstsMock
+ * @typedef {import('../../../src/webhook_manager.js').WebhookManager} WebhookManager
+ * @typedef {import('../../../src/utils/signature.js').VerificationResult} VerificationResult
+ * @typedef {import('../../../src/utils/signature.js').VerificationContext} VerificationContext
+ * @typedef {import('../../../src/services/SyncService.js').SyncService} SyncService
+ * @typedef {import("../../../src/services/ForwardingService.js").ForwardingService} ForwardingService
+ * @typedef {import("../../../src/utils/crypto.js")} CryptoUtils
+ * @typedef {import("../../../src/utils/ssrf.js")} SSRFUtils
+ * @typedef {import("crypto")} Crypto
+ * @typedef {import("fs")} FsWithPromises
+ * @typedef {import("dns").promises} DnsPromises
+ */
+
 const SHARED_CONSTS = Object.freeze({
   // eslint-disable-next-line sonarjs/no-hardcoded-ip
   SAFE_IP: "93.184.216.34",
@@ -69,30 +98,6 @@ const {
   HTTP_HEADERS,
   MIME_TYPES,
 } = allConsts;
-/**
- * @typedef {import("apify").Dataset} Dataset
- * @typedef {import("apify").DatasetDataOptions} DatasetDataOptions
- * @typedef {import("express").Application} Application
- * @typedef {import("@duckdb/node-api").DuckDBInstance} DuckDBInstance
- * @typedef {import("@duckdb/node-api").DuckDBValue} DuckDBValue
- * @typedef {import("vm").Script} VMScript
- * @typedef {jest.MockedFunction<any> & { get: jest.Mock; post: jest.Mock; delete: jest.Mock; put: jest.Mock }} AxiosMock
- * @typedef {import("./apify-mock.js").KeyValueStoreMock} KeyValueStoreMock
- * @typedef {import("./apify-mock.js").ApifyMock} ApifyMock
- * @typedef {import("../../../src/logger_middleware.js").LoggerMiddleware} LoggerMiddleware
- * @typedef {import("../../../src/utils/app_state.js").AppState} AppState
- * @typedef {import("../../../src/utils/hot_reload_manager.js").HotReloadManager} HotReloadManager
- * @typedef {import("../../../src/typedefs.js").SignatureProvider} SignatureProvider
- * @typedef {import("../../../src/utils/webhook_rate_limiter.js").WebhookRateLimiter} WebhookRateLimiter
- * @typedef {import("../../../src/repositories/LogRepository.js").LogRepository} LogRepository
- * @typedef {import('../../../src/consts/index.js')} ConstsMock
- * @typedef {import('../../../src/webhook_manager.js').WebhookManager} WebhookManager
- * @typedef {import('../../../src/utils/signature.js').VerificationResult} VerificationResult
- * @typedef {import('../../../src/utils/signature.js').VerificationContext} VerificationContext
- * @typedef {import('../../../src/services/SyncService.js').SyncService} SyncService
- * @typedef {import("../../../src/services/ForwardingService.js").ForwardingService} ForwardingService
- 
- */
 
 /**
  * Shared logger mock for test assertions.
@@ -115,9 +120,23 @@ export const loggerMock = {
 };
 
 /**
+ * Shared Pino Factory Mock.
+ */
+export const pinoMock = Object.assign(
+  jest.fn(() => loggerMock),
+  {
+    stdTimeFunctions: { isoTime: jest.fn() },
+    transport: jest.fn(),
+  },
+);
+
+/**
  * Standard axios mock for mirroring internal behavior.
  */
-const axiosBase = /** @type {AxiosMock} */ (
+/**
+ * @type {AxiosMock}
+ */
+const axiosBase = (
   jest.fn().mockImplementation((config) => {
     return Promise.resolve({
       status: HTTP_STATUS.OK,
@@ -128,48 +147,70 @@ const axiosBase = /** @type {AxiosMock} */ (
   })
 );
 
-axiosBase[allConsts.HTTP_METHODS.GET.toLowerCase()] = /** @type {AxiosMock} */ (
+/**
+ * @type {jest.MockedFunction<AxiosMock>}
+ */
+axiosBase[allConsts.HTTP_METHODS.GET.toLowerCase()] = (
   jest
     .fn()
     .mockImplementation((url, config) =>
       axiosBase({ method: allConsts.HTTP_METHODS.GET, url, ...(config || {}) }),
     )
 );
+
+/**
+ * @type {jest.MockedFunction<AxiosMock>}
+ */
 axiosBase[allConsts.HTTP_METHODS.POST.toLowerCase()] =
-  /** @type {AxiosMock} */ (
-    jest.fn().mockImplementation((url, data, config) =>
-      axiosBase({
-        method: allConsts.HTTP_METHODS.POST,
-        url,
-        data,
-        ...(config || {}),
-      }),
-    )
-  );
-axiosBase[allConsts.HTTP_METHODS.PUT.toLowerCase()] = /** @type {AxiosMock} */ (
-  jest.fn().mockImplementation((url, data, config) =>
+  (jest.fn().mockImplementation((url, data, config) =>
     axiosBase({
-      method: allConsts.HTTP_METHODS.PUT,
+      method: allConsts.HTTP_METHODS.POST,
       url,
       data,
       ...(config || {}),
     }),
   )
-);
-axiosBase[allConsts.HTTP_METHODS.DELETE.toLowerCase()] =
-  /** @type {AxiosMock} */ (
-    jest.fn().mockImplementation((url, config) =>
-      axiosBase({
-        method: allConsts.HTTP_METHODS.DELETE,
-        url,
-        ...(config || {}),
-      }),
-    )
   );
-axiosBase.request = /** @type {AxiosMock} */ (
-  jest.fn().mockImplementation((config) => axiosBase(config))
+
+/**
+ * @type {jest.MockedFunction<AxiosMock>}
+ */
+axiosBase[allConsts.HTTP_METHODS.PUT.toLowerCase()] = (jest.fn().mockImplementation((url, data, config) =>
+  axiosBase({
+    method: allConsts.HTTP_METHODS.PUT,
+    url,
+    data,
+    ...(config || {}),
+  }),
+)
 );
+
+/**
+ * @type {jest.MockedFunction<AxiosMock>}
+ */
+axiosBase[allConsts.HTTP_METHODS.DELETE.toLowerCase()] =
+  (jest.fn().mockImplementation((url, config) =>
+    axiosBase({
+      method: allConsts.HTTP_METHODS.DELETE,
+      url,
+      ...(config || {}),
+    }),
+  )
+  );
+
+/**
+ * @type {jest.MockedFunction<AxiosMock>}
+ */
+axiosBase.request = (jest.fn().mockImplementation((config) => axiosBase(config)));
+
+/**
+ * @type {jest.MockedFunction<AxiosMock>}
+ */
 axiosBase.create = jest.fn(() => axiosBase);
+
+/**
+ * @type {jest.MockedFunction<AxiosMock>}
+ */
 axiosBase.isCancel = jest.fn(() => false);
 
 export const axiosMock = axiosBase;
@@ -177,38 +218,44 @@ export const axiosMock = axiosBase;
 /**
  * Minimal Apify Actor mock for basic tests.
  */
-export const apifyMock = Object.assign(createApifyMock(), {
+/**
+ * @type {jest.Mocked<ApifyMock>}
+ */
+export const apifyMock = assertType(Object.assign(createApifyMock(), {
   getValue: jest.fn(),
-});
+}));
 
 /**
  * DNS promises mock for SSRF testing.
  * Resolves to safe external IPs by default.
  */
-
-export const dnsPromisesMock = {
-  resolve4: /** @type {jest.Mock<any>} */ (jest.fn()).mockResolvedValue([
+/**
+ * @type {jest.Mocked<DnsPromises>}
+ */
+export const dnsPromisesMock = assertType({
+  resolve4: assertType(jest.fn()).mockResolvedValue([
     SHARED_CONSTS.SAFE_IP,
   ]),
-  resolve6: /** @type {jest.Mock<any>} */ (jest.fn()).mockResolvedValue([]),
-};
+  resolve6: assertType(jest.fn()).mockResolvedValue([]),
+});
 
 /**
  * SSRF Utils Mock with proper type signatures.
  */
-export const ssrfMock = {
-  validateUrlForSsrf: /** @type {jest.Mock<any>} */ (
-    jest.fn()
-  ).mockResolvedValue({
+/**
+ * @type {jest.Mocked<SSRFUtils>}
+ */
+export const ssrfMock = assertType({
+  validateUrlForSsrf: assertType(jest.fn()).mockResolvedValue({
     safe: true,
     href: "https://example.com",
     host: "example.com",
   }),
   SSRF_ERRORS,
-  checkIpInRanges: /** @type {jest.Mock<any>} */ (jest.fn()).mockReturnValue(
+  checkIpInRanges: (jest.fn()).mockReturnValue(
     false,
   ),
-};
+});
 
 /**
  * Creates a mock dataset with predefined items and realistic getData behavior.
@@ -780,6 +827,37 @@ export const storageHelperMock = {
 };
 
 /**
+ * Shared Hmac Mock.
+ */
+/**
+ * @type {jest.Mocked<Crypto['Hmac']>}
+ */
+export const mockHmac = assertType({
+  update: jest.fn().mockReturnThis(),
+  digest: jest.fn().mockReturnValue("mock-hmac-digest"),
+});
+
+/**
+ * Shared Crypto Mock.
+ */
+/**
+ * @type {jest.Mocked<Crypto>}
+ */
+export const cryptoMock = assertType({
+  createHmac: jest.fn(() => mockHmac),
+});
+
+/**
+ * Shared Crypto Utils Mock.
+ */
+/**
+ * @type {jest.Mocked<CryptoUtils>}
+ */
+export const cryptoUtilsMock = assertType({
+  secureCompare: jest.fn((a, b) => a === b),
+});
+
+/**
  * Shared Config Mock.
  */
 /**
@@ -867,7 +945,10 @@ export const logRepositoryMock = assertType({
 /**
  * Shared FS Promises Mock.
  */
-export const fsPromisesMock = {
+/**
+ * @type {jest.Mocked<FsWithPromises['promises']>}
+ */
+export const fsPromisesMock = assertType({
   access: jest.fn(),
   readFile: jest.fn(),
   writeFile: jest.fn(),
@@ -876,15 +957,20 @@ export const fsPromisesMock = {
   rm: jest.fn(),
   unlink: jest.fn(),
   watch: jest.fn(),
-};
+});
 
 /**
  * Shared FS Mock.
  */
-export const fsMock = {
+/**
+ * @type {jest.Mocked<FsWithPromises>}
+ */
+export const fsMock = assertType({
   existsSync: jest.fn(),
+  readFileSync: jest.fn(),
+  writeFileSync: jest.fn(),
   ...fsPromisesMock,
-};
+});
 
 /**
  * Shared Forwarding Service Mock.
@@ -990,3 +1076,14 @@ export const databaseConstsFileMock = {
   PAGINATION_CONSTS,
   DUCKDB_TABLES,
 };
+
+/**
+ * Shared System Mock.
+ */
+/**
+ * @type {jest.Mocked<{exit: (code?: number) => never}>}
+ */
+export const systemMock = {
+  exit: jest.fn(),
+};
+

@@ -144,17 +144,30 @@ export function parseObjectFilter(input) {
 export function matchObject(itemObj, filterObj) {
   if (!filterObj) return true;
   const target = itemObj || {};
+
   if (typeof filterObj === "string") {
     // Avoid double-encoding if target is already a string
     const targetStr =
       typeof target === "string" ? target : JSON.stringify(target);
-    return targetStr.toLowerCase().includes(filterObj);
+    return targetStr.toLowerCase().includes(filterObj.toLowerCase());
   }
-  for (const [key, searchVal] of Object.entries(filterObj)) {
-    const itemVal = target[key];
-    if (!itemVal || !String(itemVal).toLowerCase().includes(searchVal)) {
-      return false;
+
+  return Object.entries(filterObj).every(([key, searchVal]) => {
+    // Handle dot notation for deep access
+    let itemVal = target;
+    const path = key.split('.');
+
+    for (const segment of path) {
+      if (itemVal && typeof itemVal === 'object' && segment in itemVal) {
+        itemVal = itemVal[segment];
+      } else {
+        itemVal = undefined;
+        break;
+      }
     }
-  }
-  return true;
+
+    if (itemVal === undefined || itemVal === null) return false;
+
+    return String(itemVal).toLowerCase().includes(String(searchVal).toLowerCase());
+  });
 }

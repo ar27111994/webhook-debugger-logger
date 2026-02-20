@@ -1,5 +1,9 @@
 import crypto from "crypto";
 import { verifySignature } from "../../src/utils/signature.js";
+import { HASH_ALGORITHMS, SIGNATURE_CONSTS, SIGNATURE_ENCODINGS, SIGNATURE_PROVIDERS } from "../../src/consts/security.js";
+import { assertType } from "../setup/helpers/test-utils.js";
+import { APP_CONSTS } from "../../src/consts/app.js";
+import { SIGNATURE_ERRORS } from "../../src/consts/errors.js";
 
 /**
  * @typedef {import("../../src/typedefs.js").SignatureProvider} SignatureProvider
@@ -12,19 +16,21 @@ describe("Custom Signature Verification", () => {
   const PAYLOAD = "custom-payload-data";
   const HEADER_NAME = "x-custom-signature";
   const TIMESTAMP_HEADER = "x-custom-timestamp";
-  const PROVIDER = /** @type {SignatureProvider} */ ("custom");
+  /** @type {SignatureProvider} */
+  const PROVIDER = SIGNATURE_PROVIDERS.CUSTOM;
 
   test("should verify valid signature with sha256 (default)", () => {
+    // eslint-disable-next-line sonarjs/hardcoded-secret-signatures
     const signature = crypto
-      .createHmac("sha256", SECRET)
+      .createHmac(HASH_ALGORITHMS.SHA256, SECRET)
       .update(PAYLOAD)
-      .digest("hex");
+      .digest(assertType(SIGNATURE_ENCODINGS.HEX));
 
     const config = {
       provider: PROVIDER,
       secret: SECRET,
       headerName: HEADER_NAME,
-      algorithm: /** @type {HashAlgorithm} */ ("sha256"),
+      algorithm: HASH_ALGORITHMS.SHA256,
     };
 
     const headers = {
@@ -33,20 +39,21 @@ describe("Custom Signature Verification", () => {
 
     const result = verifySignature(config, PAYLOAD, headers);
     expect(result.valid).toBe(true);
-    expect(result.provider).toBe("custom");
+    expect(result.provider).toBe(PROVIDER);
   });
 
   test("should verify valid signature with sha1", () => {
+    // eslint-disable-next-line sonarjs/hardcoded-secret-signatures
     const signature = crypto
-      .createHmac("sha1", SECRET)
+      .createHmac(HASH_ALGORITHMS.SHA1, SECRET)
       .update(PAYLOAD)
-      .digest("hex");
+      .digest(assertType(SIGNATURE_ENCODINGS.HEX));
 
     const config = {
       provider: PROVIDER,
       secret: SECRET,
       headerName: HEADER_NAME,
-      algorithm: /** @type {HashAlgorithm} */ ("sha1"),
+      algorithm: HASH_ALGORITHMS.SHA1,
     };
 
     const headers = {
@@ -58,21 +65,23 @@ describe("Custom Signature Verification", () => {
   });
 
   test("should fail if timestamp is too old (when timestampKey provided)", () => {
+    // eslint-disable-next-line sonarjs/hardcoded-secret-signatures
     const signature = crypto
-      .createHmac("sha256", SECRET)
+      .createHmac(HASH_ALGORITHMS.SHA256, SECRET)
       .update(PAYLOAD)
-      .digest("hex");
+      .digest(assertType(SIGNATURE_ENCODINGS.HEX));
 
     const config = {
       provider: PROVIDER,
       secret: SECRET,
       headerName: HEADER_NAME,
       timestampKey: TIMESTAMP_HEADER, // Enable timestamp check
-      tolerance: 300,
+      tolerance: SIGNATURE_CONSTS.TOLERANCE_SECONDS,
     };
 
     // 10 minutes ago
-    const staleTimestamp = (Math.floor(Date.now() / 1000) - 600).toString();
+    const tenMinutesInSeconds = 600;
+    const staleTimestamp = (Math.floor(Date.now() / APP_CONSTS.MS_PER_SECOND) - tenMinutesInSeconds).toString();
 
     const headers = {
       [HEADER_NAME]: signature,
@@ -81,24 +90,25 @@ describe("Custom Signature Verification", () => {
 
     const result = verifySignature(config, PAYLOAD, headers);
     expect(result.valid).toBe(false);
-    expect(result.error).toMatch(/^Timestamp outside tolerance/);
+    expect(result.error).toContain(SIGNATURE_ERRORS.TIMESTAMP_TOLERANCE);
   });
 
   test("should verify valid signature with fresh timestamp", () => {
+    // eslint-disable-next-line sonarjs/hardcoded-secret-signatures
     const signature = crypto
-      .createHmac("sha256", SECRET)
+      .createHmac(HASH_ALGORITHMS.SHA256, SECRET)
       .update(PAYLOAD)
-      .digest("hex");
+      .digest(assertType(SIGNATURE_ENCODINGS.HEX));
 
     const config = {
       provider: PROVIDER,
       secret: SECRET,
       headerName: HEADER_NAME,
       timestampKey: TIMESTAMP_HEADER,
-      tolerance: 300,
+      tolerance: SIGNATURE_CONSTS.TOLERANCE_SECONDS,
     };
 
-    const freshTimestamp = Math.floor(Date.now() / 1000).toString();
+    const freshTimestamp = Math.floor(Date.now() / APP_CONSTS.MS_PER_SECOND).toString();
 
     const headers = {
       [HEADER_NAME]: signature,
@@ -110,10 +120,11 @@ describe("Custom Signature Verification", () => {
   });
 
   test("should fail if timestamp header is missing (when required)", () => {
+    // eslint-disable-next-line sonarjs/hardcoded-secret-signatures
     const signature = crypto
-      .createHmac("sha256", SECRET)
+      .createHmac(HASH_ALGORITHMS.SHA256, SECRET)
       .update(PAYLOAD)
-      .digest("hex");
+      .digest(assertType(SIGNATURE_ENCODINGS.HEX));
 
     const config = {
       provider: PROVIDER,
@@ -129,21 +140,22 @@ describe("Custom Signature Verification", () => {
 
     const result = verifySignature(config, PAYLOAD, headers);
     expect(result.valid).toBe(false);
-    expect(result.error).toContain("Missing timestamp header");
+    expect(result.error).toContain(SIGNATURE_ERRORS.MISSING_TIMESTAMP);
   });
 
   test("should verify valid signature with base64 encoding", () => {
+    // eslint-disable-next-line sonarjs/hardcoded-secret-signatures
     const signature = crypto
-      .createHmac("sha256", SECRET)
+      .createHmac(HASH_ALGORITHMS.SHA256, SECRET)
       .update(PAYLOAD)
-      .digest("base64");
+      .digest(assertType(SIGNATURE_ENCODINGS.BASE64));
 
     const config = {
       provider: PROVIDER,
       secret: SECRET,
       headerName: HEADER_NAME,
-      algorithm: /** @type {HashAlgorithm} */ ("sha256"),
-      encoding: /** @type {SignatureEncoding} */ ("base64"),
+      algorithm: HASH_ALGORITHMS.SHA256,
+      encoding: SIGNATURE_ENCODINGS.BASE64,
     };
 
     const headers = {
@@ -152,21 +164,22 @@ describe("Custom Signature Verification", () => {
 
     const result = verifySignature(config, PAYLOAD, headers);
     expect(result.valid).toBe(true);
-    expect(result.provider).toBe("custom");
+    expect(result.provider).toBe(PROVIDER);
   });
 
   test("should fail if encoding mismatches (configured base64, sent hex)", () => {
     // Generate HEX
+    // eslint-disable-next-line sonarjs/hardcoded-secret-signatures
     const signature = crypto
-      .createHmac("sha256", SECRET)
+      .createHmac(HASH_ALGORITHMS.SHA256, SECRET)
       .update(PAYLOAD)
-      .digest("hex");
+      .digest(assertType(SIGNATURE_ENCODINGS.HEX));
 
     const config = {
       provider: PROVIDER,
       secret: SECRET,
       headerName: HEADER_NAME,
-      encoding: /** @type {SignatureEncoding} */ ("base64"), // Expecting Base64
+      encoding: SIGNATURE_ENCODINGS.BASE64, // Expecting Base64
     };
 
     const headers = {
@@ -175,6 +188,6 @@ describe("Custom Signature Verification", () => {
 
     const result = verifySignature(config, PAYLOAD, headers);
     expect(result.valid).toBe(false);
-    expect(result.error).toBe("Signature mismatch");
+    expect(result.error).toBe(SIGNATURE_ERRORS.MISMATCH);
   });
 });

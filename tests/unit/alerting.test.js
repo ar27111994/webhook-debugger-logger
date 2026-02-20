@@ -6,6 +6,7 @@
 import { jest } from '@jest/globals';
 import { setupCommonMocks } from '../setup/helpers/mock-setup.js';
 import { loggerMock, axiosMock } from '../setup/helpers/shared-mocks.js';
+import { assertType } from '../setup/helpers/test-utils.js';
 import { ALERT_TRIGGERS } from '../../src/consts/alerting.js';
 
 // Mock dependencies
@@ -25,7 +26,7 @@ const { shouldAlert, sendAlert, triggerAlertIfNeeded } = await import('../../src
 describe('Alerting Utils', () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        mockValidateUrlForSsrf.mockResolvedValue({ safe: true });
+        mockValidateUrlForSsrf.mockResolvedValue(assertType({ safe: true }));
         axiosMock.post.mockResolvedValue({ status: 200 });
     });
 
@@ -33,46 +34,46 @@ describe('Alerting Utils', () => {
         const config = { alertOn: [ALERT_TRIGGERS.ERROR, ALERT_TRIGGERS.STATUS_5XX] };
 
         it('should return true for ERROR trigger', () => {
-            expect(shouldAlert(config, { error: 'Something went wrong' })).toBe(true);
+            expect(shouldAlert(config, assertType({ error: 'Something went wrong' }))).toBe(true);
         });
 
         it('should return true for STATUS_5XX trigger', () => {
-            expect(shouldAlert(config, { statusCode: 500 })).toBe(true);
-            expect(shouldAlert(config, { statusCode: 503 })).toBe(true);
+            expect(shouldAlert(config, assertType({ statusCode: 500 }))).toBe(true);
+            expect(shouldAlert(config, assertType({ statusCode: 503 }))).toBe(true);
         });
 
         it('should return true for STATUS_4XX trigger', () => {
             const config4xx = { alertOn: [ALERT_TRIGGERS.STATUS_4XX] };
-            expect(shouldAlert(config4xx, { statusCode: 400 })).toBe(true);
-            expect(shouldAlert(config4xx, { statusCode: 404 })).toBe(true);
-            expect(shouldAlert(config4xx, { statusCode: 499 })).toBe(true);
-            expect(shouldAlert(config4xx, { statusCode: 500 })).toBe(false);
-            expect(shouldAlert(config4xx, { statusCode: 200 })).toBe(false);
+            expect(shouldAlert(config4xx, assertType({ statusCode: 400 }))).toBe(true);
+            expect(shouldAlert(config4xx, assertType({ statusCode: 404 }))).toBe(true);
+            expect(shouldAlert(config4xx, assertType({ statusCode: 499 }))).toBe(true);
+            expect(shouldAlert(config4xx, assertType({ statusCode: 500 }))).toBe(false);
+            expect(shouldAlert(config4xx, assertType({ statusCode: 200 }))).toBe(false);
         });
 
         it('should return false if trigger condition not met', () => {
-            expect(shouldAlert(config, { statusCode: 200 })).toBe(false);
-            expect(shouldAlert(config, { statusCode: 404 })).toBe(false); // 4XX not in config
+            expect(shouldAlert(config, assertType({ statusCode: 200 }))).toBe(false);
+            expect(shouldAlert(config, assertType({ statusCode: 404 }))).toBe(false); // 4XX not in config
         });
 
         it('should use default triggers if config.alertOn is missing', () => {
             const emptyConfig = {};
             // Default usually includes ERROR and maybe 5XX? let's check CONST behavior
             // We assume defaults cover at least Errors.
-            expect(shouldAlert(emptyConfig, { error: 'Fail' })).toBe(true);
+            expect(shouldAlert(emptyConfig, assertType({ error: 'Fail' }))).toBe(true);
         });
 
         it('should handle TIMEOUT trigger', () => {
             const timeoutConfig = { alertOn: [ALERT_TRIGGERS.TIMEOUT] };
-            expect(shouldAlert(timeoutConfig, { error: 'Request timeout occurred' })).toBe(true);
-            expect(shouldAlert(timeoutConfig, { error: 'Other error' })).toBe(false);
-            expect(shouldAlert(timeoutConfig, {})).toBe(false); // Hits context.error || "" branch
+            expect(shouldAlert(timeoutConfig, assertType({ error: 'Request timeout occurred' }))).toBe(true);
+            expect(shouldAlert(timeoutConfig, assertType({ error: 'Other error' }))).toBe(false);
+            expect(shouldAlert(timeoutConfig, assertType({}))).toBe(false); // Hits context.error || "" branch
         });
 
         it('should handle SIGNATURE_INVALID trigger', () => {
             const sigConfig = { alertOn: [ALERT_TRIGGERS.SIGNATURE_INVALID] };
-            expect(shouldAlert(sigConfig, { signatureValid: false })).toBe(true);
-            expect(shouldAlert(sigConfig, { signatureValid: true })).toBe(false);
+            expect(shouldAlert(sigConfig, assertType({ signatureValid: false }))).toBe(true);
+            expect(shouldAlert(sigConfig, assertType({ signatureValid: true }))).toBe(false);
         });
     });
 
@@ -83,31 +84,37 @@ describe('Alerting Utils', () => {
             statusCode: 500,
             error: 'Internal Server Error',
             timestamp: '2023-01-01T00:00:00Z',
+            // eslint-disable-next-line sonarjs/no-hardcoded-ip
             sourceIp: '1.2.3.4'
         };
 
+        const SLACK_HOOK = 'https://hooks.slack.com/services/XXX';
+        const DISCORD_HOOK = 'https://discord.com/api/webhooks/YYY';
+
         it('should send alerts to configured channels', async () => {
             const config = {
-                slack: { webhookUrl: 'https://hooks.slack.com/services/XXX' },
-                discord: { webhookUrl: 'https://discord.com/api/webhooks/YYY' }
+                slack: { webhookUrl: SLACK_HOOK },
+                discord: { webhookUrl: DISCORD_HOOK }
             };
 
-            const results = await sendAlert(config, context);
+            const results = await sendAlert(config, assertType(context));
 
-            expect(mockValidateUrlForSsrf).toHaveBeenCalledTimes(2);
-            expect(axiosMock.post).toHaveBeenCalledTimes(2);
+            const callCount = Object.keys(config).length;
+            expect(mockValidateUrlForSsrf).toHaveBeenCalledTimes(callCount);
+            expect(axiosMock.post).toHaveBeenCalledTimes(callCount);
             expect(results.slack).toBe(true);
             expect(results.discord).toBe(true);
         });
 
         it('should block SSRF URLs', async () => {
-            mockValidateUrlForSsrf.mockResolvedValueOnce({ safe: false, error: 'Blocked IP' });
+            mockValidateUrlForSsrf.mockResolvedValueOnce(assertType({ safe: false, error: 'Blocked IP' }));
 
             const config = {
+                // eslint-disable-next-line sonarjs/no-clear-text-protocols
                 slack: { webhookUrl: 'http://169.254.169.254/latest' }
             };
 
-            await sendAlert(config, context);
+            await sendAlert(config, assertType(context));
 
             expect(loggerMock.error).toHaveBeenCalledWith(
                 expect.objectContaining({ err: expect.anything() }),
@@ -117,13 +124,14 @@ describe('Alerting Utils', () => {
         });
 
         it('should block SSRF URLs for Discord', async () => {
-            mockValidateUrlForSsrf.mockResolvedValueOnce({ safe: false, error: 'Blocked IP' });
+            mockValidateUrlForSsrf.mockResolvedValueOnce(assertType({ safe: false, error: 'Blocked IP' }));
 
             const config = {
+                // eslint-disable-next-line sonarjs/no-clear-text-protocols
                 discord: { webhookUrl: 'http://169.254.169.254/latest' }
             };
 
-            await sendAlert(config, context);
+            await sendAlert(config, assertType(context));
 
             expect(loggerMock.error).toHaveBeenCalledWith(
                 expect.objectContaining({ err: expect.anything() }),
@@ -136,10 +144,10 @@ describe('Alerting Utils', () => {
             axiosMock.post.mockRejectedValueOnce(new Error('Network Error'));
 
             const config = {
-                slack: { webhookUrl: 'https://hooks.slack.com/services/XXX' }
+                slack: { webhookUrl: SLACK_HOOK }
             };
 
-            const results = await sendAlert(config, context);
+            const results = await sendAlert(config, assertType(context));
 
             expect(results.slack).toBe(false);
             expect(loggerMock.error).toHaveBeenCalled();
@@ -149,20 +157,20 @@ describe('Alerting Utils', () => {
             axiosMock.post.mockRejectedValueOnce(new Error('Network Error'));
 
             const config = {
-                discord: { webhookUrl: 'https://discord.com/api/webhooks/YYY' }
+                discord: { webhookUrl: DISCORD_HOOK }
             };
 
-            const results = await sendAlert(config, context);
+            const results = await sendAlert(config, assertType(context));
 
             expect(results.discord).toBe(false);
             expect(loggerMock.error).toHaveBeenCalled();
         });
 
         it('should format Slack message for invalid signatures correctly', async () => {
-            const config = { slack: { webhookUrl: 'https://hooks.slack.com/services/XXX' } };
+            const config = { slack: { webhookUrl: SLACK_HOOK } };
             const sigContext = { ...context, error: undefined, signatureValid: false, signatureError: 'Mismatch' };
 
-            await sendAlert(config, sigContext);
+            await sendAlert(config, assertType(sigContext));
             expect(axiosMock.post).toHaveBeenCalledWith(
                 expect.any(String),
                 expect.objectContaining({
@@ -182,11 +190,11 @@ describe('Alerting Utils', () => {
         });
 
         it('should format Discord message for invalid signatures correctly', async () => {
-            const config = { discord: { webhookUrl: 'https://discord.com/api/webhooks/YYY' } };
+            const config = { discord: { webhookUrl: DISCORD_HOOK } };
             const sigContext = { ...context, error: undefined, signatureValid: false, signatureError: 'Mismatch' };
             const DISCORD_ORANGE = 16753920;
 
-            await sendAlert(config, sigContext);
+            await sendAlert(config, assertType(sigContext));
             expect(axiosMock.post).toHaveBeenCalledWith(
                 expect.any(String),
                 expect.objectContaining({
@@ -205,17 +213,17 @@ describe('Alerting Utils', () => {
 
         it('should format message for default OK status correctly (Slack/Discord)', async () => {
             const config = {
-                slack: { webhookUrl: 'https://hooks.slack.com/services/XXX' },
-                discord: { webhookUrl: 'https://discord.com/api/webhooks/YYY' }
+                slack: { webhookUrl: SLACK_HOOK },
+                discord: { webhookUrl: DISCORD_HOOK }
             };
             const okContext = { ...context, error: undefined, signatureValid: true, statusCode: 200, sourceIp: undefined };
             const DISCORD_GREEN = 65280;
 
-            await sendAlert(config, okContext);
+            await sendAlert(config, assertType(okContext));
 
             // Checking Discord default status
             expect(axiosMock.post).toHaveBeenCalledWith(
-                'https://discord.com/api/webhooks/YYY',
+                DISCORD_HOOK,
                 expect.objectContaining({
                     embeds: expect.arrayContaining([
                         expect.objectContaining({
@@ -231,7 +239,7 @@ describe('Alerting Utils', () => {
 
             // Checking Slack default status
             expect(axiosMock.post).toHaveBeenCalledWith(
-                'https://hooks.slack.com/services/XXX',
+                SLACK_HOOK,
                 expect.objectContaining({
                     blocks: expect.arrayContaining([
                         expect.objectContaining({
@@ -257,7 +265,7 @@ describe('Alerting Utils', () => {
             };
             const context = { error: 'Fail' };
 
-            await triggerAlertIfNeeded(config, context);
+            await triggerAlertIfNeeded(config, assertType(context));
 
             expect(axiosMock.post).toHaveBeenCalled();
         });
@@ -266,7 +274,7 @@ describe('Alerting Utils', () => {
             const config = { alertOn: [ALERT_TRIGGERS.ERROR] }; // No URLs
             const context = { error: 'Fail' };
 
-            await triggerAlertIfNeeded(config, context);
+            await triggerAlertIfNeeded(config, assertType(context));
 
             expect(axiosMock.post).not.toHaveBeenCalled();
         });
@@ -278,13 +286,13 @@ describe('Alerting Utils', () => {
             };
             const context = { statusCode: 200 }; // No error
 
-            await triggerAlertIfNeeded(config, context);
+            await triggerAlertIfNeeded(config, assertType(context));
 
             expect(axiosMock.post).not.toHaveBeenCalled();
         });
 
         it('should exit cleanly if config is undefined', async () => {
-            await triggerAlertIfNeeded(undefined, { error: 'Fail' });
+            await triggerAlertIfNeeded(undefined, assertType({ error: 'Fail' }));
             expect(axiosMock.post).not.toHaveBeenCalled();
         });
     });

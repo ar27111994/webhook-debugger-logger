@@ -99,7 +99,7 @@ export class WebhookRateLimiter {
         log.info({ prunedCount }, LOG_MESSAGES.WEBHOOK_RATELIMIT_PRUNED);
       }
     }, APP_CONSTS.DEFAULT_RATE_LIMIT_WINDOW_MS);
-    if (this.#cleanupInterval.unref) this.#cleanupInterval.unref();
+    if (this.#cleanupInterval?.unref) this.#cleanupInterval.unref();
   }
 
   /**

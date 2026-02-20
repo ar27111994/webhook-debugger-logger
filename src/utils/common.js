@@ -81,11 +81,9 @@ export function deepRedact(obj, paths, censor = LOG_CONSTS.CENSOR_MARKER) {
 
     if (pathBroken) continue;
 
-    if (current) {
-      const lastKey = parts[parts.length - 1];
-      if (Object.prototype.hasOwnProperty.call(current, lastKey)) {
-        current[lastKey] = censor;
-      }
+    const lastKey = parts[parts.length - 1];
+    if (Object.prototype.hasOwnProperty.call(current, lastKey)) {
+      current[lastKey] = censor;
     }
   }
 }

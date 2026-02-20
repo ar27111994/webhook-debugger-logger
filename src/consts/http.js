@@ -182,6 +182,7 @@ export const HTTP_HEADERS = Object.freeze({
  * @enum {string}
  */
 export const ENCODINGS = Object.freeze({
+  UTF: "utf8",
   UTF8: "utf-8",
   BASE64: "base64",
 });

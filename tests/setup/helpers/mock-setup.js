@@ -42,6 +42,10 @@ import {
   eventsMock,
   createMockWithGetters,
   servicesFileMock,
+  pinoMock,
+  cryptoMock,
+  cryptoUtilsMock,
+  systemMock,
 } from "./shared-mocks.js";
 
 /**
@@ -77,6 +81,10 @@ import {
  * @property {boolean} [repositories=false] - Register LogRepository mock
  * @property {boolean} [services=false] - Register ForwardingService mock
  * @property {boolean} [fs=false] - Register fs/promises and fs mock
+ * @property {boolean} [system=false] - Register system util mock
+ * @property {boolean} [pino=false] - Register pino mock
+ * @property {boolean} [crypto=false] - Register native crypto mock
+ * @property {boolean} [utilCrypto=false] - Register src/utils/crypto.js mock
  */
 
 /**
@@ -130,6 +138,10 @@ export async function setupCommonMocks(options = {}) {
     repositories = false,
     services = false,
     fs = false,
+    system = false,
+    pino = false,
+    crypto = false,
+    utilCrypto = false,
   } = options;
 
   if (fs) {
@@ -271,9 +283,10 @@ export async function setupCommonMocks(options = {}) {
       .filter((file) => file.endsWith(".js"));
 
     // Mock both the direct modules and the index aggregator
+    const index = 'index.js';
     const modulesToMock = [
-      "index.js",
-      ...constModules.filter((m) => m !== "index.js"),
+      index,
+      ...constModules.filter((m) => m !== index),
     ];
 
     for (const moduleName of modulesToMock) {
@@ -344,5 +357,26 @@ export async function setupCommonMocks(options = {}) {
     jest.unstable_mockModule("../../../src/services/index.js", () => ({
       ...servicesFileMock,
     }));
+  }
+
+  if (system) {
+    jest.unstable_mockModule("../../../src/utils/system.js", () => systemMock);
+  }
+
+  if (pino) {
+    jest.unstable_mockModule("pino", () => ({
+      default: pinoMock,
+    }));
+  }
+
+  if (crypto) {
+    jest.unstable_mockModule("crypto", () => ({
+      default: cryptoMock,
+      ...cryptoMock,
+    }));
+  }
+
+  if (utilCrypto) {
+    jest.unstable_mockModule("../../../src/utils/crypto.js", () => cryptoUtilsMock);
   }
 }

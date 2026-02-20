@@ -76,9 +76,10 @@ export function useFakeTimers() {
 }
 
 export const useDbHooks = () => {
+  const DB_LOCK_WAIT_MS = 1000;
   beforeEach(async () => {
     // Wait for background tasks (SyncService) to release DB locks
-    await sleep(1000);
+    await sleep(DB_LOCK_WAIT_MS);
     await resetDb();
   });
 };

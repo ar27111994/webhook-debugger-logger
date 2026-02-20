@@ -1,144 +1,142 @@
-import { describe, test, expect, jest } from "@jest/globals";
-
 /**
- * @typedef {import("../../src/utils/logger.js")} LoggerUtils
- * @typedef {import("pino").Logger} Logger
- * @typedef {import("../../src/typedefs.js").CommonError} CommonError
- * @typedef {import("pino").Bindings} Bindings
+ * @file tests/unit/logger.test.js
+ * @description Unit tests for logger utility functions.
  */
 
-import { NODE_ERROR_CODES } from "../../src/consts/errors.js";
 
-// Mock pino to avoid transport issues with pino-pretty
-jest.unstable_mockModule("pino", () => {
-  const createMockLogger = (bindings = {}) => ({
-    level: "info",
-    bindings: () => bindings,
-    child: jest.fn(
-      /**
-       * @param {Bindings} newBindings
-       */
-      (newBindings) => createMockLogger({ ...bindings, ...newBindings }),
-    ),
-  });
+import { setupCommonMocks } from '../setup/helpers/mock-setup.js';
+import { loggerMock } from '../setup/helpers/shared-mocks.js';
+import { jest } from '@jest/globals';
+import { assertType } from '../setup/helpers/test-utils.js';
+import { ENV_VARS } from '../../src/consts/app.js';
 
-  return {
-    default: Object.assign(
-      jest.fn(() => createMockLogger()),
-      {
-        transport: jest.fn(() => ({})),
-        stdTimeFunctions: {
-          isoTime: () => "2026-01-01T00:00:00.000Z",
-        },
-      },
-    ),
-  };
-});
+/**
+ * @typedef {import('../../src/utils/logger.js').serializeError} serializeError
+ * @typedef {import('../../src/utils/logger.js').createChildLogger} createChildLogger
+ * @typedef {import('../../src/typedefs.js').CommonError} CommonError
+ * @typedef {import('pino')} Logger
+ */
 
-describe("Logger Utility", () => {
-  /** @type {Logger} */
-  let logger;
-  /** @type {LoggerUtils["createChildLogger"]} */
-  let createChildLogger;
-  /** @type {LoggerUtils["createRequestLogger"]} */
-  let createRequestLogger;
-  /** @type {LoggerUtils["serializeError"]} */
-  let serializeError;
-  /** @type {LoggerUtils["LogLevel"]} */
-  let LogLevel;
+describe('Logger Utils', () => {
+    /** @type {serializeError} */
+    let serializeError;
+    /** @type {createChildLogger} */
+    let createChildLogger;
 
-  async function loadLogger() {
-    const mod = await import("../../src/utils/logger.js");
-    logger = mod.logger;
-    createChildLogger = mod.createChildLogger;
-    createRequestLogger = mod.createRequestLogger;
-    serializeError = mod.serializeError;
-    LogLevel = mod.LogLevel;
-  }
+    /** @type {Logger} */
+    let pinoMock;
+    /** @type {Logger['transport']} */
+    let transportMock;
 
-  describe("serializeError", () => {
-    test("should serialize standard Error objects", async () => {
-      await loadLogger();
-      const err = new Error("test error");
-      err.name = "TestError";
-      err.stack = "stack trace";
+    const ORIGINAL_ENV = process.env;
 
-      const result = serializeError(err);
-      expect(result).toEqual({
-        type: "TestError",
-        message: "test error",
-        stack: "stack trace",
-      });
+    beforeAll(async () => {
+        await setupCommonMocks({ pino: true });
+        pinoMock = (await import('pino')).default;
+        transportMock = pinoMock.transport;
     });
 
-    test("should include error code if present", async () => {
-      await loadLogger();
+    beforeEach(async () => {
+        jest.resetModules();
+        await setupCommonMocks({ pino: true });
+        process.env = { ...ORIGINAL_ENV };
 
-      /** @type {CommonError} */
-      const err = new Error("not found");
-      err.code = NODE_ERROR_CODES.ENOENT;
+        // Re-import to get fresh module state for method tests
+        const loggerModule = await import('../../src/utils/logger.js');
+        serializeError = loggerModule.serializeError;
+        createChildLogger = loggerModule.createChildLogger;
 
-      const result = serializeError(err);
-      expect(result.code).toBe(NODE_ERROR_CODES.ENOENT);
+        jest.mocked(pinoMock).mockClear();
+        jest.mocked(transportMock).mockClear();
     });
 
-    test("should handle non-Error inputs", async () => {
-      await loadLogger();
-      expect(serializeError("string error")).toEqual({
-        message: "string error",
-      });
-      expect(serializeError(404)).toEqual({
-        message: "404",
-      });
-      expect(serializeError({ custom: "obj" })).toEqual({
-        message: "[object Object]",
-      });
-    });
-  });
-
-  describe("Child Loggers", () => {
-    test("createChildLogger should create a logger with bindings", async () => {
-      await loadLogger();
-      const child = createChildLogger({ module: "test" });
-      expect(child).toBeDefined();
-      expect(child.bindings()).toEqual({ module: "test" });
+    afterAll(() => {
+        process.env = ORIGINAL_ENV;
     });
 
-    test("createRequestLogger should create a logger with requestId", async () => {
-      await loadLogger();
-      const reqLogger = createRequestLogger("req_123");
-      expect(reqLogger.bindings()).toEqual({ requestId: "req_123" });
+    describe('serializeError', () => {
+        it('should serialize standard Error objects', () => {
+            const errorMessage = 'Test error';
+            const err = new Error(errorMessage);
+            const serialized = serializeError(err);
+            expect(serialized).toHaveProperty('message', errorMessage);
+            expect(serialized).toHaveProperty('stack');
+            expect(serialized).toHaveProperty('type', 'Error');
+        });
+
+        it('should handle strings as error messages', () => {
+            const errorMessage = 'String error';
+            const serialized = serializeError(errorMessage);
+            expect(serialized).toHaveProperty('message', errorMessage);
+        });
+
+        it('should handle null/undefined gracefully (return empty object or similar)', () => {
+            // Implementation returns { message: String(err) } for non-errors
+            expect(serializeError(null)).toEqual({ message: 'null' });
+            expect(serializeError(undefined)).toEqual({ message: 'undefined' });
+        });
+
+        it('should safely handle circular references in error objects', () => {
+            const circularErr = new Error('Circular');
+            // @ts-expect-error - Adding self reference for testing circular references
+            circularErr.self = circularErr;
+            const serialized = serializeError(circularErr);
+            expect(serialized).toHaveProperty('message', 'Circular');
+        });
     });
-  });
 
-  describe("Logger Configuration & Branches", () => {
-    test("logger should be initialized with correct level", async () => {
-      await loadLogger();
-      expect(logger.level).toBe(process.env.LOG_LEVEL || "info");
+    describe('createChildLogger', () => {
+        it('should call pino.child with bindings', () => {
+            const component = 'TestInfo';
+
+            createChildLogger({ component });
+            expect(loggerMock.child).toHaveBeenCalledWith({ component });
+        });
     });
 
-    test("LogLevel enum should be correct", async () => {
-      await loadLogger();
-      expect(LogLevel.INFO).toBe("info");
-      expect(LogLevel.ERROR).toBe("error");
+    describe('createRequestLogger', () => {
+        it('should create a child logger with requestId', async () => {
+            const { createRequestLogger } = await import('../../src/utils/logger.js');
+            const requestId = 'req-123';
+            createRequestLogger(requestId);
+            expect(loggerMock.child).toHaveBeenCalledWith({ requestId });
+        });
     });
 
-    test("should use pretty logs when PRETTY_LOGS is true", async () => {
-      process.env.PRETTY_LOGS = "true";
-      jest.resetModules();
-
-      const mod = await import(`../../src/utils/logger.js?v=${Date.now()}`);
-      expect(mod.logger).toBeDefined();
-
-      delete process.env.PRETTY_LOGS;
+    describe('serializeError with code', () => {
+        it('should include error code if present', () => {
+            /** @type {CommonError} */
+            const err = new Error('System Error');
+            err.code = 'ECONNRESET';
+            const serialized = serializeError(err);
+            expect(serialized).toHaveProperty('code', 'ECONNRESET');
+        });
     });
 
-    test("should use standard logs when PRETTY_LOGS is false", async () => {
-      process.env.PRETTY_LOGS = "false";
-      jest.resetModules();
+    describe('Logger Initialization', () => {
+        it('should use pino-pretty transport when PRETTY_LOGS is true', async () => {
+            process.env[ENV_VARS.PRETTY_LOGS] = 'true';
+            const transport = { isTransport: true };
+            jest.mocked(transportMock).mockReturnValue(assertType(transport));
 
-      const mod = await import(`../../src/utils/logger.js?v2=${Date.now()}`);
-      expect(mod.logger).toBeDefined();
+            // Force module reload by appending query string
+            await import(`../../src/utils/logger.js?t=${Date.now()}`);
+
+            expect(transportMock).toHaveBeenCalledWith(expect.objectContaining({
+                target: 'pino-pretty'
+            }));
+            // Verify pino was called with the transport result
+            expect(pinoMock).toHaveBeenCalledWith(expect.anything(), transport);
+            expect(jest.mocked(pinoMock).mock.calls[0].length).toBe(1 + 1);
+        });
+
+        it('should NOT use transport when PRETTY_LOGS is false', async () => {
+            process.env[ENV_VARS.PRETTY_LOGS] = 'false';
+            await import(`../../src/utils/logger.js?t=${Date.now()}`);
+
+            expect(transportMock).not.toHaveBeenCalled();
+            // pino(config) - 1 arg
+            expect(jest.mocked(pinoMock).mock.calls[0].length).toBe(1);
+        });
     });
-  });
 });

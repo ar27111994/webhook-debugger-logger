@@ -168,6 +168,9 @@ export const createMockNextFunction = (fn) => jest.fn(fn);
  */
 export const assertType = (value) => value;
 
+const DEFAULT_WAIT_TIMEOUT = 1000;
+const DEFAULT_WAIT_INTERVAL = 10;
+
 /**
  * Waits for a condition to become true.
  *
@@ -181,8 +184,8 @@ export const assertType = (value) => value;
  */
 export const waitForCondition = async (
   condition,
-  timeout = 1000,
-  interval = 10,
+  timeout = DEFAULT_WAIT_TIMEOUT,
+  interval = DEFAULT_WAIT_INTERVAL,
 ) => {
   const start = Date.now();
   while (true) {
@@ -225,7 +228,9 @@ export function getLastAxiosCall(axios, method = HTTP_METHODS.POST) {
  */
 export function getLastAxiosConfig(axios, method = HTTP_METHODS.POST) {
   const call = getLastAxiosCall(axios, method);
+  const ARG_INDEX_CONFIG_GET = 1;
+  const ARG_INDEX_CONFIG_POST = 2;
   if (!method || method.toUpperCase() === HTTP_METHODS.REQUEST)
     return call?.[0]; // axios(config) or axios.request(config) -> config is 1st arg
-  return call?.[method.toUpperCase() === HTTP_METHODS.GET ? 1 : 2];
+  return call?.[method.toUpperCase() === HTTP_METHODS.GET ? ARG_INDEX_CONFIG_GET : ARG_INDEX_CONFIG_POST];
 }

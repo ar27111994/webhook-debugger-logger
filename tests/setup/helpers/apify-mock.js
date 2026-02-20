@@ -26,6 +26,7 @@ import { jest } from "@jest/globals";
  * @property {jest.Mock<(code?: number) => Promise<void>>} exit
  * @property {jest.Mock<() => boolean>} isAtHome
  * @property {jest.Mock<() => any>} getEnv
+ * @property {jest.Mock<() => Promise<any>>} [getValue]
  */
 
 /**

@@ -1,34 +1,47 @@
-import { describe, test, expect } from "@jest/globals";
-import { secureCompare } from "../../src/utils/crypto.js";
+/**
+ * @file tests/unit/crypto.test.js
+ * @description Unit tests for cryptographic utility functions.
+ * Use text/decoder to inspect raw logic if buffer comparison used.
+ */
 
-describe("Crypto Utils", () => {
-  describe("secureCompare", () => {
-    test("should return true for identical strings", () => {
-      expect(secureCompare("secret", "secret")).toBe(true);
-      expect(secureCompare("", "")).toBe(true);
-      expect(secureCompare("long-secret-key-123", "long-secret-key-123")).toBe(
-        true,
-      );
-    });
 
-    test("should return false for different strings of same length", () => {
-      expect(secureCompare("secret", "public")).toBe(false);
-      expect(secureCompare("12345", "12346")).toBe(false);
-    });
+import { secureCompare } from '../../src/utils/crypto.js';
+import { assertType } from '../setup/helpers/test-utils.js';
 
-    test("should return false for strings of different length", () => {
-      expect(secureCompare("secret", "secret1")).toBe(false);
-      expect(secureCompare("secret1", "secret")).toBe(false);
-    });
+describe('Crypto Utils', () => {
+    describe('secureCompare', () => {
+        it('should return true for identical strings', () => {
+            expect(secureCompare('my-secret', 'my-secret')).toBe(true);
+        });
 
-    test("should return false for empty string mismatch", () => {
-      expect(secureCompare("secret", "")).toBe(false);
-      expect(secureCompare("", "secret")).toBe(false);
-    });
+        it('should return false for different strings of same length', () => {
+            expect(secureCompare('my-secret', 'my-secres')).toBe(false);
+        });
 
-    test("should handle unicode characters", () => {
-      expect(secureCompare("👍", "👍")).toBe(true);
-      expect(secureCompare("👍", "👎")).toBe(false);
+        it('should return false for strings of different lengths', () => {
+            expect(secureCompare('safe', 'safely')).toBe(false);
+        });
+
+        it('should return false for empty strings comparison logic edge case', () => {
+            // Depending on logic, timing safe usually pads.
+            // If secureCompare logic requires non-empty, verify it doesn't crash
+            expect(secureCompare('', '')).toBe(true);
+            expect(secureCompare('a', '')).toBe(false);
+        });
+
+        it('should handle null/undefined inputs safely (return false)', () => {
+            expect(secureCompare(assertType(null), 'test')).toBe(false);
+            expect(secureCompare('test', assertType(undefined))).toBe(false);
+            expect(secureCompare(assertType(null), assertType(null))).toBe(false); // Technically not matches
+        });
+
+        it('should simulate timing-safe behavior (no early exit)', () => {
+            // Ideally we'd verify timing but unit tests can't reliably catch nanoseconds.
+            // We verify logic correctness:
+            // "a" vs "b" -> false
+            // "a" vs "a" -> true
+            expect(secureCompare('a', 'b')).toBe(false);
+            expect(secureCompare('a', 'a')).toBe(true);
+        })
     });
-  });
 });

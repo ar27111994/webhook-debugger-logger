@@ -173,6 +173,7 @@ export const ERROR_MESSAGES = Object.freeze({
      * @returns {string}
      */
     (error) => `Failed to sync version: ${error}`,
+  SYNC_VERSION_MISSING_PACKAGE_VERSION: "'package.json' missing version field",
 });
 
 /**

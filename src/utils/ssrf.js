@@ -124,29 +124,32 @@ export async function validateUrlForSsrf(urlString) {
       ipsToCheck = [hostnameUnbracketed];
     } else {
       // Resolve DNS - get both A and AAAA records
-      const timeoutPromise =
+      const withTimeout =
         /**
-         * Helper function to create a timeout promise.
+         * Helper function to wrap a promise with a timeout.
+         * @template T
+         * @param {Promise<T>} promise
          * @param {number} ms
-         * @returns {Promise<never>}
+         * @returns {Promise<T>}
          */
-        (ms) =>
-          new Promise((_, reject) =>
-            setTimeout(
+        async (promise, ms) => {
+          let timeoutId;
+          const timeout = new Promise((_, reject) => {
+            timeoutId = setTimeout(
               () => reject(new Error(SSRF_INTERNAL_ERRORS.DNS_TIMEOUT)),
               ms,
-            ),
-          );
+            );
+          });
+          try {
+            return await Promise.race([promise, timeout]);
+          } finally {
+            clearTimeout(timeoutId);
+          }
+        };
 
       const [ipv4Results, ipv6Results] = await Promise.allSettled([
-        Promise.race([
-          dns.resolve4(hostname),
-          timeoutPromise(NETWORK_TIMEOUTS.DNS_RESOLUTION),
-        ]),
-        Promise.race([
-          dns.resolve6(hostname),
-          timeoutPromise(NETWORK_TIMEOUTS.DNS_RESOLUTION),
-        ]),
+        withTimeout(dns.resolve4(hostname), NETWORK_TIMEOUTS.DNS_RESOLUTION),
+        withTimeout(dns.resolve6(hostname), NETWORK_TIMEOUTS.DNS_RESOLUTION),
       ]);
       ipsToCheck = [
         ...(ipv4Results.status === "fulfilled" ? ipv4Results.value : []),
@@ -156,7 +159,7 @@ export async function validateUrlForSsrf(urlString) {
         // Check if failure was due to timeout
         const errors = [ipv4Results, ipv6Results]
           .filter((r) => r.status === "rejected")
-          .map((r) => /** @type {Error} */ (r.reason));
+          .map((r) => /** @type {Error} */(r.reason));
 
         if (
           errors.some((e) => e.message === SSRF_INTERNAL_ERRORS.DNS_TIMEOUT)

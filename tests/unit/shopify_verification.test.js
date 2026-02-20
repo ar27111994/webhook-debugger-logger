@@ -16,6 +16,15 @@ import {
 } from "../setup/helpers/test-utils.js";
 import { createShopifySignature } from "../setup/helpers/signature-utils.js";
 import { appEvents, EVENT_NAMES as EVENTS } from "../../src/utils/events.js";
+import {
+  createMockWebhookManager,
+  constsMock,
+} from "../setup/helpers/shared-mocks.js";
+import { Actor } from "apify";
+import { ENCODINGS, HTTP_HEADERS, MIME_TYPES } from "../../src/consts/http.js";
+import { SIGNATURE_PROVIDERS } from "../../src/consts/security.js";
+import { ERROR_LABELS, SIGNATURE_ERRORS } from "../../src/consts/errors.js";
+import { APP_CONSTS } from "../../src/consts/app.js";
 
 /**
  * @typedef {import('express').Request} Request
@@ -27,14 +36,6 @@ import { appEvents, EVENT_NAMES as EVENTS } from "../../src/utils/events.js";
  * @typedef {Request & { rawBody?: Buffer }} RequestWithBody
  */
 
-// Mock WebhookManager
-import {
-  createMockWebhookManager,
-  constsMock,
-} from "../setup/helpers/shared-mocks.js";
-import { Actor } from "apify";
-const webhookManagerMock = createMockWebhookManager();
-
 describe("Shopify Signature Verification (Raw Body)", () => {
   /** @type {Request} */
   let req;
@@ -42,6 +43,9 @@ describe("Shopify Signature Verification (Raw Body)", () => {
   let res;
   /** @type {NextFunction} */
   let next;
+
+  // Mock WebhookManager
+  const webhookManagerMock = createMockWebhookManager();
 
   beforeEach(() => {
     jest
@@ -62,28 +66,29 @@ describe("Shopify Signature Verification (Raw Body)", () => {
   test("should verify valid Shopify signature using rawBody even after JSON parsing", async () => {
     const secret = "shared_secret";
     const originalPayload = '{\n  "amount": 100.00\n}';
-    const payloadBuffer = Buffer.from(originalPayload, "utf8");
+    const payloadBuffer = Buffer.from(originalPayload, ENCODINGS.UTF8);
     const signature = createShopifySignature(originalPayload, secret);
 
     req.headers = {
-      "content-type": "application/json",
-      "x-shopify-hmac-sha256": signature,
-      "content-length": String(payloadBuffer.length),
+      [HTTP_HEADERS.CONTENT_TYPE]: MIME_TYPES.JSON,
+      [HTTP_HEADERS.SHOPIFY_HMAC_SHA256]: signature,
+      [HTTP_HEADERS.CONTENT_LENGTH]: String(payloadBuffer.length),
     };
     req.body = payloadBuffer;
 
     jsonParserMiddleware(req, res, next);
 
-    const typedReq = /** @type {RequestWithBody} */ (req);
+    /** @type {RequestWithBody} */
+    const typedReq = req;
     expect(typedReq.rawBody).toBeDefined();
-    expect(typedReq.rawBody?.toString("utf8")).toBe(originalPayload);
+    expect(typedReq.rawBody?.toString(ENCODINGS.UTF8)).toBe(originalPayload);
     expect(req.body).toEqual({ amount: 100 });
 
     const middleware = new LoggerMiddleware(
       webhookManagerMock,
       {
         signatureVerification: {
-          provider: "shopify",
+          provider: SIGNATURE_PROVIDERS.SHOPIFY,
           secret: secret,
         },
       },
@@ -113,19 +118,19 @@ describe("Shopify Signature Verification (Raw Body)", () => {
       emitSpy.mock.calls.find((call) => call[0] === EVENTS.LOG_RECEIVED)?.[1],
     );
     expect(event.signatureValid).toBe(true);
-    expect(event.signatureProvider).toBe("shopify");
+    expect(event.signatureProvider).toBe(SIGNATURE_PROVIDERS.SHOPIFY);
   });
 
   test("should fail Shopify signature if rawBody does not match", async () => {
     const secret = "shared_secret";
     const originalPayload = '{"foo":"bar"}';
-    const payloadBuffer = Buffer.from(originalPayload, "utf8");
+    const payloadBuffer = Buffer.from(originalPayload, ENCODINGS.UTF8);
     const signature = createShopifySignature("different_payload", secret);
 
     req.headers = {
-      "content-type": "application/json",
-      "x-shopify-hmac-sha256": signature,
-      "content-length": String(payloadBuffer.length),
+      [HTTP_HEADERS.CONTENT_TYPE]: MIME_TYPES.JSON,
+      [HTTP_HEADERS.SHOPIFY_HMAC_SHA256]: signature,
+      [HTTP_HEADERS.CONTENT_LENGTH]: String(payloadBuffer.length),
     };
     req.body = payloadBuffer;
 
@@ -135,7 +140,7 @@ describe("Shopify Signature Verification (Raw Body)", () => {
       webhookManagerMock,
       {
         signatureVerification: {
-          provider: "shopify",
+          provider: SIGNATURE_PROVIDERS.SHOPIFY,
           secret: secret,
         },
       },
@@ -159,27 +164,28 @@ describe("Shopify Signature Verification (Raw Body)", () => {
       emitSpy.mock.calls.find((call) => call[0] === EVENTS.LOG_RECEIVED)?.[1],
     );
     expect(event.signatureValid).toBe(false);
-    expect(event.signatureError).toBe("Signature mismatch");
+    expect(event.signatureError).toBe(SIGNATURE_ERRORS.MISMATCH);
     expect(res.status).toHaveBeenCalledWith(
       constsMock.HTTP_STATUS.UNAUTHORIZED,
     );
     expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ error: "Invalid signature" }),
+      expect.objectContaining({ error: ERROR_LABELS.INVALID_SIGNATURE }),
     );
   });
 
   test("should fail Shopify signature if timestamp is too old", async () => {
     const originalPayload = JSON.stringify({ amount: 100 });
     const secret = "hush";
-    const payloadBuffer = Buffer.from(originalPayload, "utf8");
-    const timestamp = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const payloadBuffer = Buffer.from(originalPayload, ENCODINGS.UTF);
+    const tenMinutesInSeconds = 600;
+    const timestamp = new Date(Date.now() - tenMinutesInSeconds * APP_CONSTS.MS_PER_SECOND).toISOString();
     const signature = createShopifySignature(originalPayload, secret);
 
     req.headers = {
-      "content-type": "application/json",
-      "x-shopify-hmac-sha256": signature,
-      "x-shopify-triggered-at": timestamp,
-      "content-length": String(payloadBuffer.length),
+      [HTTP_HEADERS.CONTENT_TYPE]: MIME_TYPES.JSON,
+      [HTTP_HEADERS.SHOPIFY_HMAC_SHA256]: signature,
+      [HTTP_HEADERS.SHOPIFY_TRIGGERED_AT]: timestamp,
+      [HTTP_HEADERS.CONTENT_LENGTH]: String(payloadBuffer.length),
     };
     req.body = payloadBuffer;
 
@@ -189,7 +195,7 @@ describe("Shopify Signature Verification (Raw Body)", () => {
       webhookManagerMock,
       {
         signatureVerification: {
-          provider: "shopify",
+          provider: SIGNATURE_PROVIDERS.SHOPIFY,
           secret: secret,
         },
       },
@@ -214,28 +220,28 @@ describe("Shopify Signature Verification (Raw Body)", () => {
     );
     expect(event.signatureValid).toBe(false);
     expect(event.signatureError).toEqual(
-      expect.stringContaining("Timestamp outside tolerance"),
+      expect.stringContaining(SIGNATURE_ERRORS.TIMESTAMP_TOLERANCE),
     );
     expect(res.status).toHaveBeenCalledWith(
       constsMock.HTTP_STATUS.UNAUTHORIZED,
     );
     expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ error: "Invalid signature" }),
+      expect.objectContaining({ error: ERROR_LABELS.INVALID_SIGNATURE }),
     );
   });
 
   test("should verify valid Shopify signature with fresh timestamp", async () => {
     const originalPayload = JSON.stringify({ amount: 100 });
     const secret = "hush";
-    const payloadBuffer = Buffer.from(originalPayload, "utf8");
+    const payloadBuffer = Buffer.from(originalPayload, ENCODINGS.UTF);
     const timestamp = new Date().toISOString();
     const signature = createShopifySignature(originalPayload, secret);
 
     req.headers = {
-      "content-type": "application/json",
-      "x-shopify-hmac-sha256": signature,
-      "x-shopify-triggered-at": timestamp,
-      "content-length": String(payloadBuffer.length),
+      [HTTP_HEADERS.CONTENT_TYPE]: MIME_TYPES.JSON,
+      [HTTP_HEADERS.SHOPIFY_HMAC_SHA256]: signature,
+      [HTTP_HEADERS.SHOPIFY_TRIGGERED_AT]: timestamp,
+      [HTTP_HEADERS.CONTENT_LENGTH]: String(payloadBuffer.length),
     };
     req.body = payloadBuffer;
 
@@ -245,7 +251,7 @@ describe("Shopify Signature Verification (Raw Body)", () => {
       webhookManagerMock,
       {
         signatureVerification: {
-          provider: "shopify",
+          provider: SIGNATURE_PROVIDERS.SHOPIFY,
           secret: secret,
         },
       },

@@ -67,6 +67,7 @@ export const SIGNATURE_PREFIXES = Object.freeze({
   SHA1: "sha1=",
   SHA256: "sha256=",
   V0: "v0=",
+  V1: "v1=",
   V0_NO_PREFIX: "v0",
 });
 

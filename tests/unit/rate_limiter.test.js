@@ -99,7 +99,7 @@ describe('RateLimiter', () => {
 
         it('should handle unref missing safely', () => {
             const origSetInterval = global.setInterval;
-            global.setInterval = /** @type {any} */ (jest.fn(() => ({ unref: undefined })));
+            global.setInterval = assertType(jest.fn(() => ({ unref: undefined }))); // return object without unref
 
             const safeLimiter = new RateLimiter(LIMIT, WINDOW_MS);
             expect(safeLimiter.limit).toBeDefined();
@@ -324,6 +324,7 @@ describe('RateLimiter', () => {
                 ip: '10.0.0.1',
                 headers: {
                     [HTTP_HEADERS.X_FORWARDED_FOR]: '9.9.9.9, 10.0.0.1',
+                    // eslint-disable-next-line sonarjs/no-hardcoded-ip
                     [HTTP_HEADERS.X_REAL_IP]: '8.8.8.8'
                 }
             });
@@ -336,7 +337,8 @@ describe('RateLimiter', () => {
         });
 
         it('should fallback to raw ip when trust proxy is true but headers are missing', () => {
-            const proxyLimiter = new RateLimiter(LIMIT, WINDOW_MS, 10, true);
+            const maxEntries = 10;
+            const proxyLimiter = new RateLimiter(LIMIT, WINDOW_MS, maxEntries, true);
             const proxyMw = proxyLimiter.middleware();
 
             const proxyReq = createMockRequest({
@@ -380,7 +382,7 @@ describe('RateLimiter', () => {
             const mockIterator = {
                 next: () => ({ value: 12345, done: false }) // Number instead of string
             };
-            Map.prototype.keys = /** @type {any} */ (jest.fn(() => mockIterator));
+            Map.prototype.keys = assertType(jest.fn(() => mockIterator));
 
             // Trigger eviction
             // eslint-disable-next-line sonarjs/no-hardcoded-ip
@@ -456,7 +458,6 @@ describe('RateLimiter', () => {
 
             // Register an eviction
             const mw = clockLimiter.middleware();
-            // eslint-disable-next-line sonarjs/no-hardcoded-ip
             mw(createMockRequest({ ip: 'drop.me.entirely' }), createMockResponse(), createMockNextFunction());
 
             process.env[ENV_VARS.NODE_ENV] = ENV_VALUES.PRODUCTION;
@@ -475,7 +476,7 @@ describe('RateLimiter', () => {
         it('should handle destroy gracefully when cleanupInterval is missing', () => {
             const origSetInterval = global.setInterval;
             // Force '#cleanupInterval' field to falsy value natively
-            global.setInterval = /** @type {any} */ (jest.fn(() => undefined));
+            global.setInterval = assertType(jest.fn(() => undefined));
 
             const localLimiter = new RateLimiter(LIMIT, WINDOW_MS);
             expect(() => localLimiter.destroy()).not.toThrow();
