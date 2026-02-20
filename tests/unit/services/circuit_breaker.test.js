@@ -114,12 +114,6 @@ describe('CircuitBreaker', () => {
         });
 
         it('should enforce maxSize limit via LRU-ish eviction', () => {
-            // Temporarily lower maxSize for testing if accessible, or mock Map behavior?
-            // Since we can't easily mock private maxSize without modifying source or using defineProperty,
-            // we will simulate the behavior by manually populating map over the limit if possible,
-            // OR we assume the default limit is large and we might skip this unless we export constants logic.
-
-            // Actually, we can override the property on the instance for testing
             const testMaxSize = 2;
             Object.defineProperty(circuitBreaker, 'maxSize', { value: testMaxSize });
 
