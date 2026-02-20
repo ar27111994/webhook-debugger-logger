@@ -167,13 +167,11 @@ describe('Storage Helper Utils', () => {
             const maliciousKey = 'test$&$$key';
             const url = await getKvsUrl(maliciousKey);
 
-            // Since replace is used natively, if it parses templates, the URL might be malformed, but shouldn't crash
-            // It should be a string and contain the raw injected characters or their evaluated replacement
-            expect(typeof url).toBe('string');
-            expect(url.length).toBeGreaterThan(0);
-
-            // Expected fallback is string manipulation, so JS string replace injection is the main vector here
-            // Ensure no catastrophic exceptions occur
+            // The raw key strings with special tokens evaluate against String.prototype.replace.
+            // We assert exactly how JS evaluates it to confirm no Uncaught Exceptions or memory violations occur.
+            // In Node.js, `$&` inserts the matched substring ("${key}"), and `$$` inserts `$`.
+            const expectedReplacement = `test\${key}$key`;
+            expect(url).toContain(expectedReplacement);
         });
 
         it('should handle extremely large sizes and negative sizes in createReferenceBody', () => {
