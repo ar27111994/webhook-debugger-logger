@@ -9,6 +9,7 @@ import { setupCommonMocks } from '../setup/helpers/mock-setup.js';
 import { apifyMock } from '../setup/helpers/shared-mocks.js';
 import { assertType } from '../setup/helpers/test-utils.js';
 import { MIME_TYPES } from '../../src/consts/http.js';
+import { APP_CONSTS } from '../../src/consts/app.js';
 
 // Mock dependencies
 const mockNanoid = jest.fn(() => 'mock-id');
@@ -93,7 +94,7 @@ describe('Storage Helper Utils', () => {
         it('should create a correctly formatted reference object', () => {
             const key = 'test-key';
             const kvsUrl = 'http://example.com/item';
-            const originalSize = 1024;
+            const originalSize = APP_CONSTS.BYTES_PER_KB;
             const opts = {
                 key,
                 kvsUrl,
@@ -134,6 +135,92 @@ describe('Storage Helper Utils', () => {
                 originalSize,
                 kvsUrl
             });
+        });
+    });
+
+    describe('Error Propagation Edge Cases', () => {
+        const ERROR_RATE_LIMIT = 'Rate limited';
+        const ERROR_PAYLOAD_LARGE = 'Payload too large';
+
+        it('should propagate errors if offloadToKvs fails to open KVS', async () => {
+            const error = new Error(ERROR_RATE_LIMIT);
+            apifyMock.openKeyValueStore.mockRejectedValueOnce(assertType(error));
+            await expect(offloadToKvs('key', 'val', MIME_TYPES.TEXT)).rejects.toThrow(ERROR_RATE_LIMIT);
+        });
+
+        it('should propagate errors if store.setValue fails', async () => {
+            const mockSetValue = assertType(jest.fn());
+            mockSetValue.mockRejectedValueOnce(new Error(ERROR_PAYLOAD_LARGE));
+            apifyMock.openKeyValueStore.mockResolvedValueOnce(assertType({
+                setValue: mockSetValue
+            }));
+
+            await expect(offloadToKvs('key', 'val', MIME_TYPES.TEXT)).rejects.toThrow(ERROR_PAYLOAD_LARGE);
+            expect(mockSetValue).toHaveBeenCalled();
+        });
+    });
+
+    describe('Security and Sanitation Checks', () => {
+        it('should handle payload keys with injection payloads securely in getKvsUrl fallback', async () => {
+            apifyMock.openKeyValueStore.mockRejectedValueOnce(assertType(new Error('KVS Error')));
+            // Keys with special replacement patterns ($&, $$, $', etc.)
+            const maliciousKey = 'test$&$$key';
+            const url = await getKvsUrl(maliciousKey);
+
+            // Since replace is used natively, if it parses templates, the URL might be malformed, but shouldn't crash
+            // It should be a string and contain the raw injected characters or their evaluated replacement
+            expect(typeof url).toBe('string');
+            expect(url.length).toBeGreaterThan(0);
+
+            // Expected fallback is string manipulation, so JS string replace injection is the main vector here
+            // Ensure no catastrophic exceptions occur
+        });
+
+        it('should handle extremely large sizes and negative sizes in createReferenceBody', () => {
+            const largeSize = Number.MAX_SAFE_INTEGER;
+            const ref1 = createReferenceBody({ key: 'k1', kvsUrl: 'u1', originalSize: largeSize });
+            expect(ref1.originalSize).toBe(largeSize);
+
+            const ref2 = createReferenceBody({ key: 'k1', kvsUrl: 'u1', originalSize: -1 });
+            expect(ref2.originalSize).toBe(-1); // Types allow numbers, doesn't validate bounds natively
+        });
+    });
+
+    describe('Concurrency and Stress Limits', () => {
+        it('should handle generating 10,000 keys rapidly without collision and in reasonable time', () => {
+            // Provide a pseudo-random implementation for the nanoid mock just for this test
+            let counter = 0;
+            mockNanoid.mockImplementation(() => `random-${counter++}`);
+
+            const start = Date.now();
+            const keys = new Set();
+            const count = 10000;
+            for (let i = 0; i < count; i++) {
+                keys.add(generateKvsKey());
+            }
+            const duration = Date.now() - start;
+
+            expect(keys.size).toBe(count); // No collisions
+            // 10K keys should be virtually instantaneous (< 100ms usually, setting safe threshold)
+            const durationThresholdMs = 500;
+            expect(duration).toBeLessThan(durationThresholdMs);
+
+            // Re-mock nanoid for other tests
+            mockNanoid.mockReturnValue('mock-id');
+        });
+
+        it('should handle offloading 100 concurrent payloads cleanly', async () => {
+            const concurrentCount = 100;
+            const mockSetValue = assertType(jest.fn());
+            mockSetValue.mockResolvedValue(undefined);
+            apifyMock.openKeyValueStore.mockResolvedValue(assertType({
+                setValue: mockSetValue
+            }));
+
+            const promises = Array.from({ length: concurrentCount }, (_, i) => offloadToKvs(`key_${i}`, `val_${i}`, MIME_TYPES.TEXT));
+            await Promise.all(promises);
+
+            expect(mockSetValue).toHaveBeenCalledTimes(concurrentCount);
         });
     });
 });

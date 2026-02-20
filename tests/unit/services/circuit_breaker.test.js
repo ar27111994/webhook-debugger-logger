@@ -38,11 +38,13 @@ describe('CircuitBreaker', () => {
     describe('state management', () => {
         const HOST = 'https://api.example.com/webhook';
         const HOSTNAME = 'api.example.com';
+        const STATE_ERROR = 'State should be defined';
+        const INVALID_URL = 'invalid-url';
 
         it('should record failures correctly', () => {
             circuitBreaker.recordFailure(HOST);
             const state = circuitBreaker.states.get(HOSTNAME);
-            if (!state) throw new Error('State should be defined');
+            if (!state) throw new Error(STATE_ERROR);
             expect(state).toBeDefined();
             expect(state.failures).toBe(1);
             expect(state.nextAttempt).toBeGreaterThan(Date.now());
@@ -52,11 +54,9 @@ describe('CircuitBreaker', () => {
             circuitBreaker.recordFailure(HOST);
             circuitBreaker.recordFailure(HOST);
             const state = circuitBreaker.states.get(HOSTNAME);
-            if (!state) throw new Error('State should be defined');
+            if (!state) throw new Error(STATE_ERROR);
             expect(state.failures).toBe(1 + 1);
         });
-
-        const INVALID_URL = 'invalid-url';
 
         it('should handle invalid URLs gracefully in recordFailure', () => {
             expect(() => circuitBreaker.recordFailure(INVALID_URL)).not.toThrow();

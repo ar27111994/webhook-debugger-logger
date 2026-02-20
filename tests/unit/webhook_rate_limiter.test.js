@@ -216,8 +216,8 @@ describe('WebhookRateLimiter', () => {
 
     describe('Cleanup Interval and Key Generation Edge Cases', () => {
         it('should correctly prune stale entries, retain partial entries, and log when env is production', () => {
-            const windowMs = 10000;
-            const clockLimiter = new WebhookRateLimiter(LIMIT, windowMs, MAX_ENTRIES);
+            const windowMs = 10;
+            const clockLimiter = new WebhookRateLimiter(LIMIT, windowMs * APP_CONSTS.MS_PER_SECOND, MAX_ENTRIES);
 
             // Partially stale
             // eslint-disable-next-line sonarjs/no-hardcoded-ip
@@ -297,7 +297,7 @@ describe('WebhookRateLimiter', () => {
 
         it('should handle unref missing safely', () => {
             const origSetInterval = global.setInterval;
-            global.setInterval = /** @type {any} */ (jest.fn(() => ({ unref: undefined }))); // return object without unref
+            global.setInterval = assertType(jest.fn(() => ({ unref: undefined }))); // return object without unref
 
             const safeLimiter = new WebhookRateLimiter();
             expect(safeLimiter.limit).toBeDefined();
@@ -305,14 +305,16 @@ describe('WebhookRateLimiter', () => {
             global.setInterval = origSetInterval;
         });
 
-        const origSetInterval = global.setInterval;
-        // Force '#cleanupInterval' field to falsy value natively
-        global.setInterval = /** @type {any} */ (jest.fn(() => undefined));
+        it('should handle destroy gracefully when cleanupInterval is missing natively', () => {
+            const origSetInterval = global.setInterval;
+            // Force '#cleanupInterval' field to falsy value natively
+            global.setInterval = assertType(jest.fn(() => undefined));
 
-        const localLimiter = new WebhookRateLimiter();
-        expect(() => localLimiter.destroy()).not.toThrow();
+            const localLimiter = new WebhookRateLimiter();
+            expect(() => localLimiter.destroy()).not.toThrow();
 
-        global.setInterval = origSetInterval;
+            global.setInterval = origSetInterval;
+        });
 
         it('should handle oldestKey not being a string safely during eviction', () => {
             const smallLimiter = new WebhookRateLimiter(LIMIT, WINDOW_MS, 1);
@@ -323,7 +325,7 @@ describe('WebhookRateLimiter', () => {
                 next: () => ({ value: 12345, done: false })
             };
 
-            Map.prototype.keys = /** @type {any} */ (jest.fn(() => mockIterator));
+            Map.prototype.keys = assertType(jest.fn(() => mockIterator));
 
             smallLimiter.check('normal_key_1');
             smallLimiter.check('normal_key_2');
@@ -340,13 +342,76 @@ describe('WebhookRateLimiter', () => {
 
             const origFilter = Array.prototype.filter;
             // Return an array with undefined elements to trigger the fallback logic when length > limit
-            Array.prototype.filter = /** @type {any} */ (jest.fn(() => [undefined, undefined]));
+            Array.prototype.filter = assertType(jest.fn(() => [undefined, undefined]));
 
             const result = clockLimiter.check(webhookId);
             expect(result.resetMs).toBeGreaterThan(0);
 
             Array.prototype.filter = origFilter;
             clockLimiter.destroy();
+        });
+    });
+
+    describe('Security and Sanitation checks', () => {
+        it('should handle Object.prototype pollution keys safely', () => {
+            const result1 = limiter.check('__proto__', 'constructor');
+            expect(result1.allowed).toBe(true);
+            expect(limiter.entryCount).toBe(1);
+
+            const result2 = limiter.check('__proto__', 'constructor');
+            expect(result2.allowed).toBe(true);
+            expect(result2.remaining).toBe(LIMIT - (1 + 1));
+        });
+
+        it('should handle extremely long strings without crashing', () => {
+            const oneMegabyte = 1000000;
+            const longString = 'A'.repeat(oneMegabyte); // 1 MB string
+            // eslint-disable-next-line sonarjs/no-hardcoded-ip
+            const result = limiter.check(longString, '1.1.1.1');
+            expect(result.allowed).toBe(true);
+            expect(limiter.entryCount).toBe(1);
+        });
+    });
+
+    describe('System Clock Skew (NTP Adjustments)', () => {
+        it('should handle time moving backwards gracefully', () => {
+            const webhookId = 'clockhook';
+            limiter.check(webhookId);
+
+            // Simulate NTP adjusting clock back 1 hour
+            const offset = APP_CONSTS.MS_PER_HOUR;
+            const originalNow = Date.now;
+            Date.now = () => originalNow() - offset;
+
+            const result = limiter.check(webhookId);
+            expect(result.allowed).toBe(true); // Should not crash and should allow
+            expect(result.remaining).toBe(LIMIT - (1 + 1));
+
+            // Restore
+            Date.now = originalNow;
+        });
+    });
+
+    describe('Stress and Algorithmic Complexity', () => {
+        it('should process rapid limit-busting requests without blocking event loop significantly', () => {
+            const webhookId = 'stress_hook';
+            const stressLimit = 10000;
+            const stressLimiter = new WebhookRateLimiter(stressLimit, WINDOW_MS, MAX_ENTRIES);
+
+            const start = Date.now();
+            for (let i = 0; i < stressLimit; i++) {
+                stressLimiter.check(webhookId);
+            }
+            const elapsed = Date.now() - start;
+
+            // Filter is fast but not instantaneous. Just verify it finishes within a reasonable time slice.
+            const timeoutThreshold = 500; // ms
+            expect(elapsed).toBeLessThan(timeoutThreshold);
+
+            const blocked = stressLimiter.check(webhookId);
+            expect(blocked.allowed).toBe(false);
+
+            stressLimiter.destroy();
         });
     });
 });
