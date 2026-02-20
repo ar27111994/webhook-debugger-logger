@@ -8,6 +8,8 @@ import { setupCommonMocks } from '../setup/helpers/mock-setup.js';
 import { loggerMock, axiosMock } from '../setup/helpers/shared-mocks.js';
 import { assertType } from '../setup/helpers/test-utils.js';
 import { ALERT_TRIGGERS } from '../../src/consts/alerting.js';
+import { APP_CONSTS } from '../../src/consts/app.js';
+import { HTTP_METHODS, HTTP_STATUS, HTTP_STATUS_MESSAGES } from '../../src/consts/http.js';
 
 // Mock dependencies
 const mockValidateUrlForSsrf = jest.fn();
@@ -24,10 +26,13 @@ await jest.resetModules();
 const { shouldAlert, sendAlert, triggerAlertIfNeeded } = await import('../../src/utils/alerting.js');
 
 describe('Alerting Utils', () => {
+    const SLACK_HOOK = 'https://hooks.slack.com/services/XXX';
+    const DISCORD_HOOK = 'https://discord.com/api/webhooks/YYY';
+
     beforeEach(() => {
         jest.clearAllMocks();
         mockValidateUrlForSsrf.mockResolvedValue(assertType({ safe: true }));
-        axiosMock.post.mockResolvedValue({ status: 200 });
+        axiosMock.post.mockResolvedValue({ status: HTTP_STATUS.OK });
     });
 
     describe('shouldAlert', () => {
@@ -38,22 +43,22 @@ describe('Alerting Utils', () => {
         });
 
         it('should return true for STATUS_5XX trigger', () => {
-            expect(shouldAlert(config, assertType({ statusCode: 500 }))).toBe(true);
-            expect(shouldAlert(config, assertType({ statusCode: 503 }))).toBe(true);
+            expect(shouldAlert(config, assertType({ statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR }))).toBe(true);
+            expect(shouldAlert(config, assertType({ statusCode: HTTP_STATUS.SERVICE_UNAVAILABLE }))).toBe(true);
         });
 
         it('should return true for STATUS_4XX trigger', () => {
             const config4xx = { alertOn: [ALERT_TRIGGERS.STATUS_4XX] };
-            expect(shouldAlert(config4xx, assertType({ statusCode: 400 }))).toBe(true);
-            expect(shouldAlert(config4xx, assertType({ statusCode: 404 }))).toBe(true);
-            expect(shouldAlert(config4xx, assertType({ statusCode: 499 }))).toBe(true);
-            expect(shouldAlert(config4xx, assertType({ statusCode: 500 }))).toBe(false);
-            expect(shouldAlert(config4xx, assertType({ statusCode: 200 }))).toBe(false);
+            expect(shouldAlert(config4xx, assertType({ statusCode: HTTP_STATUS.BAD_REQUEST }))).toBe(true);
+            expect(shouldAlert(config4xx, assertType({ statusCode: HTTP_STATUS.NOT_FOUND }))).toBe(true);
+            expect(shouldAlert(config4xx, assertType({ statusCode: HTTP_STATUS.CLIENT_CLOSED_REQUEST }))).toBe(true);
+            expect(shouldAlert(config4xx, assertType({ statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR }))).toBe(false);
+            expect(shouldAlert(config4xx, assertType({ statusCode: HTTP_STATUS.OK }))).toBe(false);
         });
 
         it('should return false if trigger condition not met', () => {
-            expect(shouldAlert(config, assertType({ statusCode: 200 }))).toBe(false);
-            expect(shouldAlert(config, assertType({ statusCode: 404 }))).toBe(false); // 4XX not in config
+            expect(shouldAlert(config, assertType({ statusCode: HTTP_STATUS.OK }))).toBe(false);
+            expect(shouldAlert(config, assertType({ statusCode: HTTP_STATUS.NOT_FOUND }))).toBe(false); // 4XX not in config
         });
 
         it('should use default triggers if config.alertOn is missing', () => {
@@ -80,16 +85,13 @@ describe('Alerting Utils', () => {
     describe('sendAlert', () => {
         const context = {
             webhookId: 'hook-123',
-            method: 'POST',
-            statusCode: 500,
-            error: 'Internal Server Error',
+            method: HTTP_METHODS.POST,
+            statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
+            error: HTTP_STATUS_MESSAGES[HTTP_STATUS.INTERNAL_SERVER_ERROR],
             timestamp: '2023-01-01T00:00:00Z',
             // eslint-disable-next-line sonarjs/no-hardcoded-ip
             sourceIp: '1.2.3.4'
         };
-
-        const SLACK_HOOK = 'https://hooks.slack.com/services/XXX';
-        const DISCORD_HOOK = 'https://discord.com/api/webhooks/YYY';
 
         it('should send alerts to configured channels', async () => {
             const config = {
@@ -216,7 +218,7 @@ describe('Alerting Utils', () => {
                 slack: { webhookUrl: SLACK_HOOK },
                 discord: { webhookUrl: DISCORD_HOOK }
             };
-            const okContext = { ...context, error: undefined, signatureValid: true, statusCode: 200, sourceIp: undefined };
+            const okContext = { ...context, error: undefined, signatureValid: true, statusCode: HTTP_STATUS.OK, sourceIp: undefined };
             const DISCORD_GREEN = 65280;
 
             await sendAlert(config, assertType(okContext));
@@ -229,7 +231,7 @@ describe('Alerting Utils', () => {
                         expect.objectContaining({
                             color: DISCORD_GREEN,
                             fields: expect.arrayContaining([
-                                expect.objectContaining({ value: 'Status: 200' })
+                                expect.objectContaining({ value: `Status: ${HTTP_STATUS.OK}` })
                             ])
                         })
                     ])
@@ -247,7 +249,7 @@ describe('Alerting Utils', () => {
                         }),
                         expect.objectContaining({
                             fields: expect.arrayContaining([
-                                expect.objectContaining({ text: expect.stringContaining('Status: 200') })
+                                expect.objectContaining({ text: expect.stringContaining(`Status: ${HTTP_STATUS.OK}`) })
                             ])
                         })
                     ])
@@ -282,9 +284,9 @@ describe('Alerting Utils', () => {
         it('should skip alert if condition not met', async () => {
             const config = {
                 alertOn: [ALERT_TRIGGERS.ERROR],
-                slack: { webhookUrl: 'https://slack.com' }
+                slack: { webhookUrl: SLACK_HOOK }
             };
-            const context = { statusCode: 200 }; // No error
+            const context = { statusCode: HTTP_STATUS.OK }; // No error
 
             await triggerAlertIfNeeded(config, assertType(context));
 
@@ -294,6 +296,74 @@ describe('Alerting Utils', () => {
         it('should exit cleanly if config is undefined', async () => {
             await triggerAlertIfNeeded(undefined, assertType({ error: 'Fail' }));
             expect(axiosMock.post).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('Security and Sanitation', () => {
+        it('should safely process context with prototype pollution attempts', async () => {
+            const malformedContext = JSON.parse('{"__proto__": {"admin": true}, "error": "Proto pollution test"}');
+            const config = { slack: { webhookUrl: SLACK_HOOK } };
+
+            await sendAlert(config, assertType(malformedContext));
+
+            expect(axiosMock.post).toHaveBeenCalled();
+            const calledPayload = axiosMock.post.mock.calls[0][1];
+            expect(calledPayload.admin).toBeUndefined(); // Should not bleed prototype
+        });
+
+        it('should handle extremely large error strings without throwing unhandled exceptions', async () => {
+            const config = { slack: { webhookUrl: SLACK_HOOK } };
+            const MB_SIZE = 5;
+            const massiveError = 'A'.repeat(APP_CONSTS.BYTES_PER_KB * APP_CONSTS.BYTES_PER_KB * MB_SIZE); // 5 MB string
+            const context = {
+                error: massiveError,
+                method: HTTP_METHODS.POST,
+                timestamp: new Date().toISOString()
+            };
+
+            await sendAlert(config, assertType(context));
+            expect(axiosMock.post).toHaveBeenCalledWith(
+                expect.any(String),
+                expect.objectContaining({
+                    blocks: expect.any(Array)
+                }),
+                expect.any(Object)
+            );
+        });
+    });
+
+    describe('Stress and Concurrency', () => {
+        it('should safely handle many concurrent alert triggers', async () => {
+            const config = {
+                slack: { webhookUrl: SLACK_HOOK },
+                discord: { webhookUrl: DISCORD_HOOK }
+            };
+            const context = {
+                error: 'Concurrent test',
+                method: HTTP_METHODS.GET,
+                timestamp: new Date().toISOString()
+            };
+
+            const promises = [];
+            const CONCURRENT_ALERTS = 100;
+
+            // Fire off 100 alerts simultaneously
+            for (let i = 0; i < CONCURRENT_ALERTS; i++) {
+                promises.push(sendAlert(config, assertType(context)));
+            }
+
+            const results = await Promise.all(promises);
+
+            expect(results).toHaveLength(CONCURRENT_ALERTS);
+            // Since axios is mocked, we expect 2 API calls per sendAlert (one slack, one discord)
+            // But since validateUrlForSsrf is also called, we can just check axiosMock invocations
+            expect(axiosMock.post).toHaveBeenCalledTimes(CONCURRENT_ALERTS * (1 + 1));
+
+            // Check that all promises resolved successfully
+            results.forEach(res => {
+                expect(res.slack).toBe(true);
+                expect(res.discord).toBe(true);
+            });
         });
     });
 });

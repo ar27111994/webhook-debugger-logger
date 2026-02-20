@@ -43,8 +43,12 @@ export const escapeHtml = (unsafe) => {
  * @param {(req: Request, res: Response, next: NextFunction) => Promise<void>} fn
  * @returns {RequestHandler}
  */
-export const asyncHandler = (fn) => (req, res, next) => {
-  return Promise.resolve(fn(req, res, next)).catch(next);
+export const asyncHandler = (fn) => async (req, res, next) => {
+  try {
+    await fn(req, res, next);
+  } catch (err) {
+    next(err);
+  }
 };
 
 /**
