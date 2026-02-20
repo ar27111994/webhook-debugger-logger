@@ -6,9 +6,11 @@
  * they are set before app modules (like src/consts.js) resolve defaults.
  */
 
+import { ENV_VALUES, ENV_VARS } from "../../src/consts/app.js";
+
 // Force DuckDB to use in-memory mode for all tests to ensure isolation and prevented data loss
-process.env.DUCKDB_FILENAME = ":memory:";
-process.env.DUCKDB_STORAGE_DIR = ":memory:";
+process.env[ENV_VARS.DUCKDB_FILENAME] = ":memory:";
+process.env[ENV_VARS.DUCKDB_STORAGE_DIR] = ":memory:";
 
 // Ensure other sensitive/config values are test-safe
-process.env.NODE_ENV = "test";
+process.env[ENV_VARS.NODE_ENV] = ENV_VALUES.TEST;

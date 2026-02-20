@@ -74,6 +74,7 @@ export const HTTP_STATUS = Object.freeze({
   TOO_MANY_REQUESTS: 429,
   REQUEST_HEADER_FIELDS_TOO_LARGE: 431,
   UNAVAILABLE_FOR_LEGAL_REASONS: 451,
+  CLIENT_CLOSED_REQUEST: 499,
 
   // Server Error (5xx)
   INTERNAL_SERVER_ERROR: 500,
@@ -239,6 +240,7 @@ export const HTTP_STATUS_MESSAGES = Object.freeze({
   429: "Too Many Requests",
   431: "Request Header Fields Too Large",
   451: "Unavailable For Legal Reasons",
+  499: "Client Closed Request",
   500: "Internal Server Error",
   501: "Not Implemented",
   502: "Bad Gateway",

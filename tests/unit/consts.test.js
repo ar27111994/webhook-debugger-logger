@@ -314,7 +314,7 @@ describe('Top-level Branch Coverage', () => {
         });
 
         it('should use DUCKDB_FILENAME from env if present', async () => {
-            process.env.DUCKDB_FILENAME = 'custom.db';
+            process.env[ENV_VARS.DUCKDB_FILENAME] = 'custom.db';
             mockApify({ isAtHome: false });
 
             const { DUCKDB_FILENAME_DEFAULT } = await import('../../src/consts/database.js');

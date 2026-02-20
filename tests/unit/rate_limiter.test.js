@@ -227,7 +227,7 @@ describe('RateLimiter', () => {
             // eslint-disable-next-line sonarjs/no-hardcoded-ip
             strictMw(createMockRequest({ ip: '2.2.2.2' }), createMockResponse(), createMockNextFunction());
 
-            process.env.NODE_ENV = originalEnv;
+            process.env[ENV_VARS.NODE_ENV] = originalEnv;
 
             expect(loggerMock.info).toHaveBeenCalledWith(
                 expect.objectContaining({ evictedIp: `1.1.1${LOG_MESSAGES.MASK_IPV4_SUFFIX}`, maxEntries: 1 }),
