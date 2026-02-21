@@ -159,7 +159,7 @@ export async function validateUrlForSsrf(urlString) {
         // Check if failure was due to timeout
         const errors = [ipv4Results, ipv6Results]
           .filter((r) => r.status === "rejected")
-          .map((r) => /** @type {Error} */(r.reason));
+          .map((r) => /** @type {Error} */ (r.reason));
 
         if (
           errors.some((e) => e.message === SSRF_INTERNAL_ERRORS.DNS_TIMEOUT)

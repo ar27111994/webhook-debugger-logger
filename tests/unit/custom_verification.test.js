@@ -1,6 +1,11 @@
 import crypto from "crypto";
 import { verifySignature } from "../../src/utils/signature.js";
-import { HASH_ALGORITHMS, SIGNATURE_CONSTS, SIGNATURE_ENCODINGS, SIGNATURE_PROVIDERS } from "../../src/consts/security.js";
+import {
+  HASH_ALGORITHMS,
+  SIGNATURE_CONSTS,
+  SIGNATURE_ENCODINGS,
+  SIGNATURE_PROVIDERS,
+} from "../../src/consts/security.js";
 import { assertType } from "../setup/helpers/test-utils.js";
 import { APP_CONSTS } from "../../src/consts/app.js";
 import { SIGNATURE_ERRORS } from "../../src/consts/errors.js";
@@ -81,7 +86,9 @@ describe("Custom Signature Verification", () => {
 
     // 10 minutes ago
     const tenMinutesInSeconds = 600;
-    const staleTimestamp = (Math.floor(Date.now() / APP_CONSTS.MS_PER_SECOND) - tenMinutesInSeconds).toString();
+    const staleTimestamp = (
+      Math.floor(Date.now() / APP_CONSTS.MS_PER_SECOND) - tenMinutesInSeconds
+    ).toString();
 
     const headers = {
       [HEADER_NAME]: signature,
@@ -108,7 +115,9 @@ describe("Custom Signature Verification", () => {
       tolerance: SIGNATURE_CONSTS.TOLERANCE_SECONDS,
     };
 
-    const freshTimestamp = Math.floor(Date.now() / APP_CONSTS.MS_PER_SECOND).toString();
+    const freshTimestamp = Math.floor(
+      Date.now() / APP_CONSTS.MS_PER_SECOND,
+    ).toString();
 
     const headers = {
       [HEADER_NAME]: signature,

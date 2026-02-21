@@ -50,7 +50,7 @@ describe("Shopify Signature Verification (Raw Body)", () => {
   beforeEach(() => {
     jest
       .mocked(webhookManagerMock.getWebhookData)
-      .mockReturnValue(/** @type {WebhookData} */({}));
+      .mockReturnValue(/** @type {WebhookData} */ ({}));
     jest.mocked(webhookManagerMock.isValid).mockReturnValue(true);
     req = createMockRequest({
       params: { id: "wh_test" },
@@ -92,7 +92,7 @@ describe("Shopify Signature Verification (Raw Body)", () => {
           secret: secret,
         },
       },
-      () => { },
+      () => {},
     );
 
     const mw = assertType(middleware);
@@ -144,7 +144,7 @@ describe("Shopify Signature Verification (Raw Body)", () => {
           secret: secret,
         },
       },
-      () => { },
+      () => {},
     );
 
     const mw = assertType(middleware);
@@ -178,7 +178,9 @@ describe("Shopify Signature Verification (Raw Body)", () => {
     const secret = "hush";
     const payloadBuffer = Buffer.from(originalPayload, ENCODINGS.UTF);
     const tenMinutesInSeconds = 600;
-    const timestamp = new Date(Date.now() - tenMinutesInSeconds * APP_CONSTS.MS_PER_SECOND).toISOString();
+    const timestamp = new Date(
+      Date.now() - tenMinutesInSeconds * APP_CONSTS.MS_PER_SECOND,
+    ).toISOString();
     const signature = createShopifySignature(originalPayload, secret);
 
     req.headers = {
@@ -199,7 +201,7 @@ describe("Shopify Signature Verification (Raw Body)", () => {
           secret: secret,
         },
       },
-      () => { },
+      () => {},
     );
 
     const mw = assertType(middleware);
@@ -255,7 +257,7 @@ describe("Shopify Signature Verification (Raw Body)", () => {
           secret: secret,
         },
       },
-      () => { },
+      () => {},
     );
 
     const mw = assertType(middleware);

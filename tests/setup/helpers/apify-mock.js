@@ -86,7 +86,7 @@ export function createApifyMock(inputOverrides = {}) {
     ).mockResolvedValue(defaultDataset),
     pushData: /** @type {jest.Mock<(data: any) => Promise<void>>} */ (
       jest.fn()
-    ).mockImplementation(async () => { }),
+    ).mockImplementation(async () => {}),
     on: /** @type {jest.Mock<(event: string, handler: Function) => void>} */ (
       jest.fn((event, handler) => {
         if (event === "input") inputHandler = /** @type {Function} */ (handler);

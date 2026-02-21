@@ -1,7 +1,10 @@
 import { APP_CONSTS } from "../../src/consts/app.js";
 import { SIGNATURE_ERRORS } from "../../src/consts/errors.js";
 import { ENCODINGS, HTTP_HEADERS } from "../../src/consts/http.js";
-import { SIGNATURE_PREFIXES, SIGNATURE_PROVIDERS } from "../../src/consts/security.js";
+import {
+  SIGNATURE_PREFIXES,
+  SIGNATURE_PROVIDERS,
+} from "../../src/consts/security.js";
 import { verifySignature } from "../../src/utils/signature.js";
 import { createSlackSignature } from "../setup/helpers/signature-utils.js";
 
@@ -18,7 +21,9 @@ describe("Slack Signature Verification", () => {
   const PROVIDER = SIGNATURE_PROVIDERS.SLACK;
 
   test("should verify valid signature (String Payload)", () => {
-    const timestamp = Math.floor(Date.now() / APP_CONSTS.MS_PER_SECOND).toString();
+    const timestamp = Math.floor(
+      Date.now() / APP_CONSTS.MS_PER_SECOND,
+    ).toString();
     const signature = createSlackSignature(timestamp, PAYLOAD, SECRET);
 
     const config = { provider: PROVIDER, secret: SECRET };
@@ -33,7 +38,9 @@ describe("Slack Signature Verification", () => {
   });
 
   test("should verify valid signature (Buffer Payload)", () => {
-    const timestamp = Math.floor(Date.now() / APP_CONSTS.MS_PER_SECOND).toString();
+    const timestamp = Math.floor(
+      Date.now() / APP_CONSTS.MS_PER_SECOND,
+    ).toString();
     const signature = createSlackSignature(timestamp, PAYLOAD, SECRET);
 
     const config = { provider: PROVIDER, secret: SECRET };
@@ -54,7 +61,9 @@ describe("Slack Signature Verification", () => {
   test("should fail if timestamp is too old (Replay Attack)", () => {
     // 6 minutes ago
     const SIX_MINUTES_IN_SECONDS = 360; // 6 * 60
-    const timestamp = (Math.floor(Date.now() / APP_CONSTS.MS_PER_SECOND) - SIX_MINUTES_IN_SECONDS).toString();
+    const timestamp = (
+      Math.floor(Date.now() / APP_CONSTS.MS_PER_SECOND) - SIX_MINUTES_IN_SECONDS
+    ).toString();
     const signature = createSlackSignature(timestamp, PAYLOAD, SECRET);
 
     const config = { provider: PROVIDER, secret: SECRET };
@@ -69,7 +78,9 @@ describe("Slack Signature Verification", () => {
   });
 
   test("should fail if signature format is invalid (no v0=)", () => {
-    const timestamp = Math.floor(Date.now() / APP_CONSTS.MS_PER_SECOND).toString();
+    const timestamp = Math.floor(
+      Date.now() / APP_CONSTS.MS_PER_SECOND,
+    ).toString();
     const signature = createSlackSignature(timestamp, PAYLOAD, SECRET).replace(
       SIGNATURE_PREFIXES.V0,
       "",
@@ -87,7 +98,9 @@ describe("Slack Signature Verification", () => {
   });
 
   test("should fail if signature mismatch", () => {
-    const timestamp = Math.floor(Date.now() / APP_CONSTS.MS_PER_SECOND).toString();
+    const timestamp = Math.floor(
+      Date.now() / APP_CONSTS.MS_PER_SECOND,
+    ).toString();
     const signature = createSlackSignature(timestamp, PAYLOAD, SECRET);
 
     // Tamper with signature (ensure it's different)

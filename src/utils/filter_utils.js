@@ -155,10 +155,10 @@ export function matchObject(itemObj, filterObj) {
   return Object.entries(filterObj).every(([key, searchVal]) => {
     // Handle dot notation for deep access
     let itemVal = target;
-    const path = key.split('.');
+    const path = key.split(".");
 
     for (const segment of path) {
-      if (itemVal && typeof itemVal === 'object' && segment in itemVal) {
+      if (itemVal && typeof itemVal === "object" && segment in itemVal) {
         itemVal = itemVal[segment];
       } else {
         itemVal = undefined;
@@ -168,6 +168,8 @@ export function matchObject(itemObj, filterObj) {
 
     if (itemVal === undefined || itemVal === null) return false;
 
-    return String(itemVal).toLowerCase().includes(String(searchVal).toLowerCase());
+    return String(itemVal)
+      .toLowerCase()
+      .includes(String(searchVal).toLowerCase());
   });
 }

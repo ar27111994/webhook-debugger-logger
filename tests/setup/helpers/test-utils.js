@@ -41,33 +41,33 @@ export const sleep = (ms) =>
  * });
  */
 export const createMockRequest = (overrides = {}) =>
-  /** @type {Request} */({
-  ip: undefined,
-  headers: {},
-  socket: { remoteAddress: undefined },
-  accepted: [],
-  acceptedLanguages: [],
-  acceptedCharsets: [],
-  acceptedEncodings: [],
-  baseUrl: "",
-  body: {},
-  cookies: {},
-  fresh: false,
-  hostname: "",
-  ips: [],
-  protocol: "http",
-  query: {},
-  route: {},
-  params: {},
-  path: "/test",
-  method: "GET",
-  requestId: "test_req_123", // Default requestId for error handler tests
-  get: (/** @type {string} */ header) => {
-    if (header.toLowerCase() === "host") return "localhost";
-    return undefined;
-  },
-  ...overrides,
-});
+  /** @type {Request} */ ({
+    ip: undefined,
+    headers: {},
+    socket: { remoteAddress: undefined },
+    accepted: [],
+    acceptedLanguages: [],
+    acceptedCharsets: [],
+    acceptedEncodings: [],
+    baseUrl: "",
+    body: {},
+    cookies: {},
+    fresh: false,
+    hostname: "",
+    ips: [],
+    protocol: "http",
+    query: {},
+    route: {},
+    params: {},
+    path: "/test",
+    method: "GET",
+    requestId: "test_req_123", // Default requestId for error handler tests
+    get: (/** @type {string} */ header) => {
+      if (header.toLowerCase() === "host") return "localhost";
+      return undefined;
+    },
+    ...overrides,
+  });
 
 /**
  * Creates a mock Express Response object for testing middleware.
@@ -118,17 +118,17 @@ export const createMockResponse = (overrides = {}) => {
 
     end: jest.fn(),
     on: jest.fn(
-      /** @param {string} event @param {Function} handler */(
-      event,
-      handler,
-    ) => {
+      /** @param {string} event @param {Function} handler */ (
+        event,
+        handler,
+      ) => {
         if (!listeners[event]) listeners[event] = [];
         listeners[event].push(handler);
         return res;
       },
     ),
     emit: jest.fn(
-      /** @param {string} event @param {...any} args */(event, ...args) => {
+      /** @param {string} event @param {...any} args */ (event, ...args) => {
         if (listeners[event]) {
           listeners[event].forEach((h) => h(...args));
           return true;
@@ -232,5 +232,9 @@ export function getLastAxiosConfig(axios, method = HTTP_METHODS.POST) {
   const ARG_INDEX_CONFIG_POST = 2;
   if (!method || method.toUpperCase() === HTTP_METHODS.REQUEST)
     return call?.[0]; // axios(config) or axios.request(config) -> config is 1st arg
-  return call?.[method.toUpperCase() === HTTP_METHODS.GET ? ARG_INDEX_CONFIG_GET : ARG_INDEX_CONFIG_POST];
+  return call?.[
+    method.toUpperCase() === HTTP_METHODS.GET
+      ? ARG_INDEX_CONFIG_GET
+      : ARG_INDEX_CONFIG_POST
+  ];
 }

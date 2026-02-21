@@ -289,11 +289,8 @@ export async function setupCommonMocks(options = {}) {
       .filter((file) => file.endsWith(".js"));
 
     // Mock both the direct modules and the index aggregator
-    const index = 'index.js';
-    const modulesToMock = [
-      index,
-      ...constModules.filter((m) => m !== index),
-    ];
+    const index = "index.js";
+    const modulesToMock = [index, ...constModules.filter((m) => m !== index)];
 
     for (const moduleName of modulesToMock) {
       jest.unstable_mockModule(`../../../src/consts/${moduleName}`, () => {
@@ -383,14 +380,23 @@ export async function setupCommonMocks(options = {}) {
   }
 
   if (utilCrypto) {
-    jest.unstable_mockModule("../../../src/utils/crypto.js", () => cryptoUtilsMock);
+    jest.unstable_mockModule(
+      "../../../src/utils/crypto.js",
+      () => cryptoUtilsMock,
+    );
   }
 
   if (commonUtils) {
-    jest.unstable_mockModule("../../../src/utils/common.js", () => commonUtilsMock);
+    jest.unstable_mockModule(
+      "../../../src/utils/common.js",
+      () => commonUtilsMock,
+    );
   }
 
   if (routeUtils) {
-    jest.unstable_mockModule("../../../src/routes/utils.js", () => routeUtilsMock);
+    jest.unstable_mockModule(
+      "../../../src/routes/utils.js",
+      () => routeUtilsMock,
+    );
   }
 }

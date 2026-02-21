@@ -113,13 +113,13 @@ export class ForwardingService {
         const requestHeaders =
           forwardHeaders !== false
             ? Object.fromEntries(
-              Object.entries(headers).filter(
-                ([key]) => !sensitiveHeaders.includes(key.toLowerCase()),
-              ),
-            )
+                Object.entries(headers).filter(
+                  ([key]) => !sensitiveHeaders.includes(key.toLowerCase()),
+                ),
+              )
             : {
-              [HTTP_HEADERS.CONTENT_TYPE]: headers[HTTP_HEADERS.CONTENT_TYPE],
-            };
+                [HTTP_HEADERS.CONTENT_TYPE]: headers[HTTP_HEADERS.CONTENT_TYPE],
+              };
 
         // Execute Request
         const response = await this.axiosInstance.request({

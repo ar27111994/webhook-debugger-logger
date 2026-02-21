@@ -263,9 +263,9 @@ export const createLogDetailHandler = (webhookManager) =>
 
         const fieldList = fields
           ? String(fields)
-            .split(",")
-            .map((f) => f.trim())
-            .filter(Boolean)
+              .split(",")
+              .map((f) => f.trim())
+              .filter(Boolean)
           : [];
 
         // Always include webhookId for security validation, even if not requested

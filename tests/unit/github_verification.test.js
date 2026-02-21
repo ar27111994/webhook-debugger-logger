@@ -1,4 +1,7 @@
-import { SIGNATURE_PREFIXES, SIGNATURE_PROVIDERS } from "../../src/consts/security.js";
+import {
+  SIGNATURE_PREFIXES,
+  SIGNATURE_PROVIDERS,
+} from "../../src/consts/security.js";
 import { ENCODINGS, HTTP_HEADERS } from "../../src/consts/http.js";
 import { verifySignature } from "../../src/utils/signature.js";
 import { createGitHubSignature } from "../setup/helpers/signature-utils.js";

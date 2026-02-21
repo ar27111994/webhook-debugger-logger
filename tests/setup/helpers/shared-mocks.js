@@ -136,72 +136,69 @@ export const pinoMock = Object.assign(
 /**
  * @type {AxiosMock}
  */
-const axiosBase = (
-  jest.fn().mockImplementation((config) => {
-    return Promise.resolve({
-      status: HTTP_STATUS.OK,
-      data: HTTP_STATUS_MESSAGES[HTTP_STATUS.OK],
-      headers: {},
-      config: typeof config === "string" ? { url: config } : config,
-    });
-  })
-);
+const axiosBase = jest.fn().mockImplementation((config) => {
+  return Promise.resolve({
+    status: HTTP_STATUS.OK,
+    data: HTTP_STATUS_MESSAGES[HTTP_STATUS.OK],
+    headers: {},
+    config: typeof config === "string" ? { url: config } : config,
+  });
+});
 
 /**
  * @type {jest.MockedFunction<AxiosMock>}
  */
-axiosBase[allConsts.HTTP_METHODS.GET.toLowerCase()] = (
-  jest
-    .fn()
-    .mockImplementation((url, config) =>
-      axiosBase({ method: allConsts.HTTP_METHODS.GET, url, ...(config || {}) }),
-    )
-);
+axiosBase[allConsts.HTTP_METHODS.GET.toLowerCase()] = jest
+  .fn()
+  .mockImplementation((url, config) =>
+    axiosBase({ method: allConsts.HTTP_METHODS.GET, url, ...(config || {}) }),
+  );
 
 /**
  * @type {jest.MockedFunction<AxiosMock>}
  */
-axiosBase[allConsts.HTTP_METHODS.POST.toLowerCase()] =
-  (jest.fn().mockImplementation((url, data, config) =>
+axiosBase[allConsts.HTTP_METHODS.POST.toLowerCase()] = jest
+  .fn()
+  .mockImplementation((url, data, config) =>
     axiosBase({
       method: allConsts.HTTP_METHODS.POST,
       url,
       data,
       ...(config || {}),
     }),
-  )
   );
 
 /**
  * @type {jest.MockedFunction<AxiosMock>}
  */
-axiosBase[allConsts.HTTP_METHODS.PUT.toLowerCase()] = (jest.fn().mockImplementation((url, data, config) =>
-  axiosBase({
-    method: allConsts.HTTP_METHODS.PUT,
-    url,
-    data,
-    ...(config || {}),
-  }),
-)
-);
+axiosBase[allConsts.HTTP_METHODS.PUT.toLowerCase()] = jest
+  .fn()
+  .mockImplementation((url, data, config) =>
+    axiosBase({
+      method: allConsts.HTTP_METHODS.PUT,
+      url,
+      data,
+      ...(config || {}),
+    }),
+  );
 
 /**
  * @type {jest.MockedFunction<AxiosMock>}
  */
-axiosBase[allConsts.HTTP_METHODS.DELETE.toLowerCase()] =
-  (jest.fn().mockImplementation((url, config) =>
+axiosBase[allConsts.HTTP_METHODS.DELETE.toLowerCase()] = jest
+  .fn()
+  .mockImplementation((url, config) =>
     axiosBase({
       method: allConsts.HTTP_METHODS.DELETE,
       url,
       ...(config || {}),
     }),
-  )
   );
 
 /**
  * @type {jest.MockedFunction<AxiosMock>}
  */
-axiosBase.request = (jest.fn().mockImplementation((config) => axiosBase(config)));
+axiosBase.request = jest.fn().mockImplementation((config) => axiosBase(config));
 
 /**
  * @type {jest.MockedFunction<AxiosMock>}
@@ -221,9 +218,11 @@ export const axiosMock = axiosBase;
 /**
  * @type {jest.Mocked<ApifyMock>}
  */
-export const apifyMock = assertType(Object.assign(createApifyMock(), {
-  getValue: jest.fn(),
-}));
+export const apifyMock = assertType(
+  Object.assign(createApifyMock(), {
+    getValue: jest.fn(),
+  }),
+);
 
 /**
  * DNS promises mock for SSRF testing.
@@ -233,9 +232,7 @@ export const apifyMock = assertType(Object.assign(createApifyMock(), {
  * @type {jest.Mocked<DnsPromises>}
  */
 export const dnsPromisesMock = assertType({
-  resolve4: assertType(jest.fn()).mockResolvedValue([
-    SHARED_CONSTS.SAFE_IP,
-  ]),
+  resolve4: assertType(jest.fn()).mockResolvedValue([SHARED_CONSTS.SAFE_IP]),
   resolve6: assertType(jest.fn()).mockResolvedValue([]),
 });
 
@@ -252,9 +249,7 @@ export const ssrfMock = assertType({
     host: "example.com",
   }),
   SSRF_ERRORS,
-  checkIpInRanges: (jest.fn()).mockReturnValue(
-    false,
-  ),
+  checkIpInRanges: jest.fn().mockReturnValue(false),
 });
 
 /**
@@ -281,60 +276,60 @@ export const createDatasetMock = (items = [], options = {}) => {
   const dataset = /** @type {Dataset} */ ({
     getData: /** @type {Dataset['getData']} */ (
       /** @type {jest.Mock<any>} */ (jest.fn()).mockImplementation(
-      /** @param {DatasetDataOptions} options */
-      async ({
-        offset = 0,
-        limit = SHARED_CONSTS.DEFAULT_LIMIT,
-        fields,
-      } = {}) => {
-        // Simulate field projection if requested
-        let result = items.slice(offset, offset + limit);
+        /** @param {DatasetDataOptions} options */
+        async ({
+          offset = 0,
+          limit = SHARED_CONSTS.DEFAULT_LIMIT,
+          fields,
+        } = {}) => {
+          // Simulate field projection if requested
+          let result = items.slice(offset, offset + limit);
 
-        if (fields && Array.isArray(fields)) {
-          result = result.map((item) => {
-            /** @type {Record<string, unknown>} */
-            const projected = {};
-            fields.forEach((f) => {
-              if (item[f] !== undefined) projected[f] = item[f];
+          if (fields && Array.isArray(fields)) {
+            result = result.map((item) => {
+              /** @type {Record<string, unknown>} */
+              const projected = {};
+              fields.forEach((f) => {
+                if (item[f] !== undefined) projected[f] = item[f];
+              });
+              return projected;
             });
-            return projected;
-          });
-        }
+          }
 
-        return {
-          items: result,
-          total: items.length,
-          count: result.length,
-          offset,
-          limit,
-        };
-      },
-    )
+          return {
+            items: result,
+            total: items.length,
+            count: result.length,
+            offset,
+            limit,
+          };
+        },
+      )
     ),
     pushData: /** @type {Dataset['pushData']} */ (
       /** @type {jest.Mock<any>} */ (jest.fn()).mockImplementation(
-      /** @param {any} data */
-      async (data) => {
-        if (Array.isArray(data)) {
-          items.push(...data);
-        } else if (data) {
-          items.push(data);
-        }
-      },
-    )
+        /** @param {any} data */
+        async (data) => {
+          if (Array.isArray(data)) {
+            items.push(...data);
+          } else if (data) {
+            items.push(data);
+          }
+        },
+      )
     ),
     getInfo: /** @type {Dataset['getInfo']} */ (
       /** @type {jest.Mock<any>} */ (jest.fn()).mockResolvedValue({
-      itemCount: items.length,
-    })
+        itemCount: items.length,
+      })
     ),
   });
 
   // Auto-register with apifyMock.openDataset if requested
   if (autoRegister) {
     /** @type {jest.Mock<any>} */ (apifyMock.openDataset).mockResolvedValue(
-    dataset,
-  );
+      dataset,
+    );
   }
 
   return dataset;
@@ -1103,4 +1098,3 @@ export const databaseConstsFileMock = {
 export const systemMock = {
   exit: jest.fn(),
 };
-

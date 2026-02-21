@@ -15,7 +15,7 @@ import crypto from "crypto";
  * @returns {boolean} True if values match, false otherwise
  */
 export function secureCompare(expected, actual) {
-  if (typeof expected !== 'string' || typeof actual !== 'string') {
+  if (typeof expected !== "string" || typeof actual !== "string") {
     return false;
   }
   const expectedBuffer = Buffer.from(expected);

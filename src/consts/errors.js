@@ -91,7 +91,8 @@ export const ERROR_MESSAGES = Object.freeze({
      * @returns {string}
      */
     (attempts, timeoutMs) =>
-      `Target destination timed out after ${attempts} attempts (${timeoutMs / APP_CONSTS.MS_PER_SECOND
+      `Target destination timed out after ${attempts} attempts (${
+        timeoutMs / APP_CONSTS.MS_PER_SECOND
       }s timeout per attempt)`,
   REPLAY_ATTEMPTS_EXHAUSTED:
     /**
@@ -133,7 +134,8 @@ export const ERROR_MESSAGES = Object.freeze({
      * @returns {string}
      */
     (url, isTransient, attempts, error) =>
-      `Forwarding to ${url} failed${!isTransient ? " (Non-transient error)" : ""
+      `Forwarding to ${url} failed${
+        !isTransient ? " (Non-transient error)" : ""
       } after ${attempts} attempts. Last error: ${error}`,
   BOTTLENECK_STOPPED: "has been stopped",
   RATE_LIMITER_INVALID_WINDOW:

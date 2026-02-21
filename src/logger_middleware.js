@@ -281,7 +281,7 @@ export class LoggerMiddleware {
     ];
     const webhookOverrides = Object.fromEntries(
       Object.entries(webhookData).filter(([key]) =>
-        allowedOverrides.includes(/** @type {keyof WebhookConfig} */(key)),
+        allowedOverrides.includes(/** @type {keyof WebhookConfig} */ (key)),
       ),
     );
 
@@ -385,7 +385,7 @@ export class LoggerMiddleware {
         ) {
           const result = createStreamVerifier(
             options.signatureVerification,
-            /** @type {Record<string, string>} */(req.headers),
+            /** @type {Record<string, string>} */ (req.headers),
           );
           if (result.hmac) {
             verifier = result;
@@ -511,7 +511,9 @@ export class LoggerMiddleware {
           // This avoids "crashing" or rejecting the webhook, allowing debugging of malformed payloads.
           this.#log.warn(
             { err: this.#serializeError(err), id: webhookId },
-            ERROR_MESSAGES.JSON_PARSE_ERROR(LOG_MESSAGES.JSON_PARSE_FAILED_FALLBACK),
+            ERROR_MESSAGES.JSON_PARSE_ERROR(
+              LOG_MESSAGES.JSON_PARSE_FAILED_FALLBACK,
+            ),
           );
         }
       }
@@ -1025,8 +1027,8 @@ export class LoggerMiddleware {
           },
           isTimeout
             ? LOG_MESSAGES.SCRIPT_EXECUTION_TIMED_OUT(
-              APP_CONSTS.SCRIPT_EXECUTION_TIMEOUT_MS,
-            )
+                APP_CONSTS.SCRIPT_EXECUTION_TIMEOUT_MS,
+              )
             : LOG_MESSAGES.SCRIPT_EXECUTION_FAILED,
         );
       }
