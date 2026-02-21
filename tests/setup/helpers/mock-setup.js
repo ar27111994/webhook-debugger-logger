@@ -46,6 +46,8 @@ import {
   cryptoMock,
   cryptoUtilsMock,
   systemMock,
+  commonUtilsMock,
+  routeUtilsMock,
 } from "./shared-mocks.js";
 
 /**
@@ -85,6 +87,8 @@ import {
  * @property {boolean} [pino=false] - Register pino mock
  * @property {boolean} [crypto=false] - Register native crypto mock
  * @property {boolean} [utilCrypto=false] - Register src/utils/crypto.js mock
+ * @property {boolean} [commonUtils=false] - Register src/utils/common.js mock
+ * @property {boolean} [routeUtils=false] - Register src/routes/utils.js mock
  */
 
 /**
@@ -142,6 +146,8 @@ export async function setupCommonMocks(options = {}) {
     pino = false,
     crypto = false,
     utilCrypto = false,
+    commonUtils = false,
+    routeUtils = false,
   } = options;
 
   if (fs) {
@@ -378,5 +384,13 @@ export async function setupCommonMocks(options = {}) {
 
   if (utilCrypto) {
     jest.unstable_mockModule("../../../src/utils/crypto.js", () => cryptoUtilsMock);
+  }
+
+  if (commonUtils) {
+    jest.unstable_mockModule("../../../src/utils/common.js", () => commonUtilsMock);
+  }
+
+  if (routeUtils) {
+    jest.unstable_mockModule("../../../src/routes/utils.js", () => routeUtilsMock);
   }
 }

@@ -761,6 +761,23 @@ export const authMock = {
 };
 
 /**
+ * Shared Common Utils Mock.
+ */
+export const commonUtilsMock = {
+  validateUUID: jest.fn(),
+  parseJsonSafely: jest.fn(),
+};
+
+/**
+ * Shared Route Utils Mock.
+ */
+export const routeUtilsMock = {
+  sendUnauthorizedResponse: jest.fn(),
+  sendConflictResponse: jest.fn(),
+  sendForbiddenResponse: jest.fn(),
+};
+
+/**
  * Shared Signature Mock.
  */
 /**

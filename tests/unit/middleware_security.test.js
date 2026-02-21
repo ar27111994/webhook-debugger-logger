@@ -13,12 +13,10 @@ import { createMockRequest, createMockResponse, createMockNextFunction } from '.
  * @typedef {import('express').RequestHandler} RequestHandler
  */
 
-// Mock specific utility validation behavior explicitly (optional, but good for precise control)
-jest.unstable_mockModule('../../src/utils/common.js', () => ({
-    validateUUID: jest.fn()
-}));
+import { setupCommonMocks } from '../setup/helpers/mock-setup.js';
+await setupCommonMocks({ commonUtils: true });
 
-const { validateUUID } = await import('../../src/utils/common.js');
+const { commonUtilsMock } = await import('../setup/helpers/shared-mocks.js');
 const { createRequestIdMiddleware, createCspMiddleware } = await import('../../src/middleware/security.js');
 const { REQUEST_ID_PREFIX } = await import('../../src/consts/app.js');
 const { HTTP_HEADERS, MIME_TYPES, HTTP_STATUS } = await import('../../src/consts/http.js');
@@ -46,7 +44,7 @@ describe('Security Middleware', () => {
         beforeEach(() => {
             middleware = createRequestIdMiddleware();
             // Default UUID validator behavior
-            jest.mocked(validateUUID).mockReturnValue(false);
+            commonUtilsMock.validateUUID.mockReturnValue(false);
         });
 
         it('should generate a new request ID if none is provided', () => {
@@ -61,31 +59,31 @@ describe('Security Middleware', () => {
         it('should generate a new request ID if the provided string is an invalid UUID', () => {
             const INVALID_ID = 'invalid-id';
             mockReq.headers[HTTP_HEADERS.X_REQUEST_ID] = INVALID_ID;
-            jest.mocked(validateUUID).mockReturnValue(false);
+            commonUtilsMock.validateUUID.mockReturnValue(false);
 
             middleware(mockReq, mockRes, mockNext);
 
             expect(mockReq.requestId).not.toBe(INVALID_ID);
             expect(String(mockReq.requestId).startsWith(REQUEST_ID_PREFIX)).toBe(true);
-            expect(validateUUID).toHaveBeenCalledWith(INVALID_ID);
+            expect(commonUtilsMock.validateUUID).toHaveBeenCalledWith(INVALID_ID);
         });
 
         it('should extract from lowercase header and use it if valid UUID', () => {
             const validUUID = '123e4567-e89b-12d3-a456-426614174000';
             mockReq.headers[HTTP_HEADERS.X_REQUEST_ID.toLowerCase()] = validUUID;
-            jest.mocked(validateUUID).mockReturnValue(true);
+            commonUtilsMock.validateUUID.mockReturnValue(true);
 
             middleware(mockReq, mockRes, mockNext);
 
             expect(mockReq.requestId).toBe(validUUID);
             expect(mockRes.setHeader).toHaveBeenCalledWith(HTTP_HEADERS.X_REQUEST_ID, validUUID);
-            expect(validateUUID).toHaveBeenCalledWith(validUUID);
+            expect(commonUtilsMock.validateUUID).toHaveBeenCalledWith(validUUID);
         });
 
         it('should extract from array header string safely if valid', () => {
             const validUUID = '123e4567-e89b-12d3-a456-426614174001';
             mockReq.headers[HTTP_HEADERS.X_REQUEST_ID] = [validUUID, 'second-val'];
-            jest.mocked(validateUUID).mockReturnValue(true);
+            commonUtilsMock.validateUUID.mockReturnValue(true);
 
             middleware(mockReq, mockRes, mockNext);
 
@@ -95,12 +93,12 @@ describe('Security Middleware', () => {
         it('should strip prefix before validating a provided ID that contains the prefix', () => {
             const uuidWithoutPrefix = '123e4567-e89b-12d3-a456-426614174002';
             mockReq.headers[HTTP_HEADERS.X_REQUEST_ID] = `${REQUEST_ID_PREFIX}${uuidWithoutPrefix}`;
-            jest.mocked(validateUUID).mockReturnValue(true);
+            commonUtilsMock.validateUUID.mockReturnValue(true);
 
             middleware(mockReq, mockRes, mockNext);
 
             expect(mockReq.requestId).toBe(`${REQUEST_ID_PREFIX}${uuidWithoutPrefix}`);
-            expect(validateUUID).toHaveBeenCalledWith(uuidWithoutPrefix);
+            expect(commonUtilsMock.validateUUID).toHaveBeenCalledWith(uuidWithoutPrefix);
         });
 
         it('should handle an empty string provided in the headers cleanly', () => {

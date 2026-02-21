@@ -12,17 +12,12 @@ import { jest } from '@jest/globals';
  * @typedef {import('express').ErrorRequestHandler} ErrorRequestHandler
  */
 
-jest.unstable_mockModule('../../src/utils/logger.js', () => ({
-    createChildLogger: jest.fn().mockReturnValue({
-        error: jest.fn(),
-        warn: jest.fn(),
-        info: jest.fn()
-    }),
-    serializeError: jest.fn().mockImplementation(/** @param {any} err */(err) => ({ message: err.message }))
-}));
+import { setupCommonMocks } from '../setup/helpers/mock-setup.js';
+await setupCommonMocks({ logger: true });
+
+const { loggerMock } = await import('../setup/helpers/shared-mocks.js');
 
 const { createErrorHandler } = await import('../../src/middleware/error.js');
-const { createChildLogger } = await import('../../src/utils/logger.js');
 const { HTTP_STATUS, HTTP_STATUS_MESSAGES } = await import('../../src/consts/http.js');
 const { ERROR_LABELS } = await import('../../src/consts/errors.js');
 const { LOG_MESSAGES } = await import('../../src/consts/messages.js');
@@ -39,8 +34,6 @@ describe('Error Handling Middleware', () => {
     let mockNext;
     /** @type {ErrorRequestHandler} */
     let middleware;
-
-    const mockLogger = createChildLogger({ component: 'ErrorMiddleware' });
 
     beforeEach(() => {
         mockReq = createMockRequest();
@@ -68,7 +61,7 @@ describe('Error Handling Middleware', () => {
 
             expect(mockNext).toHaveBeenCalledWith(err);
             expect(mockRes.status).not.toHaveBeenCalled();
-            expect(mockLogger.error).not.toHaveBeenCalled();
+            expect(loggerMock.error).not.toHaveBeenCalled();
         });
 
         it('should extract status from err.statusCode and handle 400 error safely without logging', () => {
@@ -88,7 +81,7 @@ describe('Error Handling Middleware', () => {
             });
 
             // No 500-level logging
-            expect(mockLogger.error).not.toHaveBeenCalled();
+            expect(loggerMock.error).not.toHaveBeenCalled();
         });
 
         it('should extract status from err.status and sanitize internal server errors (500) and log them', () => {
@@ -106,13 +99,13 @@ describe('Error Handling Middleware', () => {
                 message: ERROR_LABELS.INTERNAL_SERVER_ERROR // Message is masked
             });
 
-            expect(mockLogger.error).toHaveBeenCalledWith(
+            expect(loggerMock.error).toHaveBeenCalledWith(
                 expect.objectContaining({
                     requestId: 'req-123',
                     status: HTTP_STATUS.SERVICE_UNAVAILABLE,
                     path: '/api/test',
                     method: 'POST',
-                    err: { message: 'Database cluster failure' }
+                    err: expect.objectContaining({ message: 'Database cluster failure' })
                 }),
                 LOG_MESSAGES.SERVER_ERROR
             );
@@ -133,7 +126,7 @@ describe('Error Handling Middleware', () => {
                 message: ERROR_LABELS.INTERNAL_SERVER_ERROR
             });
 
-            expect(mockLogger.error).toHaveBeenCalledWith(
+            expect(loggerMock.error).toHaveBeenCalledWith(
                 expect.objectContaining({
                     requestId: APP_CONSTS.UNKNOWN,
                     status: HTTP_STATUS.INTERNAL_SERVER_ERROR

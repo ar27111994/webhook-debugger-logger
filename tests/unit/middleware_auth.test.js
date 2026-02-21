@@ -6,29 +6,24 @@
 import { jest } from '@jest/globals';
 
 /**
- * @typedef {import('express').Request} Request
+ * @typedef {import('../../src/typedefs.js').CustomRequest} Request
  * @typedef {import('express').Response} Response
  * @typedef {import('express').NextFunction} NextFunction
  * @typedef {import('express').RequestHandler} RequestHandler
  */
 
-// Mock dependencies
-jest.unstable_mockModule('../../src/utils/auth.js', () => ({
-    validateAuth: jest.fn()
-}));
-jest.unstable_mockModule('../../src/routes/utils.js', () => ({
-    sendUnauthorizedResponse: jest.fn()
-}));
+import { setupCommonMocks } from '../setup/helpers/mock-setup.js';
+await setupCommonMocks({ auth: true, routeUtils: true });
 
-const { validateAuth } = await import('../../src/utils/auth.js');
-const { sendUnauthorizedResponse } = await import('../../src/routes/utils.js');
+const { authMock, routeUtilsMock } = await import('../setup/helpers/shared-mocks.js');
+
 const { createAuthMiddleware } = await import('../../src/middleware/auth.js');
 const { HTTP_STATUS, HTTP_HEADERS, HTTP_STATUS_MESSAGES } = await import('../../src/consts/http.js');
 
 import { createMockRequest, createMockResponse, createMockNextFunction } from '../setup/helpers/test-utils.js';
 
 describe('Auth Middleware', () => {
-    /** @type {import('../../src/typedefs.js').CustomRequest} */
+    /** @type {Request} */
     let mockReq;
     /** @type {Response} */
     let mockRes;
@@ -59,31 +54,31 @@ describe('Auth Middleware', () => {
 
             expect(mockRes.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
             expect(mockRes.send).toHaveBeenCalledWith(HTTP_STATUS_MESSAGES[HTTP_STATUS.OK]);
-            expect(validateAuth).not.toHaveBeenCalled();
+            expect(authMock.validateAuth).not.toHaveBeenCalled();
             expect(mockNext).not.toHaveBeenCalled();
         });
 
         it('should call validateAuth and if invalid, call sendUnauthorizedResponse', () => {
             const authError = 'Invalid Auth Token';
-            jest.mocked(validateAuth).mockReturnValue({ isValid: false, error: authError });
+            authMock.validateAuth.mockReturnValue({ isValid: false, error: authError });
 
             middleware(mockReq, mockRes, mockNext);
 
             expect(mockGetAuthKey).toHaveBeenCalled();
-            expect(validateAuth).toHaveBeenCalledWith(mockReq, MOCK_AUTH_KEY);
-            expect(sendUnauthorizedResponse).toHaveBeenCalledWith(mockReq, mockRes, { error: authError });
+            expect(authMock.validateAuth).toHaveBeenCalledWith(mockReq, MOCK_AUTH_KEY);
+            expect(routeUtilsMock.sendUnauthorizedResponse).toHaveBeenCalledWith(mockReq, mockRes, { error: authError });
             expect(mockNext).not.toHaveBeenCalled();
         });
 
         it('should call validateAuth and if valid, call next()', () => {
-            jest.mocked(validateAuth).mockReturnValue({ isValid: true });
+            authMock.validateAuth.mockReturnValue({ isValid: true });
 
             middleware(mockReq, mockRes, mockNext);
 
             expect(mockGetAuthKey).toHaveBeenCalled();
-            expect(validateAuth).toHaveBeenCalledWith(mockReq, MOCK_AUTH_KEY);
+            expect(authMock.validateAuth).toHaveBeenCalledWith(mockReq, MOCK_AUTH_KEY);
             expect(mockNext).toHaveBeenCalled();
-            expect(sendUnauthorizedResponse).not.toHaveBeenCalled();
+            expect(routeUtilsMock.sendUnauthorizedResponse).not.toHaveBeenCalled();
         });
     });
 });
