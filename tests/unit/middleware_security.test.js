@@ -6,6 +6,13 @@
 import { jest } from '@jest/globals';
 import { createMockRequest, createMockResponse, createMockNextFunction } from '../setup/helpers/test-utils.js';
 
+/**
+ * @typedef {import('express').Request} Request
+ * @typedef {import('express').Response} Response
+ * @typedef {import('express').NextFunction} NextFunction
+ * @typedef {import('express').RequestHandler} RequestHandler
+ */
+
 // Mock specific utility validation behavior explicitly (optional, but good for precise control)
 jest.unstable_mockModule('../../src/utils/common.js', () => ({
     validateUUID: jest.fn()
@@ -18,11 +25,11 @@ const { HTTP_HEADERS, MIME_TYPES, HTTP_STATUS } = await import('../../src/consts
 const { SECURITY_CONSTS, SECURITY_HEADERS_VALUES } = await import('../../src/consts/security.js');
 
 describe('Security Middleware', () => {
-    /** @type {any} */
+    /** @type {import('../../src/typedefs.js').CustomRequest} */
     let mockReq;
-    /** @type {any} */
+    /** @type {Response} */
     let mockRes;
-    /** @type {any} */
+    /** @type {NextFunction} */
     let mockNext;
 
     beforeEach(() => {
@@ -34,7 +41,7 @@ describe('Security Middleware', () => {
     });
 
     describe('createRequestIdMiddleware', () => {
-        /** @type {any} */
+        /** @type {RequestHandler} */
         let middleware;
         beforeEach(() => {
             middleware = createRequestIdMiddleware();
@@ -46,7 +53,7 @@ describe('Security Middleware', () => {
             middleware(mockReq, mockRes, mockNext);
 
             expect(mockReq.requestId).toBeDefined();
-            expect(mockReq.requestId.startsWith(REQUEST_ID_PREFIX)).toBe(true);
+            expect(String(mockReq.requestId).startsWith(REQUEST_ID_PREFIX)).toBe(true);
             expect(mockRes.setHeader).toHaveBeenCalledWith(HTTP_HEADERS.X_REQUEST_ID, mockReq.requestId);
             expect(mockNext).toHaveBeenCalled();
         });
@@ -59,7 +66,7 @@ describe('Security Middleware', () => {
             middleware(mockReq, mockRes, mockNext);
 
             expect(mockReq.requestId).not.toBe(INVALID_ID);
-            expect(mockReq.requestId.startsWith(REQUEST_ID_PREFIX)).toBe(true);
+            expect(String(mockReq.requestId).startsWith(REQUEST_ID_PREFIX)).toBe(true);
             expect(validateUUID).toHaveBeenCalledWith(INVALID_ID);
         });
 
@@ -102,7 +109,7 @@ describe('Security Middleware', () => {
             middleware(mockReq, mockRes, mockNext);
 
             expect(mockReq.requestId).toBeDefined();
-            expect(mockReq.requestId.startsWith(REQUEST_ID_PREFIX)).toBe(true);
+            expect(String(mockReq.requestId).startsWith(REQUEST_ID_PREFIX)).toBe(true);
         });
 
         it('should handle an empty array provided in the headers cleanly', () => {
@@ -111,12 +118,12 @@ describe('Security Middleware', () => {
             middleware(mockReq, mockRes, mockNext);
 
             expect(mockReq.requestId).toBeDefined();
-            expect(mockReq.requestId.startsWith(REQUEST_ID_PREFIX)).toBe(true);
+            expect(String(mockReq.requestId).startsWith(REQUEST_ID_PREFIX)).toBe(true);
         });
     });
 
     describe('createCspMiddleware', () => {
-        /** @type {any} */
+        /** @type {RequestHandler} */
         let middleware;
         beforeEach(() => {
             middleware = createCspMiddleware();
@@ -138,7 +145,7 @@ describe('Security Middleware', () => {
             middleware(mockReq, mockRes, mockNext);
 
             // Mock getHeader behavior
-            mockRes.getHeader.mockReturnValue(undefined);
+            /** @type {jest.Mock} */(mockRes.getHeader).mockReturnValue(undefined);
 
             // Trigger writeHead wrap
             mockRes.writeHead(HTTP_STATUS.OK);
@@ -149,8 +156,8 @@ describe('Security Middleware', () => {
         it('should not apply CSP if content type is not HTML', () => {
             middleware(mockReq, mockRes, mockNext);
 
-            mockRes.getHeader.mockReturnValue(MIME_TYPES.JSON);
-            mockRes.writeHead(HTTP_STATUS.OK, { some: 'header' }, 'reason');
+            /** @type {jest.Mock} */(mockRes.getHeader).mockReturnValue(MIME_TYPES.JSON);
+            mockRes.writeHead(HTTP_STATUS.OK, { some: 'header' });
 
             expect(mockRes.setHeader).not.toHaveBeenCalledWith(HTTP_HEADERS.CONTENT_SECURITY_POLICY, expect.anything());
         });
@@ -158,7 +165,7 @@ describe('Security Middleware', () => {
         it('should apply CSP if content type is HTML', () => {
             middleware(mockReq, mockRes, mockNext);
 
-            mockRes.getHeader.mockReturnValue(`${MIME_TYPES.HTML}; charset=utf-8`);
+            /** @type {jest.Mock} */(mockRes.getHeader).mockReturnValue(`${MIME_TYPES.HTML}; charset=utf-8`);
             mockRes.writeHead(HTTP_STATUS.OK);
 
             expect(mockRes.setHeader).toHaveBeenCalledWith(HTTP_HEADERS.CONTENT_SECURITY_POLICY, SECURITY_CONSTS.CSP_POLICY);

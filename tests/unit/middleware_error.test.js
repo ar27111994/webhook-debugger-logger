@@ -5,13 +5,20 @@
 
 import { jest } from '@jest/globals';
 
+/**
+ * @typedef {import('express').Request} Request
+ * @typedef {import('express').Response} Response
+ * @typedef {import('express').NextFunction} NextFunction
+ * @typedef {import('express').ErrorRequestHandler} ErrorRequestHandler
+ */
+
 jest.unstable_mockModule('../../src/utils/logger.js', () => ({
     createChildLogger: jest.fn().mockReturnValue({
         error: jest.fn(),
         warn: jest.fn(),
         info: jest.fn()
     }),
-    serializeError: jest.fn().mockImplementation((err) => ({ message: err.message }))
+    serializeError: jest.fn().mockImplementation(/** @param {any} err */(err) => ({ message: err.message }))
 }));
 
 const { createErrorHandler } = await import('../../src/middleware/error.js');
@@ -24,28 +31,29 @@ const { APP_CONSTS } = await import('../../src/consts/app.js');
 import { createMockRequest, createMockResponse, createMockNextFunction } from '../setup/helpers/test-utils.js';
 
 describe('Error Handling Middleware', () => {
-    /** @type {any} */
+    /** @type {import('../../src/typedefs.js').CustomRequest} */
     let mockReq;
-    /** @type {any} */
+    /** @type {Response} */
     let mockRes;
-    /** @type {any} */
+    /** @type {NextFunction} */
     let mockNext;
-    /** @type {any} */
+    /** @type {ErrorRequestHandler} */
     let middleware;
-    /** @type {any} */
-    let mockLogger;
+
+    const mockLogger = createChildLogger({ component: 'ErrorMiddleware' });
 
     beforeEach(() => {
         mockReq = createMockRequest();
-        mockReq.path = '/api/test';
-        mockReq.method = 'POST';
-        mockReq.requestId = 'req-123';
+        Object.assign(mockReq, {
+            path: '/api/test',
+            method: 'POST',
+            requestId: 'req-123'
+        });
 
         mockRes = createMockResponse();
         mockNext = createMockNextFunction();
 
         middleware = createErrorHandler();
-        mockLogger = createChildLogger();
 
         jest.clearAllMocks();
     });

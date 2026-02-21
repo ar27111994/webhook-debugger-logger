@@ -5,6 +5,13 @@
 
 import { jest } from '@jest/globals';
 
+/**
+ * @typedef {import('express').Request} Request
+ * @typedef {import('express').Response} Response
+ * @typedef {import('express').NextFunction} NextFunction
+ * @typedef {import('express').RequestHandler} RequestHandler
+ */
+
 // Mock dependencies
 jest.unstable_mockModule('../../src/utils/auth.js', () => ({
     validateAuth: jest.fn()
@@ -21,15 +28,15 @@ const { HTTP_STATUS, HTTP_HEADERS, HTTP_STATUS_MESSAGES } = await import('../../
 import { createMockRequest, createMockResponse, createMockNextFunction } from '../setup/helpers/test-utils.js';
 
 describe('Auth Middleware', () => {
-    /** @type {any} */
+    /** @type {import('../../src/typedefs.js').CustomRequest} */
     let mockReq;
-    /** @type {any} */
+    /** @type {Response} */
     let mockRes;
-    /** @type {any} */
+    /** @type {NextFunction} */
     let mockNext;
-    /** @type {any} */
+    /** @type {jest.Mock} */
     let mockGetAuthKey;
-    /** @type {any} */
+    /** @type {RequestHandler} */
     let middleware;
 
     const MOCK_AUTH_KEY = 'mock-auth-key';
@@ -39,7 +46,7 @@ describe('Auth Middleware', () => {
         mockRes = createMockResponse();
         mockNext = createMockNextFunction();
         mockGetAuthKey = jest.fn().mockReturnValue(MOCK_AUTH_KEY);
-        middleware = createAuthMiddleware(mockGetAuthKey);
+        middleware = createAuthMiddleware(/** @type {() => string} */(mockGetAuthKey));
 
         jest.clearAllMocks();
     });
