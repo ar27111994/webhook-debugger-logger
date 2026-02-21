@@ -7,13 +7,14 @@ import { jest } from '@jest/globals';
 import { createMockRequest, createMockResponse, createMockNextFunction } from '../setup/helpers/test-utils.js';
 
 /**
- * @typedef {import('express').Request} Request
+ * @typedef {import('../../src/typedefs.js').CustomRequest} Request
  * @typedef {import('express').Response} Response
  * @typedef {import('express').NextFunction} NextFunction
  * @typedef {import('express').RequestHandler} RequestHandler
  */
 
 import { setupCommonMocks } from '../setup/helpers/mock-setup.js';
+import { ENCODINGS } from '../../src/consts/http.js';
 await setupCommonMocks({ commonUtils: true });
 
 const { commonUtilsMock } = await import('../setup/helpers/shared-mocks.js');
@@ -23,7 +24,7 @@ const { HTTP_HEADERS, MIME_TYPES, HTTP_STATUS } = await import('../../src/consts
 const { SECURITY_CONSTS, SECURITY_HEADERS_VALUES } = await import('../../src/consts/security.js');
 
 describe('Security Middleware', () => {
-    /** @type {import('../../src/typedefs.js').CustomRequest} */
+    /** @type {Request} */
     let mockReq;
     /** @type {Response} */
     let mockRes;
@@ -139,37 +140,40 @@ describe('Security Middleware', () => {
             expect(mockNext).toHaveBeenCalled();
         });
 
-        it('should mock writeHead and not apply CSP if content type is missing', () => {
+        it('should default to not applying CSP if getHeader returns nothing', () => {
+            const originalWriteHead = mockRes.writeHead;
             middleware(mockReq, mockRes, mockNext);
 
             // Mock getHeader behavior
-            /** @type {jest.Mock} */(mockRes.getHeader).mockReturnValue(undefined);
+            jest.mocked(mockRes.getHeader).mockReturnValue(undefined);
 
             // Trigger writeHead wrap
             mockRes.writeHead(HTTP_STATUS.OK);
 
             expect(mockRes.setHeader).not.toHaveBeenCalledWith(HTTP_HEADERS.CONTENT_SECURITY_POLICY, expect.anything());
+            expect(originalWriteHead).toHaveBeenCalledWith(HTTP_STATUS.OK);
         });
 
         it('should not apply CSP if content type is not HTML', () => {
+            const originalWriteHead = mockRes.writeHead;
             middleware(mockReq, mockRes, mockNext);
 
-            /** @type {jest.Mock} */(mockRes.getHeader).mockReturnValue(MIME_TYPES.JSON);
+            jest.mocked(mockRes.getHeader).mockReturnValue(MIME_TYPES.JSON);
             mockRes.writeHead(HTTP_STATUS.OK, { some: 'header' });
 
             expect(mockRes.setHeader).not.toHaveBeenCalledWith(HTTP_HEADERS.CONTENT_SECURITY_POLICY, expect.anything());
+            expect(originalWriteHead).toHaveBeenCalledWith(HTTP_STATUS.OK, { some: 'header' });
         });
 
         it('should apply CSP if content type is HTML', () => {
+            const originalWriteHead = mockRes.writeHead;
             middleware(mockReq, mockRes, mockNext);
 
-            /** @type {jest.Mock} */(mockRes.getHeader).mockReturnValue(`${MIME_TYPES.HTML}; charset=utf-8`);
+            jest.mocked(mockRes.getHeader).mockReturnValue(`${MIME_TYPES.HTML}; charset=${ENCODINGS.UTF8}`);
             mockRes.writeHead(HTTP_STATUS.OK);
 
             expect(mockRes.setHeader).toHaveBeenCalledWith(HTTP_HEADERS.CONTENT_SECURITY_POLICY, SECURITY_CONSTS.CSP_POLICY);
-            // Verify original writeHead was called
-            // In our mock setup, writeHead is a jest.fn(). The mockRes.writeHead gets replaced.
-            // But we know it succeeded because it didn't crash.
+            expect(originalWriteHead).toHaveBeenCalledWith(HTTP_STATUS.OK);
         });
 
         it('should not double-wrap writeHead if middleware is called twice on the same response object', () => {
