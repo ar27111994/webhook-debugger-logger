@@ -1,0 +1,75 @@
+/**
+ * @file tests/unit/middleware_auth.test.js
+ * @description Unit tests for the authentication middleware.
+ */
+
+import { jest } from '@jest/globals';
+
+// Mock dependencies
+jest.unstable_mockModule('../../src/utils/auth.js', () => ({
+    validateAuth: jest.fn()
+}));
+jest.unstable_mockModule('../../src/routes/utils.js', () => ({
+    sendUnauthorizedResponse: jest.fn()
+}));
+
+const { validateAuth } = await import('../../src/utils/auth.js');
+const { sendUnauthorizedResponse } = await import('../../src/routes/utils.js');
+const { createAuthMiddleware } = await import('../../src/middleware/auth.js');
+const { HTTP_STATUS, HTTP_HEADERS, HTTP_STATUS_MESSAGES } = await import('../../src/consts/http.js');
+
+import { createMockRequest, createMockResponse, createMockNextFunction } from '../setup/helpers/test-utils.js';
+
+describe('Auth Middleware', () => {
+    let mockReq;
+    let mockRes;
+    let mockNext;
+    let mockGetAuthKey;
+    let middleware;
+
+    beforeEach(() => {
+        mockReq = createMockRequest();
+        mockRes = createMockResponse();
+        mockNext = createMockNextFunction();
+        mockGetAuthKey = jest.fn().mockReturnValue('mock-auth-key');
+        middleware = createAuthMiddleware(mockGetAuthKey);
+
+        jest.clearAllMocks();
+    });
+
+    describe('createAuthMiddleware', () => {
+        it('should bypass auth and return 200 OK for Apify readiness probe', () => {
+            mockReq.headers[HTTP_HEADERS.APIFY_READINESS] = '1';
+
+            middleware(mockReq, mockRes, mockNext);
+
+            expect(mockRes.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
+            expect(mockRes.send).toHaveBeenCalledWith(HTTP_STATUS_MESSAGES[HTTP_STATUS.OK]);
+            expect(validateAuth).not.toHaveBeenCalled();
+            expect(mockNext).not.toHaveBeenCalled();
+        });
+
+        it('should call validateAuth and if invalid, call sendUnauthorizedResponse', () => {
+            const authError = 'Invalid Auth Token';
+            jest.mocked(validateAuth).mockReturnValue({ isValid: false, error: authError });
+
+            middleware(mockReq, mockRes, mockNext);
+
+            expect(mockGetAuthKey).toHaveBeenCalled();
+            expect(validateAuth).toHaveBeenCalledWith(mockReq, 'mock-auth-key');
+            expect(sendUnauthorizedResponse).toHaveBeenCalledWith(mockReq, mockRes, { error: authError });
+            expect(mockNext).not.toHaveBeenCalled();
+        });
+
+        it('should call validateAuth and if valid, call next()', () => {
+            jest.mocked(validateAuth).mockReturnValue({ isValid: true });
+
+            middleware(mockReq, mockRes, mockNext);
+
+            expect(mockGetAuthKey).toHaveBeenCalled();
+            expect(validateAuth).toHaveBeenCalledWith(mockReq, 'mock-auth-key');
+            expect(mockNext).toHaveBeenCalled();
+            expect(sendUnauthorizedResponse).not.toHaveBeenCalled();
+        });
+    });
+});
