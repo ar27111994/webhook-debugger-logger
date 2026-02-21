@@ -24,7 +24,7 @@ const { ERROR_LABELS } = await import('../../src/consts/errors.js');
 const { LOG_MESSAGES } = await import('../../src/consts/messages.js');
 const { APP_CONSTS } = await import('../../src/consts/app.js');
 
-import { createMockRequest, createMockResponse, createMockNextFunction } from '../setup/helpers/test-utils.js';
+import { createMockRequest, createMockResponse, createMockNextFunction, assertType } from '../setup/helpers/test-utils.js';
 import { HTTP_METHODS } from '../../src/consts/http.js';
 
 describe('Error Handling Middleware', () => {
@@ -142,17 +142,18 @@ describe('Error Handling Middleware', () => {
         });
 
         it('should handle type coercion securely if downstream passes status as a string', () => {
-            const errorMsg = 'Type coerced error';
-            /** @type {any} */
-            const err = new Error(errorMsg);
             // Simulate improper type passed by a buggy downstream package
-            err.status = '500';
+            const errorMsg = 'Type coerced error';
+            const status = String(HTTP_STATUS.INTERNAL_SERVER_ERROR);
+            /** @type {CommonError} */
+            const err = new Error(errorMsg);
+            err.status = assertType(status);
 
             middleware(err, mockReq, mockRes, mockNext);
 
-            expect(mockRes.status).toHaveBeenCalledWith('500'); // Express natively handles string statuses.
+            expect(mockRes.status).toHaveBeenCalledWith(status); // Express natively handles string statuses.
             expect(mockRes.json).toHaveBeenCalledWith({
-                status: '500',
+                status,
                 requestId: REQUEST_ID,
                 error: ERROR_LABELS.INTERNAL_SERVER_ERROR,
                 message: ERROR_LABELS.INTERNAL_SERVER_ERROR // Message is masked

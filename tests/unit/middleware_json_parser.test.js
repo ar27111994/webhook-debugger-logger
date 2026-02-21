@@ -104,6 +104,24 @@ describe('JSON Parser Middleware', () => {
             expect(mockNext).toHaveBeenCalled();
         });
 
+        it('should safely parse an extremely large and nested JSON without crashing (Simulation of upstream limit dependency)', () => {
+            // Create a deeply nested object to test parse performance limits (Do NOT do true DoS in unit tests though!)
+            const deepJson = { highly: { nested: { payload: { with: { lots: { of: { data: 'value' } } } } } } };
+            const MASSIVE_ARRAY_SIZE = 5000;
+            const massiveJson = Array(MASSIVE_ARRAY_SIZE).fill(deepJson);
+            const jsonStr = JSON.stringify(massiveJson);
+
+            mockReq.body = Buffer.from(jsonStr);
+            mockReq.headers[HTTP_HEADERS.CONTENT_TYPE] = MIME_TYPES.JSON;
+
+            // This confirms we can safely process the string before upstream body-parser drops it
+            expect(() => middleware(mockReq, mockRes, mockNext)).not.toThrow();
+
+            expect(Array.isArray(mockReq.body)).toBe(true);
+            expect(mockReq.body.length).toBe(MASSIVE_ARRAY_SIZE);
+            expect(mockNext).toHaveBeenCalled();
+        });
+
         it('should leave body as Buffer if content-type is not JSON', () => {
             const bufferBody = Buffer.from('<xml></xml>');
             mockReq.body = bufferBody;

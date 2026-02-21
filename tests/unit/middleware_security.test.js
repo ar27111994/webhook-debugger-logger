@@ -119,6 +119,21 @@ describe('Security Middleware', () => {
             expect(mockReq.requestId).toBeDefined();
             expect(String(mockReq.requestId).startsWith(REQUEST_ID_PREFIX)).toBe(true);
         });
+
+        it('should safely process and truncate or reject excessively large Request ID inputs (ReDOS defense check)', () => {
+            const HUGE_ID_LENGTH = 20000;
+            const hugeId = 'a'.repeat(HUGE_ID_LENGTH);
+            mockReq.headers[HTTP_HEADERS.X_REQUEST_ID] = hugeId;
+            commonUtilsMock.validateUUID.mockReturnValue(false);
+
+            middleware(mockReq, mockRes, mockNext);
+
+            expect(mockReq.requestId).toBeDefined();
+            // Should generate a NEW ID because a string of 'a's will fail validation
+            expect(mockReq.requestId).not.toBe(hugeId);
+            expect(String(mockReq.requestId).startsWith(REQUEST_ID_PREFIX)).toBe(true);
+            expect(commonUtilsMock.validateUUID).toHaveBeenCalledWith(hugeId);
+        });
     });
 
     describe('createCspMiddleware', () => {
