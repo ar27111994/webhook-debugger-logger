@@ -5,6 +5,7 @@
 
 import { jest } from '@jest/globals';
 import { createMockRequest, createMockResponse, createMockNextFunction } from '../setup/helpers/test-utils.js';
+import { ENCODINGS } from '../../src/consts/http.js';
 
 /**
  * @typedef {import('express').Request} Request
@@ -68,13 +69,14 @@ describe('JSON Parser Middleware', () => {
         });
 
         it('should parse valid JSON body when content-type contains application/json', () => {
-            const jsonStr = JSON.stringify({ key: 'value' });
+            const jsonObject = { key: 'value' };
+            const jsonStr = JSON.stringify(jsonObject);
             mockReq.body = Buffer.from(jsonStr);
-            mockReq.headers[HTTP_HEADERS.CONTENT_TYPE] = `${MIME_TYPES.JSON}; charset=utf-8`;
+            mockReq.headers[HTTP_HEADERS.CONTENT_TYPE] = `${MIME_TYPES.JSON}; charset=${ENCODINGS.UTF8}`;
 
             middleware(mockReq, mockRes, mockNext);
 
-            expect(mockReq.body).toEqual({ key: 'value' });
+            expect(mockReq.body).toEqual(jsonObject);
             expect(mockNext).toHaveBeenCalled();
         });
 
