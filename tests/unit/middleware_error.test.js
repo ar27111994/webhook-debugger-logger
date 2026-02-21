@@ -15,7 +15,7 @@ jest.unstable_mockModule('../../src/utils/logger.js', () => ({
 }));
 
 const { createErrorHandler } = await import('../../src/middleware/error.js');
-const { createChildLogger, serializeError } = await import('../../src/utils/logger.js');
+const { createChildLogger } = await import('../../src/utils/logger.js');
 const { HTTP_STATUS, HTTP_STATUS_MESSAGES } = await import('../../src/consts/http.js');
 const { ERROR_LABELS } = await import('../../src/consts/errors.js');
 const { LOG_MESSAGES } = await import('../../src/consts/messages.js');
@@ -24,10 +24,15 @@ const { APP_CONSTS } = await import('../../src/consts/app.js');
 import { createMockRequest, createMockResponse, createMockNextFunction } from '../setup/helpers/test-utils.js';
 
 describe('Error Handling Middleware', () => {
+    /** @type {any} */
     let mockReq;
+    /** @type {any} */
     let mockRes;
+    /** @type {any} */
     let mockNext;
+    /** @type {any} */
     let middleware;
+    /** @type {any} */
     let mockLogger;
 
     beforeEach(() => {
@@ -48,6 +53,7 @@ describe('Error Handling Middleware', () => {
     describe('createErrorHandler', () => {
         it('should pass error to next() if headers are already sent', () => {
             mockRes.headersSent = true;
+            /** @type {any} */
             const err = new Error('Some error');
 
             middleware(err, mockReq, mockRes, mockNext);
@@ -58,6 +64,7 @@ describe('Error Handling Middleware', () => {
         });
 
         it('should extract status from err.statusCode and handle 400 error safely without logging', () => {
+            /** @type {any} */
             const err = new Error('Bad Input');
             err.statusCode = HTTP_STATUS.BAD_REQUEST;
 
@@ -77,6 +84,7 @@ describe('Error Handling Middleware', () => {
         });
 
         it('should extract status from err.status and sanitize internal server errors (500) and log them', () => {
+            /** @type {any} */
             const err = new Error('Database cluster failure');
             err.status = HTTP_STATUS.SERVICE_UNAVAILABLE;
 
@@ -103,6 +111,7 @@ describe('Error Handling Middleware', () => {
         });
 
         it('should fallback to 500 Default status and extract fallback unknown if requestId is missing', () => {
+            /** @type {any} */
             const err = new Error('Unknown catastrophic event');
             delete mockReq.requestId; // No request id provided
 
@@ -126,6 +135,7 @@ describe('Error Handling Middleware', () => {
         });
 
         it('should use ERROR_LABELS.GENERIC if HTTP_STATUS_MESSAGES lacks the status message', () => {
+            /** @type {any} */
             const err = new Error('Weird code');
             err.status = 495; // Assume not mapped in HTTP_STATUS_MESSAGES
 

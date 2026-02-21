@@ -21,17 +21,24 @@ const { HTTP_STATUS, HTTP_HEADERS, HTTP_STATUS_MESSAGES } = await import('../../
 import { createMockRequest, createMockResponse, createMockNextFunction } from '../setup/helpers/test-utils.js';
 
 describe('Auth Middleware', () => {
+    /** @type {any} */
     let mockReq;
+    /** @type {any} */
     let mockRes;
+    /** @type {any} */
     let mockNext;
+    /** @type {any} */
     let mockGetAuthKey;
+    /** @type {any} */
     let middleware;
+
+    const MOCK_AUTH_KEY = 'mock-auth-key';
 
     beforeEach(() => {
         mockReq = createMockRequest();
         mockRes = createMockResponse();
         mockNext = createMockNextFunction();
-        mockGetAuthKey = jest.fn().mockReturnValue('mock-auth-key');
+        mockGetAuthKey = jest.fn().mockReturnValue(MOCK_AUTH_KEY);
         middleware = createAuthMiddleware(mockGetAuthKey);
 
         jest.clearAllMocks();
@@ -56,7 +63,7 @@ describe('Auth Middleware', () => {
             middleware(mockReq, mockRes, mockNext);
 
             expect(mockGetAuthKey).toHaveBeenCalled();
-            expect(validateAuth).toHaveBeenCalledWith(mockReq, 'mock-auth-key');
+            expect(validateAuth).toHaveBeenCalledWith(mockReq, MOCK_AUTH_KEY);
             expect(sendUnauthorizedResponse).toHaveBeenCalledWith(mockReq, mockRes, { error: authError });
             expect(mockNext).not.toHaveBeenCalled();
         });
@@ -67,7 +74,7 @@ describe('Auth Middleware', () => {
             middleware(mockReq, mockRes, mockNext);
 
             expect(mockGetAuthKey).toHaveBeenCalled();
-            expect(validateAuth).toHaveBeenCalledWith(mockReq, 'mock-auth-key');
+            expect(validateAuth).toHaveBeenCalledWith(mockReq, MOCK_AUTH_KEY);
             expect(mockNext).toHaveBeenCalled();
             expect(sendUnauthorizedResponse).not.toHaveBeenCalled();
         });

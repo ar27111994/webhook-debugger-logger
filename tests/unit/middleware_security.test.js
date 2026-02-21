@@ -14,12 +14,15 @@ jest.unstable_mockModule('../../src/utils/common.js', () => ({
 const { validateUUID } = await import('../../src/utils/common.js');
 const { createRequestIdMiddleware, createCspMiddleware } = await import('../../src/middleware/security.js');
 const { REQUEST_ID_PREFIX } = await import('../../src/consts/app.js');
-const { HTTP_HEADERS, MIME_TYPES } = await import('../../src/consts/http.js');
+const { HTTP_HEADERS, MIME_TYPES, HTTP_STATUS } = await import('../../src/consts/http.js');
 const { SECURITY_CONSTS, SECURITY_HEADERS_VALUES } = await import('../../src/consts/security.js');
 
 describe('Security Middleware', () => {
+    /** @type {any} */
     let mockReq;
+    /** @type {any} */
     let mockRes;
+    /** @type {any} */
     let mockNext;
 
     beforeEach(() => {
@@ -31,6 +34,7 @@ describe('Security Middleware', () => {
     });
 
     describe('createRequestIdMiddleware', () => {
+        /** @type {any} */
         let middleware;
         beforeEach(() => {
             middleware = createRequestIdMiddleware();
@@ -48,14 +52,15 @@ describe('Security Middleware', () => {
         });
 
         it('should generate a new request ID if the provided string is an invalid UUID', () => {
-            mockReq.headers[HTTP_HEADERS.X_REQUEST_ID] = 'invalid-id';
+            const INVALID_ID = 'invalid-id';
+            mockReq.headers[HTTP_HEADERS.X_REQUEST_ID] = INVALID_ID;
             jest.mocked(validateUUID).mockReturnValue(false);
 
             middleware(mockReq, mockRes, mockNext);
 
-            expect(mockReq.requestId).not.toBe('invalid-id');
+            expect(mockReq.requestId).not.toBe(INVALID_ID);
             expect(mockReq.requestId.startsWith(REQUEST_ID_PREFIX)).toBe(true);
-            expect(validateUUID).toHaveBeenCalledWith('invalid-id');
+            expect(validateUUID).toHaveBeenCalledWith(INVALID_ID);
         });
 
         it('should extract from lowercase header and use it if valid UUID', () => {
@@ -111,6 +116,7 @@ describe('Security Middleware', () => {
     });
 
     describe('createCspMiddleware', () => {
+        /** @type {any} */
         let middleware;
         beforeEach(() => {
             middleware = createCspMiddleware();
@@ -135,7 +141,7 @@ describe('Security Middleware', () => {
             mockRes.getHeader.mockReturnValue(undefined);
 
             // Trigger writeHead wrap
-            mockRes.writeHead(200);
+            mockRes.writeHead(HTTP_STATUS.OK);
 
             expect(mockRes.setHeader).not.toHaveBeenCalledWith(HTTP_HEADERS.CONTENT_SECURITY_POLICY, expect.anything());
         });
@@ -144,7 +150,7 @@ describe('Security Middleware', () => {
             middleware(mockReq, mockRes, mockNext);
 
             mockRes.getHeader.mockReturnValue(MIME_TYPES.JSON);
-            mockRes.writeHead(200, { some: 'header' }, 'reason');
+            mockRes.writeHead(HTTP_STATUS.OK, { some: 'header' }, 'reason');
 
             expect(mockRes.setHeader).not.toHaveBeenCalledWith(HTTP_HEADERS.CONTENT_SECURITY_POLICY, expect.anything());
         });
@@ -153,7 +159,7 @@ describe('Security Middleware', () => {
             middleware(mockReq, mockRes, mockNext);
 
             mockRes.getHeader.mockReturnValue(`${MIME_TYPES.HTML}; charset=utf-8`);
-            mockRes.writeHead(200);
+            mockRes.writeHead(HTTP_STATUS.OK);
 
             expect(mockRes.setHeader).toHaveBeenCalledWith(HTTP_HEADERS.CONTENT_SECURITY_POLICY, SECURITY_CONSTS.CSP_POLICY);
             // Verify original writeHead was called

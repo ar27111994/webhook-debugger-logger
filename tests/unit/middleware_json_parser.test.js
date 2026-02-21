@@ -6,13 +6,17 @@
 import { jest } from '@jest/globals';
 import { createMockRequest, createMockResponse, createMockNextFunction } from '../setup/helpers/test-utils.js';
 
-const { jsonParserMiddleware, createJsonParserMiddleware } = await import('../../src/middleware/json_parser.js');
+const { createJsonParserMiddleware } = await import('../../src/middleware/json_parser.js');
 const { HTTP_HEADERS, MIME_TYPES } = await import('../../src/consts/http.js');
 
 describe('JSON Parser Middleware', () => {
+    /** @type {any} */
     let mockReq;
+    /** @type {any} */
     let mockRes;
+    /** @type {any} */
     let mockNext;
+    /** @type {any} */
     let middleware;
 
     beforeEach(() => {
