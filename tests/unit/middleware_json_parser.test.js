@@ -91,6 +91,19 @@ describe('JSON Parser Middleware', () => {
             expect(mockNext).toHaveBeenCalled();
         });
 
+        it('should parse valid JSON array structures gracefully without causing structural damage', () => {
+            const jsonArray = [{ id: 1 }, { id: 2 }];
+            const jsonStr = JSON.stringify(jsonArray);
+            mockReq.body = Buffer.from(jsonStr);
+            mockReq.headers[HTTP_HEADERS.CONTENT_TYPE] = MIME_TYPES.JSON;
+
+            middleware(mockReq, mockRes, mockNext);
+
+            expect(Array.isArray(mockReq.body)).toBe(true);
+            expect(mockReq.body).toEqual(jsonArray);
+            expect(mockNext).toHaveBeenCalled();
+        });
+
         it('should leave body as Buffer if content-type is not JSON', () => {
             const bufferBody = Buffer.from('<xml></xml>');
             mockReq.body = bufferBody;

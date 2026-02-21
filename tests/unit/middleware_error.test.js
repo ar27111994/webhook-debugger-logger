@@ -141,6 +141,26 @@ describe('Error Handling Middleware', () => {
             );
         });
 
+        it('should handle type coercion securely if downstream passes status as a string', () => {
+            const errorMsg = 'Type coerced error';
+            /** @type {any} */
+            const err = new Error(errorMsg);
+            // Simulate improper type passed by a buggy downstream package
+            err.status = '500';
+
+            middleware(err, mockReq, mockRes, mockNext);
+
+            expect(mockRes.status).toHaveBeenCalledWith('500'); // Express natively handles string statuses.
+            expect(mockRes.json).toHaveBeenCalledWith({
+                status: '500',
+                requestId: REQUEST_ID,
+                error: ERROR_LABELS.INTERNAL_SERVER_ERROR,
+                message: ERROR_LABELS.INTERNAL_SERVER_ERROR // Message is masked
+            });
+
+            expect(loggerMock.error).toHaveBeenCalled();
+        });
+
         it('should use ERROR_LABELS.GENERIC if HTTP_STATUS_MESSAGES lacks the status message', () => {
             const errorMsg = 'Weird code';
             /** @type {CommonError} */
