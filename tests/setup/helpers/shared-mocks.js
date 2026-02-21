@@ -445,7 +445,7 @@ export const resetNetworkMocks = async () => {
  * @returns {WebhookManager}
  */
 export function createMockWebhookManager(overrides = {}) {
-  return /** @type {any} */ ({
+  return assertType({
     // Core methods actually used in tests
     isValid: /** @type {jest.Mock<any>} */ (jest.fn()).mockReturnValue(
       overrides.isValid ?? true,

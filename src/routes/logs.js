@@ -85,7 +85,7 @@ export const createLogsHandler = (
         );
 
         // Parse timestamp filters (Legacy support + Range support)
-        const timestampConditions = parseRangeQuery(timestamp, "string") || [];
+        const timestampConditions = parseRangeQuery(timestamp, "string");
         if (startTime) {
           timestampConditions.push({
             operator: SQL_CONSTS.OPERATORS.GTE,
@@ -263,9 +263,9 @@ export const createLogDetailHandler = (webhookManager) =>
 
         const fieldList = fields
           ? String(fields)
-              .split(",")
-              .map((f) => f.trim())
-              .filter(Boolean)
+            .split(",")
+            .map((f) => f.trim())
+            .filter(Boolean)
           : [];
 
         // Always include webhookId for security validation, even if not requested

@@ -26,6 +26,9 @@ import { LOG_COMPONENTS } from "../consts/logging.js";
 
 const log = createChildLogger({ component: LOG_COMPONENTS.DASHBOARD });
 
+/** @type {Promise<string> | null} */
+let activeReadPromise = null;
+
 /**
  * @typedef {import("express").Request} Request
  * @typedef {import("express").Response} Response
@@ -39,7 +42,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
  * @typedef {Object} DashboardDependencies
  * @property {WebhookManager} webhookManager
  * @property {string} version
- * @property {() => string} getTemplate - Function to get cached template
+ * @property {() => string | null | undefined} getTemplate - Function to get cached template
  * @property {(template: string) => void} setTemplate - Function to cache template
  * @property {() => string|null} getSignatureStatus - Function to get current signature provider
  */
@@ -51,66 +54,77 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
  */
 export const createDashboardHandler =
   (deps) =>
-  /** @param {Request} req @param {Response} res */
-  async (req, res) => {
-    const {
-      webhookManager,
-      version,
-      getTemplate,
-      setTemplate,
-      getSignatureStatus,
-    } = deps;
+    /** @param {Request} req @param {Response} res */
+    async (req, res) => {
+      const {
+        webhookManager,
+        version,
+        getTemplate,
+        setTemplate,
+        getSignatureStatus,
+      } = deps;
 
-    const activeCount = webhookManager.getAllActive().length;
-    const signatureProvider = getSignatureStatus ? getSignatureStatus() : null;
+      const activeCount = webhookManager.getAllActive().length;
+      const signatureProvider = getSignatureStatus ? getSignatureStatus() : null;
+      const escapedVersion = escapeHtml(String(version));
 
-    if (req.headers[HTTP_HEADERS.ACCEPT]?.includes(MIME_TYPES.PLAIN)) {
-      return res
-        .type(MIME_TYPES.PLAIN)
-        .send(
-          `${DASHBOARD_CONSTS.BRAND_HEADER} (v${version})\n` +
+      if (req.headers[HTTP_HEADERS.ACCEPT]?.includes(MIME_TYPES.PLAIN)) {
+        return res
+          .type(MIME_TYPES.PLAIN)
+          .send(
+            `${DASHBOARD_CONSTS.BRAND_HEADER} (v${escapedVersion})\n` +
             `Active Webhooks: ${activeCount}\n` +
             `Signature Verification: ${signatureProvider || STATUS_LABELS.DISABLED}`,
-        );
-    }
-
-    try {
-      let template = getTemplate();
-      if (!template) {
-        template = await readFile(
-          join(__dirname, "..", "..", DASHBOARD_TEMPLATE_PATH),
-          ENCODINGS.UTF8,
-        );
-        setTemplate(template);
+          );
       }
 
-      const escapedProvider = signatureProvider
-        ? escapeHtml(signatureProvider)
-        : null;
-      const sigBadge = escapedProvider
-        ? `<div class="status-badge signature-active">🔒 Verified: ${escapedProvider}</div>`
-        : `<div class="status-badge signature-inactive">🔓 ${STATUS_LABELS.NO_VERIFICATION}</div>`;
+      try {
+        let template = getTemplate();
+        if (template === null || template === undefined) {
+          if (!activeReadPromise) {
+            activeReadPromise = (async () => {
+              try {
+                const content = await readFile(
+                  join(__dirname, "..", "..", DASHBOARD_TEMPLATE_PATH),
+                  ENCODINGS.UTF8,
+                );
+                setTemplate(content);
+                return content;
+              } finally {
+                activeReadPromise = null;
+              }
+            })();
+          }
+          template = await activeReadPromise;
+        }
 
-      const html = template
-        .replaceAll(DASHBOARD_PLACEHOLDERS.VERSION, `v${version}`)
-        .replaceAll(DASHBOARD_PLACEHOLDERS.ACTIVE_COUNT, String(activeCount))
-        .replaceAll(DASHBOARD_PLACEHOLDERS.SIGNATURE_BADGE, sigBadge)
-        .replaceAll(
-          DASHBOARD_PLACEHOLDERS.BRAND_HEADER,
-          DASHBOARD_CONSTS.BRAND_HEADER,
+        const escapedProvider = signatureProvider
+          ? escapeHtml(signatureProvider)
+          : null;
+        const sigBadge = escapedProvider
+          ? `<div class="status-badge signature-active">🔒 Verified: ${escapedProvider}</div>`
+          : `<div class="status-badge signature-inactive">🔓 ${STATUS_LABELS.NO_VERIFICATION}</div>`;
+
+        const html = template
+          .replaceAll(DASHBOARD_PLACEHOLDERS.VERSION, `v${escapedVersion}`)
+          .replaceAll(DASHBOARD_PLACEHOLDERS.ACTIVE_COUNT, String(activeCount))
+          .replaceAll(DASHBOARD_PLACEHOLDERS.SIGNATURE_BADGE, sigBadge)
+          .replaceAll(
+            DASHBOARD_PLACEHOLDERS.BRAND_HEADER,
+            DASHBOARD_CONSTS.BRAND_HEADER,
+          );
+
+        res.send(html);
+      } catch (err) {
+        log.error(
+          { err: serializeError(err) },
+          LOG_MESSAGES.DASHBOARD_LOAD_FAILED,
         );
-
-      res.send(html);
-    } catch (err) {
-      log.error(
-        { err: serializeError(err) },
-        LOG_MESSAGES.DASHBOARD_LOAD_FAILED,
-      );
-      res
-        .status(HTTP_STATUS.INTERNAL_SERVER_ERROR)
-        .send(HTTP_STATUS_MESSAGES[HTTP_STATUS.INTERNAL_SERVER_ERROR]);
-    }
-  };
+        res
+          .status(HTTP_STATUS.INTERNAL_SERVER_ERROR)
+          .send(HTTP_STATUS_MESSAGES[HTTP_STATUS.INTERNAL_SERVER_ERROR]);
+      }
+    };
 
 /**
  * Preloads the index.html template.

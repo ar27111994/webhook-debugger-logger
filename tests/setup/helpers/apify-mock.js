@@ -26,7 +26,7 @@ import { jest } from "@jest/globals";
  * @property {jest.Mock<(code?: number) => Promise<void>>} exit
  * @property {jest.Mock<() => boolean>} isAtHome
  * @property {jest.Mock<() => any>} getEnv
- * @property {jest.Mock<() => Promise<any>>} [getValue]
+ * @property {jest.Mock<() => Promise<any>>} getValue
  */
 
 /**
@@ -114,6 +114,9 @@ export function createApifyMock(inputOverrides = {}) {
     getEnv: jest.fn(() => ({
       isAtHome: actorInstance.isAtHome(),
     })),
+    getValue: /** @type {jest.Mock<() => Promise<any>>} */ (
+      jest.fn()
+    ).mockResolvedValue(null),
   };
 
   return actorInstance;
