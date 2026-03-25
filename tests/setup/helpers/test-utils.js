@@ -1,5 +1,18 @@
+/**
+ * Test Helper Utilities.
+ *
+ * These are used in tests to provide common functionality.
+ *
+ * @module tests/setup/helpers/test-utils
+ */
+
 import { jest } from "@jest/globals";
 import { HTTP_METHODS, HTTP_STATUS } from "../../../src/consts/http.js";
+import { ERROR_MESSAGES } from "../../../src/consts/errors.js";
+
+const DEFAULT_WAIT_TIMEOUT = 1000;
+const DEFAULT_WAIT_INTERVAL = 10;
+const DEFAULT_TICKS = 20;
 
 /**
  * @typedef {import("express").Request} Request
@@ -40,8 +53,8 @@ export const sleep = (ms) =>
  *   body: { foo: 'bar' }
  * });
  */
-export const createMockRequest = (overrides = {}) =>
-  /** @type {Request} */ ({
+export const createMockRequest = (overrides = {}) => {
+  const req = /** @type {Request} */ ({
     ip: undefined,
     headers: {},
     socket: { remoteAddress: undefined },
@@ -58,16 +71,54 @@ export const createMockRequest = (overrides = {}) =>
     protocol: "http",
     query: {},
     route: {},
-    params: {},
+    params: { id: "wh_test_123" },
     path: "/test",
-    method: "GET",
+    url: "/test",
+    originalUrl: "/test",
+    method: HTTP_METHODS.POST,
     requestId: "test_req_123", // Default requestId for error handler tests
     get: (/** @type {string} */ header) => {
       if (header.toLowerCase() === "host") return "localhost";
       return undefined;
     },
+    ...(() => {
+      /** @type {Record<string, Function[]>} */
+      const listeners = {};
+      return {
+        on: jest.fn(
+          /**
+           * @param {string} event
+           * @param {Function} handler
+           * @returns {Request}
+           */
+          (event, handler) => {
+            if (!listeners[event]) listeners[event] = [];
+            listeners[event].push(handler);
+            return req;
+          },
+        ),
+        emit: jest.fn(
+          /**
+           * @param {string} event
+           * @param {...any} args
+           * @returns {boolean}
+           */
+          (event, ...args) => {
+            if (listeners[event]) {
+              listeners[event].forEach((h) => h(...args));
+              return true;
+            }
+            return false;
+          },
+        ),
+        pipe: jest.fn((stream) => stream),
+        unpipe: jest.fn(),
+      };
+    })(),
     ...overrides,
   });
+  return req;
+};
 
 /**
  * Creates a mock Express Response object for testing middleware.
@@ -118,17 +169,24 @@ export const createMockResponse = (overrides = {}) => {
 
     end: jest.fn(),
     on: jest.fn(
-      /** @param {string} event @param {Function} handler */ (
-        event,
-        handler,
-      ) => {
+      /**
+       * @param {string} event
+       * @param {Function} handler
+       * @returns {Response}
+       */
+      (event, handler) => {
         if (!listeners[event]) listeners[event] = [];
         listeners[event].push(handler);
         return res;
       },
     ),
     emit: jest.fn(
-      /** @param {string} event @param {...any} args */ (event, ...args) => {
+      /**
+       * @param {string} event
+       * @param {...any} args
+       * @returns {boolean}
+       */
+      (event, ...args) => {
         if (listeners[event]) {
           listeners[event].forEach((h) => h(...args));
           return true;
@@ -168,9 +226,6 @@ export const createMockNextFunction = (fn) => jest.fn(fn);
  */
 export const assertType = (value) => value;
 
-const DEFAULT_WAIT_TIMEOUT = 1000;
-const DEFAULT_WAIT_INTERVAL = 10;
-
 /**
  * Waits for a condition to become true.
  *
@@ -191,7 +246,7 @@ export const waitForCondition = async (
   while (true) {
     if (await condition()) return;
     if (Date.now() - start > timeout) {
-      throw new Error(`Condition not met within ${timeout}ms`);
+      throw new Error(ERROR_MESSAGES.CONDITION_NOT_MET(timeout));
     }
     await sleep(interval);
   }
@@ -238,3 +293,16 @@ export function getLastAxiosConfig(axios, method = HTTP_METHODS.POST) {
       : ARG_INDEX_CONFIG_POST
   ];
 }
+
+/**
+ * Flushes the promise queue by awaiting Promise.resolve() multiple times.
+ *
+ * @param {number} [ticks=20] - Number of times to await Promise.resolve()
+ * @returns {Promise<void>}
+ *
+ * @example
+ * await flushPromises();
+ */
+export const flushPromises = async (ticks = DEFAULT_TICKS) => {
+  for (let i = 0; i < ticks; i++) await Promise.resolve();
+};

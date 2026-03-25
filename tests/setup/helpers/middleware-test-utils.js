@@ -1,3 +1,11 @@
+/**
+ * Middleware Test Utilities.
+ *
+ * These are used in tests to provide common functionality for testing application middleware logic.
+ *
+ * @module tests/setup/helpers/middleware-test-utils
+ */
+
 import { jest } from "@jest/globals";
 import { createMockWebhookManager } from "./shared-mocks.js";
 import {
@@ -7,7 +15,7 @@ import {
 } from "./test-utils.js";
 
 /**
- * @typedef {import('express').Request} Request
+ * @typedef {import('../../../src/typedefs.js').CustomRequest} Request
  * @typedef {import('express').Response} Response
  * @typedef {import('express').NextFunction} NextFunction
  * @typedef {import('../../../src/typedefs.js').LoggerOptions} LoggerOptions
@@ -32,16 +40,33 @@ import {
  * @param {LoggerOptions} [config.options] - Middleware options
  * @param {Partial<Request>} [config.request] - Request overrides
  * @param {{ isValid?: boolean, webhookData?: Object }} [config.webhookManager] - WebhookManager mock config
+ * @param {string} [config.nodeEnv] - NODE_ENV override
  * @returns {Promise<MiddlewareTestContext>}
  */
 export async function createMiddlewareTestContext(config = {}) {
   const { createLoggerMiddleware } =
     await import("../../../src/logger_middleware.js");
-  const { options = {}, request = {}, webhookManager: wmOverrides } = config;
+  const {
+    options = {},
+    request = {},
+    webhookManager: wmOverrides,
+    nodeEnv,
+  } = config;
 
+  if (nodeEnv) {
+    const { ENV_VARS } = await import("../../../src/consts/app.js");
+    process.env[ENV_VARS.NODE_ENV] = nodeEnv;
+  }
+
+  const { forwardingServiceMock } = await import("./shared-mocks.js");
   const webhookManager = createMockWebhookManager(wmOverrides);
   const onEvent = jest.fn();
-  const middleware = createLoggerMiddleware(webhookManager, options, onEvent);
+  const middleware = createLoggerMiddleware(
+    webhookManager,
+    options,
+    onEvent,
+    forwardingServiceMock,
+  );
 
   return {
     middleware,

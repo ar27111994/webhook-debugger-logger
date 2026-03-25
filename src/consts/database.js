@@ -140,6 +140,7 @@ export const SQL_CONSTS = Object.freeze({
     VACUUM: "VACUUM",
     CHECKPOINT: "CHECKPOINT",
   },
+  CONNECTION_VALIDATION_SQL: "SELECT 1",
 });
 
 export const SQL_FUNCTIONS = Object.freeze({

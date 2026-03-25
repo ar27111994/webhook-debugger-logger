@@ -1,5 +1,14 @@
+/**
+ * Application Test Utilities.
+ *
+ * These are used in tests to provide common functionality for setup, teardown
+ * and testing the main application.
+ *
+ * @module tests/setup/helpers/app-utils
+ */
+
 import request from "supertest";
-import { ENV_VARS } from "../../../src/consts/app.js";
+import { ENV_VARS, SHUTDOWN_SIGNALS } from "../../../src/consts/app.js";
 
 /**
  * @typedef {import("express").Express} App
@@ -37,7 +46,7 @@ export const setupTestApp = async (options = {}, enableHotReload = false) => {
     appClient: request(app),
     teardownApp: async () => {
       const { shutdown } = await import("../../../src/main.js");
-      await shutdown("TEST_COMPLETE");
+      await shutdown(SHUTDOWN_SIGNALS.TEST_COMPLETE);
     },
   };
 };

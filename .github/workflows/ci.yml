@@ -36,8 +36,15 @@ jobs:
       - name: Type Check
         run: npm run typecheck
 
-      - name: Test with Coverage
-        run: npm run test:coverage
+      - name: Coverage Gate (Integration/E2E Scopes)
+        run: |
+          npm run test:coverage:new-scopes
+          npm run coverage:check:new-scopes
+
+      - name: Coverage Gate (Full Source Matrix)
+        run: |
+          npm run test:coverage:matrix
+          npm run coverage:check:matrix
 
   verify-docker:
     needs: build

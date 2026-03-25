@@ -172,6 +172,9 @@ export const createReplayHandler = (getReplayMaxRetries, getReplayTimeoutMs) =>
         /** @type {AxiosResponse | undefined} */
         let response;
         const replayAbort = new AbortController();
+        // Dual timeout strategy:
+        // 1. Per-request timeout: replayTimeout
+        // 2. Total operation timeout: replayTimeout * (maxRetries + 1)
         const totalTimeoutMs = replayTimeout * (maxRetries + 1);
         const replayTimeoutId = setTimeout(
           () => replayAbort.abort(),
@@ -200,10 +203,12 @@ export const createReplayHandler = (getReplayMaxRetries, getReplayTimeoutMs) =>
         } catch (err) {
           const axiosError = /** @type {CommonError} */ (err);
 
+          // sendSafeRequest throws on non-2xx, but we want the response for replay feedback
           if (axiosError.response) {
-            response = /** @type {AxiosResponse} */ (axiosError.response); // It was a non-2xx response, but we got one.
+            response = /** @type {AxiosResponse} */ (axiosError.response);
           } else {
-            throw err; // Real network error / timeout
+            // Real network error (connection refused, DNS failure, timeout)
+            throw err;
           }
         } finally {
           clearTimeout(replayTimeoutId);

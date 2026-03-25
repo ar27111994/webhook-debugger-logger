@@ -282,4 +282,27 @@ describe("CircuitBreaker", () => {
       expect(() => cb.destroy()).not.toThrow();
     });
   });
+
+  describe("hardening (audit feedback)", () => {
+    it("should explicitly return false for isOpen when failures are below threshold", () => {
+      const threshold = FORWARDING_CONSTS.CIRCUIT_BREAKER_FAILURE_THRESHOLD;
+      for (let i = 0; i < threshold - 1; i++) {
+        circuitBreaker.recordFailure(TARGET_URL);
+      }
+      expect(circuitBreaker.isOpen(TARGET_URL)).toBe(false);
+    });
+
+    it("should NOT prune entries where nextAttempt is in the past but failures > 0", () => {
+      const pastMs = 1000;
+      // Mock state manually
+      circuitBreaker.states.set(TARGET_HOSTNAME, {
+        failures: 1,
+        nextAttempt: Date.now() - pastMs, // In the past
+      });
+
+      circuitBreaker.prune();
+      // Should survive because failures > 0 (it's in the reset period or half-open)
+      expect(circuitBreaker.states.has(TARGET_HOSTNAME)).toBe(true);
+    });
+  });
 });

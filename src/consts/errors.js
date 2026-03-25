@@ -24,6 +24,7 @@ export const ERROR_LABELS = Object.freeze({
   FORWARD_ERROR: "Forward Error",
   CLIENT_ERROR: "Client Error",
   INVALID_SIGNATURE: "Invalid signature",
+  SIGNATURE_HEADER_MISSING: "Signature header missing",
   SIGNATURE_MISMATCH_STREAM: "Signature mismatch (stream verified)",
   INVALID_JSON_SCHEMA: "Invalid JSON schema",
   GENERIC: "Error",
@@ -135,7 +136,7 @@ export const ERROR_MESSAGES = Object.freeze({
      */
     (url, isTransient, attempts, error) =>
       `Forwarding to ${url} failed${
-        !isTransient ? " (Non-transient error)" : ""
+        !isTransient ? " (Non-transient error/Permanent Failure)" : ""
       } after ${attempts} attempts. Last error: ${error}`,
   BOTTLENECK_STOPPED: "has been stopped",
   RATE_LIMITER_INVALID_WINDOW:
@@ -176,6 +177,13 @@ export const ERROR_MESSAGES = Object.freeze({
      */
     (error) => `Failed to sync version: ${error}`,
   SYNC_VERSION_MISSING_PACKAGE_VERSION: "'package.json' missing version field",
+  CONDITION_NOT_MET:
+    /**
+     * @param {number} timeout
+     * @returns {string}
+     */
+    (timeout) => `Condition not met within ${timeout}ms`,
+  SHUTDOWN_RETRY_FAILED: "Retry shutdown failed fatally",
 });
 
 /**

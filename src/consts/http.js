@@ -120,6 +120,7 @@ export const MIME_TYPES = Object.freeze({
   JAVASCRIPT: "application/javascript",
   XML: "application/xml",
   EVENT_STREAM: "text/event-stream",
+  IMAGE_PNG: "image/png",
   WILDCARD: "*/*",
 });
 
@@ -177,6 +178,7 @@ export const HTTP_HEADERS = Object.freeze({
   PROXY_CONNECTION: "proxy-connection",
   X_FORWARDED_BY: "x-forwarded-by",
   CUSTOM_SIGNATURE: "x-custom-signature",
+  X_APIFY_ID: "x-apify-run-id",
 });
 
 /**

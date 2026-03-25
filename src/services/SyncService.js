@@ -98,6 +98,7 @@ export class SyncService {
    */
   async #onLogReceived(payload) {
     if (!this.#isRunning) return;
+    if (!payload || typeof payload !== "object") return;
 
     try {
       // 1. Instant insert for real-time view (offset=null)
@@ -131,12 +132,14 @@ export class SyncService {
 
   /**
    * Stop the synchronization service
+   * @returns {Promise<void>}
    */
-  stop() {
+  async stop() {
+    if (!this.#isRunning) return;
     log.info(LOG_MESSAGES.SYNC_STOP);
     this.#isRunning = false;
     appEvents.off(EVENT_NAMES.LOG_RECEIVED, this.#boundOnLogReceived);
-    this.#limiter.stop({ dropWaitingJobs: true });
+    await this.#limiter.stop({ dropWaitingJobs: true });
   }
 
   /**
@@ -172,10 +175,14 @@ export class SyncService {
       `SELECT MAX(source_offset) as maxOffset FROM ${DUCKDB_TABLES.LOGS}`,
     );
     const maxOffsetVal = rows[0]?.maxOffset;
-    const lastOffset =
+    const parsedOffset =
       maxOffsetVal !== null && maxOffsetVal !== undefined
         ? Number(maxOffsetVal)
         : DB_MISSING_OFFSET_MARKER;
+
+    const lastOffset = Number.isFinite(parsedOffset)
+      ? parsedOffset
+      : DB_MISSING_OFFSET_MARKER;
 
     this.#cachedMaxOffset = lastOffset;
     return lastOffset + 1;
@@ -192,8 +199,9 @@ export class SyncService {
       // 2. Check Dataset Info
       const dataset = await Actor.openDataset();
       const info = await dataset.getInfo();
+      const itemCount = Number(info?.itemCount);
 
-      if (!info || info.itemCount <= nextOffset) {
+      if (!Number.isFinite(itemCount) || itemCount <= nextOffset) {
         return; // Nothing new
       }
 
@@ -205,7 +213,7 @@ export class SyncService {
         limit: limit,
       });
 
-      if (items.length === 0) return;
+      if (!Array.isArray(items) || items.length === 0) return;
 
       log.info(
         { count: items.length, offset: nextOffset },
@@ -216,7 +224,9 @@ export class SyncService {
       const logsToInsert = items.map((item, i) => {
         const offset = nextOffset + i;
         // Ensure ID presence
-        const mutableItem = /** @type {LogEntry} */ (item);
+        const mutableItem = /** @type {LogEntry} */ ({
+          .../** @type {Object} */ (item),
+        });
         if (!mutableItem.id) mutableItem.id = crypto.randomUUID();
 
         return {
@@ -244,6 +254,8 @@ export class SyncService {
       this.#cachedMaxOffset = null;
       this.#errorCount++;
       this.#lastErrorTime = new Date();
+      // Re-throw to propagate to #triggerSync()'s catch handler (line 156)
+      throw err;
     }
   }
 }

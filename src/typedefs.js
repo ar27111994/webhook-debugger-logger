@@ -18,13 +18,23 @@
 
 /**
  * @typedef {Object} WebhookData
+ * @property {string} [id]
  * @property {string} expiresAt
  * @property {number} [responseDelayMs]
  * @property {number} [defaultResponseCode]
- * @property {string} [defaultResponseBody]
+ * @property {string | Object} [defaultResponseBody]
  * @property {Object.<string, string>} [defaultResponseHeaders]
  * @property {string} [forwardUrl]
  * @property {boolean} [forwardHeaders]
+ * @property {number} [maxPayloadSize]
+ * @property {boolean} [enableJSONParsing]
+ * @property {boolean} [maskSensitiveData]
+ * @property {string} [customScript]
+ * @property {Object} [jsonSchema]
+ * @property {string[]} [redactBodyPaths]
+ * @property {SignatureConfig} [signatureVerification]
+ * @property {AlertConfig} [alerts]
+ * @property {string[]} [allowedIps]
  */
 
 /**
@@ -231,7 +241,11 @@
  */
 
 /**
- * @typedef {import('express').RequestHandler & { updateOptions: function(Object): void }} LoggerMiddlewareFunction
+ * @typedef {import('express').RequestHandler & {
+ *   updateOptions: (options: Object) => void,
+ *   hasCompiledScript: () => boolean,
+ *   hasValidator: () => boolean
+ * }} LoggerMiddlewareFunction
  */
 
 /**
@@ -239,7 +253,7 @@
  * @property {string} [authKey]
  * @property {string[]} [allowedIps]
  * @property {number} [defaultResponseCode]
- * @property {string} [defaultResponseBody]
+ * @property {string | Object} [defaultResponseBody]
  * @property {Object.<string, string>} [defaultResponseHeaders]
  * @property {number} [responseDelayMs]
  * @property {string} [forwardUrl]

@@ -257,6 +257,7 @@ export const SHUTDOWN_SIGNALS = Object.freeze({
   ABORTING: "ABORTING",
   SIGTERM: "SIGTERM",
   SIGINT: "SIGINT",
+  SIGKILL: "SIGKILL",
   TESTANDEXIT: "TESTANDEXIT",
 });
 
@@ -269,6 +270,7 @@ export const STREAM_EVENTS = Object.freeze({
   DATA: "data",
   ERROR: "error",
   CLOSE: "close",
+  END: "end",
 });
 
 export const INTERNAL_EVENTS = Object.freeze({

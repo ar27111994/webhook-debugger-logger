@@ -80,6 +80,8 @@ export class LogRepository {
         if (!validFields.includes(rule.field)) return null;
         const col = rule.field; // Using field name as column name directly for whitelisted fields
         const dir =
+          !rule.dir ||
+          !Object.values(SORT_DIRECTIONS).includes(rule.dir.toUpperCase()) ||
           rule.dir.toUpperCase() === SORT_DIRECTIONS.ASC
             ? SORT_DIRECTIONS.ASC
             : SORT_DIRECTIONS.DESC;
@@ -140,11 +142,12 @@ export class LogRepository {
         // Whitelist safe characters to prevent SQL injection via JSON path
         const safeKey = key.replace(/[^a-zA-Z0-9_.-]/g, "");
         if (!safeKey) return;
+        if (val === undefined || val === null) return;
         const pName = `${col}_key_${idx}`;
         result.conditions.push(
           `${SQL_FUNCTIONS.JSON_EXTRACT_STRING}(${col}, '$.${safeKey}') ILIKE $${pName}`,
         );
-        result.params[pName] = `%${val}%`;
+        result.params[pName] = `%${String(val)}%`;
       });
     }
 
@@ -190,8 +193,11 @@ export class LogRepository {
       if (Array.isArray(conditions.statusCode)) {
         merge(this.#addRange("statusCode", conditions.statusCode));
       } else {
-        where.push("statusCode = $statusCode");
-        params.statusCode = Number(conditions.statusCode);
+        const statusCodeNum = Number(conditions.statusCode);
+        if (!Number.isNaN(statusCodeNum)) {
+          where.push("statusCode = $statusCode");
+          params.statusCode = statusCodeNum;
+        }
       }
     }
 
@@ -256,8 +262,8 @@ export class LogRepository {
 
   /**
    * Helper to convert BigInts to Numbers for JSON serialization
-   * @param {Record<string, DuckDBValue>} row
-   * @returns {Record<string, DuckDBValue>}
+   * @param {Record<string, DuckDBValue> | null | undefined} row
+   * @returns {Record<string, DuckDBValue> | null | undefined}
    */
   #fixBigInts(row) {
     if (!row) return row;
@@ -272,9 +278,35 @@ export class LogRepository {
   }
 
   /**
+   * @param {unknown} limit
+   * @returns {number}
+   */
+  #normalizeLimit(limit) {
+    const parsed = Number(limit);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return PAGINATION_CONSTS.DEFAULT_PAGE_LIMIT;
+    }
+
+    return Math.min(parsed, PAGINATION_CONSTS.MAX_PAGE_LIMIT);
+  }
+
+  /**
+   * @param {unknown} offset
+   * @returns {number}
+   */
+  #normalizeOffset(offset) {
+    const parsed = Number(offset);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      return PAGINATION_CONSTS.DEFAULT_PAGE_OFFSET;
+    }
+
+    return parsed;
+  }
+
+  /**
    * Find logs with filters
    * @param {LogFilters} filters
-   * @returns {Promise<{ items: Array<WebhookEvent>, total: number }>}
+   * @returns {Promise<{ items: Array<LogEntry>, total: number }>}
    */
   async findLogs(filters) {
     const { sql: whereSql, params } = this.#buildWhereClause(filters);
@@ -286,12 +318,8 @@ export class LogRepository {
 
     // Sort & Page
     const orderByClause = this.#buildOrderBy(filters.sort || []);
-    const limit = Math.min(
-      Number(filters.limit) || PAGINATION_CONSTS.DEFAULT_PAGE_LIMIT,
-      PAGINATION_CONSTS.MAX_PAGE_LIMIT,
-    );
-    const offset =
-      Number(filters.offset) || PAGINATION_CONSTS.DEFAULT_PAGE_OFFSET;
+    const limit = this.#normalizeLimit(filters.limit);
+    const offset = this.#normalizeOffset(filters.offset);
 
     params.limit = limit;
     params.offset = offset;
@@ -305,26 +333,9 @@ export class LogRepository {
 
     const rows = await executeQuery(sql, params);
 
-    const items = rows.map((rawRow) => {
-      const row = this.#fixBigInts(rawRow);
-      const entry = /** @type {LogEntry} */ ({
-        ...row,
-        headers: parseIfPresent("headers", row),
-        query: parseIfPresent("query", row),
-        body: parseIfPresent("body", row),
-        responseHeaders: parseIfPresent("responseHeaders", row),
-        responseBody: parseIfPresent("responseBody", row),
-        signatureValid: row.signatureValid === true || row.signatureValid === 1,
-      });
-
-      // Strip undefined keys
-      Object.keys(entry).forEach((k) => {
-        const key = /** @type {keyof LogEntry} */ (k);
-        if (entry[key] === undefined) delete entry[key];
-      });
-
-      return entry;
-    });
+    const items = rows
+      .map((rawRow) => this.#mapRowToEntry(rawRow))
+      .filter((item) => !!item);
 
     return { items, total };
   }
@@ -350,25 +361,24 @@ export class LogRepository {
     const rows = await executeQuery(sql, { id });
     if (rows.length === 0) return null;
 
-    const rawRow = rows[0];
-    const row = this.#fixBigInts(rawRow);
-
-    return /** @type {LogEntry} */ ({
-      ...row,
-      headers: parseIfPresent("headers", row),
-      query: parseIfPresent("query", row),
-      body: parseIfPresent("body", row),
-      responseHeaders: parseIfPresent("responseHeaders", row),
-      responseBody: parseIfPresent("responseBody", row),
-    });
+    const mappedEntry = this.#mapRowToEntry(rows[0]);
+    return mappedEntry ?? null;
   }
 
   /**
    * Map a log entry to database parameters
-   * @param {LogEntry} log
+   * @param {LogEntry & { source_offset?: number }} log
    * @returns {Record<string, DuckDBValue>}
    */
   #mapLogToParams(log) {
+    /** @type {number | null} */
+    let sourceOffset = null;
+    if (log.sourceOffset !== undefined) {
+      sourceOffset = log.sourceOffset;
+    } else if (log.source_offset !== undefined) {
+      sourceOffset = log.source_offset;
+    }
+
     return {
       id: log.id,
       webhookId: log.webhookId || null,
@@ -397,7 +407,7 @@ export class LogRepository {
       contentType: log.contentType || null,
       bodyEncoding: log.bodyEncoding || null,
 
-      sourceOffset: log.sourceOffset !== undefined ? log.sourceOffset : null,
+      sourceOffset,
     };
   }
 
@@ -442,7 +452,6 @@ export class LogRepository {
     // We filter where body.data is one of our markers.
     // Note: body is stored as JSON text in our schema, but inserted as JSON.
     // DuckDB `json_extract_string` works on JSON strings.
-
     const sql = `
       SELECT body
       FROM ${DUCKDB_TABLES.LOGS}
@@ -473,7 +482,7 @@ export class LogRepository {
         }
         return null;
       })
-      .filter((item) => item !== null);
+      .filter((item) => !!item);
   }
 
   /**
@@ -494,10 +503,7 @@ export class LogRepository {
    */
   async findLogsCursor(filters) {
     const { sql: whereSql, params } = this.#buildWhereClause(filters);
-    const limit = Math.min(
-      Number(filters.limit) || PAGINATION_CONSTS.DEFAULT_PAGE_LIMIT,
-      PAGINATION_CONSTS.MAX_PAGE_LIMIT,
-    );
+    const limit = this.#normalizeLimit(filters.limit);
 
     // Parse cursor: base64(timestamp:id)
     if (filters.cursor) {
@@ -538,27 +544,10 @@ export class LogRepository {
     const rows = await executeQuery(sql, params);
 
     const hasMore = rows.length > limit;
-    const items = rows.slice(0, limit).map((rawRow) => {
-      const row = this.#fixBigInts(rawRow);
-
-      const entry = /** @type {LogEntry} */ ({
-        ...row,
-        headers: parseIfPresent("headers", row),
-        query: parseIfPresent("query", row),
-        body: parseIfPresent("body", row),
-        responseHeaders: parseIfPresent("responseHeaders", row),
-        responseBody: parseIfPresent("responseBody", row),
-        signatureValid: row.signatureValid === true || row.signatureValid === 1,
-      });
-
-      // Strip undefined keys
-      Object.keys(entry).forEach((k) => {
-        const key = /** @type {keyof LogEntry} */ (k);
-        if (entry[key] === undefined) delete entry[key];
-      });
-
-      return entry;
-    });
+    const items = rows
+      .slice(0, limit)
+      .map((rawRow) => this.#mapRowToEntry(rawRow))
+      .filter((item) => !!item);
 
     // Generate next cursor from last item
     let nextCursor = null;
@@ -577,13 +566,44 @@ export class LogRepository {
    * @returns {string}
    */
   parseTimestamp(timestamp) {
-    if (typeof timestamp === "string") return timestamp;
     try {
       const d = timestamp ? new Date(timestamp) : new Date();
       return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
     } catch {
       return new Date().toISOString();
     }
+  }
+
+  /**
+   * Maps a raw database row to a LogEntry object.
+   * @param {Record<string, DuckDBValue> | null | undefined} rawRow
+   * @returns {LogEntry | null}
+   */
+  #mapRowToEntry(rawRow) {
+    const row = this.#fixBigInts(rawRow);
+    if (!row) {
+      return null;
+    }
+
+    const entry = /** @type {LogEntry} */ ({
+      ...row,
+      headers: parseIfPresent("headers", row),
+      query: parseIfPresent("query", row),
+      body: parseIfPresent("body", row),
+      responseHeaders: parseIfPresent("responseHeaders", row),
+      responseBody: parseIfPresent("responseBody", row),
+      signatureValid: row.signatureValid === true || row.signatureValid === 1,
+      sourceOffset:
+        row.source_offset !== undefined ? Number(row.source_offset) : undefined,
+    });
+
+    // Strip undefined keys
+    Object.keys(entry).forEach((k) => {
+      const key = /** @type {keyof LogEntry} */ (k);
+      if (entry[key] === undefined) delete entry[key];
+    });
+
+    return entry;
   }
 }
 

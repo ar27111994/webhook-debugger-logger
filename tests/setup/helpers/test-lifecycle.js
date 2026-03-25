@@ -4,7 +4,7 @@
  * These helpers standardize common beforeEach/afterEach patterns
  * to reduce boilerplate and ensure consistent test isolation.
  *
- * @module tests/helpers/test-lifecycle
+ * @module tests/setup/helpers/test-lifecycle
  */
 
 import { jest, beforeEach, afterEach } from "@jest/globals";
@@ -34,15 +34,17 @@ import { sleep } from "./test-utils.js";
  *   axiosMock.mockResolvedValue({ status: 200 });
  * });
  *
- * @param {() => void} [additionalSetup] - Optional function to run after clearing mocks
+ * @param {(() => void | Promise<void>)} [additionalSetup] - Optional function to run after clearing mocks
  */
 export function useMockCleanup(additionalSetup) {
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
-    additionalSetup?.();
+    if (additionalSetup) {
+      await additionalSetup();
+    }
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     jest.restoreAllMocks();
   });
 }

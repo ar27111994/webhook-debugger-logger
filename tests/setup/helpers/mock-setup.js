@@ -9,7 +9,6 @@
  */
 
 import { jest } from "@jest/globals";
-import nodeFs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -113,6 +112,10 @@ import {
  * @returns {Promise<void>}
  */
 export async function setupCommonMocks(options = {}) {
+  const __dirname_setup = path.dirname(fileURLToPath(import.meta.url));
+  const resolveSrc = (/** @type {string} */ rel) =>
+    path.resolve(__dirname_setup, rel);
+
   const {
     axios = true,
     apify = true,
@@ -150,24 +153,6 @@ export async function setupCommonMocks(options = {}) {
     routeUtils = false,
   } = options;
 
-  if (fs) {
-    const fsPromisesRegistry = {
-      ...fsPromisesMock,
-      default: fsPromisesMock,
-      __esModule: true,
-    };
-    jest.unstable_mockModule("fs/promises", () => fsPromisesRegistry);
-    jest.unstable_mockModule("node:fs/promises", () => fsPromisesRegistry);
-
-    const fsRegistry = {
-      ...fsMock,
-      default: fsMock,
-      __esModule: true,
-    };
-    jest.unstable_mockModule("fs", () => fsRegistry);
-    jest.unstable_mockModule("node:fs", () => fsRegistry);
-  }
-
   if (axios) {
     jest.unstable_mockModule("axios", () => ({
       default: axiosMock,
@@ -194,35 +179,41 @@ export async function setupCommonMocks(options = {}) {
   }
 
   if (ssrf) {
-    jest.unstable_mockModule("../../../src/utils/ssrf.js", () => ssrfMock);
+    jest.unstable_mockModule(
+      resolveSrc("../../../src/utils/ssrf.js"),
+      () => ssrfMock,
+    );
   }
 
   if (logger) {
-    jest.unstable_mockModule("../../../src/utils/logger.js", () => ({
-      logger: loggerMock,
-      createChildLogger: jest.fn(() => loggerMock),
-      createRequestLogger: jest.fn(() => loggerMock),
-      serializeError: jest.fn(
-        /**
-         * @param {any} err
-         * @returns {CommonError}
-         */
-        (err) => ({
-          message:
-            err instanceof Error ? err.message : String(err?.message || err),
-          stack: err instanceof Error ? err.stack : undefined,
-          name: err instanceof Error ? err.name : undefined,
-        }),
-      ),
-      LogLevel: {
-        TRACE: "trace",
-        DEBUG: "debug",
-        INFO: "info",
-        WARN: "warn",
-        ERROR: "error",
-        FATAL: "fatal",
-      },
-    }));
+    jest.unstable_mockModule(
+      resolveSrc("../../../src/utils/logger.js"),
+      () => ({
+        logger: loggerMock,
+        createChildLogger: jest.fn(() => loggerMock),
+        createRequestLogger: jest.fn(() => loggerMock),
+        serializeError: jest.fn(
+          /**
+           * @param {any} err
+           * @returns {CommonError}
+           */
+          (err) => ({
+            message:
+              err instanceof Error ? err.message : String(err?.message || err),
+            stack: err instanceof Error ? err.stack : undefined,
+            name: err instanceof Error ? err.name : undefined,
+          }),
+        ),
+        LogLevel: {
+          TRACE: "trace",
+          DEBUG: "debug",
+          INFO: "info",
+          WARN: "warn",
+          ERROR: "error",
+          FATAL: "fatal",
+        },
+      }),
+    );
   }
 
   if (express) {
@@ -232,117 +223,145 @@ export async function setupCommonMocks(options = {}) {
   }
 
   if (db) {
-    jest.unstable_mockModule("../../../src/db/duckdb.js", () => duckDbMock);
+    jest.unstable_mockModule(
+      resolveSrc("../../../src/db/duckdb.js"),
+      () => duckDbMock,
+    );
   }
 
   if (sync) {
-    jest.unstable_mockModule("../../../src/services/SyncService.js", () => ({
-      SyncService: jest.fn(() => syncServiceMock),
-    }));
+    jest.unstable_mockModule(
+      resolveSrc("../../../src/services/SyncService.js"),
+      () => ({
+        SyncService: jest.fn(() => syncServiceMock),
+      }),
+    );
   }
 
   if (loggerMiddleware) {
-    jest.unstable_mockModule("../../../src/logger_middleware.js", () => ({
-      LoggerMiddleware: jest.fn(() => loggerMiddlewareMock),
-    }));
+    jest.unstable_mockModule(
+      resolveSrc("../../../src/logger_middleware.js"),
+      () => ({
+        LoggerMiddleware: jest.fn(() => loggerMiddlewareMock),
+      }),
+    );
   }
 
   if (appState) {
-    jest.unstable_mockModule("../../../src/utils/app_state.js", () => ({
-      AppState: jest.fn(() => appStateMock),
-    }));
+    jest.unstable_mockModule(
+      resolveSrc("../../../src/utils/app_state.js"),
+      () => ({
+        AppState: jest.fn(() => appStateMock),
+      }),
+    );
   }
 
   if (hotReload) {
     jest.unstable_mockModule(
-      "../../../src/utils/hot_reload_manager.js",
+      resolveSrc("../../../src/utils/hot_reload_manager.js"),
       () => ({ HotReloadManager: jest.fn(() => hotReloadMock) }),
     );
   }
 
   if (bootstrap) {
     jest.unstable_mockModule(
-      "../../../src/utils/bootstrap.js",
+      resolveSrc("../../../src/utils/bootstrap.js"),
       () => bootstrapMock,
     );
   }
 
   if (routes) {
-    jest.unstable_mockModule("../../../src/routes/index.js", () => routesMock);
+    jest.unstable_mockModule(
+      resolveSrc("../../../src/routes/index.js"),
+      () => routesMock,
+    );
   }
 
   if (middleware) {
     jest.unstable_mockModule(
-      "../../../src/middleware/index.js",
+      resolveSrc("../../../src/middleware/index.js"),
       () => middlewareMock,
     );
   }
 
   if (consts) {
     // Dynamically discover and mock all constant modules
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = path.dirname(__filename);
-    const constsDir = path.resolve(__dirname, "../../../src/consts");
-
-    const constModules = nodeFs
-      .readdirSync(constsDir)
-      .filter((file) => file.endsWith(".js"));
+    const { discoverConstantModules } = await import("./constant-discovery.js");
+    const constModules = discoverConstantModules();
 
     // Mock both the direct modules and the index aggregator
     const index = "index.js";
     const modulesToMock = [index, ...constModules.filter((m) => m !== index)];
 
     for (const moduleName of modulesToMock) {
-      jest.unstable_mockModule(`../../../src/consts/${moduleName}`, () => {
-        return createMockWithGetters({}, constsMock);
-      });
+      jest.unstable_mockModule(
+        resolveSrc(`../../../src/consts/${moduleName}`),
+        () => {
+          return createMockWithGetters({}, constsMock);
+        },
+      );
     }
   }
 
   if (webhookManager) {
-    jest.unstable_mockModule("../../../src/webhook_manager.js", () => ({
-      WebhookManager: jest.fn(() => webhookManagerMock),
-    }));
+    jest.unstable_mockModule(
+      resolveSrc("../../../src/webhook_manager.js"),
+      () => ({
+        WebhookManager: jest.fn(() => webhookManagerMock),
+      }),
+    );
   }
 
   if (auth) {
-    jest.unstable_mockModule("../../../src/utils/auth.js", () => authMock);
+    jest.unstable_mockModule(
+      resolveSrc("../../../src/utils/auth.js"),
+      () => authMock,
+    );
   }
 
   if (signature) {
-    jest.unstable_mockModule("../../../src/utils/signature.js", () => ({
-      ...signatureMock,
-      __esModule: true,
-    }));
+    jest.unstable_mockModule(
+      resolveSrc("../../../src/utils/signature.js"),
+      () => ({
+        ...signatureMock,
+        __esModule: true,
+      }),
+    );
   }
 
   if (rateLimit) {
     jest.unstable_mockModule(
-      "../../../src/utils/webhook_rate_limiter.js",
+      resolveSrc("../../../src/utils/webhook_rate_limiter.js"),
       () => rateLimitMock,
     );
   }
 
   if (storage) {
     jest.unstable_mockModule(
-      "../../../src/utils/storage_helper.js",
+      resolveSrc("../../../src/utils/storage_helper.js"),
       () => storageHelperMock,
     );
   }
 
   if (config) {
-    jest.unstable_mockModule("../../../src/utils/config.js", () => configMock);
+    jest.unstable_mockModule(
+      resolveSrc("../../../src/utils/config.js"),
+      () => configMock,
+    );
   }
 
   if (alerting) {
     jest.unstable_mockModule(
-      "../../../src/utils/alerting.js",
+      resolveSrc("../../../src/utils/alerting.js"),
       () => alertingMock,
     );
   }
 
   if (events) {
-    jest.unstable_mockModule("../../../src/utils/events.js", () => eventsMock);
+    jest.unstable_mockModule(
+      resolveSrc("../../../src/utils/events.js"),
+      () => eventsMock,
+    );
   }
 
   if (vm) {
@@ -351,19 +370,44 @@ export async function setupCommonMocks(options = {}) {
 
   if (repositories) {
     jest.unstable_mockModule(
-      "../../../src/repositories/LogRepository.js",
+      resolveSrc("../../../src/repositories/LogRepository.js"),
       () => ({ logRepository: logRepositoryMock }),
     );
   }
 
   if (services) {
-    jest.unstable_mockModule("../../../src/services/index.js", () => ({
-      ...servicesFileMock,
-    }));
+    jest.unstable_mockModule(
+      resolveSrc("../../../src/services/index.js"),
+      () => ({
+        ...servicesFileMock,
+      }),
+    );
   }
 
   if (system) {
-    jest.unstable_mockModule("../../../src/utils/system.js", () => systemMock);
+    jest.unstable_mockModule(
+      resolveSrc("../../../src/utils/system.js"),
+      () => systemMock,
+    );
+  }
+
+  // Register FS mocks AFTER constants discovery to avoid self-mocking readdirSync
+  if (fs) {
+    const fsPromisesRegistry = {
+      ...fsPromisesMock,
+      default: fsPromisesMock,
+      __esModule: true,
+    };
+    jest.unstable_mockModule("fs/promises", () => fsPromisesRegistry);
+    jest.unstable_mockModule("node:fs/promises", () => fsPromisesRegistry);
+
+    const fsRegistry = {
+      ...fsMock,
+      default: fsMock,
+      __esModule: true,
+    };
+    jest.unstable_mockModule("fs", () => fsRegistry);
+    jest.unstable_mockModule("node:fs", () => fsRegistry);
   }
 
   if (pino) {
@@ -381,21 +425,21 @@ export async function setupCommonMocks(options = {}) {
 
   if (utilCrypto) {
     jest.unstable_mockModule(
-      "../../../src/utils/crypto.js",
+      resolveSrc("../../../src/utils/crypto.js"),
       () => cryptoUtilsMock,
     );
   }
 
   if (commonUtils) {
     jest.unstable_mockModule(
-      "../../../src/utils/common.js",
+      resolveSrc("../../../src/utils/common.js"),
       () => commonUtilsMock,
     );
   }
 
   if (routeUtils) {
     jest.unstable_mockModule(
-      "../../../src/routes/utils.js",
+      resolveSrc("../../../src/routes/utils.js"),
       () => routeUtilsMock,
     );
   }

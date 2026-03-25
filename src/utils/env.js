@@ -5,6 +5,8 @@
  * @module utils/env
  */
 
+import { ENV_VALUES, ENV_VARS } from "../consts/app.js";
+
 /**
  * Helper to safely parse integer environment variables
  * @param {string} key
@@ -19,3 +21,12 @@ export function getInt(key, fallback) {
   const parsed = parseInt(val, 10);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
+
+/**
+ * Checks if the current environment is a test environment.
+ * @returns {boolean}
+ * 
+ * @example const isTest = IS_TEST();
+ */
+export const IS_TEST = () => process.env[ENV_VARS.NODE_ENV] === ENV_VALUES.TEST;
+

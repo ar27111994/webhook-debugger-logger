@@ -1,4 +1,19 @@
+/**
+ * Signature Helper Utilities.
+ *
+ * These are used in tests to provide common functionality for signature verification.
+ *
+ * @module tests/setup/helpers/signature-utils
+ */
+
 import crypto from "crypto";
+import {
+  HASH_ALGORITHMS,
+  SIGNATURE_ENCODINGS,
+  SIGNATURE_PREFIXES,
+} from "../../../src/consts/security.js";
+import { assertType } from "./test-utils.js";
+import { ENCODINGS } from "../../../src/consts/http.js";
 
 /**
  * Creates a valid Stripe signature.
@@ -10,9 +25,9 @@ import crypto from "crypto";
 export function createStripeSignature(timestamp, payload, secret) {
   const signedPayload = `${timestamp}.${payload}`;
   const signature = crypto
-    .createHmac("sha256", secret)
+    .createHmac(HASH_ALGORITHMS.SHA256, secret)
     .update(signedPayload)
-    .digest("hex");
+    .digest(assertType(SIGNATURE_ENCODINGS.HEX));
   return `t=${timestamp},v1=${signature}`;
 }
 
@@ -24,9 +39,9 @@ export function createStripeSignature(timestamp, payload, secret) {
  */
 export function createShopifySignature(payload, secret) {
   return crypto
-    .createHmac("sha256", secret)
-    .update(payload, "utf8")
-    .digest("base64");
+    .createHmac(HASH_ALGORITHMS.SHA256, secret)
+    .update(payload, ENCODINGS.UTF)
+    .digest(assertType(SIGNATURE_ENCODINGS.BASE64));
 }
 
 /**
@@ -37,10 +52,10 @@ export function createShopifySignature(payload, secret) {
  */
 export function createGitHubSignature(payload, secret) {
   const signature = crypto
-    .createHmac("sha256", secret)
+    .createHmac(HASH_ALGORITHMS.SHA256, secret)
     .update(payload)
-    .digest("hex");
-  return `sha256=${signature}`;
+    .digest(assertType(SIGNATURE_ENCODINGS.HEX));
+  return `${SIGNATURE_PREFIXES.SHA256}${signature}`;
 }
 
 /**
@@ -51,10 +66,10 @@ export function createGitHubSignature(payload, secret) {
  * @returns {string}
  */
 export function createSlackSignature(timestamp, payload, secret) {
-  const sigBasestring = `v0:${timestamp}:${payload}`;
+  const sigBasestring = `${SIGNATURE_PREFIXES.V0_NO_PREFIX}:${timestamp}:${payload}`;
   const signature = crypto
-    .createHmac("sha256", secret)
+    .createHmac(HASH_ALGORITHMS.SHA256, secret)
     .update(sigBasestring)
-    .digest("hex");
-  return `v0=${signature}`;
+    .digest(assertType(SIGNATURE_ENCODINGS.HEX));
+  return `${SIGNATURE_PREFIXES.V0}${signature}`;
 }

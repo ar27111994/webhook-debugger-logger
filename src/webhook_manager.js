@@ -11,8 +11,6 @@ import {
   WEBHOOK_ID_PREFIX,
   DEFAULT_ID_LENGTH,
   APP_CONSTS,
-  ENV_VARS,
-  ENV_VALUES,
 } from "./consts/app.js";
 import { LOG_COMPONENTS } from "./consts/logging.js";
 import {
@@ -24,6 +22,7 @@ import { logRepository } from "./repositories/LogRepository.js";
 import { vacuumDb } from "./db/duckdb.js";
 import { createChildLogger, serializeError } from "./utils/logger.js";
 import { LOG_MESSAGES } from "./consts/messages.js";
+import { IS_TEST } from "./utils/env.js";
 
 const log = createChildLogger({ component: LOG_COMPONENTS.WEBHOOK_MANAGER });
 
@@ -41,11 +40,38 @@ export class WebhookManager {
   #STATE_KEY = KVS_KEYS.STATE;
   /** @type {number} */
   #lastVacuumTime = 0;
+  /** @type {Promise<void>} */
+  #persistPromise = Promise.resolve();
 
-  constructor() {
+  /**
+   * Internal configuration object using the "Injected Configuration" pattern.
+   * This approach is preferred over direct use of global constants to:
+   * 1. Ensure test stability by allowing deterministic overrides without module isolation.
+   * 2. Avoid brittle 'jest.isolateModulesAsync' which can cause mock identity loss in ESM.
+   * 3. Enable concurrent testing with different behaviors in the same process.
+   */
+  #config = {
+    vacuumEnabled: DUCKDB_VACUUM_ENABLED,
+    vacuumIntervalMs: DUCKDB_VACUUM_INTERVAL_MS,
+  };
+
+  /**
+   * Initializes the WebhookManager.
+   * Uses Dependency Injection for configuration to facilitate reliable unit testing.
+   *
+   * @param {Object} [options] - Initialization options.
+   * @param {Object} [options.config] - Configuration overrides (primarily for tests).
+   * @param {boolean} [options.config.vacuumEnabled] - Enable/disable DuckDB vacuuming.
+   * @param {number} [options.config.vacuumIntervalMs] - Interval between vacuum operations.
+   */
+  constructor(options = {}) {
     this.#webhooks = new Map();
     this.#kvStore = null;
     this.#STATE_KEY = KVS_KEYS.STATE;
+    this.#config = {
+      ...this.#config,
+      ...(options.config || {}),
+    };
   }
 
   /**
@@ -74,21 +100,35 @@ export class WebhookManager {
 
   /**
    * Persists the current state (active webhooks) to KeyValueStore.
-   * Atomic operation to ensure consistency.
+   * Linearized using a Promise chain to ensure atomicity and prevent race conditions
+   * where stale snapshots overwrite newer state.
+   *
+   * @returns {Promise<void>}
    */
   async persist() {
-    try {
-      const state = Object.fromEntries(this.#webhooks);
-      if (!this.#kvStore) {
-        this.#kvStore = await Actor.openKeyValueStore();
-      }
-      await this.#kvStore.setValue(this.#STATE_KEY, state);
-    } catch (error) {
-      log.error(
-        { err: serializeError(error) },
-        LOG_MESSAGES.WEBHOOK_STATE_PERSIST_FAILED,
-      );
-    }
+    // Snapshots the state synchronously to ensure we capture current Map contents
+    const state = Object.fromEntries(this.#webhooks);
+
+    // Chain the persist operation purely sequentially
+    this.#persistPromise = this.#persistPromise
+      .then(async () => {
+        try {
+          if (!this.#kvStore) {
+            this.#kvStore = await Actor.openKeyValueStore();
+          }
+          await this.#kvStore.setValue(this.#STATE_KEY, state);
+        } catch (error) {
+          log.error(
+            { err: serializeError(error) },
+            LOG_MESSAGES.WEBHOOK_STATE_PERSIST_FAILED,
+          );
+        }
+      })
+      .catch(() => {
+        /* Handled in try/catch above */
+      });
+
+    return this.#persistPromise;
   }
 
   /**
@@ -117,9 +157,15 @@ export class WebhookManager {
     ) {
       throw new Error(ERROR_MESSAGES.INVALID_RETENTION(retentionHours));
     }
-    const expiresAt = new Date(
-      Date.now() + retentionHours * APP_CONSTS.MS_PER_HOUR,
-    ).toISOString();
+    const now = Date.now();
+    const expiryMs = now + retentionHours * APP_CONSTS.MS_PER_HOUR;
+
+    // Safety: Ensure we don't create an Invalid Date with extreme offsets
+    if (!Number.isFinite(expiryMs)) {
+      throw new Error(ERROR_MESSAGES.INVALID_RETENTION(retentionHours));
+    }
+
+    const expiresAt = new Date(expiryMs).toISOString();
     const newIds = [];
 
     for (let i = 0; i < count; i++) {
@@ -163,7 +209,11 @@ export class WebhookManager {
     }
 
     for (const [id, data] of this.#webhooks.entries()) {
-      if (now > new Date(data.expiresAt)) {
+      const expiry = new Date(data.expiresAt);
+      // Logic Fix: items with malformed/invalid dates must be pruned to avoid leaks
+      const isInvalidDate = !Number.isFinite(expiry.getTime());
+
+      if (isInvalidDate || now > expiry) {
         try {
           // 1. Find and delete offloaded payloads
           const payloads = await logRepository.findOffloadedPayloads(id);
@@ -208,13 +258,18 @@ export class WebhookManager {
       await this.persist();
 
       // Periodic vacuum for SaaS/long-running instances
-      if (DUCKDB_VACUUM_ENABLED) {
+      if (this.#config.vacuumEnabled) {
         const now = Date.now();
-        if (now - this.#lastVacuumTime > DUCKDB_VACUUM_INTERVAL_MS) {
+        if (now - this.#lastVacuumTime > this.#config.vacuumIntervalMs) {
+          // Logic Fix: update timestamp BEFORE awaiting to prevent "Vacuum Storm"
+          // during concurrent cleanups on high-churn instances.
+          this.#lastVacuumTime = now;
           try {
             await vacuumDb();
-            this.#lastVacuumTime = now;
           } catch (vacuumErr) {
+            // Reset on failure if we want to retry immediately, but typically
+            // for DuckDB a failed vacuum means we should wait for the next interval
+            // or the db is locked. We keep the new timestamp to suppress retries.
             log.warn(
               { err: serializeError(vacuumErr) },
               LOG_MESSAGES.VACUUM_FAILED,
@@ -231,9 +286,17 @@ export class WebhookManager {
    * @param {WebhookData} data
    */
   addWebhookForTest(id, data) {
-    if (process.env[ENV_VARS.NODE_ENV] === ENV_VALUES.TEST) {
+    if (IS_TEST()) {
       this.#webhooks.set(id, data);
     }
+  }
+
+  /**
+   * Resets the vacuum timestamp for testing purposes.
+   * @internal
+   */
+  resetVacuumForTest() {
+    this.#lastVacuumTime = 0;
   }
 
   /**
@@ -247,6 +310,7 @@ export class WebhookManager {
 
   /**
    * Returns current count of webhooks (active + expired)
+   * @returns {number} Count of webhooks
    */
   get webhookCount() {
     return this.#webhooks.size;
@@ -255,14 +319,19 @@ export class WebhookManager {
   /**
    * Test-only helper to check existence
    * @param {string} id
+   * @returns {boolean} True if webhook exists
    */
   hasWebhook(id) {
-    if (process.env[ENV_VARS.NODE_ENV] === ENV_VALUES.TEST) {
+    if (IS_TEST()) {
       return this.#webhooks.has(id);
     }
     return false;
   }
 
+  /**
+   * Returns all active webhooks.
+   * @returns {WebhookData[]} Array of active webhooks
+   */
   getAllActive() {
     return Array.from(this.#webhooks.entries())
       .filter(([id]) => this.isValid(id))

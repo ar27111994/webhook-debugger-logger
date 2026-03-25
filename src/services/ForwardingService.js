@@ -226,7 +226,9 @@ export class ForwardingService {
         }
       }
     }
-    throw new Error(ERROR_MESSAGES.FORWARD_FAILED); // Should be unreachable if loop works
+    throw new Error(
+      `${ERROR_MESSAGES.FORWARD_FAILED}: ${ERROR_MESSAGES.REPLAY_ATTEMPTS_EXHAUSTED(maxRetries)}`,
+    ); // (Should be unreachable if loop works)
   }
 
   /**
@@ -236,6 +238,8 @@ export class ForwardingService {
    * @param {LoggerOptions} options
    * @param {string} forwardUrl
    * @param {AbortSignal} [signal]
+   *
+   * @returns {Promise<void>}
    */
   async forwardWebhook(event, req, options, forwardUrl, signal) {
     let validatedUrl = Object.values(PROTOCOL_PREFIXES).some((prefix) =>

@@ -26,12 +26,6 @@ import Bottleneck from "bottleneck";
 
 const log = createChildLogger({ component: LOG_COMPONENTS.DUCKDB });
 
-// Serialize all write operations to prevent "Database Locked" errors
-// and ensure sequential processing of mutations.
-const writeQueue = new Bottleneck({
-  maxConcurrent: 1,
-});
-
 /**
  * @typedef {import("@duckdb/node-api").DuckDBValue} DuckDBValue
  * @typedef {import("@duckdb/node-api").DuckDBConnection} DuckDBConnection
@@ -50,6 +44,34 @@ const connectionPool = [];
 const inUseConnections = [];
 
 const IN_MEM_DB = DUCKDB_CONSTS.MEMORY_DB;
+
+// Serialize all write operations to prevent "Database Locked" errors
+// and ensure sequential processing of mutations.
+/**
+ * @returns {Bottleneck}
+ */
+function createWriteQueue() {
+  return new Bottleneck({
+    maxConcurrent: 1,
+  });
+}
+
+/** @type {Bottleneck} */
+let writeQueue = createWriteQueue();
+
+/**
+ * Closes a connection while suppressing close-time errors from stale handles.
+ * @param {DuckDBConnection | undefined} conn
+ * @returns {void}
+ */
+function closeConnectionQuietly(conn) {
+  if (!conn) return;
+  try {
+    conn.closeSync();
+  } catch {
+    // Ignore close errors for stale/invalid handles.
+  }
+}
 
 /**
  * Gets the current database path based on environment variables.
@@ -119,6 +141,32 @@ export async function resetDbInstance() {
   initPromise = null;
   connectionPool.length = 0;
   inUseConnections.length = 0;
+
+  await writeQueue.stop({ dropWaitingJobs: true });
+  writeQueue = createWriteQueue();
+}
+
+/**
+ * Checks whether a pooled connection is still usable before reuse.
+ * A stale connection can survive across tests after the underlying instance has
+ * been torn down, so we validate it with a trivial query and discard it if the
+ * driver reports a disconnection.
+ *
+ * @param {DuckDBConnection} conn
+ * @returns {Promise<boolean>}
+ */
+async function isConnectionUsable(conn) {
+  try {
+    await conn.run(SQL_CONSTS.CONNECTION_VALIDATION_SQL);
+    return true;
+  } catch {
+    try {
+      conn.closeSync();
+    } catch {
+      // Ignore close errors while discarding an unusable pooled handle.
+    }
+    return false;
+  }
 }
 
 /**
@@ -128,14 +176,21 @@ export async function resetDbInstance() {
 async function acquireConnection() {
   const instance = await getDbInstance();
 
-  // Try to get from pool
-  const pooledConn = connectionPool.pop();
-  if (pooledConn) {
+  while (connectionPool.length > 0) {
+    const pooledConn = connectionPool.pop();
+    if (!pooledConn) {
+      break;
+    }
+
+    const isUsable = await isConnectionUsable(pooledConn);
+    if (!isUsable) {
+      continue;
+    }
+
     inUseConnections.push(pooledConn);
     return pooledConn;
   }
 
-  // Create new connection
   const newConn = await instance.connect();
   inUseConnections.push(newConn);
   return newConn;
@@ -155,7 +210,7 @@ function releaseConnection(conn) {
   if (connectionPool.length < DUCKDB_POOL_SIZE) {
     connectionPool.push(conn);
   } else {
-    conn.closeSync();
+    closeConnectionQuietly(conn);
   }
 }
 
@@ -291,10 +346,10 @@ async function initSchema(conn) {
 export async function closeDb() {
   // Drain connection pool
   while (connectionPool.length > 0) {
-    connectionPool.pop()?.closeSync();
+    closeConnectionQuietly(connectionPool.pop());
   }
   while (inUseConnections.length > 0) {
-    inUseConnections.pop()?.closeSync();
+    closeConnectionQuietly(inUseConnections.pop());
   }
   dbInstance = null;
   initPromise = null;

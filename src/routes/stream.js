@@ -16,7 +16,7 @@ import { SSE_CONSTS } from "../consts/ui.js";
 import { SECURITY_HEADERS_VALUES } from "../consts/security.js";
 import { LOG_MESSAGES } from "../consts/messages.js";
 import { ERROR_MESSAGES } from "../consts/errors.js";
-import { MAX_SSE_CLIENTS } from "../consts/app.js";
+import { MAX_SSE_CLIENTS, STREAM_EVENTS } from "../consts/app.js";
 
 const log = createChildLogger({ component: LOG_COMPONENTS.STREAM });
 
@@ -60,7 +60,7 @@ export const createLogStreamHandler =
     res.setHeader(HTTP_HEADERS.X_ACCEL_BUFFERING, SECURITY_HEADERS_VALUES.NO); // Nginx: Unbuffered
 
     // 2. Register cleanup BEFORE writing to handle immediate close
-    req.on("close", () => clients.delete(res));
+    req.on(STREAM_EVENTS.CLOSE, () => clients.delete(res));
 
     res.flushHeaders();
 

@@ -4,7 +4,7 @@
  * @module utils/rate_limiter
  */
 import net from "node:net";
-import { APP_CONSTS, ENV_VALUES, ENV_VARS } from "../consts/app.js";
+import { APP_CONSTS } from "../consts/app.js";
 import {
   HTTP_HEADERS,
   HTTP_CONSTS,
@@ -15,6 +15,7 @@ import { LOG_COMPONENTS, LOG_CONSTS } from "../consts/logging.js";
 import { LOG_MESSAGES } from "../consts/messages.js";
 import { ERROR_MESSAGES } from "../consts/errors.js";
 import { createChildLogger } from "./logger.js";
+import { IS_TEST } from "./env.js";
 
 const log = createChildLogger({ component: LOG_COMPONENTS.RATE_LIMITER });
 
@@ -90,7 +91,7 @@ export class RateLimiter {
 
       if (
         prunedCount > 0 &&
-        process.env[ENV_VARS.NODE_ENV] !== ENV_VALUES.TEST
+        !IS_TEST()
       ) {
         log.info({ prunedCount }, LOG_MESSAGES.RATELIMIT_PRUNED);
       }
@@ -132,7 +133,7 @@ export class RateLimiter {
    * @param {string} ip
    */
   hasIp(ip) {
-    if (process.env[ENV_VARS.NODE_ENV] === ENV_VALUES.TEST) {
+    if (IS_TEST()) {
       return this.#hits.has(ip);
     }
     return false;
@@ -217,7 +218,7 @@ export class RateLimiter {
 
       // Test hook to simulate missing IP metadata
       if (
-        process.env[ENV_VARS.NODE_ENV] === ENV_VALUES.TEST &&
+        IS_TEST() &&
         req.headers[HTTP_HEADERS.X_SIMULATE_NO_IP]
       ) {
         ip = undefined;
@@ -255,7 +256,7 @@ export class RateLimiter {
           const oldestKey = this.#hits.keys().next().value;
           if (typeof oldestKey === "string") this.#hits.delete(oldestKey);
           if (
-            process.env[ENV_VARS.NODE_ENV] !== ENV_VALUES.TEST &&
+            !IS_TEST() &&
             typeof oldestKey === "string"
           ) {
             log.info(

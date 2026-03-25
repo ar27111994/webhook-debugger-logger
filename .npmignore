@@ -8,6 +8,8 @@
 tsconfig.json
 eslint.config.js
 Dockerfile
+.dockerignore
+.kilocodeignore
 
 # CI/CD & GitHub
 .github

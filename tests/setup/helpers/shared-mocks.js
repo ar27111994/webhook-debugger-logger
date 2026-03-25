@@ -1,3 +1,9 @@
+/**
+ * Shared mocks for tests.
+ *
+ * @module tests/setup/shared-mocks
+ */
+
 import { jest } from "@jest/globals";
 import { createApifyMock } from "./apify-mock.js";
 import { assertType } from "./test-utils.js";
@@ -8,6 +14,8 @@ import * as allConsts from "../../../src/consts/index.js";
  * @typedef {import("apify").Dataset} Dataset
  * @typedef {import("apify").DatasetDataOptions} DatasetDataOptions
  * @typedef {import("express").Application} Application
+ * @typedef {import("express").Request} Request
+ * @typedef {import("express").Response} Response
  * @typedef {import("@duckdb/node-api").DuckDBInstance} DuckDBInstance
  * @typedef {import("@duckdb/node-api").DuckDBValue} DuckDBValue
  * @typedef {import("vm").Script} VMScript
@@ -33,7 +41,7 @@ import * as allConsts from "../../../src/consts/index.js";
  * @typedef {import("dns").promises} DnsPromises
  */
 
-const SHARED_CONSTS = Object.freeze({
+export const SHARED_CONSTS = Object.freeze({
   // eslint-disable-next-line sonarjs/no-hardcoded-ip
   SAFE_IP: "93.184.216.34",
   DEFAULT_LIMIT: 100,
@@ -210,6 +218,9 @@ axiosBase.create = jest.fn(() => axiosBase);
  */
 axiosBase.isCancel = jest.fn(() => false);
 
+/**
+ * @type {jest.Mocked<AxiosMock>}
+ */
 export const axiosMock = axiosBase;
 
 /**
@@ -350,6 +361,16 @@ export const createKeyValueStoreMock = (overrides = {}) => ({
   ),
   ...overrides,
 });
+
+/**
+ * Shared Dataset Mock.
+ */
+export const datasetMock = createDatasetMock();
+
+/**
+ * Shared KeyValueStore Mock.
+ */
+export const keyValueStoreMock = createKeyValueStoreMock();
 
 /**
  * Setup basic Apify mock with standard lifecycle methods and defaults.
@@ -574,7 +595,7 @@ export const loggerMiddlewareMock = assertType({
  * @type {jest.Mocked<AppState>}
  */
 export const appStateMock = assertType({
-  destroy: jest.fn(),
+  destroy: jest.fn().mockResolvedValue(assertType(undefined)),
   applyConfigUpdate: jest.fn(),
   rateLimitMiddleware: jest.fn(),
   bodyParserMiddleware: jest.fn(),
@@ -606,7 +627,7 @@ export const bootstrapMock = assertType({
  * Shared Routes Mock.
  */
 /**
- * @type {jest.Mocked<{createBroadcaster: jest.Mock, createLogsHandler: jest.Mock, createLogDetailHandler: jest.Mock, createLogPayloadHandler: jest.Mock, createInfoHandler: jest.Mock, createLogStreamHandler: jest.Mock, createReplayHandler: jest.Mock, createDashboardHandler: jest.Mock, createSystemMetricsHandler: jest.Mock, createHealthRoutes: jest.Mock}>}
+ * @type {{createBroadcaster: jest.Mock, createLogsHandler: jest.Mock, createLogDetailHandler: jest.Mock, createLogPayloadHandler: jest.Mock, createInfoHandler: jest.Mock, createLogStreamHandler: jest.Mock, createReplayHandler: jest.Mock, createDashboardHandler: jest.Mock, createSystemMetricsHandler: jest.Mock, createHealthRoutes: jest.Mock, preloadTemplate: jest.Mock<() => Promise<string>>}}
  */
 export const routesMock = assertType({
   createBroadcaster: jest.fn(() => jest.fn()),
@@ -639,7 +660,7 @@ export const middlewareFactoriesMock = assertType({
 // Keep a mutable base object for test-overridable constants
 /** @type {Record<string, any>} */
 const overridableConsts = {
-  BACKGROUND_TASK_TIMEOUT_PROD_MS: 1000,
+  BACKGROUND_TASK_TIMEOUT_PROD_MS: APP_CONSTS.MS_PER_SECOND,
   BACKGROUND_TASK_TIMEOUT_TEST_MS: 100,
   RETENTION_LOG_SUPPRESSION_MS: 100,
   DNS_RESOLUTION_TIMEOUT_MS: 100,
@@ -711,7 +732,9 @@ export const constsMock = {
   ],
   REPLAY_STATUS_LABELS: { REPLAYED: "replayed", FAILED: "failed" },
   EVENT_NAMES: INTERNAL_EVENTS,
+  RECURSION_HEADER_NAME: allConsts.HTTP_HEADERS.X_FORWARDED_BY,
   RECURSION_HEADER_VALUE: "Apify-Webhook-Debugger",
+  RECURSION_HEADER_LOOP_SUFFIX: "-Loop-Check",
   // Backward compatibility for top-level defaults
   DEFAULT_ID_LENGTH: APP_CONSTS.DEFAULT_ID_LENGTH,
   DEFAULT_FIXED_MEMORY_MBYTES: APP_CONSTS.DEFAULT_FIXED_MEMORY_MBYTES,
@@ -734,33 +757,57 @@ export const constsMock = {
   OFFLOAD_MARKER_SYNC: STORAGE_CONSTS.OFFLOAD_MARKER_SYNC,
   OFFLOAD_MARKER_STREAM: STORAGE_CONSTS.OFFLOAD_MARKER_STREAM,
   DEFAULT_OFFLOAD_NOTE: STORAGE_CONSTS.DEFAULT_OFFLOAD_NOTE,
-  // Clone frozen objects to extend/modify in tests
-  FORWARDING_CONSTS: { ...FORWARDING_CONSTS },
-  APP_CONSTS: { ...APP_CONSTS },
+  // Use recursive proxies so nested usage also hits the dynamic overrides
+  FORWARDING_CONSTS: createMockWithGetters(
+    { ...FORWARDING_CONSTS },
+    overridableConsts,
+  ),
+  APP_CONSTS: createMockWithGetters({ ...APP_CONSTS }, overridableConsts),
+  STORAGE_CONSTS: createMockWithGetters(
+    { ...STORAGE_CONSTS },
+    overridableConsts,
+  ),
 };
 
-// Dynamically add getters for overridable constants
+// Dynamically add getters for top-level overridable constants
 createMockWithGetters(constsMock, overridableConsts);
 
 /**
  * Shared Auth Mock.
  */
 /**
- * @type {jest.Mocked<{validateAuth: (req: any, key: string) => {isValid: boolean, error?: string}}>}
+ * @type {jest.Mocked<{
+ *   validateAuth: (req: Request, key: string) => {isValid: boolean, error?: string},
+ *   sendUnauthorizedResponse: (req: Request, res: Response, details: any) => void,
+ *   verifyApiKey: () => {isValid: boolean}
+ * }>}
  */
 export const authMock = {
   validateAuth: jest.fn((_req, key) => {
-    if (key === "invalid-key") return { isValid: false, error: "Unauthorized" };
+    if (key && _req.headers?.[HTTP_HEADERS.AUTHORIZATION] !== key) {
+      return { isValid: false, error: allConsts.AUTH_ERRORS.UNAUTHORIZED_KEY };
+    }
     return { isValid: true };
   }),
+  sendUnauthorizedResponse: jest.fn((_req, res, details) => {
+    res.status(HTTP_STATUS.UNAUTHORIZED).json({
+      error: details.error || constsMock.ERROR_LABELS.UNAUTHORIZED,
+      id: details.id,
+      docs: APP_CONSTS.APIFY_HOMEPAGE_URL,
+    });
+  }),
+  verifyApiKey: jest.fn(() => ({ isValid: true })),
 };
 
 /**
  * Shared Common Utils Mock.
  */
 export const commonUtilsMock = {
+  tryParse: jest.fn(),
+  parseIfPresent: jest.fn(),
+  validateStatusCode: jest.fn(),
+  deepRedact: jest.fn(),
   validateUUID: jest.fn(),
-  parseJsonSafely: jest.fn(),
 };
 
 /**
@@ -981,6 +1028,8 @@ export const fsMock = assertType({
   existsSync: jest.fn(),
   readFileSync: jest.fn(),
   writeFileSync: jest.fn(),
+  readdirSync: jest.fn(),
+  mkdirSync: jest.fn(),
   ...fsPromisesMock,
 });
 
@@ -1093,8 +1142,9 @@ export const databaseConstsFileMock = {
  * Shared System Mock.
  */
 /**
- * @type {jest.Mocked<{exit: (code?: number) => never}>}
+ * @type {jest.Mocked<{exit: (code?: number) => never, on: (event: string, handler: (...args: any[]) => void) => void}>}
  */
 export const systemMock = {
   exit: jest.fn(),
+  on: jest.fn(),
 };

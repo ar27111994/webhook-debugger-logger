@@ -27,6 +27,7 @@ import { jest } from "@jest/globals";
  * @property {jest.Mock<() => boolean>} isAtHome
  * @property {jest.Mock<() => any>} getEnv
  * @property {jest.Mock<() => Promise<any>>} getValue
+ * @property {ApifyMock} [Actor]
  */
 
 /**
@@ -86,7 +87,7 @@ export function createApifyMock(inputOverrides = {}) {
     ).mockResolvedValue(defaultDataset),
     pushData: /** @type {jest.Mock<(data: any) => Promise<void>>} */ (
       jest.fn()
-    ).mockImplementation(async () => {}),
+    ).mockImplementation(async () => { }),
     on: /** @type {jest.Mock<(event: string, handler: Function) => void>} */ (
       jest.fn((event, handler) => {
         if (event === "input") inputHandler = /** @type {Function} */ (handler);
@@ -118,6 +119,8 @@ export function createApifyMock(inputOverrides = {}) {
       jest.fn()
     ).mockResolvedValue(null),
   };
+
+  actorInstance.Actor = actorInstance;
 
   return actorInstance;
 }

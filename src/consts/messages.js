@@ -94,6 +94,9 @@ export const LOG_MESSAGES = Object.freeze({
   CLEANUP_ERROR: "Cleanup error",
   FORCE_SHUTDOWN: "Forceful shutdown after timeout",
   SHUTDOWN_START: "Shutting down",
+  SHUTDOWN_HOT_RELOAD_FAILED: "HotReloadManager.stop() failed during shutdown",
+  SHUTDOWN_APP_STATE_FAILED: "AppState.destroy() failed during shutdown",
+  SHUTDOWN_FINAL_CLEANUP_FAILED: "Final cleanup failed during shutdown",
   INPUT_ENV_VAR_PARSED: "Using override from INPUT environment variable",
   INPUT_ENV_VAR_INVALID: "INPUT env var must be a non-array JSON object",
   INPUT_ENV_VAR_PARSE_FAILED: "Failed to parse INPUT env var",
@@ -127,7 +130,6 @@ export const LOG_MESSAGES = Object.freeze({
   MASK_HIDDEN: "unknown",
   MASK_IPV6_SUFFIX: ":****",
   MASK_IPV4_SUFFIX: ".****",
-
   JSON_SCHEMA_VALIDATION_FAILED: "JSON Schema Validation Failed",
   JSON_PARSE_FAILED_FALLBACK: "JSON parsing failed, treating as raw string",
   KVS_OFFLOAD_THRESHOLD_EXCEEDED: "Body exceeds threshold, offloading to KVS",
@@ -162,4 +164,10 @@ export const LOG_MESSAGES = Object.freeze({
      */
     (version) => `Synced actor.json to v${version}`,
   SYNC_VERSION_ALREADY_SYNCED: "Versions are already in sync.",
+  OBJECT_PLACEHOLDER: "[object Object]",
+  ALREADY_INITIALIZED:
+    "initialize() called again without a preceding shutdown()",
+  ALREADY_INITIALIZED_WARNING:
+    "initialize() called again without a preceding shutdown()",
+  HOT_RELOAD_STOP_FAILED: "Hot reload stop failed during re-init cleanup",
 });

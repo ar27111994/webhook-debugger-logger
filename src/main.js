@@ -4,6 +4,9 @@
  * configures middleware (Auth, DB, Sync), and handles graceful shutdown.
  * @module main
  */
+import { readFileSync } from "fs";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
 import { Actor } from "apify";
 import { getDbInstance } from "./db/duckdb.js";
 import { SyncService } from "./services/SyncService.js";
@@ -18,7 +21,6 @@ import { AppState } from "./utils/app_state.js";
 import {
   APP_CONSTS,
   ENV_VARS,
-  ENV_VALUES,
   SHUTDOWN_SIGNALS,
   APP_ROUTES,
   QUERY_PARAMS,
@@ -26,7 +28,12 @@ import {
   EXPRESS_SETTINGS,
 } from "./consts/app.js";
 import { LOG_COMPONENTS, LOG_TAGS } from "./consts/logging.js";
-import { HTTP_METHODS, HTTP_STATUS, MIME_TYPES } from "./consts/http.js";
+import {
+  ENCODINGS,
+  HTTP_METHODS,
+  HTTP_STATUS,
+  MIME_TYPES,
+} from "./consts/http.js";
 import { STORAGE_CONSTS, FILE_NAMES } from "./consts/storage.js";
 import {
   createBroadcaster,
@@ -48,20 +55,31 @@ import {
   createCspMiddleware,
   createErrorHandler,
 } from "./middleware/index.js";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
-import { createRequire } from "module";
 import cors from "cors";
 import { createChildLogger, serializeError } from "./utils/logger.js";
 import { LOG_MESSAGES } from "./consts/messages.js";
 import { validateStatusCode } from "./utils/common.js";
 import { SSE_CONSTS } from "./consts/ui.js";
 import { exit as systemExit, on as systemOn } from "./utils/system.js";
+import { ERROR_MESSAGES } from "./consts/errors.js";
+import { IS_TEST } from "./utils/env.js";
 
 const log = createChildLogger({ component: LOG_COMPONENTS.MAIN });
 
-const require = createRequire(import.meta.url);
-const packageJson = require(FILE_NAMES.PACKAGE_JSON);
+// Single __dirname declaration at module scope; the inner shadow inside
+// initialize() has been removed — both resolve to the same value.
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// Wrap readFileSync so a missing or malformed package.json does not
+// prevent the entire module from loading. APP_VERSION falls back gracefully.
+let packageJson = /** @type {{ version?: string }} */ ({});
+try {
+  packageJson = JSON.parse(
+    readFileSync(join(__dirname, FILE_NAMES.PACKAGE_JSON), ENCODINGS.UTF),
+  );
+} catch {
+  // package.json absent or malformed — APP_VERSION falls through to APP_CONSTS.UNKNOWN
+}
 
 /**
  * @typedef {import("express").Request} Request
@@ -76,10 +94,13 @@ const packageJson = require(FILE_NAMES.PACKAGE_JSON);
  * @typedef {ReturnType<typeof setInterval> | undefined} Interval
  */
 
-const INPUT_POLL_INTERVAL_MS =
-  process.env[ENV_VARS.NODE_ENV] === ENV_VALUES.TEST
-    ? APP_CONSTS.INPUT_POLL_INTERVAL_TEST_MS
-    : APP_CONSTS.INPUT_POLL_INTERVAL_PROD_MS;
+/**
+ * The interval at which the input is polled for changes.
+ * Evaluated lazily inside initialize() to support dynamic environment switching.
+ * 
+ * @type {number}
+ */
+let inputPollIntervalMs;
 
 const APP_VERSION =
   process.env[ENV_VARS.NPM_PACKAGE_VERSION] ||
@@ -97,50 +118,109 @@ let appState;
 /** @type {HotReloadManager | undefined} */
 let hotReloadManager;
 
+// Track initialization to detect re-entrancy and enable safe teardown
+// of leaked intervals and managers on a second call.
+let isInitialized = false;
+
 const webhookManager = new WebhookManager();
 /** @type {SyncService} */
 const syncService = new SyncService();
 /** @type {Set<ServerResponse>} */
 const clients = new Set();
-const app = express(); // Exported for tests
+const app = express();
 
-// Use factory function from routes/utils.js
 const broadcast = createBroadcaster(clients);
+let isShuttingDown = false;
+let signalsRegistered = false;
 
 /**
  * Gracefully shuts down the server and persists state.
  * @param {string} signal
  */
 const shutdown = async (signal) => {
-  if (cleanupInterval) clearInterval(cleanupInterval);
-  if (sseHeartbeat) clearInterval(sseHeartbeat);
-  if (hotReloadManager) await hotReloadManager.stop();
-
-  syncService.stop();
-
-  if (appState) appState.destroy();
-
-  if (
-    process.env[ENV_VARS.NODE_ENV] === ENV_VALUES.TEST &&
-    signal !== SHUTDOWN_SIGNALS.TEST_COMPLETE
-  )
-    return;
-
   log.info({ signal }, LOG_MESSAGES.SHUTDOWN_START);
   const forceExitTimer = setTimeout(() => {
     log.error(LOG_MESSAGES.FORCE_SHUTDOWN);
     systemExit(EXIT_CODES.FAILURE);
   }, APP_CONSTS.SHUTDOWN_TIMEOUT_MS);
 
+  if (cleanupInterval) {
+    clearInterval(cleanupInterval);
+    cleanupInterval = undefined;
+  }
+  if (sseHeartbeat) {
+    clearInterval(sseHeartbeat);
+    sseHeartbeat = undefined;
+  }
+
+  // Signal all open SSE streams to close before draining the server so
+  // clients are not left hanging on a silently abandoned connection.
+  clients.forEach((c) => {
+    try {
+      c.end();
+    } catch {
+      /* ignore — client may already be gone */
+    }
+  });
+  clients.clear();
+
+  if (hotReloadManager) {
+    try {
+      await hotReloadManager.stop();
+    } catch (err) {
+      log.warn(
+        { err: serializeError(err) },
+        LOG_MESSAGES.SHUTDOWN_HOT_RELOAD_FAILED,
+      );
+    }
+  }
+
+  if (appState) {
+    try {
+      appState.destroy();
+    } catch (err) {
+      log.warn(
+        { err: serializeError(err) },
+        LOG_MESSAGES.SHUTDOWN_APP_STATE_FAILED,
+      );
+    }
+  }
+
+  // Stop Database sync service
+  // Don't wrap it → a stop() failure retries the whole shutdown sequence,
+  // which is what we want.
+  await syncService.stop();
+
+  if (IS_TEST() && signal !== SHUTDOWN_SIGNALS.TEST_COMPLETE) {
+    if (forceExitTimer) clearTimeout(forceExitTimer);
+    return;
+  }
+
   const finalCleanup = async () => {
-    await webhookManager.persist();
-    if (process.env[ENV_VARS.NODE_ENV] !== ENV_VALUES.TEST) await Actor.exit();
-    clearTimeout(forceExitTimer);
-    if (process.env[ENV_VARS.NODE_ENV] !== ENV_VALUES.TEST)
-      systemExit(EXIT_CODES.SUCCESS);
+    try {
+      await webhookManager.persist();
+      // Actor.exit() calls process.exit() internally, making the systemExit
+      // below dead code on the happy path. It is an explicit last-resort fallback for
+      // the case where the Apify SDK throws instead of exiting (e.g. a future SDK bug).
+      if (!IS_TEST()) await Actor.exit();
+    } catch (err) {
+      log.warn(
+        { err: serializeError(err) },
+        LOG_MESSAGES.SHUTDOWN_FINAL_CLEANUP_FAILED,
+      );
+    } finally {
+      clearTimeout(forceExitTimer);
+      // Fallback: only reached if Actor.exit() threw, or in test mode.
+      if (!IS_TEST()) systemExit(EXIT_CODES.SUCCESS);
+    }
   };
 
   if (server && server.listening) {
+    // Drain existing keep-alive connections so server.close() fires promptly
+    // rather than waiting for each client to disconnect on its own.
+    if (typeof server.closeAllConnections === "function") {
+      server.closeAllConnections();
+    }
     await new Promise((resolve) => {
       server?.close(() => resolve(undefined));
     });
@@ -152,9 +232,12 @@ const shutdown = async (signal) => {
 
 /**
  * Handles shutdown signals with retry logic.
- * @param {string} signal - The shutdown signal.
+ * @param {string} signal
  */
 const handleShutdownSignal = (signal) => {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+
   let attempts = 0;
   const maxAttempts = APP_CONSTS.SHUTDOWN_RETRY_MAX_ATTEMPTS;
   const retryDelayMs = APP_CONSTS.SHUTDOWN_RETRY_DELAY_MS;
@@ -175,7 +258,7 @@ const handleShutdownSignal = (signal) => {
           { err: serializeError(error), signal },
           LOG_MESSAGES.SHUTDOWN_FAILED_AFTER_RETRIES,
         );
-        systemExit(EXIT_CODES.FAILURE); // Force exit if retries fail
+        systemExit(EXIT_CODES.FAILURE);
       }
     }
   };
@@ -183,15 +266,69 @@ const handleShutdownSignal = (signal) => {
 };
 
 /**
+ * Resets shutdown and initialization state for testing purposes.
+ * @internal
+ */
+const resetShutdownForTest = () => {
+  isShuttingDown = false;
+  signalsRegistered = false;
+  // Also reset the init guard so tests can call initialize() across
+  // a shutdown→reset→initialize cycle without triggering the re-entrancy warning.
+  isInitialized = false;
+  hotReloadManager = undefined;
+  appState = undefined;
+  sseHeartbeat = undefined;
+  cleanupInterval = undefined;
+};
+
+/**
+ * Registers handlers for termination signals and platform events.
+ * @internal
+ */
+const setupGracefulShutdown = () => {
+  if (signalsRegistered) return;
+  signalsRegistered = true;
+
+  [SHUTDOWN_SIGNALS.SIGTERM, SHUTDOWN_SIGNALS.SIGINT].forEach((sig) => {
+    systemOn(sig, () => handleShutdownSignal(sig));
+  });
+
+  Actor.on("migrating", () => handleShutdownSignal(SHUTDOWN_SIGNALS.MIGRATING));
+  Actor.on("aborting", () => handleShutdownSignal(SHUTDOWN_SIGNALS.ABORTING));
+};
+
+/**
  * Main initialization logic.
  * @param {Partial<ActorInput>} testOptions - Options for testing purposes.
  * @returns {Promise<Application>}
  */
-// Exported for tests to allow dependency injection
-export async function initialize(testOptions = {}) {
-  await Actor.init();
+async function initialize(testOptions = {}) {
+  // On re-entrancy, clear leaked resources from the previous call before
+  // proceeding. This prevents orphaned intervals and file watchers accumulating when
+  // initialize() is called more than once without an intervening shutdown().
+  if (isInitialized) {
+    log.warn(LOG_MESSAGES.ALREADY_INITIALIZED);
+    if (sseHeartbeat) clearInterval(sseHeartbeat);
+    if (cleanupInterval) clearInterval(cleanupInterval);
+    if (hotReloadManager) {
+      await hotReloadManager.stop().catch((err) => {
+        log.warn(
+          { err: serializeError(err) },
+          LOG_MESSAGES.HOT_RELOAD_STOP_FAILED,
+        );
+      });
+    }
+    return app;
+  }
+  isInitialized = true;
 
-  const __dirname = dirname(fileURLToPath(import.meta.url));
+  // Initialize poll interval based on current environment
+  inputPollIntervalMs = IS_TEST()
+    ? APP_CONSTS.INPUT_POLL_INTERVAL_TEST_MS
+    : APP_CONSTS.INPUT_POLL_INTERVAL_PROD_MS;
+
+  await Actor.init();
+  setupGracefulShutdown();
 
   // Cache the HTML template once at startup (using modular preloader)
   let indexTemplate = await preloadTemplate();
@@ -235,12 +372,9 @@ export async function initialize(testOptions = {}) {
   }
 
   const config = parseWebhookOptions(input);
-  const {
-    urlCount = APP_CONSTS.DEFAULT_URL_COUNT,
-    retentionHours = APP_CONSTS.DEFAULT_RETENTION_HOURS,
-  } = config; // Uses coerced defaults via config.js (which we updated)
-  const enableJSONParsing =
-    config.enableJSONParsing !== undefined ? config.enableJSONParsing : true;
+  const urlCount = /** @type {number} */ (config.urlCount);
+  const retentionHours = /** @type {number} */ (config.retentionHours);
+  const enableJSONParsing = /** @type {boolean} */ (config.enableJSONParsing);
   const testAndExit = input.testAndExit || false;
 
   await webhookManager.init();
@@ -252,13 +386,11 @@ export async function initialize(testOptions = {}) {
     await syncService.start();
   } catch (err) {
     log.error({ err: serializeError(err) }, LOG_MESSAGES.INIT_DB_SYNC_FAILED);
-    // Strategy: Disposable Read Model
-    // We intentionally allow the application to start even if the Read Model (DuckDB) fails.
-    // The Dataset (Write Model) is the single source of truth, so ingestion remains functional.
-    // Query capabilities may be unavailable, but data integrity is preserved in the Dataset.
+    // Strategy: Disposable Read Model — allow the application to start even when
+    // DuckDB fails. The Dataset is the source of truth; ingest stays functional.
   }
 
-  if (process.env[ENV_VARS.NODE_ENV] !== ENV_VALUES.TEST) {
+  if (!IS_TEST()) {
     try {
       await Actor.pushData({
         id: APP_CONSTS.STARTUP_ID_PREFIX + Date.now(),
@@ -272,11 +404,20 @@ export async function initialize(testOptions = {}) {
     } catch (e) {
       log.warn({ err: serializeError(e) }, LOG_MESSAGES.STARTUP_LOG_FAILED);
     }
-    if (testAndExit)
-      setTimeout(
-        () => shutdown(SHUTDOWN_SIGNALS.TESTANDEXIT),
-        APP_CONSTS.STARTUP_TEST_EXIT_DELAY_MS,
-      );
+  }
+
+  // testAndExit is checked independently of IS_TEST so it can be
+  // exercised in tests by passing { testAndExit: true } to initialize().
+  if (testAndExit) {
+    setTimeout(() => {
+      shutdown(SHUTDOWN_SIGNALS.TESTANDEXIT).catch((retryErr) => {
+        log.error(
+          { err: retryErr, signal: SHUTDOWN_SIGNALS.TESTANDEXIT },
+          ERROR_MESSAGES.SHUTDOWN_RETRY_FAILED,
+        );
+        systemExit(EXIT_CODES.FAILURE);
+      });
+    }, APP_CONSTS.STARTUP_TEST_EXIT_DELAY_MS);
   }
 
   const active = webhookManager.getAllActive();
@@ -299,9 +440,17 @@ export async function initialize(testOptions = {}) {
     log.info({ count: active.length }, LOG_MESSAGES.SCALING_RESUMING);
   }
 
-  // 2. Sync Retention (Global Extension)
-  await webhookManager.updateRetention(retentionHours);
+  // Only extend retention for pre-existing webhooks loaded from KVS state.
+  // Newly generated webhooks already have the correct expiresAt, so skipping the
+  // call when there are none avoids a redundant KVS persist on every cold start.
+  // Note: updateRetention intentionally only EXTENDS expiry, never shrinks it.
+  // A user reducing retentionHours will see pre-existing webhooks keep their longer
+  // expiry — this prevents accidental data loss but should be surfaced in docs.
+  if (active.length > 0) {
+    await webhookManager.updateRetention(retentionHours);
+  }
 
+  // LoggerMiddleware: Handles request and response processing, logging, and signature verification
   // Initialize LoggerMiddleware first as it's a dependency for AppState
   const loggerMiddlewareInstance = new LoggerMiddleware(
     webhookManager,
@@ -312,14 +461,15 @@ export async function initialize(testOptions = {}) {
   // Initialize AppState (encapsulates authKey, rateLimiter, bodyParser, etc.)
   appState = new AppState(config, webhookManager, loggerMiddlewareInstance);
 
-  // 3. Auth Middleware (using modular factory)
+  // Auth middleware for protected routes (dashboard, logs, replay, etc.)
   const authMiddleware = createAuthMiddleware(() => appState?.authKey || "");
 
-  // Rate Limiter managed by AppState
-  // RateLimiter is created in AppState constructor
-  const mgmtRateLimiter = appState.rateLimitMiddleware;
+  // This rate limiter applies to management/read endpoints only (dashboard, logs, replay …),
+  // not to the webhook ingest path which is intentionally unlimited.
+  const managementRateLimiter = appState.rateLimitMiddleware;
 
   // --- Express Middleware ---
+
   // On Apify platform, trust all proxy hops (their infrastructure).
   // Self-hosted: only trust the first proxy to prevent X-Forwarded-For spoofing.
   app.set(EXPRESS_SETTINGS.TRUST_PROXY, Actor.isAtHome() ? true : 1);
@@ -359,9 +509,9 @@ export async function initialize(testOptions = {}) {
   // eslint-disable-next-line sonarjs/cors
   app.use(cors());
 
-  // Dynamic Body Parser managed by AppState
   // Crucial: Mount ingestMiddleware BEFORE body-parser to handle streams
   app.all(APP_ROUTES.WEBHOOK, loggerMiddlewareInstance.ingestMiddleware);
+  // Dynamic Body Parser managed by AppState
   app.use(appState.bodyParserMiddleware);
 
   if (enableJSONParsing) {
@@ -371,7 +521,7 @@ export async function initialize(testOptions = {}) {
   // --- Hot Reloading Logic ---
   hotReloadManager = new HotReloadManager({
     initialInput: normalizeInput(input),
-    pollIntervalMs: INPUT_POLL_INTERVAL_MS,
+    pollIntervalMs: inputPollIntervalMs,
     onConfigChange: appState.applyConfigUpdate.bind(appState),
   });
 
@@ -387,12 +537,12 @@ export async function initialize(testOptions = {}) {
       }
     });
   }, APP_CONSTS.SSE_HEARTBEAT_INTERVAL_MS);
-  if (sseHeartbeat.unref) sseHeartbeat.unref();
+  if (sseHeartbeat && sseHeartbeat.unref) sseHeartbeat.unref();
 
   // --- Routes ---
   app.get(
     APP_ROUTES.DASHBOARD,
-    mgmtRateLimiter,
+    managementRateLimiter,
     authMiddleware,
     createDashboardHandler({
       webhookManager,
@@ -411,18 +561,25 @@ export async function initialize(testOptions = {}) {
     }),
   );
 
+  // Status-override middleware is mounted only on the webhook ingest route.
+  // Previously app.all would have set forcedStatus on unrelated routes whose paths
+  // happen to share the same prefix, causing confusing side-effects.
   app.all(
     APP_ROUTES.WEBHOOK,
-    (
-      /** @type {CustomRequest} */ req,
-      /** @type {Response} */ _res,
-      /** @type {NextFunction} */ next,
-    ) => {
+    /**
+     * @param {CustomRequest} req
+     * @param {Response} _res
+     * @param {NextFunction} next
+     */
+    (req, _res, next) => {
       const statusOverride = Number.parseInt(
         String(req.query[QUERY_PARAMS.STATUS]),
         10,
       );
-      if (validateStatusCode(statusOverride)) {
+      if (
+        Number.isInteger(statusOverride) &&
+        validateStatusCode(statusOverride)
+      ) {
         req.forcedStatus = statusOverride;
       }
       next();
@@ -432,7 +589,7 @@ export async function initialize(testOptions = {}) {
 
   app.all(
     APP_ROUTES.REPLAY,
-    mgmtRateLimiter,
+    managementRateLimiter,
     authMiddleware,
     createReplayHandler(
       () => appState?.replayMaxRetries,
@@ -442,35 +599,35 @@ export async function initialize(testOptions = {}) {
 
   app.get(
     APP_ROUTES.LOG_STREAM,
-    mgmtRateLimiter,
+    managementRateLimiter,
     authMiddleware,
     createLogStreamHandler(clients),
   );
 
   app.get(
     APP_ROUTES.LOGS,
-    mgmtRateLimiter,
+    managementRateLimiter,
     authMiddleware,
     createLogsHandler(webhookManager),
   );
 
   app.get(
     APP_ROUTES.LOG_DETAIL,
-    mgmtRateLimiter,
+    managementRateLimiter,
     authMiddleware,
     createLogDetailHandler(webhookManager),
   );
 
   app.get(
     APP_ROUTES.LOG_PAYLOAD,
-    mgmtRateLimiter,
+    managementRateLimiter,
     authMiddleware,
     createLogPayloadHandler(webhookManager),
   );
 
   app.get(
     APP_ROUTES.INFO,
-    mgmtRateLimiter,
+    managementRateLimiter,
     authMiddleware,
     createInfoHandler({
       webhookManager,
@@ -486,7 +643,7 @@ export async function initialize(testOptions = {}) {
   // System metrics endpoint for monitoring
   app.get(
     APP_ROUTES.SYSTEM_METRICS,
-    mgmtRateLimiter,
+    managementRateLimiter,
     authMiddleware,
     createSystemMetricsHandler(syncService),
   );
@@ -495,8 +652,8 @@ export async function initialize(testOptions = {}) {
   const { health, ready } = createHealthRoutes(
     () => webhookManager.getAllActive().length,
   );
-  app.get(APP_ROUTES.HEALTH, mgmtRateLimiter, health);
-  app.get(APP_ROUTES.READY, mgmtRateLimiter, ready);
+  app.get(APP_ROUTES.HEALTH, managementRateLimiter, health);
+  app.get(APP_ROUTES.READY, managementRateLimiter, ready);
 
   // Error handling middleware (using modular factory)
   app.use(createErrorHandler());
@@ -504,10 +661,8 @@ export async function initialize(testOptions = {}) {
   // -----------------------------------------------------------------------
   // 2. Constants & Configuration
   // -----------------------------------------------------------------------
-  const IS_TEST = process.env[ENV_VARS.NODE_ENV] === ENV_VALUES.TEST;
 
-  /* istanbul ignore next */
-  if (!IS_TEST) {
+  if (!IS_TEST()) {
     const port =
       process.env[ENV_VARS.ACTOR_WEB_SERVER_PORT] || APP_CONSTS.DEFAULT_PORT;
     server = app.listen(port, () => {
@@ -518,26 +673,26 @@ export async function initialize(testOptions = {}) {
         log.error({ err: serializeError(e) }, LOG_MESSAGES.CLEANUP_ERROR);
       });
     }, APP_CONSTS.CLEANUP_INTERVAL_MS);
-    Actor.on("migrating", () => shutdown(SHUTDOWN_SIGNALS.MIGRATING));
-    Actor.on("aborting", () => shutdown(SHUTDOWN_SIGNALS.ABORTING));
-
-    // Refactored shutdown signals to include retry logic
-    systemOn(SHUTDOWN_SIGNALS.SIGTERM, () =>
-      handleShutdownSignal(SHUTDOWN_SIGNALS.SIGTERM),
-    );
-    systemOn(SHUTDOWN_SIGNALS.SIGINT, () =>
-      handleShutdownSignal(SHUTDOWN_SIGNALS.SIGINT),
-    );
   }
 
   return app;
 }
 
-if (process.env[ENV_VARS.NODE_ENV] !== ENV_VALUES.TEST) {
+if (!IS_TEST()) {
   initialize().catch((err) => {
     log.error({ err: serializeError(err) }, LOG_MESSAGES.SERVER_START_FAILED);
     systemExit(EXIT_CODES.FAILURE);
   });
 }
 
-export { app, webhookManager, server, sseHeartbeat, shutdown };
+export {
+  app,
+  webhookManager,
+  server,
+  sseHeartbeat,
+  initialize,
+  shutdown,
+  resetShutdownForTest,
+  setupGracefulShutdown,
+  APP_VERSION,
+};
