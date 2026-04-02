@@ -1,14 +1,36 @@
 # Webhook Debugger, Logger & API Mocking Suite
 
-![Webhook Debugger and Logger logo](assets/icon.png)
+![Webhook Debugger and Logger logo](assets/icon-160.png)
 
 Generate temporary webhook URLs, inspect every incoming request, replay failures, and simulate callback behavior without tunneling localhost.
+
+## Status
+
+[![Build Status](https://github.com/ar27111994/webhook-debugger-logger/actions/workflows/ci.yml/badge.svg)](https://github.com/ar27111994/webhook-debugger-logger/actions/workflows/ci.yml)
+[![GitHub release](https://img.shields.io/github/v/release/ar27111994/webhook-debugger-logger)](https://github.com/ar27111994/webhook-debugger-logger/releases)
+[![npm version](https://img.shields.io/npm/v/webhook-debugger-logger)](https://www.npmjs.com/package/webhook-debugger-logger)
+[![npm downloads](https://img.shields.io/npm/dm/webhook-debugger-logger)](https://www.npmjs.com/package/webhook-debugger-logger)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D18-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
+[![GHCR](https://img.shields.io/badge/GHCR-Container%20Image-2496ED?logo=docker&logoColor=white)](https://github.com/ar27111994/webhook-debugger-logger/pkgs/container/webhook-debugger-logger)
+![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/ar27111994/webhook-debugger-logger?utm_source=oss&utm_medium=github&utm_campaign=ar27111994%2Fwebhook-debugger-logger&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
+[![Webhook Debugger, Logger & API Mocker - Debug webhooks 90% faster without localhost tunneling | Product Hunt](https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1057655&theme=light&t=1767529788592)](https://www.producthunt.com/products/webhook-debugger-logger-api-mocker?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-webhook-debugger-logger-api-mocker)
+
+## Run & Docs
 
 [![Open actor in the Apify Store](https://img.shields.io/badge/Apify%20Store-Open%20Actor-5A4FCF?logo=apify&logoColor=white)](https://apify.com/ar27111994/webhook-debugger-logger)
 [![Run actor on Apify](https://img.shields.io/badge/Run%20on-Apify-6B46FF?logo=apify&logoColor=white)](https://console.apify.com/actors/ar27111994~webhook-debugger-logger/input)
 [![Read the API reference](https://img.shields.io/badge/API-Reference-0F766E?logo=swagger&logoColor=white)](docs/api-reference.md)
 [![Watch the local demo video](https://img.shields.io/badge/Watch-Demo-1F6FEB?logo=github&logoColor=white)](./assets/Webhook%20Debugger%20%26%20Logger%20Narrated.mp4)
 [![Self-host with Docker](https://img.shields.io/badge/Self--host-Docker-2496ED?logo=docker&logoColor=white)](docs/local_docker_testing.md)
+
+## Contribute
+
+[![Report a bug](https://img.shields.io/badge/Report-Bug-d73a4a?logo=github&logoColor=white)](https://github.com/ar27111994/webhook-debugger-logger/issues/new?template=bug_report.md)
+[![Request a feature](https://img.shields.io/badge/Request-Feature-1f883d?logo=github&logoColor=white)](https://github.com/ar27111994/webhook-debugger-logger/issues/new?template=feature_request.md)
+[![View changelog](https://img.shields.io/badge/View-Changelog-6f42c1?logo=readthedocs&logoColor=white)](CHANGELOG.md)
+[![Security policy](https://img.shields.io/badge/Security-Policy-ffb000?logo=shield&logoColor=white)](SECURITY.md)
+[![Contributing](https://img.shields.io/badge/Contributing-Guide-0969da?logo=github&logoColor=white)](CONTRIBUTING.md)
 
 Webhook Debugger, Logger & API Mocking Suite is an [Apify Actor](https://apify.com/ar27111994/webhook-debugger-logger) for testing webhook integrations end to end. It generates temporary endpoints, captures the full request envelope, exposes live and queryable logs, and lets you replay or forward captured traffic to another destination.
 
@@ -47,6 +69,8 @@ The current repo schema is defined in [.actor/input_schema.json](.actor/input_sc
 | `responseDelayMs` | Simulate network latency or slow callback processing | `0` |
 | `jsonSchema` | Reject payloads that do not match a JSON Schema | unset |
 | `customScript` | Transform or enrich the captured event before storage | unset |
+
+![Input schema preview from the Apify Actor input tab](assets/input_schema_preview.png)
 
 ## What does this actor do?
 
@@ -188,6 +212,8 @@ curl -X POST "https://<run-id>.runs.apify.net/webhook/wh_demo123" \
 }
 ```
 
+![Dataset view showing captured webhook events with metadata and payload fields](assets/dataset_view.png)
+
 ## Advanced configuration examples
 
 ### Secure an endpoint and verify a Stripe signature
@@ -278,6 +304,10 @@ The actor exposes a small but practical HTTP surface.
 
 For the full contract, see [docs/api-reference.md](docs/api-reference.md) and the machine-readable schema in [.actor/web_server_schema.json](.actor/web_server_schema.json).
 
+### Live stream preview
+
+![SSE stream output showing heartbeat events and real-time webhook captures](assets/sse_stream.png)
+
 ## Platform and MCP workflows
 
 This project is built as an Apify Actor first, not as a standalone one-off webhook bin.
@@ -297,7 +327,9 @@ This actor is not itself an MCP server, but it fits cleanly into MCP-enabled aut
 
 - MCP clients can trigger or inspect Apify Actors, runs, datasets, and KVS records through Apify tooling.
 - Agent-driven workflows can use this actor as a disposable webhook target while another MCP tool verifies payloads, dashboards, or downstream effects.
-- The repo includes MCP-oriented development assets such as [assets/mcp_config.png](assets/mcp_config.png) and guidance under the repo rules for using Apify and Chrome DevTools MCP during development.
+- The repo includes MCP-oriented development assets and guidance under the repo rules for using Apify and Chrome DevTools MCP during development.
+
+![MCP configuration screenshot showing how to connect Apify tooling in an MCP client](assets/mcp_config.png)
 
 In practice, that means AI-assisted integration tests can create a run, post webhook traffic, inspect `/info` or `/logs`, and then continue through the rest of an Apify or browser automation workflow.
 
@@ -385,6 +417,14 @@ npm start
 ```
 
 The web server listens on `http://localhost:8080` by default.
+
+#### CLI demo screenshots
+
+![VS Code terminal showing local actor startup and generated webhook IDs](assets/demo_cli.PNG)
+
+![CLI output showing JSON/form submissions and a forced 401 scenario](assets/demo_cli_output.PNG)
+
+![Terminal output of SSE stream with heartbeat and live captured events](assets/demo_cli_sse_output.PNG)
 
 ### Local .env loading and override order
 
