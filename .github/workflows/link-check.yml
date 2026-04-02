@@ -1,0 +1,102 @@
+name: Link Check
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "*.md"
+      - "*.txt"
+      - "*.js"
+      - "*.mjs"
+      - "*.cjs"
+      - ".github/**/*.md"
+      - ".claude/**/*.md"
+      - "docs/**/*.md"
+      - "docs/**/*.html"
+      - "public/**/*.html"
+      - "src/**/*.js"
+      - "scripts/**/*.js"
+      - "scripts/**/*.mjs"
+      - "tests/**/*.js"
+  push:
+    branches: [main]
+    paths:
+      - "*.md"
+      - "*.txt"
+      - "*.js"
+      - "*.mjs"
+      - "*.cjs"
+      - ".github/**/*.md"
+      - ".claude/**/*.md"
+      - "docs/**/*.md"
+      - "docs/**/*.html"
+      - "public/**/*.html"
+      - "src/**/*.js"
+      - "scripts/**/*.js"
+      - "scripts/**/*.mjs"
+      - "tests/**/*.js"
+  schedule:
+    - cron: "0 9 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: link-check-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lychee:
+    name: Link Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Restore lychee cache
+        id: restore-lychee-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .lycheecache
+          key: lychee-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            lychee-${{ runner.os }}-
+
+      - name: Check repository links
+        id: lychee
+        uses: lycheeverse/lychee-action@v2
+        with:
+          fail: true
+          jobSummary: true
+          args: >-
+            --root-dir "$(pwd)"
+            --cache
+            --max-cache-age 1d
+            --verbose
+            --no-progress
+            --include-fragments
+            "./*.md"
+            "./*.txt"
+            "./*.js"
+            "./*.mjs"
+            "./*.cjs"
+            "./.github/**/*.md"
+            "./.claude/**/*.md"
+            "./docs/**/*.md"
+            "./docs/**/*.html"
+            "./public/**/*.html"
+            "./src/**/*.js"
+            "./scripts/**/*.js"
+            "./scripts/**/*.mjs"
+            "./tests/**/*.js"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Save lychee cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .lycheecache
+          key: ${{ steps.restore-lychee-cache.outputs.cache-primary-key }}

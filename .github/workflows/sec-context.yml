@@ -1,0 +1,146 @@
+name: sec-context PR Security
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "**/*.js"
+      - "**/*.mjs"
+      - "**/*.cjs"
+      - "**/*.html"
+      - ".github/workflows/*.yml"
+      - ".github/workflows/*.yaml"
+      - "Dockerfile"
+      - "Dockerfile.*"
+      - "package.json"
+      - "package-lock.json"
+      - "npm-shrinkwrap.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sec-context-${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          fail-on-scopes: runtime
+          show-patched-versions: true
+
+  guardrails:
+    name: sec-context Guardrails
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Summarize sec-context coverage
+        shell: bash
+        run: |
+          {
+            echo "## sec-context coverage"
+            echo "- Reference corpus: [Arcanum-Sec/sec-context](https://github.com/Arcanum-Sec/sec-context)"
+            echo "- Dependency risks: reviewed by the Dependency Review job"
+            echo "- Hardcoded secrets and embedded credentials: checked by the PR diff gate below"
+            echo "- Injection, XSS, auth/session, file-handling, and API anti-patterns: analyzed by CodeQL security queries"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Detect high-confidence secret patterns in changed source
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          mapfile -t files < <(
+            git diff --name-only "$BASE_SHA" "$HEAD_SHA" | \
+              grep -E '(^[^/]+\.(js|mjs|cjs|json|ya?ml)$)|(^src/)|(^public/)|(^scripts/)|(^\.github/workflows/)|(^Dockerfile(\..*)?$)' || true
+          )
+
+          if [[ ${#files[@]} -eq 0 ]]; then
+            echo "No changed source or workflow files matched the sec-context diff gate."
+            exit 0
+          fi
+
+          diff_output="$(mktemp)"
+          git diff --unified=0 "$BASE_SHA" "$HEAD_SHA" -- "${files[@]}" > "$diff_output"
+
+          added_lines="$(mktemp)"
+          grep '^+' "$diff_output" | grep -v '^\+\+\+' > "$added_lines" || true
+
+          if [[ ! -s "$added_lines" ]]; then
+            echo "No added lines to inspect."
+            exit 0
+          fi
+
+          filtered_lines="$(mktemp)"
+          grep -Evi '(YOUR_|your_|example|placeholder|change_me|changeme|test123|localhost|127\.0\.0\.1)' "$added_lines" > "$filtered_lines" || true
+
+          if [[ ! -s "$filtered_lines" ]]; then
+            echo "Only placeholder-like additions were found in the diff."
+            exit 0
+          fi
+
+          if grep -Ein \
+            'sk_live_|pk_live_|ghp_[A-Za-z0-9_]+|gho_[A-Za-z0-9_]+|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z\-_]{35}|-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----|((password|secret|token|credential|api[_-]?key)\w*)\s*[:=]\s*["'"'"'][^"'"'"'[:space:]]{10,}["'"'"']|://[^:@/]+:[^@/]+@' \
+            "$filtered_lines"; then
+            echo "Potential hardcoded secret or credential material detected in added lines."
+            exit 1
+          fi
+
+          echo "No high-confidence secret patterns found in added source lines."
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: javascript-typescript
+          build-mode: none
+          queries: security-extended,security-and-quality
+
+      - name: Analyze with CodeQL
+        uses: github/codeql-action/analyze@v4
+
+  sec-context-pr-security:
+    name: sec-context PR Security
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs:
+      - dependency-review
+      - guardrails
+    if: always()
+
+    steps:
+      - name: Enforce upstream security checks
+        shell: bash
+        run: |
+          if [[ "${{ needs.dependency-review.result }}" != "success" ]]; then
+            echo "Dependency Review finished with result: ${{ needs.dependency-review.result }}"
+            exit 1
+          fi
+
+          if [[ "${{ needs.guardrails.result }}" != "success" ]]; then
+            echo "sec-context Guardrails finished with result: ${{ needs.guardrails.result }}"
+            exit 1
+          fi
+
+          echo "All sec-context prerequisite jobs passed."

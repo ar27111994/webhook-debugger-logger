@@ -1,8 +1,11 @@
 node_modules/
 storage/
+:memory:/
+_memory_/
 .apify/
 .DS_Store
 *.log
+*.txt
 .env
 *.mp4
 coverage/

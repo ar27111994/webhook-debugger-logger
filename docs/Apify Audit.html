@@ -1,0 +1,757 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>
+      Apify Dataset Filtering: Architecture Review & Modernization Roadmap
+    </title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Google Fonts -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      /* Custom Styles & Overrides */
+      body {
+        font-family: "Inter", sans-serif;
+        background-color: #f8fafc;
+        color: #1e293b;
+      }
+      .font-mono {
+        font-family: "JetBrains Mono", monospace;
+      }
+
+      /* Smooth scrolling */
+      html {
+        scroll-behavior: smooth;
+      }
+
+      /* Chart Container Strict Styling */
+      .chart-container {
+        position: relative;
+        width: 100%;
+        max-width: 800px; /* Max width for readability */
+        height: 400px;
+        max-height: 400px;
+        margin: 0 auto;
+      }
+
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar {
+        width: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #f1f5f9;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+      }
+
+      /* Card Hover Effects */
+      .card-hover {
+        transition:
+          transform 0.2s,
+          box-shadow 0.2s;
+      }
+      .card-hover:hover {
+        transform: translateY(-2px);
+        box-shadow:
+          0 10px 15px -3px rgba(0, 0, 0, 0.1),
+          0 4px 6px -2px rgba(0, 0, 0, 0.05);
+      }
+
+      /* Code Block Styling */
+      .code-block {
+        background-color: #0f172a;
+        color: #e2e8f0;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        overflow-x: auto;
+        font-size: 0.875rem;
+      }
+      .code-keyword {
+        color: #c678dd;
+      }
+      .code-function {
+        color: #61afef;
+      }
+      .code-string {
+        color: #98c379;
+      }
+      .code-comment {
+        color: #5c6370;
+        font-style: italic;
+      }
+
+      /* Status Indicators */
+      .status-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+      }
+      .status-critical {
+        background-color: #fef2f2;
+        color: #ef4444;
+        border: 1px solid #fecaca;
+      }
+      .status-warning {
+        background-color: #fffbeb;
+        color: #f59e0b;
+        border: 1px solid #fde68a;
+      }
+      .status-good {
+        background-color: #f0fdf4;
+        color: #22c55e;
+        border: 1px solid #bbf7d0;
+      }
+      .status-info {
+        background-color: #eff6ff;
+        color: #3b82f6;
+        border: 1px solid #bfdbfe;
+      }
+    </style>
+
+    <!-- Placeholder Comments Required by Prompt -->
+    <!-- Chosen Palette: Slate (Background), Blue (Primary), Amber/Red (Status), Emerald (Success). Professional Dashboard Aesthetic. -->
+    <!-- Application Structure Plan: Dashboard layout. 
+         1. Executive Summary: Immediate feedback on the user's "Hack" approach.
+         2. Performance Lab: Interactive Chart.js to simulate the cost of Offset scanning vs Indexing.
+         3. Code Analysis: Deep dive into the uploaded files (logs.js, dataset.js) highlighting specific logic flaws.
+         4. Architecture Re-design: Visual diagrams (CSS/HTML) showing the transition from Scan to Index.
+         5. Roadmap: Concrete steps.
+         Rationale: The user asked for "Analysis" and "Research/Suggestions". A dashboard lets them toggle between the problem (current code) and the solution. -->
+    <!-- Visualization & Content Choices:
+         - Performance Lab: Line Chart (Chart.js) to show O(N) vs O(1) scaling. Goal: Prove why current approach fails at scale.
+         - Architecture Diagrams: Flexbox flows. Goal: Visualize data movement. No SVG used.
+         - Code Audit: Syntax-highlighted HTML blocks. Goal: Point directly to lines in their code. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+  </head>
+  <body class="antialiased">
+    <!-- Navigation -->
+    <nav
+      class="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm"
+    >
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between h-16">
+          <div class="flex items-center">
+            <span class="text-xl font-bold text-slate-800 tracking-tight"
+              >🔎 Apify<span class="text-blue-600">Audit</span></span
+            >
+          </div>
+          <div class="hidden md:flex items-center space-x-8">
+            <button
+              onclick="scrollToSection('summary')"
+              class="text-slate-600 hover:text-blue-600 font-medium transition-colors"
+            >
+              Summary
+            </button>
+            <button
+              onclick="scrollToSection('performance')"
+              class="text-slate-600 hover:text-blue-600 font-medium transition-colors"
+            >
+              Performance Lab
+            </button>
+            <button
+              onclick="scrollToSection('code-audit')"
+              class="text-slate-600 hover:text-blue-600 font-medium transition-colors"
+            >
+              Code Audit
+            </button>
+            <button
+              onclick="scrollToSection('architecture')"
+              class="text-slate-600 hover:text-blue-600 font-medium transition-colors"
+            >
+              New Architecture
+            </button>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-12">
+      <!-- Section 1: Executive Summary -->
+      <section id="summary" class="animate-fade-in">
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
+          <div
+            class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6"
+          >
+            <div>
+              <h1 class="text-3xl font-bold text-slate-900">
+                System Architecture Analysis
+              </h1>
+              <p class="text-slate-500 mt-2">
+                Analysis of
+                <span class="font-mono text-sm bg-slate-100 px-2 py-1 rounded"
+                  >webhook-debugger-logger</span
+                >
+              </p>
+            </div>
+            <div class="mt-4 md:mt-0 flex gap-2">
+              <span class="status-warning">⚠️ High Latency Risk</span>
+              <span class="status-good">🛡️ Strong SSRF Security</span>
+            </div>
+          </div>
+
+          <p class="text-lg text-slate-700 leading-relaxed mb-6">
+            Your current implementation is a classic case of
+            <strong>"Application-Side Filtering"</strong>. While functional for
+            small datasets (< 10k items), the architectural decision to use
+            offset-based pagination (`offset`, `limit`) combined with linear
+            scanning (`while` loops in `logs.js`) creates a linear degradation
+            in performance. As your dataset grows, your API response times will
+            increase proportionally, eventually causing timeouts.
+          </p>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- Metric 1 -->
+            <div class="bg-slate-50 p-6 rounded-lg border border-slate-100">
+              <div
+                class="text-sm font-semibold text-slate-500 uppercase tracking-wider"
+              >
+                Complexity
+              </div>
+              <div class="mt-2 text-3xl font-bold text-red-500">O(N)</div>
+              <p class="text-sm text-slate-600 mt-1">
+                Filtering complexity. Every search requires scanning unrelated
+                items.
+              </p>
+            </div>
+            <!-- Metric 2 -->
+            <div class="bg-slate-50 p-6 rounded-lg border border-slate-100">
+              <div
+                class="text-sm font-semibold text-slate-500 uppercase tracking-wider"
+              >
+                Pagination
+              </div>
+              <div class="mt-2 text-3xl font-bold text-amber-500">Offset</div>
+              <p class="text-sm text-slate-600 mt-1">
+                Cost increases as users scroll deeper into history.
+              </p>
+            </div>
+            <!-- Metric 3 -->
+            <div class="bg-slate-50 p-6 rounded-lg border border-slate-100">
+              <div
+                class="text-sm font-semibold text-slate-500 uppercase tracking-wider"
+              >
+                Security
+              </div>
+              <div class="mt-2 text-3xl font-bold text-green-500">A-</div>
+              <p class="text-sm text-slate-600 mt-1">
+                SSRF prevention is robust. Validations are solid.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 2: Performance Lab -->
+      <section id="performance">
+        <div class="flex flex-col md:flex-row gap-8 items-center mb-6">
+          <div class="flex-1">
+            <h2 class="text-2xl font-bold text-slate-900">
+              Performance Simulator
+            </h2>
+            <p class="text-slate-600 mt-2">
+              This simulation visualizes why the "Scan until found" logic in
+              <code>logs.js</code> is dangerous. As the "Filter Selectivity"
+              (how rare an item is) decreases, the number of API calls to Apify
+              Dataset explodes.
+            </p>
+          </div>
+          <div class="flex-shrink-0">
+            <div
+              class="bg-white border border-slate-200 rounded-lg p-4 shadow-sm"
+            >
+              <label
+                class="block text-xs font-semibold text-slate-500 uppercase"
+                >Dataset Size (Items)</label
+              >
+              <select
+                id="datasetSizeInput"
+                class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
+              >
+                <option value="10000">10,000</option>
+                <option value="100000" selected>100,000</option>
+                <option value="1000000">1,000,000</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+          <!-- Chart Container -->
+          <div class="chart-container">
+            <canvas id="performanceChart"></canvas>
+          </div>
+          <div class="mt-4 grid grid-cols-2 gap-4 text-center">
+            <div class="p-3 bg-red-50 rounded border border-red-100">
+              <span class="block text-sm text-red-600 font-semibold"
+                >Current Implementation</span
+              >
+              <span class="text-xs text-red-500"
+                >Scanning requires fetching irrelevant data</span
+              >
+            </div>
+            <div class="p-3 bg-blue-50 rounded border border-blue-100">
+              <span class="block text-sm text-blue-600 font-semibold"
+                >Indexed Implementation</span
+              >
+              <span class="text-xs text-blue-500"
+                >Direct lookup (0 wasted fetches)</span
+              >
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 3: Code Audit -->
+      <section id="code-audit">
+        <h2 class="text-2xl font-bold text-slate-900 mb-6">
+          Codebase Audit & Logic Review
+        </h2>
+        <div class="space-y-6">
+          <!-- Audit Item 1: The Loop -->
+          <div
+            class="bg-white rounded-lg border border-slate-200 overflow-hidden card-hover"
+          >
+            <div
+              class="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center cursor-pointer"
+              onclick="toggleDetail('audit-1')"
+            >
+              <div class="flex items-center gap-3">
+                <span
+                  class="bg-red-100 text-red-700 text-xs font-mono px-2 py-1 rounded border border-red-200"
+                  >logs.js:52</span
+                >
+                <h3 class="font-semibold text-slate-800">
+                  The "Scan & Hope" Loop
+                </h3>
+              </div>
+              <span class="text-slate-400">▼</span>
+            </div>
+            <div id="audit-1" class="p-6">
+              <p class="text-slate-600 mb-4">
+                In <code>createLogsHandler</code>, the code enters a
+                <code>while</code> loop that repeatedly calls
+                <code>dataset.getData</code>. If a user filters for a specific
+                IP or header that appears at index 90,000, you will fetch,
+                parse, and discard 89,000 items (89 HTTP requests to Apify).
+              </p>
+              <div class="code-block font-mono mb-4">
+                <span class="code-keyword">while</span> (scannedCount <
+                MAX_SCAN_LIMIT && results.length < limit) {<br />
+                &nbsp;&nbsp;<span class="code-keyword">const</span> { items } =
+                <span class="code-keyword">await</span> dataset.getData({
+                offset, limit: batchSize, ... });<br />
+                &nbsp;&nbsp;<span class="code-comment"
+                  >// ... application side filtering ...</span
+                ><br />
+                &nbsp;&nbsp;<span class="code-keyword">const</span> matches =
+                items.filter(filterFn);<br />
+                }
+              </div>
+              <div class="flex gap-4 items-center mt-2">
+                <span class="text-sm font-semibold text-red-600">Risk:</span>
+                <span class="text-sm text-slate-600"
+                  >Route Timeout (504 Gateway Timeout) on heavy filters.</span
+                >
+              </div>
+            </div>
+          </div>
+
+          <!-- Audit Item 2: Binary Search -->
+          <div
+            class="bg-white rounded-lg border border-slate-200 overflow-hidden card-hover"
+          >
+            <div
+              class="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center cursor-pointer"
+              onclick="toggleDetail('audit-2')"
+            >
+              <div class="flex items-center gap-3">
+                <span
+                  class="bg-amber-100 text-amber-700 text-xs font-mono px-2 py-1 rounded border border-amber-200"
+                  >dataset.js:18</span
+                >
+                <h3 class="font-semibold text-slate-800">
+                  Binary Search on Unindexed Data
+                </h3>
+              </div>
+              <span class="text-slate-400">▼</span>
+            </div>
+            <div id="audit-2" class="p-6 hidden">
+              <p class="text-slate-600 mb-4">
+                <code>findOffsetForTimestamp</code> uses a binary search
+                algorithm. While conceptually sound ($O(\log N)$) for sorted
+                data, it executes this over a network API where random access
+                (`offset`) is not instant.
+              </p>
+              <ul
+                class="list-disc list-inside text-sm text-slate-600 space-y-2"
+              >
+                <li>
+                  <strong>Good:</strong> It significantly reduces search time
+                  compared to linear scan for timestamps.
+                </li>
+                <li>
+                  <strong>Bad:</strong> It still requires multiple HTTP
+                  round-trips to Apify to "probe" the midpoints.
+                </li>
+                <li>
+                  <strong>Optimization:</strong> Cache the "Start of Day"
+                  offsets in memory or Redis to avoid recalculating this
+                  constantly.
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Audit Item 3: Filter Utils -->
+          <div
+            class="bg-white rounded-lg border border-slate-200 overflow-hidden card-hover"
+          >
+            <div
+              class="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center cursor-pointer"
+              onclick="toggleDetail('audit-3')"
+            >
+              <div class="flex items-center gap-3">
+                <span
+                  class="bg-green-100 text-green-700 text-xs font-mono px-2 py-1 rounded border border-green-200"
+                  >filter_utils.js</span
+                >
+                <h3 class="font-semibold text-slate-800">
+                  Robust Logic, Wrong Location
+                </h3>
+              </div>
+              <span class="text-slate-400">▼</span>
+            </div>
+            <div id="audit-3" class="p-6 hidden">
+              <p class="text-slate-600 mb-4">
+                The logic in <code>parseRangeQuery</code> and
+                <code>checkIpInRanges</code> is excellent. It handles CIDR
+                blocks and complex comparison operators safely.
+              </p>
+              <p class="text-sm text-slate-600">
+                <strong>Missed Opportunity:</strong> This logic runs inside your
+                Node.js event loop. If you move to a database (like
+                PostgreSQL/Mongo), these checks translate directly to SQL
+                `WHERE` clauses or Mongo `$match` stages, which are orders of
+                magnitude faster.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 4: Proposed Architecture -->
+      <section id="architecture">
+        <h2 class="text-2xl font-bold text-slate-900 mb-6">
+          Proposed Architecture
+        </h2>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <!-- Current State -->
+          <div class="bg-slate-50 p-6 rounded-xl border border-slate-200">
+            <h3 class="text-lg font-bold text-slate-700 mb-4 flex items-center">
+              <span class="w-2 h-2 bg-red-500 rounded-full mr-2"></span>
+              Current: "The Straw"
+            </h3>
+            <div class="space-y-4">
+              <div class="flex flex-col items-center">
+                <div
+                  class="w-full bg-white p-3 rounded shadow-sm border text-center"
+                >
+                  User Request (Filter: Status=500)
+                </div>
+                <div class="h-6 w-0.5 bg-slate-300"></div>
+                <div
+                  class="w-full bg-blue-100 p-3 rounded shadow-sm border border-blue-200 text-center font-mono text-sm"
+                >
+                  Node.js Loop
+                </div>
+                <div class="h-6 w-0.5 bg-slate-300"></div>
+                <!-- Simulation of multiple fetches -->
+                <div class="w-full space-y-2">
+                  <div class="flex gap-2">
+                    <div
+                      class="flex-1 bg-slate-200 h-2 rounded animate-pulse"
+                    ></div>
+                    <span class="text-xs text-slate-500"
+                      >Fetch 1-1000 (No match)</span
+                    >
+                  </div>
+                  <div class="flex gap-2">
+                    <div
+                      class="flex-1 bg-slate-200 h-2 rounded animate-pulse"
+                      style="animation-delay: 0.2s"
+                    ></div>
+                    <span class="text-xs text-slate-500"
+                      >Fetch 1001-2000 (No match)</span
+                    >
+                  </div>
+                  <div class="flex gap-2">
+                    <div
+                      class="flex-1 bg-green-200 h-2 rounded"
+                      style="animation-delay: 0.4s"
+                    ></div>
+                    <span class="text-xs text-green-700 font-bold"
+                      >Match Found</span
+                    >
+                  </div>
+                </div>
+              </div>
+              <p class="text-xs text-slate-500 mt-4 border-t pt-2">
+                The "Straw" approach sucks data through a thin pipe (HTTP) to
+                filter it locally. High latency, high bandwidth cost.
+              </p>
+            </div>
+          </div>
+
+          <!-- Proposed State -->
+          <div class="bg-slate-50 p-6 rounded-xl border border-slate-200">
+            <h3 class="text-lg font-bold text-slate-700 mb-4 flex items-center">
+              <span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+              Recommended: "The Engine"
+            </h3>
+            <div class="space-y-4">
+              <div class="flex flex-col items-center">
+                <div
+                  class="w-full bg-white p-3 rounded shadow-sm border text-center"
+                >
+                  User Request (Filter: Status=500)
+                </div>
+                <div class="h-6 w-0.5 bg-slate-300"></div>
+                <div
+                  class="w-full bg-blue-600 text-white p-3 rounded shadow-sm border text-center font-bold"
+                >
+                  Indexed Database
+                </div>
+                <div class="h-6 w-0.5 bg-slate-300"></div>
+                <div
+                  class="w-full bg-green-100 p-3 rounded shadow-sm border border-green-300 text-center text-green-800"
+                >
+                  Return ONLY Matching Rows
+                </div>
+              </div>
+              <p class="text-xs text-slate-500 mt-4 border-t pt-2">
+                Push the query to the data. Use Apify only for raw storage, but
+                maintain a "Search Index" for querying.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Roadmap Options -->
+        <div class="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+          <!-- Option 1 -->
+          <div
+            class="bg-white p-5 rounded-lg border border-slate-200 shadow-sm hover:border-blue-300 transition-colors"
+          >
+            <div class="text-xs font-bold text-blue-600 mb-2">QUICK FIX</div>
+            <h4 class="font-bold text-slate-800 mb-2">Parallel Prefetching</h4>
+            <p class="text-sm text-slate-600 mb-4">
+              If sticking with current architecture, don't fetch batches
+              sequentially. Fetch 5 batches (5000 items) in parallel using
+              `Promise.all` to saturate the network.
+            </p>
+            <div class="h-1 w-full bg-slate-100 rounded overflow-hidden">
+              <div class="h-full bg-blue-500 w-1/3"></div>
+            </div>
+            <span class="text-xs text-slate-400 mt-1 block">Effort: Low</span>
+          </div>
+
+          <!-- Option 2 -->
+          <div
+            class="bg-white p-5 rounded-lg border border-slate-200 shadow-sm hover:border-blue-300 transition-colors"
+          >
+            <div class="text-xs font-bold text-amber-600 mb-2">
+              HYBRID (Recommended)
+            </div>
+            <h4 class="font-bold text-slate-800 mb-2">Lightweight Indexing</h4>
+            <p class="text-sm text-slate-600 mb-4">
+              Use Apify Key-Value Store to maintain a mapping of `Timestamp ->
+              Offset` or `ID -> Offset`. Update this index every 5 minutes. Use
+              binary search on this index, not the dataset.
+            </p>
+            <div class="h-1 w-full bg-slate-100 rounded overflow-hidden">
+              <div class="h-full bg-amber-500 w-2/3"></div>
+            </div>
+            <span class="text-xs text-slate-400 mt-1 block"
+              >Effort: Medium</span
+            >
+          </div>
+
+          <!-- Option 3 -->
+          <div
+            class="bg-white p-5 rounded-lg border border-slate-200 shadow-sm hover:border-blue-300 transition-colors"
+          >
+            <div class="text-xs font-bold text-purple-600 mb-2">ENTERPRISE</div>
+            <h4 class="font-bold text-slate-800 mb-2">External Storage</h4>
+            <p class="text-sm text-slate-600 mb-4">
+              Stream logs to Tinybird, ClickHouse, or MongoDB Atlas. These
+              services are built for "filtering large datasets". Apify is built
+              for "storing crawl results".
+            </p>
+            <div class="h-1 w-full bg-slate-100 rounded overflow-hidden">
+              <div class="h-full bg-purple-500 w-full"></div>
+            </div>
+            <span class="text-xs text-slate-400 mt-1 block">Effort: High</span>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer
+      class="max-w-7xl mx-auto px-4 py-8 border-t border-slate-200 text-center text-slate-500 text-sm"
+    >
+      Generated Analysis for Webhook Debugger Logger
+    </footer>
+
+    <!-- Logic Script -->
+    <script>
+      // --- 1. Navigation Logic ---
+      function scrollToSection(id) {
+        const el = document.getElementById(id);
+        if (el) {
+          // Offset for sticky header
+          const headerOffset = 80;
+          const elementPosition = el.getBoundingClientRect().top;
+          const offsetPosition =
+            elementPosition + window.pageYOffset - headerOffset;
+          window.scrollTo({ top: offsetPosition, behavior: "smooth" });
+        }
+      }
+
+      function toggleDetail(id) {
+        const el = document.getElementById(id);
+        if (el) {
+          el.classList.toggle("hidden");
+        }
+      }
+
+      // --- 2. Chart Logic (Chart.js) ---
+      // We simulate the time taken to find 50 items based on "selectivity" (how common the item is)
+      // Scenario: Dataset of N items. We want 50 matches.
+
+      function initChart() {
+        const ctx = document
+          .getElementById("performanceChart")
+          .getContext("2d");
+
+        // Initial Data for 100,000 items
+        const dataConfig = {
+          labels: [
+            "100% (Everything)",
+            "50% (Common)",
+            "10% (Frequent)",
+            "1% (Rare)",
+            "0.1% (Needle in Haystack)",
+          ],
+          datasets: [
+            {
+              label: "Current Architecture (Offset Scan)",
+              data: [50, 100, 500, 5000, 50000], // Linear growth: N / Selectivity
+              borderColor: "#ef4444",
+              backgroundColor: "rgba(239, 68, 68, 0.1)",
+              borderWidth: 2,
+              tension: 0.4,
+              fill: true,
+            },
+            {
+              label: "Indexed Database (Target)",
+              data: [5, 5, 8, 12, 15], // Logarithmic/Constant access
+              borderColor: "#22c55e",
+              backgroundColor: "rgba(34, 197, 94, 0.1)",
+              borderWidth: 2,
+              borderDash: [5, 5],
+              tension: 0.4,
+              fill: true,
+            },
+          ],
+        };
+
+        const chart = new Chart(ctx, {
+          type: "line",
+          data: dataConfig,
+          options: {
+            responsive: true,
+            maintainAspectRatio: false, // Vital for the container constraints
+            scales: {
+              y: {
+                beginAtZero: true,
+                type: "logarithmic", // Use Log scale because the difference is massive
+                title: {
+                  display: true,
+                  text: "Estimated Items Scanned (Log Scale)",
+                },
+              },
+              x: {
+                title: {
+                  display: true,
+                  text: "Filter Selectivity (Match Rate)",
+                },
+              },
+            },
+            plugins: {
+              tooltip: {
+                callbacks: {
+                  label: function (context) {
+                    return (
+                      context.dataset.label +
+                      ": " +
+                      context.raw +
+                      " items scanned"
+                    );
+                  },
+                },
+              },
+              legend: {
+                position: "bottom",
+              },
+            },
+          },
+        });
+
+        // Input Handler
+        document
+          .getElementById("datasetSizeInput")
+          .addEventListener("change", (e) => {
+            const size = parseInt(e.target.value);
+            // Update Current Architecture Data based on size ratio
+            // Rough heuristic: Scanning cost scales linearly with dataset size for rare items
+            const ratio = size / 100000;
+
+            const newData = [
+              50,
+              100 * ratio,
+              500 * ratio,
+              5000 * ratio,
+              50000 * ratio,
+            ];
+
+            chart.data.datasets[0].data = newData;
+            chart.update();
+          });
+      }
+
+      // Initialize on load
+      document.addEventListener("DOMContentLoaded", initChart);
+    </script>
+  </body>
+</html>

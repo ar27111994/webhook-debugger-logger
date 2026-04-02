@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.0] - 2026-04-02
+
+### Added (3.0.0)
+
+- **Standby Web Server Contract**: Added `.actor/web_server_schema.json` and wired it through `.actor/actor.json` with `usesStandbyMode: true`, turning the Actor into a documented long-lived web service.
+- **Expanded HTTP Surface**: Added or formalized routes for dashboard, runtime info, log queries, log detail, payload retrieval, replay, streaming, health, readiness, and system metrics.
+- **Webhook Signature Verification**: Added provider-aware verification for Stripe, Shopify, GitHub, Slack, and custom HMAC integrations.
+- **Standalone Self-Hosting Track**: Added `Dockerfile.standalone` for running the product outside the default Apify image path.
+- **Environment Bootstrapping**: Added `.env.example` and project-level `.env` loading support for local CLI and self-hosted workflows.
+- **Documentation Set**: Added `docs/api-reference.md`, `docs/architecture.md`, multiple operational playbooks, roadmap notes, and expanded publication/release guidance.
+
+### Improved (3.0.0)
+
+- **Architecture**: Refactored the runtime into a clearer modular monolith split across `routes`, `middleware`, `services`, `repositories`, `consts`, and `utils`.
+- **DuckDB Integration**: Migrated to `@duckdb/node-api` with cached instance management, pooled connections, and serialized writes for better stability under load.
+- **Log Querying**: Upgraded `/logs` with richer filters, range parsing, sort controls, signature filters, and cursor-based pagination.
+- **Hot Reloading**: Improved runtime config refresh with both Apify key-value-store polling and local filesystem watching.
+- **Operator Controls**: Expanded input schema support for replay retries/timeouts, memory overrides, redaction, alerting, forwarding, verification, and response simulation.
+- **Quality Tooling**: Added coverage matrix tooling, schema validation scripts, version synchronization helpers, and stronger CI/release automation.
+
+### Security (3.0.0)
+
+- **Access Control**: Hardened management and ingress authentication behavior when `authKey` is configured.
+- **Traffic Protection**: Split rate limiting between management endpoints and per-webhook ingestion flows.
+- **Forwarding Safety**: Added recursion detection to block self-referential forwarding loops.
+- **Data Protection**: Strengthened sensitive-header and body-path redaction options for captured traffic.
+
+### Testing (3.0.0)
+
+- **Test Pyramid Restructure**: Reorganized tests into explicit `unit`, `integration`, and `e2e` suites.
+- **Harness Depth**: Added reusable helpers for DB lifecycle management, process harnessing, payload fixtures, middleware testing, signature assertions, and mock orchestration.
+- **Coverage Depth**: Added broad route, repository, middleware, service, utility, and script coverage for the new modular runtime.
+
 ## [2.8.7] - 2026-01-15
 
 ### Fixed (2.8.7)

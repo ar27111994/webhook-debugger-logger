@@ -1,3 +1,4 @@
+import "./src/utils/load_env.js";
 import axios from "axios";
 import { EventSource } from "eventsource";
 
@@ -11,10 +12,22 @@ import { EventSource } from "eventsource";
 
 const BASE_URL = process.env.APIFY_ACTOR_URL || "http://localhost:8080";
 const AUTH_KEY = process.env.AUTH_KEY || "";
+const SECTION_DIVIDER = "------------------------------------------";
+const API_CONTRACT_PATH = ".actor/web_server_schema.json";
+const PRETTY_JSON_INDENT = 2;
+const BODY_PREVIEW_LENGTH = 100;
+const DEMO_STEP_DELAY_MS = {
+  jsonPayload: 1500,
+  formData: 3000,
+  forcedUnauthorized: 4500,
+};
 
 async function runDemo() {
   console.log("\n🚀 WEBHOOK DEBUGGER & LOGGER - LIVE DEMO");
-  console.log("------------------------------------------");
+  console.log(SECTION_DIVIDER);
+  console.log(`[API] Contract: ${API_CONTRACT_PATH}`);
+  console.log("[API] Validate: npm run validate:web-server-schema");
+  console.log(SECTION_DIVIDER);
 
   try {
     const headers = {};
@@ -57,9 +70,9 @@ async function runDemo() {
       console.log(`- Status: ${data.statusCode}`);
       console.log(`- Path:   /webhook/${data.webhookId}`);
       console.log(
-        `- Body:   ${JSON.stringify(data.body, null, 2).substring(0, 100)}...`,
+        `- Body:   ${JSON.stringify(data.body, null, PRETTY_JSON_INDENT).substring(0, BODY_PREVIEW_LENGTH)}...`,
       );
-      console.log("------------------------------------------");
+      console.log(SECTION_DIVIDER);
     };
 
     es.onerror = (err) => {
@@ -76,7 +89,7 @@ async function runDemo() {
         },
         { headers },
       );
-    }, 1500);
+    }, DEMO_STEP_DELAY_MS.jsonPayload);
 
     setTimeout(async () => {
       console.log("[ACTION] Sending Form Data...");
@@ -84,7 +97,7 @@ async function runDemo() {
       params.append("user", "tester");
       params.append("action", "login");
       await axios.post(`${BASE_URL}/webhook/${targetId}`, params, { headers });
-    }, 3000);
+    }, DEMO_STEP_DELAY_MS.formData);
 
     setTimeout(async () => {
       console.log(
@@ -95,7 +108,7 @@ async function runDemo() {
         .catch(() => {});
 
       console.log("\n✨ Demo complete. Press Ctrl+C to exit.");
-    }, 4500);
+    }, DEMO_STEP_DELAY_MS.forcedUnauthorized);
   } catch (err) {
     console.error(`[ERROR] Setup failed: ${err.message}`);
     console.log(
