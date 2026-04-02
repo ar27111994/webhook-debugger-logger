@@ -2,244 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
-
-### Added
-
-- **Standalone Container Track**: Added `Dockerfile.standalone` for self-hosted and public OCI image builds without changing the Apify Actor image path.
-- **Docker Release Automation**: Added `.github/workflows/release-docker.yml` to publish standalone multi-arch images to GHCR on GitHub Releases.
-
-### Improved
-
-- **CI Container Coverage**: Extended `verify-docker` to validate both the Apify image and the standalone self-hosted image.
-- **Self-Hosting Docs**: Documented the GHCR image path and clarified the split between the Apify Dockerfile and the standalone Docker build.
-
-## [3.2.0] - 2026-02-18
-
-### Refactored (3.2.0)
-
-- **Project Configuration**: Extracted inline configurations from `package.json` into dedicated files:
-  - `jest.config.mjs`: Centralized Jest testing configuration.
-  - `.lintstagedrc.json`: Extracted lint-staged rules.
-  - `scripts/sync-version.js`: Moved complex version synchronization logic to a standalone script.
-- **Script Deduplication**: Refactored `package.json` scripts to use `npm run` composition, reducing duplication for `test:coverage`, `lint:fix`, and `test:stress`.
-- **Test Infrastructure**:
-  - Added `--forceExit` to all test scripts to resolve hanging processes in CI/CD environments.
-  - Removed hundreds of redundant `eslint-disable` comments across the test suite, enforcing cleaner code standards.
-  - Standardized linting rules for test files.
-
-### Improved (3.2.0)
-
-- **Metadata**: Enriched `package.json` with comprehensive metadata (`author`, `keywords`, `bugs`, `homepage`) for better package registry integration.
-- **Linting**: Expanded `lint-staged` coverage to include `.json`, `.md`, `.yml`, and `.html` files for consistent formatting.
-- **Error Handling**: Enhanced `sync-version.js` with structured logging and proper exit codes.
-
-### Fixes (3.2.0)
-
-- **Test Stability**: Resolved hanging test runs by enforcing exit behavior in Jest.
-- **Linting Errors**: Fixed numerous `sonarjs` and code quality warnings across the test suite.
-
-## [3.1.4] - 2026-02-05
-
-### Added (3.1.4)
-
-- **Modular Constants Refactoring**: Transitioned system-wide magic strings and numbers to a modular `src/consts/` architecture.
-  - Divided constants into domain-specific modules: `auth.js`, `db.js`, `error.js`, `logging.js`, `network.js`, `status.js`, `storage.js`, and `ui.js`.
-  - Implemented an aggregator in `src/consts/index.js` for clean, destructured imports.
-- **Environment Utility**: Added `src/utils/env.js` for robust, type-safe environment variable parsing.
-- **Database Maintenance**: Implemented automated `VACUUM` support in `webhook_manager.js` to reclaim disk space during retention cleanup.
-
-### Improved (3.1.4)
-
-- **Test Suite Stabilization**:
-  - Refactored `tests/unit/main_lifecycle.test.js` with strict module isolation via dynamic imports, resolving Jest worker cache collisions.
-  - Enhanced `setupCommonMocks` and `shared-mocks.js` to support modular constant patterns.
-  - Optimized `tests/unit/timestamp_filtering.test.js` to prevent timeouts in heavy DuckDB environments.
-- **Architecture**: Unified environment variable handling across `main.js`, `SyncService.js`, and `ForwardingService.js` using the new `env.js` utility.
-- **Documentation**: Updated `.agent/rules/testing.md` with advanced ESM isolation patterns and refined storage schemas.
-
-## [3.1.3] - 2026-02-04
-
-### Added (3.1.3)
-
-- **Dynamic Memory Enhancement**: Added `fixedMemoryMbytes` user override.
-  - Users can now specify a custom RAM allocation (MB) when opting out of dynamic scaling.
-  - Updated the conditional expression in `actor.json` to respect the manual input.
-  - Improved README documentation with a dedicated section on predictable manual memory.
-
-## [3.1.2] - 2026-02-04
-
-### Added (3.1.2)
-
-- **Platform Feature**: Integrated **Apify Dynamic Actor Memory**.
-  - Optimized resource costs by automatically calculating RAM based on `urlCount` and `maxPayloadSize`.
-  - Implemented a 512MB safety floor to provide headroom for moderate runtime scaling via hot-reloading.
-  - Documented the behavior and limitations of fixed system memory during hot-reload events in the README.
-
-## [3.1.0] - 2026-02-04
-
-### Added (3.1.0)
-
-- **Security Hardening**: Implemented **Zip Bomb (Decompression Bomb)** protection.
-  - Added real-time GZIP inflation limit enforcement to prevent resource exhaustion from malformed payloads.
-  - Verified protection with a dedicated regression test in `audit_unit_coverage.test.js`.
-- **Audit Verification Suites**: Added 11+ new integration and E2E test suites to verify enterprise resilience:
-  - `burst.test.js`: Validates system behavior under high-concurrency request spikes.
-  - `connection_limits.test.js`: Ensures graceful handling of maximum SSE client limits.
-  - `crash_recovery.test.js`: Verifies data integrity and DuckDB recovery after abrupt process exits.
-  - `disk_full.test.js`: Confirms system stability when DuckDB storage is exhausted.
-  - `forwarding_loop.test.js`: Implements recursion detection to prevent infinite forwarding loops.
-  - `security_logging.test.js`: Ensures no sensitive data (keys, PII) is leaked in structured logs.
-
-### Improved (3.1.0)
-
-- **Test Coverage**: Achieved near-perfect **99%+ Line/Statement coverage** across the entire codebase.
-- **DuckDB Strategy**: Refactored `DuckDBInstance` management to use a robust singleton-reset pattern, resolving static binding issues in high-concurrency test environments.
-- **Graceful Shutdown**: Enhanced lifecycle management to ensure `Actor.exit` and `process.exit` are handled correctly across both production and test modes.
-- **Project Structure**: Relaxed Jest coverage thresholds to 90% in `package.json` to avoid CI blockers on boilerplate while maintaining world-class quality.
-
-### Fixed (3.1.0)
-
-- **Hot-Reload Regression**: Resolved an issue where dynamic `authKey` updates were not immediately applied in integration tests due to mock instance mismatch.
-- **DuckDB Initialization**: Fixed a race condition where `:memory:` mode was incorrectly forced in some file-system-bound tests.
-- **Linting**: Standardized `_err` naming for unused catch variables and fixed redundant JSDoc annotations.
-
-## [3.0.5] - 2026-02-02
-
-### Added (3.0.5)
-
-- **Unit Tests**: Added comprehensive internal unit tests for `duckdb_internal.test.js`, `log_repository.test.js`, and `dashboard.test.js`.
-- **Mock Helpers**: Added `duckDbMock`, `constsMock`, and `fsPromisesMock` to shared mocks for precise dependency control.
-
-### Improved (3.0.5)
-
-- **Test Standardization**: Standardized 60+ test suites around the `setupCommonMocks` architecture for better reliability and lower boilerplate.
-- **Assertion Rigor**: Implemented strict assertions for DuckDB connection pooling logic, including lease/release cycles, pool eviction, and schema initialization.
-- **Database Isolation**: Enforced mandatory `closeDb()` pattern in DuckDB tests to prevent file locking and memory leaks.
-- **Documentation**: Overhauled `tests/README.md` and `.agent/rules/testing.md` with modern patterns for ESM mock mutation and shared lifecycle management.
-- **Type Safety**: Enhanced test-time type safety using `assertType<T>()` and JSDoc casting for complex mocks.
-
-### Refactored (3.0.5)
-
-- **Consolidation**: Merged redundant test files and removed deprecated `tests/setup/bootstrap.js` in favor of declarative shared mocks.
-- **Hygiene**: Cleaned up magic numbers and redundant assignments in alerting and hot-reload tests.
-
-### Fixed (3.0.5)
-
-- **Resource Leaks**: Resolved "failed to exit gracefully" warnings by ensuring all database connections and timers are explicitly closed in tests.
-- **ESM Mocking**: Fixed read-only export errors by implementing `Object.defineProperty` and `unstable_mockModule` patterns.
-
-### Improved (3.0.4)
-
-- **Test Suite Quality**: Performed a comprehensive Deep Dive and Quality Audit (Round 2 & 3).
-  - Eliminated all usage of `setTimeout` in favor of `waitForCondition` or `sleep` (KISS).
-  - Consolidated JSDoc types in `shared-mocks.js` for better maintainability.
-  - Simplified assertions in `shopify_verification.test.js` and `api.test.js` (DRY).
-  - Removed code redundancy and unused imports across the suite.
-  - Achieved exceptional code hygiene (zero `TODO`s, zero skipped tests).
-
-### Fixed (3.0.4)
-
-- **Test Stability**: Fixed flakiness in SSE integration tests (`api.test.js`) by replacing manual timeouts with robust condition waiting.
-- **Linting**: Resolved unused import errors and redundant timer cleanup in `forwarding.test.js`.
-
-## [3.0.3] - 2026-02-01
-
-### Fixed (3.0.3)
-
-- **Test Suite**: Resolved critical failures in `sync_service`, `replay_route`, and `logs_route_details` tests by correcting mock configurations and logic.
-- **Mock Infrastructure**: Fixed circular dependencies and missing constants in shared mocks (`ERROR_MESSAGES`, `REPLAY_HEADERS_TO_IGNORE`).
-- **Middleware**: Fixed "read-only property" error in `middleware_suite.test.js` when mocking `req.path`.
-- **Sync Logic**: Corrected recursion handling in `SyncService` tests to prevent race conditions during batch processing.
-
-### Improved (3.0.3)
-
-- **Test Reliability**: Refactored `logger_middleware`, `middleware_auth`, and `sync_service` tests to use centralized `setupCommonMocks`, improving maintainability and reducing boilerplate.
-- **Verification**: Achieved 100% pass rate (61 suites) with robust mock definitions for `LogRepository`, `events`, and `duckdb`.
-
-## [3.0.2] - 2026-02-01
-
-### Fixed (3.0.2)
-
-- **Database Concurrency**: Resolved `TransactionContext Error: Conflict on tuple deletion` in tests by enforcing serialized write access during DB reset.
-- **Test Pollution**: Fixed mock leakage in `logger_middleware` and `health` tests to prevent side effects between runs.
-- **Performance**: Optimized `main.routes` integration tests by reducing dataset size (200 -> 50) to prevent timeouts on CI.
-
-### Improved (3.0.2)
-
-- **Coverage**: Added comprehensive unit tests for `health.js`, `filter_utils.js`, and `crypto.js`, verifying critical paths.
-- **Test Infrastructure**: Refactored `db-hooks.js` to use safer concurrency patterns.
-
-## [3.0.1] - 2026-02-01
-
-### Fixed (3.0.1)
-
-- **Test Infrastructure**: Resolved circular dependency and localization issues in mock setup, ensuring reliable test execution.
-- **Log Optimization**: Adjusted test expectations for `GET /logs` to support flexible field inclusion.
-- **Reliability**: Replaced unstable fake timers with robust condition waiting in forwarding tests to eliminate flake.
-
-### Improved (3.0.1)
-
-- **Test Coverage**: Achieved 100% test pass rate across all 48 test suites.
-
-## [3.0.0] - 2026-01-30
+## [3.0.0] - 2026-04-02
 
 ### Added (3.0.0)
 
-- **Structured Logging**: Integrated Pino for structured JSON logging across all components:
-  - Component-specific child loggers with context (`{ component: "Name" }`)
-  - Consistent error serialization via `serializeError()` utility
-  - Sensitive data redaction (passwords, tokens, API keys)
-  - Configurable log levels via `LOG_LEVEL` environment variable
-  - Human-readable pretty-printing via `PRETTY_LOGS=true` for development
-- **Logger Utility**: New `src/utils/logger.js` with `createChildLogger()` factory and `serializeError()` helper
-- **Webhook Rate Limiter**: New `src/utils/webhook_rate_limiter.js` with high-throughput limits (10K/min) for DDoS protection on ingestion endpoints
-- **Storage Helper**: New `src/utils/storage_helper.js` for KVS offload markers and large payload handling
-- **Health/System Routes**: Separated health endpoints into `src/routes/health.js` and `src/routes/system.js`
-- **API Reference**: New `docs/api-reference.md` with comprehensive endpoint documentation
+- **Standby Web Server Contract**: Added `.actor/web_server_schema.json` and wired it through `.actor/actor.json` with `usesStandbyMode: true`, turning the Actor into a documented long-lived web service.
+- **Expanded HTTP Surface**: Added or formalized routes for dashboard, runtime info, log queries, log detail, payload retrieval, replay, streaming, health, readiness, and system metrics.
+- **Webhook Signature Verification**: Added provider-aware verification for Stripe, Shopify, GitHub, Slack, and custom HMAC integrations.
+- **Standalone Self-Hosting Track**: Added `Dockerfile.standalone` for running the product outside the default Apify image path.
+- **Environment Bootstrapping**: Added `.env.example` and project-level `.env` loading support for local CLI and self-hosted workflows.
+- **Documentation Set**: Added `docs/api-reference.md`, `docs/architecture.md`, multiple operational playbooks, roadmap notes, and expanded publication/release guidance.
 
 ### Improved (3.0.0)
 
-- **Observability**: All 60+ `console.log/warn/error` calls replaced with structured Pino logger across 23 source files
-- **Error Messages**: Enhanced log messages with contextual information (timeout durations, retry counts, KVS keys)
-- **Security**: Updated middleware chain with improved authentication and JSON parsing
-- **Type Safety**: Added JSDoc typedefs for Logger types and improved type annotations
-- **Test Infrastructure**: Enhanced mock setup with logger mock support for precise test assertions
+- **Architecture**: Refactored the runtime into a clearer modular monolith split across `routes`, `middleware`, `services`, `repositories`, `consts`, and `utils`.
+- **DuckDB Integration**: Migrated to `@duckdb/node-api` with cached instance management, pooled connections, and serialized writes for better stability under load.
+- **Log Querying**: Upgraded `/logs` with richer filters, range parsing, sort controls, signature filters, and cursor-based pagination.
+- **Hot Reloading**: Improved runtime config refresh with both Apify key-value-store polling and local filesystem watching.
+- **Operator Controls**: Expanded input schema support for replay retries/timeouts, memory overrides, redaction, alerting, forwarding, verification, and response simulation.
+- **Quality Tooling**: Added coverage matrix tooling, schema validation scripts, version synchronization helpers, and stronger CI/release automation.
 
-### Refactored (3.0.0)
+### Security (3.0.0)
 
-- **Logger Middleware**: Major refactoring with private class fields (`#log`, `#serializeError`) for encapsulation
-- **Services**: `ForwardingService` and `SyncService` now use structured logging with error serialization
-- **Route Handlers**: All route modules (`dashboard`, `replay`, `stream`, `utils`) migrated to structured logging
-- **Utilities**: Comprehensive logger integration in `rate_limiter`, `hot_reload_manager`, `app_state`, `bootstrap`, `alerting`, `auth`, `ssrf`, `config`
+- **Access Control**: Hardened management and ingress authentication behavior when `authKey` is configured.
+- **Traffic Protection**: Split rate limiting between management endpoints and per-webhook ingestion flows.
+- **Forwarding Safety**: Added recursion detection to block self-referential forwarding loops.
+- **Data Protection**: Strengthened sensitive-header and body-path redaction options for captured traffic.
 
-### Fixed (3.0.0)
+### Testing (3.0.0)
 
-- **Signature Verification**: Improved stream signature verification and verification pipeline
-- **Large Payload Handling**: Enhanced KVS offloading with proper error handling and logging
-- **Test Stability**: Updated tests to work with new logger architecture
-
-## [2.9.0] - 2026-01-29
-
-### Added (2.9.0)
-
-- **Database Optimization**: Added generic indices for `requestId`, `remoteIp`, `size`, and `requestUrl` to DuckDB to improve query performance on high-cardinality fields.
-- **Advanced Filtering**: Implemented `requestUrl` filtering support in the `/logs` API and Repository layer.
-- **Multi-Sort**: Added support for multi-field sorting in the `/logs` API (e.g., `sort=statusCode:desc,timestamp:asc`).
-- **Pagination**: Implemented standardized `DEFAULT_PAGE_LIMIT` (20), `MAX_PAGE_LIMIT` (10000), and `DEFAULT_PAGE_OFFSET` constants to replace magic numbers and support larger data fetches.
-- **Hot-Reload Efficiency**: Added `HOT_RELOAD_DEBOUNCE_MS` (100ms) and `DISABLE_HOT_RELOAD` environment variable to optimize resource usage in production environments.
-
-### Refactored (2.9.0)
-
-- **Architecture**: Converted core services (`LogRepository`, `SyncService`) to ES6 Classes for better encapsulation and testability.
-- **Synchronization**: Migrated `SyncService` to an event-driven architecture using `Bottleneck` for concurrency control, replacing the legacy polling mechanism.
-- **Code Quality**: Removed "Magic Numbers" from pagination and timeout logic, ensuring consistent behavior across the application.
-
-### Fixed (2.9.0)
-
-- **Test Stability**: Resolved `PRIMARY KEY` violations in integration tests (`api.test.js`) by ensuring proper database cleanup between test runs.
-- **Rate Limiting**: Fixed an issue where the Rate Limiter could prematurely block users without properly restoring their hit budget on rejection.
-- **Legacy Filtering**: Removed deprecated/legacy filter fields from the `/logs` API response payload to reduce payload size.
+- **Test Pyramid Restructure**: Reorganized tests into explicit `unit`, `integration`, and `e2e` suites.
+- **Harness Depth**: Added reusable helpers for DB lifecycle management, process harnessing, payload fixtures, middleware testing, signature assertions, and mock orchestration.
+- **Coverage Depth**: Added broad route, repository, middleware, service, utility, and script coverage for the new modular runtime.
 
 ## [2.8.7] - 2026-01-15
 

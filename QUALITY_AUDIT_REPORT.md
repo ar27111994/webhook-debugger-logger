@@ -1,76 +1,181 @@
 # Quality Audit Report
 
-**Date:** 2026-02-11
-**Version:** 1.0.0
-**Scope:** `src`, `.actor`, `public`, `assets`, `tests/support`, configuration files.
+**Date:** 2026-04-02  
+**Version:** 3.0.0 branch audit  
+**Scope:** `src`, `.actor`, `public`, `docs`, `tests/setup`, `tests/unit`,
+`tests/integration`, `tests/e2e`, `Dockerfile*`, and GitHub workflow files.
 
 ## 1. Executive Summary
 
-The **Webhook Debugger & Logger** codebase demonstrates a **high level of maturity, robustness, and adherence to security best practices**. The architecture is well-structured, utilizing a clear separation of concerns between middleware, services, data access, and utilities.
+The current **Webhook Debugger & Logger** branch demonstrates a high level of
+maturity, resilience, and operational readiness. Compared with the earlier
+audit baseline, this branch now presents a much more explicit product shape:
+the project behaves as a documented standby-mode web server, supports both
+Apify-hosted and self-hosted operation, and exposes a broader, better-tested,
+and better-documented management API.
 
-Key strengths include:
+Key strengths in the current branch include:
 
-- **Resilience**: Implementation of "Disposable Read Model" pattern with DuckDB and auto-recovery from the Apify Dataset.
-- **Security**: Comprehensive SSRF protection, strict Content Security Policy (CSP), per-webhook rate limiting, and secure header configuration.
-- **Observability**: Structured JSON logging (`pino`) with correlation IDs (`X-Request-Id`) across the stack.
-- **Performance**: Streaming offload for large payloads, optimized DuckDB batch insertions, and compression management.
+- **Architecture**: A cleaner modular monolith split across routes,
+  middleware, services, repositories, constants, and utilities.
+- **Runtime Contract**: An OpenAPI-based web server schema wired through
+  `.actor/web_server_schema.json` and `usesStandbyMode`.
+- **Security**: SSRF protection, auth gating, IP allowlisting, request/body
+  redaction, forwarding loop prevention, and provider-aware signature
+  verification.
+- **Operability**: Health and readiness endpoints, structured logging,
+  configuration hot reload, local `.env` support, and a standalone Docker path.
+- **Quality**: A significantly expanded test pyramid and a much stronger set of
+  architecture, API, and operational documents.
+
+Overall assessment: **production-grade**, with the main remaining concerns in
+release management and metadata alignment rather than runtime design.
 
 ## 2. Detailed Findings
 
-### 2.1. Application Architecture
+### 2.1 Application Architecture
 
-- **Pattern**: The application follows a modular, service-oriented architecture within a monolith (Modular Monolith).
-- **Separation of Concerns**: Middleware handles transport concerns (Auth, Parsing, Security), Services handle logic (Sync, Forwarding), and Repositories handle data access. This is excellent for maintainability.
-- **Sync Mechanism**: The `SyncService` correctly implements an event-driven model with a polling fallback (dataset catch-up), ensuring data consistency without coupling ingestion variance to read performance.
-- **Hot Reload**: The `HotReloadManager` implementation supports both platform KVS polling and local filesystem watching, significantly improving Developer Experience (DX) and operational agility.
+- **Pattern**: The application follows a modular monolith architecture with
+  explicit ownership boundaries for transport, orchestration, persistence, and
+  shared utilities.
+- **Separation of Concerns**: Middleware handles auth, security, and parsing;
+  services handle forwarding and synchronization; repositories encapsulate the
+  DuckDB read model; routes expose the HTTP surface.
+- **DuckDB Read Model**: The current branch uses `@duckdb/node-api` with cached
+  instance management, pooled connections, and serialized writes via
+  `Bottleneck`. This is a stronger and more modern posture than the earlier
+  audit baseline.
+- **Sync Mechanism**: The synchronization flow still reflects a durable
+  disposable-read-model design, rebuilding and querying from actor-managed data
+  without coupling ingress performance to query-time filtering.
+- **Hot Reload**: `HotReloadManager` now supports both Apify key-value-store
+  polling and local filesystem watch behavior, improving both operator agility
+  and local DX.
+- **Environment Loading**: `src/utils/load_env.js` adds one-time local `.env`
+  loading for CLI and self-hosted usage without overriding already injected
+  runtime configuration.
 
-### 2.2. Code Quality & Standards
+### 2.2 API and Product Surface
 
-- **Type Safety**: TypeScript is effectively used (via JSDoc + `tsconfig.json` settings like `checkJs: true`, `noImplicitAny: true`) to enforce type safety in a JavaScript codebase.
-- **Linting**: ESLint and Prettier are configured and enforced via Husky pre-commit hooks.
-- **Documentation**: Code is well-commented with JSDoc.
-- **Modern JS**: Usage of ES2022 features (top-level await support in tooling, private class fields `#field`) is consistent.
+- **Standby Web Server**: `.actor/actor.json` now declares `usesStandbyMode:
+  true`, which materially changes the Actor's hosted operating model.
+- **Machine-Readable API Contract**: `.actor/web_server_schema.json` documents
+  the HTTP API surface and raises the quality bar for runtime discoverability.
+- **Management Surface**: The service now formalizes routes for dashboard,
+  runtime info, logs, log detail, payload retrieval, replay, SSE streaming,
+  health, readiness, and system metrics.
+- **Query Model**: `/logs` now behaves like a proper query interface, including
+  richer filters, sort controls, range parsing, and cursor-based pagination.
+- **Input Schema Breadth**: `.actor/input_schema.json` now exposes controls for
+  replay retries and timeouts, manual memory override, alerting, response
+  simulation, forwarding, redaction, auth, allowlists, and signature
+  verification.
 
-### 2.3. Security Audit
+### 2.3 Code Quality and Standards
 
-- **SSRF Protection**: `src/utils/ssrf.js` implements a robust validator resolving both IPv4 and IPv6, protecting against DNS rebinding (to an extent) and blocking internal ranges. Check for TOCTOU race condition is noted in comments, which shows awareness.
-- **Rate Limiting**: Two-tiered rate limiting (Management IP-based vs. Webhook ID-based) protects the control plane while allowing bursty webhook traffic.
+- **Type Safety**: JSDoc plus TypeScript `checkJs` enforcement continue to
+  provide strong guardrails in a JavaScript codebase.
+- **Linting and Formatting**: ESLint, Prettier, Husky, and lint-staged are all
+  present and materially stronger than the earlier audit state.
+- **Constants and Config Hygiene**: The branch replaces older inline constants
+  with a modular `src/consts/` layout, improving discoverability and reducing
+  magic values.
+- **Documentation Density**: Architecture notes, playbooks, API reference,
+  publication guidance, and operational docs are now extensive and aligned with
+  the actual runtime surface.
+
+### 2.4 Security Audit
+
+- **SSRF Protection**: `src/utils/ssrf.js` remains one of the stronger parts of
+  the codebase, resolving and validating addresses rather than trusting raw
+  hostnames.
+- **Authentication**: When `authKey` is configured, the current branch can
+  protect both management endpoints and webhook ingress, reducing accidental
+  public exposure.
+- **Rate Limiting**: The current runtime separates management endpoint limits
+  from the webhook-specific ingress limiter, which is the right shape for a
+  mixed control-plane and data-plane service.
+- **Signature Verification**: The current branch validates webhook signatures
+  for Stripe, Shopify, GitHub, Slack, and custom HMAC flows with optional
+  timestamp tolerance.
+- **Safe Forwarding**: Forwarding loop detection prevents recursive self-calls,
+  which is a common class of webhook automation failure.
 - **Injection Prevention**:
-  - **SQL**: `LogRepository` uses parameterized queries (`$id`, `$webhookId`) preventing SQL injection.
-  - **XSS**: `escapeHtml` utility is used for HTML output. CSP headers are strict (`default-src 'self'`).
-  - **Object Injection**: `json_parser.js` uses `JSON.parse` safely.
-- **Dependencies**: All dependencies in `package.json` are pegged or use `^` with recent versions. `ipaddr.js` is used for reliable IP parsing.
+  - **SQL**: `LogRepository` uses parameterized queries.
+  - **XSS**: HTML output paths use escaping and CSP-backed rendering.
+  - **JSON Handling**: Parsing and validation are centralized rather than
+    scattered across handlers.
 
-### 2.4. Performance & Efficiency
+### 2.5 Performance and Efficiency
 
-- **Database**: DuckDB is an excellent choice for in-process OLAP. Explicit indexing on frequently queried columns (`webhookId`, `timestamp`, `method`) is present.
-- **Large Payloads**: The middleware intelligently streams payloads > `MAX_PAYLOAD_SIZE` directly to KVS, preventing memory pressure on the ingestion node.
-- **Concurrency**: usage of `bottleneck` for DB writes controls concurrency effectively (`maxConcurrent: 1` for writes prevents locking issues).
-- **SSE**: Server-Sent Events implementation correctly disables compression/buffering (`X-Accel-Buffering: no`) for real-time responsiveness.
+- **Database Choice**: DuckDB remains a strong fit for in-process analytical
+  querying of captured webhook traffic.
+- **Connection Handling**: The current branch already uses `@duckdb/node-api`,
+  so the earlier recommendation to migrate to the newer API is obsolete.
+- **Large Payload Handling**: Oversized bodies are offloaded to key-value
+  storage, reducing in-memory pressure on the request path.
+- **Write Serialization**: `Bottleneck` protects the file-backed database from
+  lock contention on writes.
+- **Pagination Strategy**: Cursor pagination is a concrete improvement for
+  large log sets and standby-mode operation.
+- **Streaming**: SSE handling explicitly disables buffering/compression hazards
+  for real-time log delivery.
 
-### 2.5. Operational Excellence
+### 2.6 Operational Excellence
 
-- **Graceful Shutdown**: `src/main.js` handles `SIGINT`/`SIGTERM` and ensures `Actor.exit()` and DB connections are closed.
-- **Health Checks**: `/health` and `/ready` endpoints exist for orchestration (Kubernetes/Apify).
-- **Docker**: Multi-stage (implied) or optimized base image usage. `npm install --omit=dev` ensures small production footprint.
+- **Graceful Shutdown**: `src/main.js` continues to handle process shutdown and
+  database cleanup appropriately.
+- **Health Checks**: `/health` and `/ready` make the service more suitable for
+  orchestration and container platforms.
+- **Self-Hosted Distribution**: `Dockerfile.standalone` adds a real
+  self-hosting track and broadens the deployment story beyond Apify.
+- **Release Automation**: The repository now includes a Docker release workflow
+  and validation scripts for version and schema drift.
+- **Developer Onboarding**: `.env.example`, local Docker guidance, and the
+  growing document set substantially improve operator and contributor readiness.
 
-## 3. Recommendations & Improvements
+### 2.7 Testing and Documentation Posture
 
-While the codebase is excellent, the following minor improvements could further enhance robustness:
+- **Test Pyramid**: The repository now has explicit `unit`, `integration`, and
+  `e2e` suites instead of relying on a flatter legacy layout.
+- **Harness Quality**: `tests/setup/helpers` now provides reusable building
+  blocks for app bootstrapping, DB lifecycle, process harnesses, mock setup,
+  payload fixtures, and signature-specific assertions.
+- **Coverage Tooling**: The branch adds dedicated coverage matrix and threshold
+  scripts, improving the repeatability of release validation.
+- **Operational Docs**: The addition of `docs/api-reference.md`,
+  `docs/architecture.md`, and multiple playbooks is a material quality signal.
 
-### 3.1. High Priority
+## 3. Recommendations and Improvements
 
-- **DB Connection Pooling**: `src/db/duckdb.js` manually manages a connection pool. Consider migrating to `@duckdb/node-api`'s native pooling if/when available and stable, or ensuring strict bounds on `connectionPool` size to prevent resource leaks under extreme load. _(Current manual implementation is safe but adds complexity)._
+### 3.1 High Priority
 
-### 3.2. Medium Priority
+- **Version Metadata Alignment**: Align `package.json`, `.actor/actor.json`,
+  runtime display/version references, `CHANGELOG.md`, and release notes before
+  the next formal release. The current branch mixes `3.1.3` runtime metadata
+  with newer changelog entries.
+- **Schema Drift Guarding**: Keep the web server schema validation script wired
+  into release validation so that route behavior and published API contract do
+  not diverge.
 
-- **Test Support Isolation**: `tests/setup/helpers/test-lifecycle.js` and `shared-mocks.js` are good, but ensure `resetDb` is atomic when running parallel tests (Jest worker isolation helps here).
-- **SSRF DNS Cache**: The SSRF utility resolves DNS on every call. For high throughput, a short-lived internal DNS cache (or relying on Node's internal caching if configured) could reduce latency.
+### 3.2 Medium Priority
 
-### 3.3. Low Priority
+- **SSRF DNS Caching**: If ingress volume grows significantly, a short-lived DNS
+  cache could reduce repeated lookup overhead in SSRF validation.
+- **Standby Load Monitoring**: Monitor long-lived standby workloads for file
+  size growth and connection-pool pressure in file-backed DuckDB deployments.
 
-- **Unified Config**: Configuration is scattered slightly between `config.js`, `app.js` (consts), and `main.js`. Centralizing all "default" values into a single configuration schema (like `zod` schema) could improve discoverability.
+### 3.3 Low Priority
+
+- **Config Discoverability**: The configuration story is much stronger than the
+  earlier baseline, but operator defaults still span actor input, environment
+  variables, runtime constants, and docs. Continued consolidation would improve
+  discoverability.
 
 ## 4. Conclusion
 
-The **Webhook Debugger & Logger** is a production-grade application. It handles the specific constraints of the Apify platform (ephemeral filesystem, KVS storage) while utilizing modern Node.js capabilities. No critical vulnerabilities or architectural flaws were found.
+The **Webhook Debugger & Logger** branch is a production-grade webhook capture,
+inspection, replay, and API-mocking platform. No critical architectural flaws
+or obvious high-severity vulnerabilities were found in the sampled review. The
+largest remaining risk is release metadata drift, not product capability or
+runtime robustness.
