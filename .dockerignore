@@ -1,10 +1,16 @@
 .git
 .github
+.claude
 .agent
 .vscode
 node_modules
 tests
 coverage
+assets
+docs
+_memory_
+scripts
+demo_cli.js
 *.md
 !README.md
 .eslintrc*
@@ -12,6 +18,7 @@ coverage
 tsconfig.json
 storage
 .env
+.env.*
 :memory:
 *.log
 *.txt

@@ -84,10 +84,15 @@ describe("Info Route", () => {
       features: DASHBOARD_CONSTS.FEATURES_LIST,
       endpoints: {
         logs: `https://example.com${DASHBOARD_CONSTS.ENDPOINTS.LOGS}`,
+        logDetail: `https://example.com${DASHBOARD_CONSTS.ENDPOINTS.LOG_DETAIL}`,
+        logPayload: `https://example.com${DASHBOARD_CONSTS.ENDPOINTS.LOG_PAYLOAD}`,
         stream: `https://example.com${DASHBOARD_CONSTS.ENDPOINTS.STREAM}`,
         webhook: `https://example.com${DASHBOARD_CONSTS.ENDPOINTS.WEBHOOK}`,
         replay: `https://example.com${DASHBOARD_CONSTS.ENDPOINTS.REPLAY}`,
         info: `https://example.com${DASHBOARD_CONSTS.ENDPOINTS.INFO}`,
+        systemMetrics: `https://example.com${DASHBOARD_CONSTS.ENDPOINTS.SYSTEM_METRICS}`,
+        health: `https://example.com${DASHBOARD_CONSTS.ENDPOINTS.HEALTH}`,
+        ready: `https://example.com${DASHBOARD_CONSTS.ENDPOINTS.READY}`,
       },
       docs: APP_CONSTS.APIFY_HOMEPAGE_URL,
     });
@@ -161,6 +166,7 @@ describe("Info Route", () => {
         endpoints: expect.objectContaining({
           // Should map to `https://undefined/api/...` without throwing
           logs: `https://undefined${DASHBOARD_CONSTS.ENDPOINTS.LOGS}`,
+          health: `https://undefined${DASHBOARD_CONSTS.ENDPOINTS.HEALTH}`,
         }),
       }),
     );

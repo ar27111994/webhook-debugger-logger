@@ -4,6 +4,7 @@
  * @module consts/app
  */
 import { createRequire } from "module";
+import { ENV_VARS } from "./env.js";
 import { getInt } from "../utils/env.js";
 
 const require = createRequire(import.meta.url);
@@ -38,7 +39,8 @@ export const APP_CONSTS = Object.freeze({
   BASE_URL_TEMPLATE: "${protocol}://${host}${baseUrl}",
   DEFAULT_ID_LENGTH,
   MAX_SSE_CLIENTS,
-  APIFY_HOMEPAGE_URL: process.env.APIFY_HOMEPAGE_URL || actorJson.homepageUrl,
+  APIFY_HOMEPAGE_URL:
+    process.env[ENV_VARS.APIFY_HOMEPAGE_URL] || actorJson.homepageUrl,
   BACKGROUND_TASK_TIMEOUT_PROD_MS: getInt(
     "BACKGROUND_TASK_TIMEOUT_PROD_MS",
     10000,
@@ -235,22 +237,6 @@ export const QUERY_PARAMS = Object.freeze({
   STATUS: "__status",
 });
 
-export const ENV_VARS = Object.freeze({
-  NODE_ENV: "NODE_ENV",
-  LOG_LEVEL: "LOG_LEVEL",
-  PRETTY_LOGS: "PRETTY_LOGS",
-  DISABLE_HOT_RELOAD: "DISABLE_HOT_RELOAD",
-  ACTOR_WEB_SERVER_PORT: "ACTOR_WEB_SERVER_PORT",
-  DUCKDB_STORAGE_DIR: "DUCKDB_STORAGE_DIR",
-  DUCKDB_FILENAME: "DUCKDB_FILENAME",
-  INPUT: "INPUT",
-  NPM_PACKAGE_VERSION: "npm_package_version",
-  APIFY_ACTOR_DIR: "APIFY_ACTOR_DIR",
-  APIFY_LOCAL_STORAGE_DIR: "APIFY_LOCAL_STORAGE_DIR",
-  DUCKDB_MEMORY_LIMIT: "DUCKDB_MEMORY_LIMIT",
-  DUCKDB_VACUUM_ENABLED: "DUCKDB_VACUUM_ENABLED",
-});
-
 export const SHUTDOWN_SIGNALS = Object.freeze({
   TEST_COMPLETE: "TEST_COMPLETE",
   MIGRATING: "MIGRATING",
@@ -259,11 +245,6 @@ export const SHUTDOWN_SIGNALS = Object.freeze({
   SIGINT: "SIGINT",
   SIGKILL: "SIGKILL",
   TESTANDEXIT: "TESTANDEXIT",
-});
-
-export const ENV_VALUES = Object.freeze({
-  TEST: "test",
-  PRODUCTION: "production",
 });
 
 export const STREAM_EVENTS = Object.freeze({
@@ -276,3 +257,5 @@ export const STREAM_EVENTS = Object.freeze({
 export const INTERNAL_EVENTS = Object.freeze({
   LOG_RECEIVED: "log:received",
 });
+
+export { ENV_VALUES, ENV_VARS, ENV_WARNING_CODES } from "./env.js";

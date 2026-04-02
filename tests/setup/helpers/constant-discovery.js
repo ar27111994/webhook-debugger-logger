@@ -6,8 +6,9 @@
  * @module tests/setup/helpers/constant-discovery
  */
 
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { join } from "node:path";
+import { ENCODINGS } from "../../../src/consts/http.js";
 
 /**
  * Discovers all constant modules in src/consts.
@@ -18,9 +19,19 @@ export function discoverConstantModules() {
   const constsDir = join(process.cwd(), "src", "consts");
 
   try {
-    // Use ls to list files, bypassing any active fs mocks
-    // eslint-disable-next-line sonarjs/os-command
-    const output = execSync(`ls "${constsDir}"`).toString();
+    // Use a separate Node process so test-level fs mocks do not affect discovery.
+    const output = execFileSync(
+      process.execPath,
+      [
+        "-e",
+        `const { readdirSync } = require("node:fs");
+const dir = ${JSON.stringify(constsDir)};
+for (const entry of readdirSync(dir, { withFileTypes: true })) {
+  if (entry.isFile()) process.stdout.write(entry.name + "\\n");
+}`,
+      ],
+      { encoding: ENCODINGS.UTF },
+    );
     return output
       .split("\n")
       .map((line) => line.trim())

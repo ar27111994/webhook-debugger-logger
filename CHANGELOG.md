@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- **Standalone Container Track**: Added `Dockerfile.standalone` for self-hosted and public OCI image builds without changing the Apify Actor image path.
+- **Docker Release Automation**: Added `.github/workflows/release-docker.yml` to publish standalone multi-arch images to GHCR on GitHub Releases.
+
+### Improved
+
+- **CI Container Coverage**: Extended `verify-docker` to validate both the Apify image and the standalone self-hosted image.
+- **Self-Hosting Docs**: Documented the GHCR image path and clarified the split between the Apify Dockerfile and the standalone Docker build.
+
 ## [3.2.0] - 2026-02-18
 
 ### Refactored (3.2.0)

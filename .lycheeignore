@@ -1,0 +1,11 @@
+# Local development and runtime-only endpoints, Example and placeholder hosts used in docs and demos, and Placeholder low-code webhook examples
+
+^(?:http://|https://)localhost(?::\d+)?(?:/|$)
+^(?:http://|https://)127\.0\.0\.1(?::\d+)?(?:/|$)
+^(?:http://|https://)[^/]+\.runs\.apify\.net(?:/|$)
+^(?:http://|https://)(?:[A-Za-z0-9-]+\.)*example\.com(?:/|$)
+^(?:http://|https://)(?:[A-Za-z0-9-]+\.)*example(?:/|$)
+^(?:http://|https://)<[^>]+>(?:/|$)
+^(?:http://|https://)\[[^]]+\](?:/|$)
+^(?:http://|https://)(?:[A-Za-z0-9-]+\.)?ngrok\.(?:io|app)(?:/|$)
+^(?:https://)hooks\.zapier\.com/hooks/catch/11111/aaaaa/?$

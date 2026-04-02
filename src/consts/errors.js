@@ -184,6 +184,14 @@ export const ERROR_MESSAGES = Object.freeze({
      */
     (timeout) => `Condition not met within ${timeout}ms`,
   SHUTDOWN_RETRY_FAILED: "Retry shutdown failed fatally",
+  PROJECT_ENV_LOAD_FAILED:
+    /**
+     * @param {string} envFileName
+     * @param {string} path
+     * @param {string} error
+     * @returns {string}
+     */
+    (envFileName, path, error) => `Failed to load project .env file '${envFileName}' from ${path}: ${error}`,
 });
 
 /**

@@ -2,7 +2,7 @@ name: Publish to NPM
 
 on:
   release:
-    types: [created]
+    types: [published]
 
 jobs:
   publish:
@@ -21,7 +21,10 @@ jobs:
           registry-url: "https://registry.npmjs.org"
 
       - name: Install Dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
+
+      - name: Validate Web Server Schema
+        run: npm run validate:web-server-schema
 
       - name: Verify Builds/Tests
         run: npm test

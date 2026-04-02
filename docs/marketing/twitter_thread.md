@@ -4,7 +4,7 @@
 🚀 Debugging webhooks on localhost? Stop using ngrok.
 Introducing **Webhook Debugger & Logger v3.0** (Enterprise Suite) on @Apify.
 
-Sub-10ms latency. Real-time log streaming. OOP Architecture.
+Fast acknowledgment path. Live log streaming endpoint (`GET /log-stream`). OOP Architecture.
 And it's completely open-source. 👇
 [Link to Actor]
 
@@ -19,7 +19,7 @@ We built a high-performance Express.js actor that:
 
 - Generates instant webhook URLs
 - Validates signatures (HMAC-SHA256)
-- Streams logs to your terminal via SSE
+- Streams logs to your terminal via `GET /log-stream`
 - Replays failed events
 
 4/8

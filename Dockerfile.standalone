@@ -11,7 +11,7 @@ RUN npm pkg delete scripts.prepare \
 FROM node:24-bookworm-slim AS runtime
 
 LABEL org.opencontainers.image.title="webhook-debugger-logger" \
-      org.opencontainers.image.description="Apify publication image for Webhook Debugger & Logger" \
+      org.opencontainers.image.description="Self-hosted container image for Webhook Debugger & Logger" \
       org.opencontainers.image.licenses="ISC"
 
 ENV NODE_ENV=production \

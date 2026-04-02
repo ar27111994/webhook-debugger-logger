@@ -196,6 +196,14 @@ describe("Consts Logic", () => {
         `Condition not met within ${MOCK_TIMEOUT}ms`,
       );
     });
+
+    it("should format PROJECT_ENV_LOAD_FAILED correctly", () => {
+      expect(
+        ERROR_MESSAGES.PROJECT_ENV_LOAD_FAILED(".env", "/path/to/.env", "EACCES"),
+      ).toBe(
+        "Failed to load project .env file '.env' from /path/to/.env: EACCES",
+      );
+    });
   });
 
   describe("SIGNATURE_ERRORS", () => {

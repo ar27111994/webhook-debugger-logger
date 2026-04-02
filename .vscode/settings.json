@@ -7,5 +7,8 @@
     "coverage": true
   },
   "jest.useJest30": true,
-  "karmaTestExplorer.autoWatchEnabled": false
+  "karmaTestExplorer.autoWatchEnabled": false,
+  "chat.agentSkillsLocations": {
+    "~/.agents/skills": false
+  }
 }

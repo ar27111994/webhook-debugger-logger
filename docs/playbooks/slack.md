@@ -1,60 +1,84 @@
 # 💬 Slack App & Bot Playbook
 
-Accelerate your Slack app development by inspecting complex Block Kit payloads and verifying interactive component responses.
+Use this playbook to inspect Slack Events API traffic, verify signed requests, debug interactive payloads, and test custom immediate responses for app callbacks.
 
 ## 🚀 Quick Setup (Manual)
 
-1. **[Open Webhook Debugger on Apify Store](https://apify.com/ar27111994/webhook-debugger-logger?utm_campaign=slack_bot)**
-2. Navigate to the **Input** tab.
-3. **Copy & Paste** the JSON from the section below into the JSON editor.
+1. Open [Webhook Debugger on Apify Store](https://apify.com/ar27111994/webhook-debugger-logger).
+2. Open the **Input** tab.
+3. Paste the JSON configuration below.
 
 ## 📋 Recommended Quick-Start (JSON)
 
-Copy the JSON below and paste it into the **Input** tab in Apify Console:
-
 ```json
 {
-  "authKey": "slack-bot-key",
+  "urlCount": 1,
+  "retentionHours": 24,
+  "authKey": "slack-debug-key",
   "enableJSONParsing": true,
+  "maskSensitiveData": true,
+  "signatureVerification": {
+    "provider": "slack",
+    "secret": "slack_signing_secret",
+    "tolerance": 300
+  },
   "defaultResponseCode": 200,
-  "maskSensitiveData": true
+  "defaultResponseBody": "{\"ok\":true}",
+  "defaultResponseHeaders": {
+    "Content-Type": "application/json"
+  },
+  "forwardUrl": "https://staging.example.com/slack/events",
+  "forwardHeaders": true
 }
 ```
 
-## 🛠️ Programmatic Run (API)
+## ✅ What This Matches in the Current Code
 
-Trigger this setup for your dev environment via `curl`:
+- Slack request verification uses the signed raw body and timestamp headers.
+- JSON payloads are auto-parsed only when Slack sends `application/json`.
+- Interactive payloads sent as `application/x-www-form-urlencoded` are captured as raw text, not automatically expanded into nested JSON objects.
+- `customScript` can override `event.statusCode`, `event.responseBody`, and `event.responseHeaders`, which makes it suitable for immediate Slack callback experiments.
 
-```bash
-curl --request POST \
-  --url https://api.apify.com/v2/acts/ar27111994~webhook-debugger-logger/run-sync?token=YOUR_API_TOKEN \
-  --header 'Content-Type: application/json' \
-  --data '{
-    "authKey": "slack-bot-test",
-    "enableJSONParsing": true,
-    "defaultResponseCode": 200
-  }'
+## 🧪 Interactive Response Example
+
+If you want Slack interactivity requests to receive a custom JSON response body, use a script like this:
+
+```javascript
+event.responseHeaders = { "Content-Type": "application/json" };
+event.responseBody = { text: "Handled by the sandbox" };
 ```
 
-## 🧠 Advanced: Interactive Block Debugging
+## 🔎 Investigation Queries That Match the Current API
 
-Slack's interactive components (buttons, menus) send massive payloads that can be hard to mock.
+- Signature failures:
 
-1. **Live Inspection**: Point your "Interactive Components" URL to the Actor.
-2. **Dynamic Responses**: Use `customScript` to return specific JSON (e.g., `{"replace_original": "true"}`) to test how Slack updates your message in real-time.
+```text
+GET /logs?webhookId=<your-webhook-id>&signatureValid=false
+```
 
-## 🔍 Common Slack Error Patterns
+- Slack Events API JSON traffic:
 
-| Error Signal       | Description                                                | Solution                                                                                                         |
-| :----------------- | :--------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------- |
-| `dispatch_failed`  | Slack didn't get a 200 OK within 3 seconds.                | Ensure the Actor is in **Standby Mode** for sub-10ms responses.                                                  |
-| `Missing block_id` | Your Block Kit JSON is malformed.                          | Inspect the raw body in the Actor dataset; the Actor's **JSON Parsing** handles nested structures automatically. |
-| `ssl_required`     | Slack requires HTTPS for all endpoints.                    | The Actor's generated URLs are **HTTPS by default**, satisfying Slack's security policy.                         |
-| `Invalid Response` | Slack expects specific responses for interactive triggers. | Use `customScript` to return the exact JSON Slack expects.                                                       |
+```text
+GET /logs?webhookId=<your-webhook-id>&body.type=event_callback
+```
 
-## 🛠️ Typical Workflow
+- Slack interactivity payloads captured as form data:
 
-1. **Interactive Test**: Point your Slack App's "Interactivity & Shortcuts" URL to the Actor.
-2. **Payload Inspection**: Click a button in Slack and see the massive JSON payload arrive in the Actor's **SSE Live View**.
-3. **Drafting**: Use the captured payload as a template for your real backend logic.
-4. **Automation**: Once your logic is ready, switch the Actor to **Forwarding Mode** to bridge Slack to your local dev environment.
+```text
+GET /logs?webhookId=<your-webhook-id>&body=payload%3D
+```
+
+## 🔍 Common Slack Failure Patterns
+
+| Signal | What it usually means | What to do |
+| :----- | :-------------------- | :--------- |
+| `signatureValid=false` | Wrong signing secret or timestamp outside tolerance | Verify the Slack signing secret and check server clock skew. |
+| `dispatch_failed` | Slack did not receive a fast enough 2xx | Keep the immediate actor response lightweight and move heavy work behind forwarding or replay. |
+| Raw `payload=` body instead of nested JSON | Slack interactivity was sent as form-encoded data | Inspect the raw body string or forward it to app code that already knows how to decode Slack interactivity payloads. |
+
+## 🔄 Recommended Workflow
+
+1. Point either the Events API URL or the Interactivity URL at the generated actor webhook.
+2. Use `/logs` and `/log-stream` to capture both the headers and the raw callback body.
+3. Add a `customScript` when you want to prototype an immediate response body without deploying your real Slack backend.
+4. Turn on forwarding after you have confirmed the payload shape you want your real app to consume.

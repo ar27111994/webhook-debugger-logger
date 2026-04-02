@@ -10,7 +10,7 @@ Split your screen: **Left side** (Apify Console) | **Right side** (Terminal or P
 
 ### Step 1: Initialize & Start (0:00 - 0:43)
 
-1. Open your Actor on the [Apify Console]([YOUR-ACTOR-URL]).
+1. Open your Actor on the Apify Console at `[YOUR-ACTOR-URL]`.
 2. Click **Start** in the bottom left.
 3. Narrate: _"We're starting the Webhook Debugger in Standby mode for instant response times."_
 4. Go to the **Live View** or **URL** provided in the logs.

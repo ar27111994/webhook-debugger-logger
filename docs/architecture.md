@@ -10,7 +10,7 @@ The application follows a **Modular Monolith** architecture with distinct layers
 
 | Component       | Technology                 | Purpose                                   | Resilience Strategy                            |
 | :-------------- | :------------------------- | :---------------------------------------- | :--------------------------------------------- |
-| **Runtime**     | Node.js 20+ (ESM)          | Core execution environment                | Graceful shutdown handling                     |
+| **Runtime**     | Node.js 18+ (ESM)          | Core execution environment                | Graceful shutdown handling                     |
 | **Web Server**  | Express.js                 | HTTP routing, middleware pipeline         | Rate limiting, timeouts                        |
 | **Read Model**  | **DuckDB**                 | OLAP queries, filtering, aggregation      | **Disposable**: rebuilds from Dataset on start |
 | **Write Model** | Apify Dataset              | Append-only log of all events             | Persistent Source of Truth                     |
@@ -44,22 +44,26 @@ graph TB
             BODY[Dynamic BodyParser<br/>managed by AppState]
         end
 
-        subgraph "Ingestion Path (no auth)"
+        subgraph "Ingestion Path (configurable auth/IP controls)"
             INGEST["LoggerMiddleware.ingestMiddleware<br/>• Recursion detection<br/>• Per-webhook rate limiting<br/>• Streaming KVS offload<br/>• Signature verification"]
-            MW["LoggerMiddleware.middleware<br/>• Validation<br/>• Data preparation<br/>• Custom script execution<br/>• Response generation"]
+            MW["LoggerMiddleware.middleware<br/>• Validation (webhook, auth, IP allowlist)<br/>• Data preparation<br/>• Custom script execution<br/>• Response generation"]
         end
 
-        subgraph "Management Path (auth + rate limited)"
+        subgraph "Dashboard + Management Path (auth + rate limited when authKey is set)"
             AUTH[Auth Middleware]
             RL[RateLimiter]
             LOGS[GET /logs]
-            DETAIL[GET /logs/:id]
-            REPLAY[POST /replay/:id]
-            STREAM[GET /log-stream SSE]
+            DETAIL[GET /logs/:logId]
+            REPLAY[POST /replay/:webhookId/:itemId?url=https://...]
+            STREAM[GET /log-stream]
             INFO[GET /info]
-            HEALTH[GET /health]
             METRICS[GET /system/metrics]
             DASHBOARD_R["GET / Dashboard"]
+        end
+
+        subgraph "Probe Path (rate limited, no auth)"
+            HEALTH[GET /health]
+            READY[GET /ready]
         end
     end
 
@@ -82,7 +86,7 @@ graph TB
         KVS[("Apify KVS<br/>• Config state<br/>• Large payloads<br/>• Webhook state")]
     end
 
-    WH -->|"POST /:webhookId"| INGEST
+    WH -->|"POST /webhook/:id"| INGEST
     INGEST --> MW
     MW -->|background| FWD
     MW -->|background| ALERT
@@ -181,7 +185,7 @@ graph LR
 
 ### Webhook Ingestion (Write Path)
 
-```
+```text
 Incoming Request
     │
     ▼
@@ -208,8 +212,8 @@ LoggerMiddleware.middleware
 
 ### Log Query (Read Path)
 
-```
-API Request (GET /logs, /logs/:id)
+```text
+API Request (GET /logs, /logs/:logId)
     │
     ▼
 Auth + Rate Limit middleware
@@ -254,7 +258,9 @@ DuckDB connections are pooled (configurable size). All write operations go throu
 - **Platform**: KVS polling at configurable intervals
 - **Local dev**: `fs.watch` on the INPUT.json file
 
-Config changes propagate through `AppState.applyConfigUpdate()` which updates body parser limits, rate limiters, auth keys, retention, and more — all without restart.
+Config changes propagate through `AppState.applyConfigUpdate()` which updates body parser limits, rate limiters, auth keys, retention, replay settings, and more — all without restart.
+
+Retention updates are intentionally non-destructive for active webhooks. The current implementation extends existing expiry timestamps when retention increases instead of shortening live webhook lifetimes.
 
 ### 6. Streaming Large Payload Offload
 
@@ -266,11 +272,11 @@ Payloads exceeding the KVS offload threshold are streamed directly to Apify KVS 
 
 ### Trust Boundaries
 
-```
+```text
 ┌─────────────────────────────────────────────────┐
 │  Internet (untrusted)                           │
 │  ┌───────────────────────────────────────────┐  │
-│  │  Ingestion Endpoint /:webhookId           │  │
+│  │  Ingestion Endpoint /webhook/:id          │  │
 │  │  • IP whitelist (optional)                │  │
 │  │  • Per-webhook rate limiting              │  │
 │  │  • Payload size limits                    │  │
@@ -278,8 +284,8 @@ Payloads exceeding the KVS offload threshold are streamed directly to Apify KVS 
 │  │  • Auth key (optional)                    │  │
 │  └───────────────────────────────────────────┘  │
 │  ┌───────────────────────────────────────────┐  │
-│  │  Management API                           │  │
-│  │  • API key authentication (required)      │  │
+│  │  Dashboard + Management API               │  │
+│  │  • API key authentication (when enabled)  │  │
 │  │  • Per-IP rate limiting                   │  │
 │  │  • CSP headers on dashboard               │  │
 │  │  • Security headers (HSTS, etc.)          │  │

@@ -4,16 +4,20 @@
 
 # Environment & Config
 .env
+.env.*
 .tsbuildinfo
 tsconfig.json
 eslint.config.js
 Dockerfile
+Dockerfile.*
 .dockerignore
 .kilocodeignore
 
 # CI/CD & GitHub
 .github
 .agent
+.claude
+.vscode
 
 # Apify Platform & DuckDB Specifics
 .actor
@@ -21,10 +25,13 @@ storage
 storage_v2
 apify_storage
 :memory:
+_memory_
 
 # Documentation & Assets
 docs
 assets
+scripts
+demo_cli.js
 MANUAL_DEMO_GUIDE.md
 PUBLICATION_GUIDE.md
 QUALITY_AUDIT_REPORT.md
