@@ -6,9 +6,14 @@
   "version": "3.1.3",
   "output": "./output_schema.json",
   "input": "./input_schema.json",
+  "webServerSchema": "./web_server_schema.json",
   "usesStandbyMode": true,
   "dockerfile": "../Dockerfile",
-  "categories": ["DEVELOPER_TOOLS", "UTILITIES", "INTEGRATION_TOOLS"],
+  "categories": [
+    "DEVELOPER_TOOLS",
+    "UTILITIES",
+    "INTEGRATION_TOOLS"
+  ],
   "homepageUrl": "https://apify.com/ar27111994/webhook-debugger-logger",
   "storages": {
     "dataset": "./dataset_schema.json",

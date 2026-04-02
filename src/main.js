@@ -4,6 +4,7 @@
  * configures middleware (Auth, DB, Sync), and handles graceful shutdown.
  * @module main
  */
+import "./utils/load_env.js";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";

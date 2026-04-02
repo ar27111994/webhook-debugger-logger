@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import http from "node:http";
 import { once } from "node:events";
+import { fileURLToPath } from "node:url";
 import {
   APP_ROUTES,
   ENV_VALUES,
@@ -25,6 +26,10 @@ const PROCESS_SHUTDOWN_TIMEOUT_MS = 10000;
 const POLL_INTERVAL_MS = 100;
 const HTTP_STATUS_MIN_OK = 200;
 const HTTP_STATUS_MAX_CLIENT_ERROR = 500;
+const REPO_ROOT = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../..",
+);
 
 /**
  * @typedef {import("node:child_process").ChildProcess} ChildProcess
@@ -45,6 +50,10 @@ const HTTP_STATUS_MAX_CLIENT_ERROR = 500;
  * @typedef {Object} SpawnAppOptions
  * @property {number} port
  * @property {Record<string, unknown>} [input]
+ * @property {string} [cwd]
+ * @property {NodeJS.ProcessEnv} [envOverrides]
+ * @property {boolean} [injectPortEnv=true]
+ * @property {boolean} [injectInputEnv=true]
  */
 
 /**
@@ -152,20 +161,37 @@ export async function waitForProcessReady(
  * @returns {Promise<SpawnedApp>}
  */
 export async function spawnAppProcess(options) {
-  const { port, input = {} } = options;
+  const {
+    port,
+    input,
+    cwd = REPO_ROOT,
+    envOverrides = {},
+    injectPortEnv = true,
+    injectInputEnv = true,
+  } = options;
   const storageDir = await mkdtemp(path.join(tmpdir(), "wdl-e2e-"));
 
+  /** @type {NodeJS.ProcessEnv} */
   const env = {
     ...process.env,
     [ENV_VARS.NODE_ENV]: ENV_VALUES.PRODUCTION,
-    [ENV_VARS.ACTOR_WEB_SERVER_PORT]: String(port),
     [ENV_VARS.DISABLE_HOT_RELOAD]: "true",
     [ENV_VARS.APIFY_LOCAL_STORAGE_DIR]: storageDir,
-    [ENV_VARS.INPUT]: JSON.stringify(input),
+    ...envOverrides,
   };
 
-  const child = spawn(process.execPath, ["src/main.js"], {
-    cwd: process.cwd(),
+  delete env[ENV_VARS.JEST_WORKER_ID];
+
+  if (injectPortEnv) {
+    env[ENV_VARS.ACTOR_WEB_SERVER_PORT] = String(port);
+  }
+
+  if (injectInputEnv && input !== undefined) {
+    env[ENV_VARS.INPUT] = JSON.stringify(input);
+  }
+
+  const child = spawn(process.execPath, [path.join(REPO_ROOT, "src/main.js")], {
+    cwd,
     env,
     stdio: ["ignore", "pipe", "pipe"],
   });

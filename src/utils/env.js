@@ -1,11 +1,15 @@
 /**
  * @file src/utils/env.js
  * @description Lightweight helpers for environment variable parsing.
- * This file is dependency-free to allow usage in constants without circular dependencies.
+ * Also triggers one-time local .env loading for CLI/self-hosted usage.
+ * Keep the side-effect import here because multiple constants modules read
+ * environment-backed defaults during module evaluation, including code paths
+ * that do not boot through src/main.js.
  * @module utils/env
  */
 
-import { ENV_VALUES, ENV_VARS } from "../consts/app.js";
+import "./load_env.js";
+import { ENV_VALUES, ENV_VARS } from "../consts/env.js";
 
 /**
  * Helper to safely parse integer environment variables
