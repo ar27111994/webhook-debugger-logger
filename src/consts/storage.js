@@ -38,6 +38,7 @@ export const FILE_NAMES = Object.freeze({
   SCHEMA: "input_schema.json",
   PACKAGE_JSON: "../package.json",
   ACTOR_JSON: `../${ACTOR_CONFIG_DIR}/actor.json`,
+  WEB_SERVER_SCHEMA_JSON: `../${ACTOR_CONFIG_DIR}/web_server_schema.json`,
 });
 
 /** @enum {string} */

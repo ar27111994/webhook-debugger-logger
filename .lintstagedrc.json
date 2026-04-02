@@ -3,5 +3,8 @@
     "eslint --fix",
     "prettier --write"
   ],
-  "package.json": ["npm run sync:version", "git add .actor/actor.json"]
+  "package.json": [
+    "npm run sync:version",
+    "git add .actor/actor.json .actor/web_server_schema.json"
+  ]
 }

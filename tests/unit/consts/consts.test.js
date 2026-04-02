@@ -73,7 +73,7 @@ describe("Consts Logic", () => {
 
     it("should format SYNC_VERSION_SUCCESS correctly", () => {
       expect(LOG_MESSAGES.SYNC_VERSION_SUCCESS("1.2.3")).toBe(
-        "Synced actor.json to v1.2.3",
+        "Synced version metadata to v1.2.3",
       );
     });
   });

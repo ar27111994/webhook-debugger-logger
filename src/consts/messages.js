@@ -162,7 +162,7 @@ export const LOG_MESSAGES = Object.freeze({
      * @param {string} version
      * @returns {string}
      */
-    (version) => `Synced actor.json to v${version}`,
+    (version) => `Synced version metadata to v${version}`,
   SYNC_VERSION_ALREADY_SYNCED: "Versions are already in sync.",
   OBJECT_PLACEHOLDER: "[object Object]",
   ALREADY_INITIALIZED:

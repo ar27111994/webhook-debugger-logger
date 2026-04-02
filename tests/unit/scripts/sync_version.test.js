@@ -35,8 +35,19 @@ describe("Sync Version Script", () => {
     version: PACKAGE_VERSION,
     name: "actor",
   });
+  const WEB_SERVER_SCHEMA_OLD = JSON.stringify({
+    openapi: "3.0.3",
+    info: { title: "Webhook API", version: "0.0.0" },
+  });
+  const WEB_SERVER_SCHEMA_MATCH = JSON.stringify({
+    openapi: "3.0.3",
+    info: { title: "Webhook API", version: PACKAGE_VERSION },
+  });
   const ACTOR_JSON = "actor.json";
+  const WEB_SERVER_SCHEMA_JSON = "web_server_schema.json";
   const PACKAGE_JSON_PATH = "package.json";
+  const READ_FILE_COUNT = 3;
+  const WRITE_FILE_COUNT = 2;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -46,7 +57,7 @@ describe("Sync Version Script", () => {
     systemMock.exit.mockReset();
   });
 
-  it("should update actor.json when versions mismatch", () => {
+  it("should update actor.json and web_server_schema.json when versions mismatch", () => {
     fsMock.readFileSync.mockImplementation(
       assertType(
         /**
@@ -56,6 +67,9 @@ describe("Sync Version Script", () => {
         (path) => {
           if (String(path).includes(PACKAGE_JSON_PATH)) return PACKAGE_JSON;
           if (String(path).includes(ACTOR_JSON)) return ACTOR_JSON_OLD;
+          if (String(path).includes(WEB_SERVER_SCHEMA_JSON)) {
+            return WEB_SERVER_SCHEMA_OLD;
+          }
           return "{}";
         },
       ),
@@ -63,14 +77,27 @@ describe("Sync Version Script", () => {
 
     syncVersion();
 
-    expect(fsMock.readFileSync).toHaveBeenCalledTimes(1 + 1);
-    expect(fsMock.writeFileSync).toHaveBeenCalledTimes(1);
+    expect(fsMock.readFileSync).toHaveBeenCalledTimes(READ_FILE_COUNT);
+    expect(fsMock.writeFileSync).toHaveBeenCalledTimes(WRITE_FILE_COUNT);
 
-    const [path, content] = fsMock.writeFileSync.mock.calls[0];
-    expect(path).toContain(ACTOR_JSON);
+    const actorWrite = fsMock.writeFileSync.mock.calls.find(([path]) =>
+      String(path).includes(ACTOR_JSON),
+    );
+    const schemaWrite = fsMock.writeFileSync.mock.calls.find(([path]) =>
+      String(path).includes(WEB_SERVER_SCHEMA_JSON),
+    );
 
-    const written = JSON.parse(assertType(content));
-    expect(written.version).toBe(PACKAGE_VERSION);
+    expect(actorWrite).toBeDefined();
+    expect(schemaWrite).toBeDefined();
+
+    const [, actorContent] = assertType(actorWrite);
+    const [, schemaContent] = assertType(schemaWrite);
+
+    const writtenActor = JSON.parse(assertType(actorContent));
+    expect(writtenActor.version).toBe(PACKAGE_VERSION);
+
+    const writtenSchema = JSON.parse(assertType(schemaContent));
+    expect(writtenSchema.info.version).toBe(PACKAGE_VERSION);
 
     expect(loggerMock.info).toHaveBeenCalledWith(
       expect.stringContaining(PACKAGE_VERSION),
@@ -87,6 +114,9 @@ describe("Sync Version Script", () => {
         (path) => {
           if (String(path).includes(PACKAGE_JSON_PATH)) return PACKAGE_JSON;
           if (String(path).includes(ACTOR_JSON)) return ACTOR_JSON_MATCH;
+          if (String(path).includes(WEB_SERVER_SCHEMA_JSON)) {
+            return WEB_SERVER_SCHEMA_MATCH;
+          }
           return "{}";
         },
       ),
@@ -94,11 +124,40 @@ describe("Sync Version Script", () => {
 
     syncVersion();
 
-    expect(fsMock.readFileSync).toHaveBeenCalledTimes(1 + 1);
+    expect(fsMock.readFileSync).toHaveBeenCalledTimes(READ_FILE_COUNT);
     expect(fsMock.writeFileSync).not.toHaveBeenCalled();
     expect(loggerMock.info).toHaveBeenCalledWith(
       expect.stringContaining("already in sync"),
     );
+  });
+
+  it("should update only web_server_schema.json when actor.json is already synced", () => {
+    fsMock.readFileSync.mockImplementation(
+      assertType(
+        /**
+         * @param {PathOrFileDescriptor} path
+         * @returns {string}
+         */
+        (path) => {
+          if (String(path).includes(PACKAGE_JSON_PATH)) return PACKAGE_JSON;
+          if (String(path).includes(ACTOR_JSON)) return ACTOR_JSON_MATCH;
+          if (String(path).includes(WEB_SERVER_SCHEMA_JSON)) {
+            return WEB_SERVER_SCHEMA_OLD;
+          }
+          return "{}";
+        },
+      ),
+    );
+
+    syncVersion();
+
+    expect(fsMock.writeFileSync).toHaveBeenCalledTimes(1);
+
+    const [path, content] = fsMock.writeFileSync.mock.calls[0];
+    expect(path).toContain(WEB_SERVER_SCHEMA_JSON);
+
+    const writtenSchema = JSON.parse(assertType(content));
+    expect(writtenSchema.info.version).toBe(PACKAGE_VERSION);
   });
 
   it("should handle errors gracefully", () => {
@@ -170,7 +229,22 @@ describe("Sync Version Script", () => {
 
   it("should execute if run as main script", async () => {
     // Mock valid files to avoid error exit
-    fsMock.readFileSync.mockReturnValue("{}");
+    fsMock.readFileSync.mockImplementation(
+      assertType(
+        /**
+         * @param {PathOrFileDescriptor} path
+         * @returns {string}
+         */
+        (path) => {
+          if (String(path).includes(PACKAGE_JSON_PATH)) return PACKAGE_JSON;
+          if (String(path).includes(ACTOR_JSON)) return ACTOR_JSON_MATCH;
+          if (String(path).includes(WEB_SERVER_SCHEMA_JSON)) {
+            return WEB_SERVER_SCHEMA_MATCH;
+          }
+          return "{}";
+        },
+      ),
+    );
     fsMock.writeFileSync.mockImplementation(() => {});
 
     // Calculate expected path

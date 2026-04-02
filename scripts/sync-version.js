@@ -1,6 +1,6 @@
 /**
  * @file scripts/sync-version.js
- * @description Syncs the version from package.json to actor.json.
+ * @description Syncs the version from package.json to generated actor metadata files.
  * @module scripts/sync-version
  */
 
@@ -20,13 +20,24 @@ const log = createChildLogger({ component: LOG_COMPONENTS.SYNC_VERSION });
 const actorJsonPath = fileURLToPath(
   new URL(FILE_NAMES.ACTOR_JSON, import.meta.url),
 );
+const webServerSchemaPath = fileURLToPath(
+  new URL(FILE_NAMES.WEB_SERVER_SCHEMA_JSON, import.meta.url),
+);
 const packageJsonPath = fileURLToPath(
   new URL(FILE_NAMES.PACKAGE_JSON, import.meta.url),
 );
 
+/**
+ * @param {string} path
+ * @param {unknown} data
+ * @returns {void}
+ */
+const writeJsonFile = (path, data) => {
+  writeFileSync(path, JSON.stringify(data, null, APP_CONSTS.JSON_INDENT) + "\n");
+};
+
 export const syncVersion = () => {
   try {
-    const actorJson = JSON.parse(readFileSync(actorJsonPath, ENCODINGS.UTF8));
     const packageJson = JSON.parse(
       readFileSync(packageJsonPath, ENCODINGS.UTF8),
     );
@@ -36,12 +47,28 @@ export const syncVersion = () => {
       throw new Error(ERROR_MESSAGES.SYNC_VERSION_MISSING_PACKAGE_VERSION);
     }
 
+    const actorJson = JSON.parse(readFileSync(actorJsonPath, ENCODINGS.UTF8));
+    const webServerSchema = JSON.parse(
+      readFileSync(webServerSchemaPath, ENCODINGS.UTF8),
+    );
+    let didSync = false;
+
     if (actorJson.version !== packageVersion) {
       actorJson.version = packageVersion;
-      writeFileSync(
-        actorJsonPath,
-        JSON.stringify(actorJson, null, APP_CONSTS.JSON_INDENT) + "\n",
-      );
+      writeJsonFile(actorJsonPath, actorJson);
+      didSync = true;
+    }
+
+    if (webServerSchema.info?.version !== packageVersion) {
+      webServerSchema.info = {
+        ...webServerSchema.info,
+        version: packageVersion,
+      };
+      writeJsonFile(webServerSchemaPath, webServerSchema);
+      didSync = true;
+    }
+
+    if (didSync) {
       log.info(LOG_MESSAGES.SYNC_VERSION_SUCCESS(packageVersion));
     } else {
       log.info(LOG_MESSAGES.SYNC_VERSION_ALREADY_SYNCED);
