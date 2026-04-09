@@ -45,7 +45,7 @@
     "retentionHours": {
       "type": "integer",
       "title": "Retention Window (Hours)",
-      "description": "How long to keep your webhook URLs active (1-168 hours). Note: Logs for expired webhooks are filtered out from the '/logs' endpoint.",
+      "description": "How long to keep your webhook URLs active (1-168 hours). After expiry, the webhook stops accepting traffic immediately and its logs are removed from '/logs' during the next cleanup cycle (up to 10 minutes later). Reducing this value via hot-reload only affects new webhooks — pre-existing webhooks keep their original expiry. Logs already pushed to the Apify Dataset are not affected by retention.",
       "minimum": 1,
       "maximum": 168,
       "default": 24,

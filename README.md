@@ -54,21 +54,21 @@ It is designed for developers working with providers such as Stripe, GitHub, Sho
 
 The current repo schema is defined in [.actor/input_schema.json](.actor/input_schema.json). These are the settings most users touch first.
 
-| Input | Purpose | Default |
-| --- | --- | --- |
-| `urlCount` | Number of temporary webhook endpoints to generate | `3` |
-| `retentionHours` | How long generated webhook URLs remain active | `24` |
-| `maxPayloadSize` | Maximum accepted request body size in bytes | `10485760` |
-| `enableJSONParsing` | Parse JSON payloads into structured objects for search | `true` |
-| `maskSensitiveData` | Redact `Authorization` and `Cookie` headers from logs | `true` |
-| `authKey` | Protect management routes and optionally webhook ingest with a shared key | unset |
-| `allowedIps` | Restrict traffic to specific IPs or CIDR blocks | empty |
-| `signatureVerification` | Verify Stripe, Shopify, GitHub, Slack, or custom signatures | unset |
-| `forwardUrl` | Forward every captured request to another destination | unset |
-| `defaultResponseCode` | Return a custom HTTP status to the sender | `200` |
-| `responseDelayMs` | Simulate network latency or slow callback processing | `0` |
-| `jsonSchema` | Reject payloads that do not match a JSON Schema | unset |
-| `customScript` | Transform or enrich the captured event before storage | unset |
+| Input                   | Purpose                                                                                                           | Default    |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------- | ---------- |
+| `urlCount`              | Number of temporary webhook endpoints to generate                                                                 | `3`        |
+| `retentionHours`        | How long generated webhook URLs remain active                                                                     | `24`       |
+| `maxPayloadSize`        | Maximum accepted request body size in bytes; values above 100 MB are clamped                                      | `10485760` |
+| `enableJSONParsing`     | Parse JSON payloads into structured objects for search                                                            | `true`     |
+| `maskSensitiveData`     | Redact sensitive headers such as `Authorization`, `Cookie`, `Set-Cookie`, and API key headers from logs           | `true`     |
+| `authKey`               | Protect management routes and optionally webhook ingest with a shared key                                         | unset      |
+| `allowedIps`            | Restrict traffic to specific IPs or CIDR blocks                                                                   | empty      |
+| `signatureVerification` | Verify Stripe, Shopify, GitHub, Slack, or custom signatures                                                       | unset      |
+| `forwardUrl`            | Forward every captured request to another destination                                                             | unset      |
+| `defaultResponseCode`   | Return a custom HTTP status to the sender                                                                         | `200`      |
+| `responseDelayMs`       | Simulate network latency or slow callback processing; accepted range is 0-10,000 ms and higher values are clamped | `0`        |
+| `jsonSchema`            | Reject payloads that do not match a JSON Schema                                                                   | unset      |
+| `customScript`          | Transform or enrich the captured event before storage                                                             | unset      |
 
 ![Input schema preview from the Apify Actor input tab](assets/input_schema_preview.png)
 
@@ -119,21 +119,21 @@ This actor combines those workflows in one place.
 
 ## What can this actor do?
 
-| Feature | What you get |
-| --- | --- |
-| Temporary webhook URLs | Generate 1-50 unique endpoints per run with configurable retention |
-| Full request capture | Method, headers, query, body, response body, response headers, size, latency, IP |
-| Searchable logs | DuckDB-backed `/logs` queries with pagination and detailed retrieval |
-| Live streaming | Real-time event feed over `/log-stream` using SSE |
-| Replay workflows | Replay a captured request to a different target URL |
-| HTTP forwarding | Forward every incoming request to a destination with retries and circuit breaker protection |
-| API mocking | Return custom status codes, headers, bodies, and artificial latency |
-| Alert notifications | Send Slack or Discord notifications for `error`, `4xx`, `5xx`, `timeout`, or `signature_invalid` events |
-| Security controls | Global API key, IP allowlist, sensitive header masking, provider signature verification |
-| Large payload handling | Enforce request size limits and offload large accepted payloads so inspection stays practical |
-| Payload validation | Optional JSON Schema validation and custom JavaScript transforms |
-| Platform integrations | Apify web server, Dataset, Key-Value Store, saved runs, API automation, and MCP-friendly Apify workflows |
-| Ops endpoints | `/health`, `/ready`, `/system/metrics`, and `/info` |
+| Feature                | What you get                                                                                             |
+| ---------------------- | -------------------------------------------------------------------------------------------------------- |
+| Temporary webhook URLs | Generate 1-50 unique endpoints per run with configurable retention                                       |
+| Full request capture   | Method, headers, query, body, response body, response headers, size, latency, IP                         |
+| Searchable logs        | DuckDB-backed `/logs` queries with pagination and detailed retrieval                                     |
+| Live streaming         | Real-time event feed over `/log-stream` using SSE                                                        |
+| Replay workflows       | Replay a captured request to a different target URL                                                      |
+| HTTP forwarding        | Forward every incoming request to a destination with retries and circuit breaker protection              |
+| API mocking            | Return custom status codes, headers, bodies, and artificial latency                                      |
+| Alert notifications    | Send Slack or Discord notifications for `error`, `4xx`, `5xx`, `timeout`, or `signature_invalid` events  |
+| Security controls      | Global API key, IP allowlist, sensitive header masking, provider signature verification                  |
+| Large payload handling | Enforce request size limits and offload large accepted payloads so inspection stays practical            |
+| Payload validation     | Optional JSON Schema validation and custom JavaScript transforms                                         |
+| Platform integrations  | Apify web server, Dataset, Key-Value Store, saved runs, API automation, and MCP-friendly Apify workflows |
+| Ops endpoints          | `/health`, `/ready`, `/system/metrics`, and `/info`                                                      |
 
 ## Quick start on Apify
 
@@ -154,11 +154,12 @@ After the actor starts, open the web server URL and call `/info`.
 
 ```json
 {
-  "version": "3.1.3",
+  "version": "3.0.0",
   "status": "Enterprise Suite Online",
   "system": {
     "authActive": false,
     "retentionHours": 24,
+    "maxPayloadLimit": "10.0MB",
     "webhookCount": 3,
     "activeWebhooks": [
       {
@@ -167,12 +168,27 @@ After the actor starts, open the web server URL and call `/info`.
       }
     ]
   },
+  "features": [
+    "High-Performance Logging & Payload Forensics",
+    "Real-time SSE Log Streaming",
+    "Smart Forwarding & Replay Workflows",
+    "Isomorphic Custom Scripting & Latency Simulation",
+    "Provider Signature Verification & Enterprise Security",
+    "Large Payload Handling & Operational Health"
+  ],
   "endpoints": {
-    "webhook": "https://<run-id>.runs.apify.net/webhook/:id",
     "logs": "https://<run-id>.runs.apify.net/logs?limit=100",
+    "logDetail": "https://<run-id>.runs.apify.net/logs/:logId",
+    "logPayload": "https://<run-id>.runs.apify.net/logs/:logId/payload",
     "stream": "https://<run-id>.runs.apify.net/log-stream",
-    "replay": "https://<run-id>.runs.apify.net/replay/:webhookId/:itemId?url=https://example.com/webhook"
-  }
+    "webhook": "https://<run-id>.runs.apify.net/webhook/:id",
+    "replay": "https://<run-id>.runs.apify.net/replay/:webhookId/:itemId?url=http://your-goal.com",
+    "info": "https://<run-id>.runs.apify.net/info",
+    "systemMetrics": "https://<run-id>.runs.apify.net/system/metrics",
+    "health": "https://<run-id>.runs.apify.net/health",
+    "ready": "https://<run-id>.runs.apify.net/ready"
+  },
+  "docs": "https://apify.com/ar27111994/webhook-debugger-logger"
 }
 ```
 
@@ -288,19 +304,21 @@ The script receives `{ event, req }` and can normalize, enrich, or redact payloa
 
 The actor exposes a small but practical HTTP surface.
 
-| Endpoint | Purpose |
-| --- | --- |
-| `GET /` | Lightweight dashboard page |
-| `GET /info` | Runtime info, active webhooks, endpoint discovery |
-| `ANY /webhook/:id` | Capture incoming webhook traffic |
-| `GET /logs` | Query captured events |
-| `GET /logs/:logId` | Fetch one log entry |
-| `GET /logs/:logId/payload` | Retrieve the stored payload for an event |
-| `GET /log-stream` | SSE live feed of captured events |
-| `POST /replay/:webhookId/:itemId` | Replay a captured event to a target URL |
-| `GET /system/metrics` | Sync and operational metrics |
-| `GET /health` | Liveness probe |
-| `GET /ready` | Readiness probe |
+`/health` and `/ready` are intentionally rate-limited but not protected by `authKey`, so orchestrators and load balancers can probe them even when management routes require authentication.
+
+| Endpoint                          | Purpose                                           |
+| --------------------------------- | ------------------------------------------------- |
+| `GET /`                           | Lightweight dashboard page                        |
+| `GET /info`                       | Runtime info, active webhooks, endpoint discovery |
+| `ANY /webhook/:id`                | Capture incoming webhook traffic                  |
+| `GET /logs`                       | Query captured events                             |
+| `GET /logs/:logId`                | Fetch one log entry                               |
+| `GET /logs/:logId/payload`        | Retrieve the stored payload for an event          |
+| `GET /log-stream`                 | SSE live feed of captured events                  |
+| `POST /replay/:webhookId/:itemId` | Replay a captured event to a target URL           |
+| `GET /system/metrics`             | Sync and operational metrics                      |
+| `GET /health`                     | Liveness probe                                    |
+| `GET /ready`                      | Readiness probe                                   |
 
 For the full contract, see [docs/api-reference.md](docs/api-reference.md) and the machine-readable schema in [.actor/web_server_schema.json](.actor/web_server_schema.json).
 
@@ -360,12 +378,12 @@ Use tighter limits for public debugging endpoints and looser limits for high-thr
 
 Retry and timeout behavior exists in several places and serves different goals.
 
-| Setting | What it controls | Default behavior |
-| --- | --- | --- |
+| Setting             | What it controls                                | Default behavior                                                                |
+| ------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------- |
 | `maxForwardRetries` | Retries for outbound forwarding to `forwardUrl` | Retries transient delivery failures with backoff and circuit breaker protection |
-| `replayMaxRetries` | Retries for replay requests | Retries replay delivery attempts before marking them failed |
-| `replayTimeoutMs` | Per-attempt replay timeout | Bounds replay requests so a dead downstream does not hang the actor |
-| `responseDelayMs` | Artificial response latency to the sender | Simulates slow callbacks for client timeout testing |
+| `replayMaxRetries`  | Retries for replay requests                     | Retries replay delivery attempts before marking them failed                     |
+| `replayTimeoutMs`   | Per-attempt replay timeout                      | Bounds replay requests so a dead downstream does not hang the actor             |
+| `responseDelayMs`   | Artificial response latency to the sender       | Simulates slow callbacks for client timeout testing                             |
 
 In addition to input-level settings, the runtime has internal bounded timeouts for alert delivery, background tasks, custom script execution, shutdown, DNS resolution, and outbound forwarding.
 
@@ -446,14 +464,14 @@ INPUT={"urlCount":1,"retentionHours":24,"authKey":"local-dev-key"}
 
 Useful environment variables:
 
-| Variable | Purpose |
-| --- | --- |
-| `ACTOR_WEB_SERVER_PORT` | Local HTTP port override |
-| `INPUT` | Full actor input JSON for local or container boot |
-| `AUTH_KEY` | Used by [demo_cli.js](demo_cli.js) when calling protected endpoints |
-| `APIFY_ACTOR_URL` | Used by [demo_cli.js](demo_cli.js) to target a non-default base URL |
-| `APIFY_LOCAL_STORAGE_DIR` | Local storage location for state, datasets, and offloaded payloads |
-| `DUCKDB_STORAGE_DIR` / `DUCKDB_FILENAME` | Override DuckDB storage location and file name |
+| Variable                                 | Purpose                                                             |
+| ---------------------------------------- | ------------------------------------------------------------------- |
+| `ACTOR_WEB_SERVER_PORT`                  | Local HTTP port override                                            |
+| `INPUT`                                  | Full actor input JSON for local or container boot                   |
+| `AUTH_KEY`                               | Used by [demo_cli.js](demo_cli.js) when calling protected endpoints |
+| `APIFY_ACTOR_URL`                        | Used by [demo_cli.js](demo_cli.js) to target a non-default base URL |
+| `APIFY_LOCAL_STORAGE_DIR`                | Local storage location for state, datasets, and offloaded payloads  |
+| `DUCKDB_STORAGE_DIR` / `DUCKDB_FILENAME` | Override DuckDB storage location and file name                      |
 
 ### Run with Docker
 
@@ -510,7 +528,7 @@ The repo includes focused operational guides for common debugging and rollout sc
 
 ### How long do generated webhook URLs stay active?
 
-Set `retentionHours` anywhere from 1 to 168 hours. The actor automatically expires old webhook URLs after the configured window.
+Set `retentionHours` anywhere from 1 to 168 hours. Expired webhooks immediately stop accepting traffic. Their logs are purged from the `/logs` query endpoint during the next cleanup cycle (roughly every 10 minutes). Reducing `retentionHours` via hot-reload only affects newly generated webhooks — pre-existing webhooks keep their original, longer expiry window. Events already written to the Apify Dataset are retained independently of this setting.
 
 ### Can I secure my webhook endpoints?
 
