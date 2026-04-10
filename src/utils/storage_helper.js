@@ -39,10 +39,7 @@ export async function offloadToKvs(key, value, contentType) {
  * @returns {Promise<string>}
  */
 export async function getKvsUrl(key) {
-  let kvsUrl = STORAGE_CONSTS.KVS_URL_FALLBACK.replace("${key}", key).replace(
-    "${key}",
-    key,
-  );
+  let kvsUrl = STORAGE_CONSTS.KVS_URL_FALLBACK(key);
   try {
     const kvs = await Actor.openKeyValueStore();
     if (typeof kvs.getPublicUrl === "function") {

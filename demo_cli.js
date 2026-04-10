@@ -38,7 +38,7 @@ async function runDemo() {
 
     // 1. Get active webhooks
     const infoRes = await axios.get(`${BASE_URL}/info`, { headers });
-    const active = infoRes.data.activeWebhooks;
+    const active = infoRes.data.system?.activeWebhooks || [];
 
     if (active.length === 0) {
       console.log("[ERROR] No active webhooks found. Is the Actor running?");
@@ -49,7 +49,7 @@ async function runDemo() {
     console.log(`[URLS] Generated: ${active.map((a) => a.id).join(", ")}`);
     console.log(`[URLS] Using for demo: ${targetId}`);
 
-    if (infoRes.data.authActive) {
+    if (infoRes.data.system?.authActive) {
       console.log(
         "[WARN] Authentication is ENABLED. This demo might return 401s if not configured with the key.",
       );

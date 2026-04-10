@@ -11,7 +11,7 @@ import {
   createReadinessProbeHeader,
 } from "../setup/helpers/integration-harness.js";
 import { APP_ROUTES } from "../../src/consts/app.js";
-import { HTTP_CONSTS, HTTP_STATUS } from "../../src/consts/http.js";
+import { HTTP_STATUS } from "../../src/consts/http.js";
 
 /**
  * @typedef {import('supertest').Agent} AppClient
@@ -59,14 +59,13 @@ describe("Integration: App lifecycle and auth boundaries", () => {
     expect(authorizedResponse.status).toBe(HTTP_STATUS.OK);
   });
 
-  it("should bypass auth for readiness probe header on protected endpoint", async () => {
+  it("should not bypass auth for protected endpoints when the readiness header is present", async () => {
     context = await startIntegrationApp({ authKey: AUTH_KEY });
 
     const readinessResponse = await context.appClient
       .get(APP_ROUTES.INFO)
       .set(createReadinessProbeHeader());
 
-    expect(readinessResponse.status).toBe(HTTP_CONSTS.DEFAULT_RESPONSE_CODE);
-    expect(readinessResponse.text).toBe(HTTP_CONSTS.DEFAULT_SUCCESS_BODY);
+    expect(readinessResponse.status).toBe(HTTP_STATUS.UNAUTHORIZED);
   });
 });

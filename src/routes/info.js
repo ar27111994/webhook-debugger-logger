@@ -37,7 +37,6 @@ export const createInfoHandler =
       getMaxPayloadSize,
       version,
     } = deps;
-    const baseUrl = `${req.protocol}://${req.get("host")}`;
     const activeWebhooks = webhookManager.getAllActive();
 
     res.json({
@@ -56,16 +55,16 @@ export const createInfoHandler =
       },
       features: DASHBOARD_CONSTS.FEATURES_LIST,
       endpoints: {
-        logs: `${baseUrl}${DASHBOARD_CONSTS.ENDPOINTS.LOGS}`,
-        logDetail: `${baseUrl}${DASHBOARD_CONSTS.ENDPOINTS.LOG_DETAIL}`,
-        logPayload: `${baseUrl}${DASHBOARD_CONSTS.ENDPOINTS.LOG_PAYLOAD}`,
-        stream: `${baseUrl}${DASHBOARD_CONSTS.ENDPOINTS.STREAM}`,
-        webhook: `${baseUrl}${DASHBOARD_CONSTS.ENDPOINTS.WEBHOOK}`,
-        replay: `${baseUrl}${DASHBOARD_CONSTS.ENDPOINTS.REPLAY}`,
-        info: `${baseUrl}${DASHBOARD_CONSTS.ENDPOINTS.INFO}`,
-        systemMetrics: `${baseUrl}${DASHBOARD_CONSTS.ENDPOINTS.SYSTEM_METRICS}`,
-        health: `${baseUrl}${DASHBOARD_CONSTS.ENDPOINTS.HEALTH}`,
-        ready: `${baseUrl}${DASHBOARD_CONSTS.ENDPOINTS.READY}`,
+        logs: DASHBOARD_CONSTS.ENDPOINTS.LOGS,
+        logDetail: DASHBOARD_CONSTS.ENDPOINTS.LOG_DETAIL,
+        logPayload: DASHBOARD_CONSTS.ENDPOINTS.LOG_PAYLOAD,
+        stream: DASHBOARD_CONSTS.ENDPOINTS.STREAM,
+        webhook: DASHBOARD_CONSTS.ENDPOINTS.WEBHOOK,
+        replay: DASHBOARD_CONSTS.ENDPOINTS.REPLAY,
+        info: DASHBOARD_CONSTS.ENDPOINTS.INFO,
+        systemMetrics: DASHBOARD_CONSTS.ENDPOINTS.SYSTEM_METRICS,
+        health: DASHBOARD_CONSTS.ENDPOINTS.HEALTH,
+        ready: DASHBOARD_CONSTS.ENDPOINTS.READY,
       },
       docs: APP_CONSTS.APIFY_HOMEPAGE_URL,
     });

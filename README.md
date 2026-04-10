@@ -10,7 +10,7 @@ Generate temporary webhook URLs, inspect every incoming request, replay failures
 [![GitHub release](https://img.shields.io/github/v/release/ar27111994/webhook-debugger-logger)](https://github.com/ar27111994/webhook-debugger-logger/releases)
 [![npm version](https://img.shields.io/npm/v/webhook-debugger-logger)](https://www.npmjs.com/package/webhook-debugger-logger)
 [![npm downloads](https://img.shields.io/npm/dm/webhook-debugger-logger)](https://www.npmjs.com/package/webhook-debugger-logger)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D18-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
 [![GHCR](https://img.shields.io/badge/GHCR-Container%20Image-2496ED?logo=docker&logoColor=white)](https://github.com/ar27111994/webhook-debugger-logger/pkgs/container/webhook-debugger-logger)
 ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/ar27111994/webhook-debugger-logger?utm_source=oss&utm_medium=github&utm_campaign=ar27111994%2Fwebhook-debugger-logger&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
@@ -21,7 +21,6 @@ Generate temporary webhook URLs, inspect every incoming request, replay failures
 [![Open actor in the Apify Store](https://img.shields.io/badge/Apify%20Store-Open%20Actor-5A4FCF?logo=apify&logoColor=white)](https://apify.com/ar27111994/webhook-debugger-logger)
 [![Run actor on Apify](https://img.shields.io/badge/Run%20on-Apify-6B46FF?logo=apify&logoColor=white)](https://console.apify.com/actors/ar27111994~webhook-debugger-logger/input)
 [![Read the API reference](https://img.shields.io/badge/API-Reference-0F766E?logo=swagger&logoColor=white)](docs/api-reference.md)
-[![Watch the local demo video](https://img.shields.io/badge/Watch-Demo-1F6FEB?logo=github&logoColor=white)](./assets/Webhook%20Debugger%20%26%20Logger%20Narrated.mp4)
 [![Self-host with Docker](https://img.shields.io/badge/Self--host-Docker-2496ED?logo=docker&logoColor=white)](docs/local_docker_testing.md)
 
 ## Contribute

@@ -20,7 +20,6 @@ Dockerfile.*
 .vscode
 
 # Apify Platform & DuckDB Specifics
-.actor
 storage
 storage_v2
 apify_storage

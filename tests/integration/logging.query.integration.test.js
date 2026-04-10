@@ -139,12 +139,11 @@ describe("Integration: Logging and query contracts", () => {
     expect(createdItem).toBeDefined();
     expect(String(createdItem?.id).length).toBeGreaterThan(0);
     expect(String(createdItem?.method)).toBe(HTTP_METHODS.POST);
-    expect(String(createdItem?.detailUrl).startsWith("http")).toBe(true);
+    expect(String(createdItem?.detailUrl).startsWith("/")).toBe(true);
     expect(String(createdItem?.detailUrl)).toContain(String(createdItem?.id));
 
-    const detailPath = new URL(String(createdItem?.detailUrl)).pathname;
     const detailResponse = await activeContext.appClient
-      .get(`${detailPath}?fields=id,webhookId,method`)
+      .get(`${String(createdItem?.detailUrl)}?fields=id,webhookId,method`)
       .set(
         HTTP_HEADERS.AUTHORIZATION,
         `${AUTH_CONSTS.BEARER_PREFIX}${AUTH_KEY}`,

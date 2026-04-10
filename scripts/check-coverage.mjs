@@ -178,8 +178,8 @@ export function main(argv = process.argv.slice(1 + 1), deps = {}) {
   const summaryPath = resolveFn(cwd, args.summaryPath);
   const thresholdsPath = resolveFn(cwd, args.thresholdsPath);
 
-  const summary = JSON.parse(readFileSyncFn(summaryPath, ENCODINGS.UTF));
-  const thresholds = JSON.parse(readFileSyncFn(thresholdsPath, ENCODINGS.UTF));
+  const summary = JSON.parse(readFileSyncFn(summaryPath, ENCODINGS.UTF8));
+  const thresholds = JSON.parse(readFileSyncFn(thresholdsPath, ENCODINGS.UTF8));
 
   runChecks(asObject(summary), asObject(thresholds), args.label, io);
 }

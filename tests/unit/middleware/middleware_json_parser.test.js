@@ -20,7 +20,8 @@ import { ENCODINGS } from "../../../src/consts/http.js";
 
 const { createJsonParserMiddleware } =
   await import("../../../src/middleware/json_parser.js");
-const { HTTP_HEADERS, MIME_TYPES } = await import("../../../src/consts/http.js");
+const { HTTP_HEADERS, MIME_TYPES } =
+  await import("../../../src/consts/http.js");
 
 describe("JSON Parser Middleware", () => {
   /** @type {Request & { rawBody?: Buffer | string }} */
@@ -68,7 +69,7 @@ describe("JSON Parser Middleware", () => {
       expect(descriptor).toEqual({
         value: bufferBody,
         writable: false,
-        enumerable: true,
+        enumerable: false,
         configurable: false,
       });
     });

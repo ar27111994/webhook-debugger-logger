@@ -58,7 +58,7 @@ release management and metadata alignment rather than runtime design.
 ### 2.2 API and Product Surface
 
 - **Standby Web Server**: `.actor/actor.json` now declares `usesStandbyMode:
-  true`, which materially changes the Actor's hosted operating model.
+true`, which materially changes the Actor's hosted operating model.
 - **Machine-Readable API Contract**: `.actor/web_server_schema.json` documents
   the HTTP API surface and raises the quality bar for runtime discoverability.
 - **Management Surface**: The service now formalizes routes for dashboard,
@@ -152,7 +152,7 @@ release management and metadata alignment rather than runtime design.
 
 - **Version Metadata Alignment**: Align `package.json`, `.actor/actor.json`,
   runtime display/version references, `CHANGELOG.md`, and release notes before
-  the next formal release. The current branch mixes `3.1.3` runtime metadata
+  the next formal release. The current branch now targets `3.0.0` runtime metadata
   with newer changelog entries.
 - **Schema Drift Guarding**: Keep the web server schema validation script wired
   into release validation so that route behavior and published API contract do

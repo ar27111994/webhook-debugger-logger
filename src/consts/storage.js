@@ -13,7 +13,13 @@ export const DEFAULT_STORAGE_DIR =
 
 export const STORAGE_CONSTS = Object.freeze({
   KVS_KEY_PREFIX: "payload_",
-  KVS_URL_FALLBACK: "Key: ${key} (Use Actor.getValue('${key}') to retrieve)",
+  KVS_URL_FALLBACK:
+    /**
+     * @param {string} key
+     * @returns {string}
+     */
+    (key) =>
+      `Key: ${key} (Use Actor.getValue(${JSON.stringify(String(key))}) to retrieve)`,
   CURSOR_SEPARATOR: ":",
   INPUT_JSON: "INPUT.json",
   OFFLOAD_MARKER_SYNC: "[OFFLOADED_TO_KVS]",

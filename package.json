@@ -61,7 +61,7 @@
   },
   "homepage": "https://github.com/ar27111994/webhook-debugger-logger#readme",
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "devDependencies": {
     "@apify/actor-memory-expression": "^0.1.6",
@@ -74,6 +74,7 @@
     "@types/supertest": "^6.0.3",
     "eslint": "^10.0.0",
     "eslint-plugin-sonarjs": "^3.0.7",
+    "eventsource": "^4.1.0",
     "globals": "^17.0.0",
     "husky": "^9.1.7",
     "jest": "^30.2.0",

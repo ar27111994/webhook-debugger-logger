@@ -10,7 +10,7 @@ The application follows a **Modular Monolith** architecture with distinct layers
 
 | Component       | Technology                 | Purpose                                   | Resilience Strategy                            |
 | :-------------- | :------------------------- | :---------------------------------------- | :--------------------------------------------- |
-| **Runtime**     | Node.js 18+ (ESM)          | Core execution environment                | Graceful shutdown handling                     |
+| **Runtime**     | Node.js 20+ (ESM)          | Core execution environment                | Graceful shutdown handling                     |
 | **Web Server**  | Express.js                 | HTTP routing, middleware pipeline         | Rate limiting, timeouts                        |
 | **Read Model**  | **DuckDB**                 | OLAP queries, filtering, aggregation      | **Disposable**: rebuilds from Dataset on start |
 | **Write Model** | Apify Dataset              | Append-only log of all events             | Persistent Source of Truth                     |

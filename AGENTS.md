@@ -11,7 +11,7 @@ This document provides essential information for agents working in this reposito
 
 - **Type**: Apify Actor (Node.js/Express)
 - **Language**: JavaScript with JSDoc type annotations
-- **Runtime**: Node.js 18+
+- **Runtime**: Node.js 20+
 - **Storage**: Apify Dataset + DuckDB (read model)
 
 ## Commands

@@ -32,13 +32,7 @@ describe("Info Route", () => {
   beforeEach(() => {
     mockReq = createMockRequest({
       protocol: "https",
-      get: assertType(jest.fn()).mockImplementation(
-        /** @param {string} header */
-        (header) => {
-          if (header.toLowerCase() === "host") return "example.com";
-          return undefined;
-        },
-      ),
+      get: assertType(jest.fn()).mockReturnValue("example.com"),
     });
     mockRes = createMockResponse();
     mockNext = createMockNextFunction();
@@ -83,16 +77,16 @@ describe("Info Route", () => {
       },
       features: DASHBOARD_CONSTS.FEATURES_LIST,
       endpoints: {
-        logs: `https://example.com${DASHBOARD_CONSTS.ENDPOINTS.LOGS}`,
-        logDetail: `https://example.com${DASHBOARD_CONSTS.ENDPOINTS.LOG_DETAIL}`,
-        logPayload: `https://example.com${DASHBOARD_CONSTS.ENDPOINTS.LOG_PAYLOAD}`,
-        stream: `https://example.com${DASHBOARD_CONSTS.ENDPOINTS.STREAM}`,
-        webhook: `https://example.com${DASHBOARD_CONSTS.ENDPOINTS.WEBHOOK}`,
-        replay: `https://example.com${DASHBOARD_CONSTS.ENDPOINTS.REPLAY}`,
-        info: `https://example.com${DASHBOARD_CONSTS.ENDPOINTS.INFO}`,
-        systemMetrics: `https://example.com${DASHBOARD_CONSTS.ENDPOINTS.SYSTEM_METRICS}`,
-        health: `https://example.com${DASHBOARD_CONSTS.ENDPOINTS.HEALTH}`,
-        ready: `https://example.com${DASHBOARD_CONSTS.ENDPOINTS.READY}`,
+        logs: DASHBOARD_CONSTS.ENDPOINTS.LOGS,
+        logDetail: DASHBOARD_CONSTS.ENDPOINTS.LOG_DETAIL,
+        logPayload: DASHBOARD_CONSTS.ENDPOINTS.LOG_PAYLOAD,
+        stream: DASHBOARD_CONSTS.ENDPOINTS.STREAM,
+        webhook: DASHBOARD_CONSTS.ENDPOINTS.WEBHOOK,
+        replay: DASHBOARD_CONSTS.ENDPOINTS.REPLAY,
+        info: DASHBOARD_CONSTS.ENDPOINTS.INFO,
+        systemMetrics: DASHBOARD_CONSTS.ENDPOINTS.SYSTEM_METRICS,
+        health: DASHBOARD_CONSTS.ENDPOINTS.HEALTH,
+        ready: DASHBOARD_CONSTS.ENDPOINTS.READY,
       },
       docs: APP_CONSTS.APIFY_HOMEPAGE_URL,
     });
@@ -128,45 +122,6 @@ describe("Info Route", () => {
           authActive: false,
           maxPayloadLimit: `0.0${UNIT_LABELS.MB}`,
           webhookCount: 0,
-        }),
-      }),
-    );
-  });
-
-  it("should handle undefined Host header gracefully (e.g., HTTP/1.0 clients)", () => {
-    /** @type {WebhookManager} */
-    const mockWebhookManager = assertType({
-      getAllActive: jest.fn().mockReturnValue([]),
-    });
-
-    // Mock req to return undefined for everything
-    mockReq.get = assertType(jest.fn()).mockReturnValue(undefined);
-
-    const FALLBACK_RETENTION = 24;
-    const FALLBACK_PAYLOAD = 1024;
-    const deps = {
-      webhookManager: mockWebhookManager,
-      getAuthKey: /** @type {() => string} */ (
-        jest.fn().mockReturnValue("secret")
-      ),
-      getRetentionHours: /** @type {() => number} */ (
-        jest.fn().mockReturnValue(FALLBACK_RETENTION)
-      ),
-      getMaxPayloadSize: /** @type {() => number | undefined} */ (
-        jest.fn().mockReturnValue(FALLBACK_PAYLOAD)
-      ),
-      version: "3.0.0",
-    };
-
-    const handler = createInfoHandler(deps);
-    handler(mockReq, mockRes, mockNext);
-
-    expect(mockRes.json).toHaveBeenCalledWith(
-      expect.objectContaining({
-        endpoints: expect.objectContaining({
-          // Should map to `https://undefined/api/...` without throwing
-          logs: `https://undefined${DASHBOARD_CONSTS.ENDPOINTS.LOGS}`,
-          health: `https://undefined${DASHBOARD_CONSTS.ENDPOINTS.HEALTH}`,
         }),
       }),
     );

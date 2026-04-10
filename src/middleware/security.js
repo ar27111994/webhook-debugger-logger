@@ -10,7 +10,6 @@ import {
   SECURITY_HEADERS_VALUES,
 } from "../consts/security.js";
 import { HTTP_HEADERS, MIME_TYPES } from "../consts/http.js";
-import { validateUUID } from "../utils/common.js";
 
 /**
  * @typedef {import("../typedefs.js").CustomRequest} Request
@@ -31,25 +30,7 @@ export const createRequestIdMiddleware =
   () =>
   /** @param {Request} req @param {Response} res @param {NextFunction} next */
   (req, res, next) => {
-    const idHeader =
-      req.headers[HTTP_HEADERS.X_REQUEST_ID] ||
-      req.headers[HTTP_HEADERS.X_REQUEST_ID.toLowerCase()];
-    const existingId =
-      String(Array.isArray(idHeader) ? idHeader[0] : idHeader) || "";
-
-    let requestId = `${REQUEST_ID_PREFIX}${nanoid()}`;
-    // Preserve existing ID if it looks reasonable (not just an empty string)
-    if (existingId) {
-      if (
-        validateUUID(
-          existingId.startsWith(REQUEST_ID_PREFIX)
-            ? existingId.slice(REQUEST_ID_PREFIX.length)
-            : existingId,
-        )
-      ) {
-        requestId = existingId;
-      }
-    }
+    const requestId = `${REQUEST_ID_PREFIX}${nanoid()}`;
 
     req.requestId = requestId;
 

@@ -60,7 +60,7 @@ Visit http://localhost:3000 to see the application.
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20+
 - PostgreSQL 14+
 - Redis 6.2+
 

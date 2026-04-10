@@ -28,10 +28,10 @@ When `authKey` is configured in Actor input, the application protects the dashbo
 
 ### Supported Methods
 
-| Method | Example |
-| --- | --- |
-| Bearer token | `Authorization: Bearer YOUR_KEY` |
-| Query parameter | `?key=YOUR_KEY` |
+| Method          | Example                          |
+| --------------- | -------------------------------- |
+| Bearer token    | `Authorization: Bearer YOUR_KEY` |
+| Query parameter | `?key=YOUR_KEY`                  |
 
 ### Auth-Protected When `authKey` Is Configured
 
@@ -78,12 +78,12 @@ The configured `rateLimitPerMinute` applies to:
 
 ### Response Headers
 
-| Header | Description |
-| --- | --- |
-| `X-RateLimit-Limit` | Maximum requests allowed per window |
-| `X-RateLimit-Remaining` | Remaining requests in current window |
-| `X-RateLimit-Reset` | Unix timestamp when the current window resets |
-| `Retry-After` | Seconds to wait before retrying |
+| Header                  | Description                                   |
+| ----------------------- | --------------------------------------------- |
+| `X-RateLimit-Limit`     | Maximum requests allowed per window           |
+| `X-RateLimit-Remaining` | Remaining requests in current window          |
+| `X-RateLimit-Reset`     | Unix timestamp when the current window resets |
+| `Retry-After`           | Seconds to wait before retrying               |
 
 ### Management `429` Example
 
@@ -121,7 +121,7 @@ Returns the built-in dashboard page. If the request `Accept` header includes `te
 **Plain-text Example:**
 
 ```text
-Webhook Debugger & Logger (v3.1.3)
+Webhook Debugger & Logger (v3.0.0)
 Active Webhooks: 1
 Signature Verification: STRIPE
 ```
@@ -138,14 +138,14 @@ Captures incoming webhook traffic for any HTTP method handled by Express.
 
 **Path Parameters:**
 
-| Name | Type | Description |
-| --- | --- | --- |
+| Name | Type   | Description                                   |
+| ---- | ------ | --------------------------------------------- |
 | `id` | string | Active webhook identifier such as `wh_abc123` |
 
 **Query Parameters:**
 
-| Parameter | Type | Description |
-| --- | --- | --- |
+| Parameter  | Type   | Description                                                                               |
+| ---------- | ------ | ----------------------------------------------------------------------------------------- |
 | `__status` | number | Overrides the response status code for this request when the value is a valid HTTP status |
 
 **Request Example:**
@@ -207,7 +207,7 @@ Returns runtime metadata, active webhook state, discoverable endpoints, and the 
 
 ```json
 {
-  "version": "3.1.3",
+  "version": "3.0.0",
   "status": "Enterprise Suite Online",
   "system": {
     "authActive": true,
@@ -247,7 +247,7 @@ Returns runtime metadata, active webhook state, discoverable endpoints, and the 
 
 **Notes:**
 
-- `version` is sourced from runtime package metadata. In the current branch source it resolves to `3.1.3` unless `npm_package_version` overrides it at runtime.
+- `version` is sourced from runtime package metadata. In the current branch source it resolves to `3.0.0` unless `npm_package_version` overrides it at runtime.
 - `activeWebhooks` contains the webhook manager's persisted active state, which currently includes `id` and `expiresAt`.
 - The discovery URL for `logs` intentionally includes `?limit=100` as a reasonable starter page size even though `/logs` itself defaults to a larger limit when `limit` is omitted.
 
@@ -263,34 +263,34 @@ Queries captured webhook events from the DuckDB read model using offset- or curs
 
 **Query Parameters:**
 
-| Parameter | Type | Default | Description |
-| --- | --- | --- | --- |
-| `id` | string | - | Exact log ID |
-| `webhookId` | string | - | Exact webhook ID |
-| `requestUrl` | string | - | Partial match against the stored request URL |
-| `method` | string | - | Exact HTTP method, normalized to uppercase |
-| `statusCode` | number or range object | - | Exact code or range syntax such as `statusCode[gte]=400` |
-| `contentType` | string | - | Partial match against stored content type |
-| `requestId` | string | - | Exact request ID |
-| `remoteIp` | string | - | Exact IP or CIDR block |
-| `userAgent` | string | - | Partial match against user agent |
-| `signatureValid` | boolean | - | Signature verification result |
-| `signatureProvider` | string | - | Exact signature provider |
-| `signatureError` | string | - | Exact signature error string |
-| `processingTime` | number or range object | - | Exact or ranged processing time filter |
-| `size` | number or range object | - | Exact or ranged payload size filter |
-| `timestamp` | string or range object | - | Exact or ranged timestamp filter |
-| `startTime` | ISO string | - | Convenience lower bound for timestamp filtering |
-| `endTime` | ISO string | - | Convenience upper bound for timestamp filtering |
-| `headers` | string or object | - | Substring search over serialized headers or keyed JSON filtering |
-| `query` | string or object | - | Substring search over query JSON or keyed JSON filtering |
-| `body` | string or object | - | Substring search over body JSON or keyed JSON filtering |
-| `responseHeaders` | string or object | - | Substring search over response header JSON or keyed JSON filtering |
-| `responseBody` | string or object | - | Substring search over response body JSON or keyed JSON filtering |
-| `limit` | number | `10000` | Result limit. Invalid values are clamped to a minimum of `1`. |
-| `offset` | number | `0` | Offset for traditional pagination |
-| `cursor` | string | - | Cursor for keyset pagination. When present, it takes precedence over `offset`. |
-| `sort` | string | `timestamp:DESC` | Comma-separated sort rules such as `timestamp:desc,method:asc` |
+| Parameter           | Type                   | Default          | Description                                                                    |
+| ------------------- | ---------------------- | ---------------- | ------------------------------------------------------------------------------ |
+| `id`                | string                 | -                | Exact log ID                                                                   |
+| `webhookId`         | string                 | -                | Exact webhook ID                                                               |
+| `requestUrl`        | string                 | -                | Partial match against the stored request URL                                   |
+| `method`            | string                 | -                | Exact HTTP method, normalized to uppercase                                     |
+| `statusCode`        | number or range object | -                | Exact code or range syntax such as `statusCode[gte]=400`                       |
+| `contentType`       | string                 | -                | Partial match against stored content type                                      |
+| `requestId`         | string                 | -                | Exact request ID                                                               |
+| `remoteIp`          | string                 | -                | Exact IP or CIDR block                                                         |
+| `userAgent`         | string                 | -                | Partial match against user agent                                               |
+| `signatureValid`    | boolean                | -                | Signature verification result                                                  |
+| `signatureProvider` | string                 | -                | Exact signature provider                                                       |
+| `signatureError`    | string                 | -                | Exact signature error string                                                   |
+| `processingTime`    | number or range object | -                | Exact or ranged processing time filter                                         |
+| `size`              | number or range object | -                | Exact or ranged payload size filter                                            |
+| `timestamp`         | string or range object | -                | Exact or ranged timestamp filter                                               |
+| `startTime`         | ISO string             | -                | Convenience lower bound for timestamp filtering                                |
+| `endTime`           | ISO string             | -                | Convenience upper bound for timestamp filtering                                |
+| `headers`           | string or object       | -                | Substring search over serialized headers or keyed JSON filtering               |
+| `query`             | string or object       | -                | Substring search over query JSON or keyed JSON filtering                       |
+| `body`              | string or object       | -                | Substring search over body JSON or keyed JSON filtering                        |
+| `responseHeaders`   | string or object       | -                | Substring search over response header JSON or keyed JSON filtering             |
+| `responseBody`      | string or object       | -                | Substring search over response body JSON or keyed JSON filtering               |
+| `limit`             | number                 | `10000`          | Result limit. Invalid values are clamped to a minimum of `1`.                  |
+| `offset`            | number                 | `0`              | Offset for traditional pagination                                              |
+| `cursor`            | string                 | -                | Cursor for keyset pagination. When present, it takes precedence over `offset`. |
+| `sort`              | string                 | `timestamp:DESC` | Comma-separated sort rules such as `timestamp:desc,method:asc`                 |
 
 **Supported Sort Fields:**
 
@@ -358,9 +358,9 @@ Returns a single log entry from the read model.
 
 **Query Parameters:**
 
-| Parameter | Type | Description |
-| --- | --- | --- |
-| `fields` | string | Optional comma-separated field list for sparse responses |
+| Parameter | Type   | Description                                              |
+| --------- | ------ | -------------------------------------------------------- |
+| `fields`  | string | Optional comma-separated field list for sparse responses |
 
 **Response Example:**
 
@@ -419,9 +419,9 @@ Replays a captured webhook event to a new destination URL after SSRF validation.
 
 **Query Parameters:**
 
-| Parameter | Type | Description |
-| --- | --- | --- |
-| `url` | string | Destination URL. Required. Subject to SSRF and DNS safety checks. |
+| Parameter | Type   | Description                                                       |
+| --------- | ------ | ----------------------------------------------------------------- |
+| `url`     | string | Destination URL. Required. Subject to SSRF and DNS safety checks. |
 
 **Request Example:**
 
@@ -631,18 +631,18 @@ Replay timeouts can also include an error code:
 
 ### Common Status Codes
 
-| Code | Description |
-| --- | --- |
-| `400` | Invalid parameters, JSON Schema validation failures, or unsafe replay URL |
-| `401` | Missing or invalid auth key, or failed signature verification |
-| `403` | Source IP is not in the configured allowlist |
+| Code  | Description                                                                         |
+| ----- | ----------------------------------------------------------------------------------- |
+| `400` | Invalid parameters, JSON Schema validation failures, or unsafe replay URL           |
+| `401` | Missing or invalid auth key, or failed signature verification                       |
+| `403` | Source IP is not in the configured allowlist                                        |
 | `404` | Webhook or log not found, invalid webhook/log pairing, or missing offloaded payload |
-| `413` | Payload exceeds the configured maximum size |
-| `422` | Recursive forwarding loop detected |
-| `429` | Rate limit exceeded |
-| `500` | Internal server error |
-| `503` | Probe not ready, SSE connection limit reached, or similar temporary unavailability |
-| `504` | Replay or forward timeout across retry attempts |
+| `413` | Payload exceeds the configured maximum size                                         |
+| `422` | Recursive forwarding loop detected                                                  |
+| `429` | Rate limit exceeded                                                                 |
+| `500` | Internal server error                                                               |
+| `503` | Probe not ready, SSE connection limit reached, or similar temporary unavailability  |
+| `504` | Replay or forward timeout across retry attempts                                     |
 
 ---
 
@@ -662,12 +662,12 @@ The following URL classes are blocked for replay destinations, forwarding target
 
 The Actor supports automatic signature verification for:
 
-| Provider | Header | Algorithm |
-| --- | --- | --- |
-| Stripe | `Stripe-Signature` | HMAC-SHA256 with timestamp |
-| Shopify | `X-Shopify-Hmac-Sha256` | Base64 HMAC-SHA256 |
-| GitHub | `X-Hub-Signature-256` | `sha256=<hex>` |
-| Slack | `X-Slack-Signature` | `v0=<hex>` with timestamp |
-| Custom | Configurable | Configurable algorithm |
+| Provider | Header                  | Algorithm                  |
+| -------- | ----------------------- | -------------------------- |
+| Stripe   | `Stripe-Signature`      | HMAC-SHA256 with timestamp |
+| Shopify  | `X-Shopify-Hmac-Sha256` | Base64 HMAC-SHA256         |
+| GitHub   | `X-Hub-Signature-256`   | `sha256=<hex>`             |
+| Slack    | `X-Slack-Signature`     | `v0=<hex>` with timestamp  |
+| Custom   | Configurable            | Configurable algorithm     |
 
 Configure via `signatureVerification` in Actor input.

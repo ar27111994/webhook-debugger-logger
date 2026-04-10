@@ -111,7 +111,7 @@
     },
     "redactBodyPaths": {
       "type": "array",
-      "title": "Redact Payalod Paths",
+      "title": "Redact Payload Paths",
       "description": "List of dot-notation paths in the JSON body to redact. Must start with 'body.' (e.g., 'body.token', 'body.auth', 'body.user.password', 'body.payment.card', etc.).",
       "editor": "stringList",
       "default": []

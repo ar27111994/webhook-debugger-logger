@@ -18,9 +18,9 @@ await setupCommonMocks({ auth: true, routeUtils: true });
 const { authMock, routeUtilsMock } =
   await import("../../setup/helpers/shared-mocks.js");
 
-const { createAuthMiddleware } = await import("../../../src/middleware/auth.js");
-const { HTTP_STATUS, HTTP_HEADERS, HTTP_STATUS_MESSAGES } =
-  await import("../../../src/consts/http.js");
+const { createAuthMiddleware } =
+  await import("../../../src/middleware/auth.js");
+const { HTTP_HEADERS } = await import("../../../src/consts/http.js");
 
 import {
   createMockRequest,
@@ -48,23 +48,23 @@ describe("Auth Middleware", () => {
     mockNext = createMockNextFunction();
     mockGetAuthKey = jest.fn().mockReturnValue(MOCK_AUTH_KEY);
     middleware = createAuthMiddleware(
-      /** @type {() => string} */(mockGetAuthKey),
+      /** @type {() => string} */ (mockGetAuthKey),
     );
 
     jest.clearAllMocks();
   });
 
   describe("createAuthMiddleware", () => {
-    it("should bypass auth and return 200 OK for Apify readiness probe", () => {
+    it("should not bypass auth for protected endpoints when the readiness header is present", () => {
       mockReq.headers[HTTP_HEADERS.APIFY_READINESS] = "1";
 
       middleware(mockReq, mockRes, mockNext);
 
-      expect(mockRes.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
-      expect(mockRes.send).toHaveBeenCalledWith(
-        HTTP_STATUS_MESSAGES[HTTP_STATUS.OK],
+      expect(mockGetAuthKey).toHaveBeenCalled();
+      expect(authMock.validateAuth).toHaveBeenCalledWith(
+        mockReq,
+        MOCK_AUTH_KEY,
       );
-      expect(authMock.validateAuth).not.toHaveBeenCalled();
       expect(mockNext).not.toHaveBeenCalled();
     });
 

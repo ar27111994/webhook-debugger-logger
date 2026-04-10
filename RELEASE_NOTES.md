@@ -148,12 +148,10 @@ Compared with `main`, the branch introduces:
 
 ## Known Release-Management Follow-Up
 
-- Current runtime metadata resolves to `3.1.3` in `package.json` and
+- Current runtime metadata resolves to `3.0.0` in `package.json` and
   `.actor/actor.json`.
-- `CHANGELOG.md` now includes a major `3.0.0` milestone summary for this branch,
-  but the release history still needs to be reconciled with the current
-  `3.1.3` runtime metadata if you plan to preserve every intermediate 3.x
-  release entry.
+- `CHANGELOG.md` and the release copy in this branch are aligned to the
+  `3.0.0` milestone release.
 - Before cutting the next formal release, align package metadata, actor
   metadata, changelog entries, dashboard/runtime version display, and any store
   publication copy.

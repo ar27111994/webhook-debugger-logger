@@ -27,7 +27,7 @@ export const jsonParserMiddleware = (req, _res, next) => {
   Object.defineProperty(req, "rawBody", {
     value: req.body,
     writable: false,
-    enumerable: true,
+    enumerable: false,
     configurable: false,
   });
 

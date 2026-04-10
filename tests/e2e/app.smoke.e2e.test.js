@@ -9,11 +9,7 @@ import {
   spawnAppProcess,
 } from "../setup/helpers/e2e-process-harness.js";
 import { APP_ROUTES } from "../../src/consts/app.js";
-import {
-  HTTP_CONSTS,
-  HTTP_HEADERS,
-  HTTP_STATUS,
-} from "../../src/consts/http.js";
+import { HTTP_HEADERS, HTTP_STATUS } from "../../src/consts/http.js";
 
 /**
  * @typedef {import('../setup/helpers/e2e-process-harness.js').SpawnedApp} SpawnedApp
@@ -49,7 +45,7 @@ describe("E2E: Spawned app smoke", () => {
     expect(response.bodyText.length).toBeGreaterThan(0);
   });
 
-  it("should enforce auth on info endpoint and allow readiness bypass", async () => {
+  it("should enforce auth on info endpoint even when a readiness header is supplied", async () => {
     const port = await findFreePort();
     appProcess = await spawnAppProcess({
       port,
@@ -80,7 +76,6 @@ describe("E2E: Spawned app smoke", () => {
 
     expect(unauthorized.statusCode).toBe(HTTP_STATUS.UNAUTHORIZED);
     expect(authorized.statusCode).toBe(HTTP_STATUS.OK);
-    expect(readinessBypass.statusCode).toBe(HTTP_CONSTS.DEFAULT_RESPONSE_CODE);
-    expect(readinessBypass.bodyText).toBe(HTTP_CONSTS.DEFAULT_SUCCESS_BODY);
+    expect(readinessBypass.statusCode).toBe(HTTP_STATUS.UNAUTHORIZED);
   });
 });

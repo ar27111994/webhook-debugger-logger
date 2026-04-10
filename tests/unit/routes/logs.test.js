@@ -101,15 +101,17 @@ describe("Logs Routes", () => {
           items: expect.arrayContaining([
             expect.objectContaining({
               id: "1",
-              detailUrl: "https://example.com/admin/api/logs/1",
+              detailUrl: "/admin/api/logs/1",
             }),
             expect.objectContaining({
               id: "2",
-              detailUrl: "https://example.com/admin/api/logs/2",
+              detailUrl: "/admin/api/logs/2",
             }),
           ]),
           nextOffset: PAGINATION_CONSTS.MAX_PAGE_LIMIT,
-          nextPageUrl: expect.stringContaining("offset=10000"),
+          nextPageUrl: expect.stringMatching(
+            /^\/admin\/api\/logs\?(.+&)?offset=10000(?:&.*)?$/,
+          ),
         }),
       );
     });
@@ -141,12 +143,14 @@ describe("Logs Routes", () => {
           count: mockStoredLogs.items.length,
           items: expect.arrayContaining([
             expect.objectContaining({
-              detailUrl: "https://example.com/admin/api/logs/cursor1",
+              detailUrl: "/admin/api/logs/cursor1",
             }),
           ]),
           nextCursor: mockStoredLogs.nextCursor,
-          nextPageUrl: expect.stringContaining(
-            `cursor=${mockStoredLogs.nextCursor}`,
+          nextPageUrl: expect.stringMatching(
+            new RegExp(
+              `^/admin/api/logs\\?(.+&)?cursor=${mockStoredLogs.nextCursor}(?:&.*)?$`,
+            ),
           ),
         }),
       );

@@ -8,7 +8,7 @@ import { logRepository } from "../repositories/LogRepository.js";
 import { parseRangeQuery, parseObjectFilter } from "../utils/filter_utils.js";
 import { Actor } from "apify";
 import { HTTP_STATUS } from "../consts/http.js";
-import { SORT_DIRECTIONS } from "../consts/app.js";
+import { APP_ROUTES, SORT_DIRECTIONS } from "../consts/app.js";
 import { DELIMITERS } from "../consts/network.js";
 import { ERROR_LABELS, ERROR_MESSAGES } from "../consts/errors.js";
 import { STORAGE_CONSTS } from "../consts/storage.js";
@@ -169,7 +169,7 @@ export const createLogsHandler = (
         };
 
         // Transform items (add detailUrl)
-        const baseUrl = `${req.protocol}://${req.get("host")}${req.baseUrl}`;
+        const listPath = req.baseUrl || req.path || APP_ROUTES.LOGS;
         /** @type {Record<string, any>} */
         const reqQuery = req.query;
 
@@ -179,7 +179,7 @@ export const createLogsHandler = (
 
           const enrichedItems = items.map((item) => ({
             ...item,
-            detailUrl: `${baseUrl}/${item.id}`,
+            detailUrl: `${listPath}/${item.id}`,
           }));
 
           let nextPageUrl = null;
@@ -187,7 +187,7 @@ export const createLogsHandler = (
             const nextParams = new URLSearchParams(reqQuery);
             nextParams.set("cursor", nextCursor);
             nextParams.delete("offset");
-            nextPageUrl = `${baseUrl}?${nextParams.toString()}`;
+            nextPageUrl = `${listPath}?${nextParams.toString()}`;
           }
 
           res.json(
@@ -207,7 +207,7 @@ export const createLogsHandler = (
 
         const enrichedItems = items.map((item) => ({
           ...item,
-          detailUrl: `${baseUrl}/${item.id}`,
+          detailUrl: `${listPath}/${item.id}`,
         }));
 
         // Pagination Metadata
@@ -220,7 +220,7 @@ export const createLogsHandler = (
         if (nextOffset !== null) {
           const nextParams = new URLSearchParams(reqQuery);
           nextParams.set("offset", String(nextOffset));
-          nextPageUrl = `${baseUrl}?${nextParams.toString()}`;
+          nextPageUrl = `${listPath}?${nextParams.toString()}`;
         }
 
         res.json(

@@ -5,11 +5,6 @@
  */
 import { validateAuth } from "../utils/auth.js";
 import { sendUnauthorizedResponse } from "../routes/utils.js";
-import {
-  HTTP_STATUS,
-  HTTP_HEADERS,
-  HTTP_STATUS_MESSAGES,
-} from "../consts/http.js";
 import { LOG_COMPONENTS } from "../consts/logging.js";
 import { LOG_MESSAGES } from "../consts/messages.js";
 import { createChildLogger } from "../utils/logger.js";
@@ -32,12 +27,6 @@ export const createAuthMiddleware =
   (getAuthKey) =>
   /** @param {Request} req @param {Response} res @param {NextFunction} next */
   (req, res, next) => {
-    // Bypass for readiness probe
-    if (req.headers[HTTP_HEADERS.APIFY_READINESS]) {
-      res.status(HTTP_STATUS.OK).send(HTTP_STATUS_MESSAGES[HTTP_STATUS.OK]);
-      return;
-    }
-
     const authResult = validateAuth(req, getAuthKey());
 
     if (!authResult.isValid) {

@@ -82,9 +82,7 @@ describe("Storage Helper Utils", () => {
 
       const url = await getKvsUrl(key);
 
-      expect(url).toBe(
-        STORAGE_CONSTS.KVS_URL_FALLBACK.replaceAll("${key}", key),
-      );
+      expect(url).toBe(STORAGE_CONSTS.KVS_URL_FALLBACK(key));
     });
 
     it("should fallback if getPublicUrl is not a function", async () => {
@@ -93,9 +91,7 @@ describe("Storage Helper Utils", () => {
 
       const url = await getKvsUrl(key);
 
-      expect(url).toBe(
-        STORAGE_CONSTS.KVS_URL_FALLBACK.replaceAll("${key}", key),
-      );
+      expect(url).toBe(STORAGE_CONSTS.KVS_URL_FALLBACK(key));
     });
   });
 
@@ -176,19 +172,15 @@ describe("Storage Helper Utils", () => {
   });
 
   describe("Security and Sanitation Checks", () => {
-    it("should handle payload keys with injection payloads securely in getKvsUrl fallback", async () => {
+    it("should escape the fallback Actor.getValue hint for keys with quotes and control characters", async () => {
       apifyMock.openKeyValueStore.mockRejectedValueOnce(
         assertType(new Error("KVS Error")),
       );
-      // Keys with special replacement patterns ($&, $$, $', etc.)
-      const maliciousKey = "test$&$$key";
+      const maliciousKey = `test'"\\\n$&$$key`;
       const url = await getKvsUrl(maliciousKey);
 
-      // The raw key strings with special tokens evaluate against String.prototype.replace.
-      // We assert exactly how JS evaluates it to confirm no Uncaught Exceptions or memory violations occur.
-      // In Node.js, `$&` inserts the matched substring ("${key}"), and `$$` inserts `$`.
-      const expectedReplacement = `test\${key}$key`;
-      expect(url).toContain(expectedReplacement);
+      expect(url).toContain(maliciousKey);
+      expect(url).toContain(`Actor.getValue(${JSON.stringify(maliciousKey)})`);
     });
 
     it("should handle extremely large sizes and negative sizes in createReferenceBody", () => {

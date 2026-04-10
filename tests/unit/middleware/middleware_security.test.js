@@ -19,9 +19,7 @@ import {
 
 import { setupCommonMocks } from "../../setup/helpers/mock-setup.js";
 import { ENCODINGS } from "../../../src/consts/http.js";
-await setupCommonMocks({ commonUtils: true });
-
-const { commonUtilsMock } = await import("../../setup/helpers/shared-mocks.js");
+await setupCommonMocks();
 const { createRequestIdMiddleware, createCspMiddleware } =
   await import("../../../src/middleware/security.js");
 const { REQUEST_ID_PREFIX } = await import("../../../src/consts/app.js");
@@ -51,8 +49,6 @@ describe("Security Middleware", () => {
     let middleware;
     beforeEach(() => {
       middleware = createRequestIdMiddleware();
-      // Default UUID validator behavior
-      commonUtilsMock.validateUUID.mockReturnValue(false);
     });
 
     it("should generate a new request ID if none is provided", () => {
@@ -72,7 +68,6 @@ describe("Security Middleware", () => {
     it("should generate a new request ID if the provided string is an invalid UUID", () => {
       const INVALID_ID = "invalid-id";
       mockReq.headers[HTTP_HEADERS.X_REQUEST_ID] = INVALID_ID;
-      commonUtilsMock.validateUUID.mockReturnValue(false);
 
       middleware(mockReq, mockRes, mockNext);
 
@@ -80,47 +75,44 @@ describe("Security Middleware", () => {
       expect(String(mockReq.requestId).startsWith(REQUEST_ID_PREFIX)).toBe(
         true,
       );
-      expect(commonUtilsMock.validateUUID).toHaveBeenCalledWith(INVALID_ID);
     });
 
-    it("should extract from lowercase header and use it if valid UUID", () => {
+    it("should ignore a valid lowercase request ID header and generate a new server ID", () => {
       const validUUID = "123e4567-e89b-12d3-a456-426614174000";
       mockReq.headers[HTTP_HEADERS.X_REQUEST_ID.toLowerCase()] = validUUID;
-      commonUtilsMock.validateUUID.mockReturnValue(true);
 
       middleware(mockReq, mockRes, mockNext);
 
-      expect(mockReq.requestId).toBe(validUUID);
-      expect(mockRes.setHeader).toHaveBeenCalledWith(
-        HTTP_HEADERS.X_REQUEST_ID,
-        validUUID,
+      expect(mockReq.requestId).not.toBe(validUUID);
+      expect(String(mockReq.requestId).startsWith(REQUEST_ID_PREFIX)).toBe(
+        true,
       );
-      expect(commonUtilsMock.validateUUID).toHaveBeenCalledWith(validUUID);
     });
 
-    it("should extract from array header string safely if valid", () => {
+    it("should ignore an array header value and keep the generated request ID", () => {
       const validUUID = "123e4567-e89b-12d3-a456-426614174001";
       mockReq.headers[HTTP_HEADERS.X_REQUEST_ID] = [validUUID, "second-val"];
-      commonUtilsMock.validateUUID.mockReturnValue(true);
 
       middleware(mockReq, mockRes, mockNext);
 
-      expect(mockReq.requestId).toBe(validUUID);
+      expect(mockReq.requestId).not.toBe(validUUID);
+      expect(String(mockReq.requestId).startsWith(REQUEST_ID_PREFIX)).toBe(
+        true,
+      );
     });
 
-    it("should strip prefix before validating a provided ID that contains the prefix", () => {
+    it("should ignore a prefixed request ID header and generate a new server ID", () => {
       const uuidWithoutPrefix = "123e4567-e89b-12d3-a456-426614174002";
       mockReq.headers[HTTP_HEADERS.X_REQUEST_ID] =
         `${REQUEST_ID_PREFIX}${uuidWithoutPrefix}`;
-      commonUtilsMock.validateUUID.mockReturnValue(true);
 
       middleware(mockReq, mockRes, mockNext);
 
-      expect(mockReq.requestId).toBe(
+      expect(mockReq.requestId).not.toBe(
         `${REQUEST_ID_PREFIX}${uuidWithoutPrefix}`,
       );
-      expect(commonUtilsMock.validateUUID).toHaveBeenCalledWith(
-        uuidWithoutPrefix,
+      expect(String(mockReq.requestId).startsWith(REQUEST_ID_PREFIX)).toBe(
+        true,
       );
     });
 
@@ -150,7 +142,6 @@ describe("Security Middleware", () => {
       const HUGE_ID_LENGTH = 20000;
       const hugeId = "a".repeat(HUGE_ID_LENGTH);
       mockReq.headers[HTTP_HEADERS.X_REQUEST_ID] = hugeId;
-      commonUtilsMock.validateUUID.mockReturnValue(false);
 
       middleware(mockReq, mockRes, mockNext);
 
@@ -160,7 +151,6 @@ describe("Security Middleware", () => {
       expect(String(mockReq.requestId).startsWith(REQUEST_ID_PREFIX)).toBe(
         true,
       );
-      expect(commonUtilsMock.validateUUID).toHaveBeenCalledWith(hugeId);
     });
   });
 
