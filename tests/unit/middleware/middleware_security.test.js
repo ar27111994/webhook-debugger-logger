@@ -177,11 +177,11 @@ describe("Security Middleware", () => {
         SECURITY_HEADERS_VALUES.REF_STRICT_ORIGIN,
       );
       expect(mockRes.setHeader).toHaveBeenCalledWith(
-        SECURITY_HEADERS_VALUES.HSTS_HEADER,
+        HTTP_HEADERS.STRICT_TRANSPORT_SECURITY,
         SECURITY_HEADERS_VALUES.HSTS_VALUE,
       );
       expect(mockRes.setHeader).toHaveBeenCalledWith(
-        SECURITY_HEADERS_VALUES.PERMISSIONS_POLICY_HEADER,
+        HTTP_HEADERS.PERMISSIONS_POLICY,
         SECURITY_HEADERS_VALUES.PERMISSIONS_POLICY_VALUE,
       );
 
@@ -235,6 +235,10 @@ describe("Security Middleware", () => {
         SECURITY_CONSTS.CSP_POLICY,
       );
       expect(originalWriteHead).toHaveBeenCalledWith(HTTP_STATUS.OK);
+    });
+
+    it("should emit a CSP policy without unsafe-inline allowances", () => {
+      expect(SECURITY_CONSTS.CSP_POLICY).not.toContain("'unsafe-inline'");
     });
 
     it("should not double-wrap writeHead if middleware is called twice on the same response object", () => {

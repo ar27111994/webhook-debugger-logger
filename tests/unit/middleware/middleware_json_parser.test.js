@@ -74,6 +74,38 @@ describe("JSON Parser Middleware", () => {
       });
     });
 
+    it("should preserve string bodies in req.rawBody and parse JSON strings", () => {
+      const jsonObject = { key: "value" };
+      const jsonStr = JSON.stringify(jsonObject);
+      mockReq.body = jsonStr;
+      mockReq.headers[HTTP_HEADERS.CONTENT_TYPE] = MIME_TYPES.JSON;
+
+      middleware(mockReq, mockRes, mockNext);
+
+      expect(mockReq.rawBody).toBe(jsonStr);
+      expect(mockReq.body).toEqual(jsonObject);
+      expect(mockNext).toHaveBeenCalled();
+    });
+
+    it("should reuse an existing rawBody property instead of redefining it", () => {
+      const bufferBody = Buffer.from('{"key":"value"}');
+      const existingRawBody = "existing-raw-body";
+      mockReq.body = bufferBody;
+      mockReq.headers[HTTP_HEADERS.CONTENT_TYPE] = MIME_TYPES.JSON;
+      Object.defineProperty(mockReq, "rawBody", {
+        value: existingRawBody,
+        writable: false,
+        enumerable: false,
+        configurable: false,
+      });
+
+      middleware(mockReq, mockRes, mockNext);
+
+      expect(mockReq.rawBody).toBe(existingRawBody);
+      expect(mockReq.body).toEqual({ key: "value" });
+      expect(mockNext).toHaveBeenCalled();
+    });
+
     it("should parse valid JSON body when content-type contains application/json", () => {
       const jsonObject = { key: "value" };
       const jsonStr = JSON.stringify(jsonObject);

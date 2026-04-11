@@ -18,12 +18,36 @@ import { APP_CONSTS } from "../consts/app.js";
  */
 
 /**
- * Health check response structure.
+ * Memory usage details returned by the liveness probe.
+ * @typedef {Object} HealthMemoryInfo
+ * @property {number} heapUsed - Used heap memory in MB
+ * @property {number} heapTotal - Total heap memory in MB
+ * @property {number} rss - Resident set size in MB
+ * @property {string} unit - Memory unit label
+ */
+
+/**
+ * Liveness probe response structure for GET /health.
  * @typedef {Object} HealthResponse
- * @property {'healthy' | 'unhealthy'} status - Overall health status
+ * @property {'healthy'} status - Process health status
  * @property {number} uptime - Process uptime in seconds
  * @property {string} timestamp - ISO timestamp
- * @property {Object} checks - Individual component checks
+ * @property {HealthMemoryInfo} memory - Process memory usage details
+ */
+
+/**
+ * Individual readiness check result.
+ * @typedef {Object} ReadyCheck
+ * @property {string} status - Check status label
+ * @property {string} [message] - Optional check detail message
+ */
+
+/**
+ * Readiness probe response structure for GET /ready.
+ * @typedef {Object} ReadyResponse
+ * @property {'ready' | 'not_ready'} status - Service readiness status
+ * @property {string} timestamp - ISO timestamp
+ * @property {Record<string, ReadyCheck>} checks - Individual component checks
  */
 
 const startTime = Date.now();

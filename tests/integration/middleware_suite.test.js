@@ -11,7 +11,6 @@ import {
   HTTP_STATUS,
   MIME_TYPES,
 } from "../../src/consts/http.js";
-import { SECURITY_HEADERS_VALUES } from "../../src/consts/security.js";
 import {
   startIntegrationApp,
   createBearerAuthHeader,
@@ -88,7 +87,7 @@ describe("Integration: Middleware suite", () => {
       response.headers[HTTP_HEADERS.X_FRAME_OPTIONS.toLowerCase()],
     ).toBeDefined();
     expect(
-      response.headers[SECURITY_HEADERS_VALUES.HSTS_HEADER.toLowerCase()],
+      response.headers[HTTP_HEADERS.STRICT_TRANSPORT_SECURITY.toLowerCase()],
     ).toBeDefined();
 
     // Request-id middleware

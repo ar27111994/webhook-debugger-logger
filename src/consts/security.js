@@ -74,8 +74,8 @@ export const SIGNATURE_PREFIXES = Object.freeze({
 export const SECURITY_CONSTS = Object.freeze({
   CSP_POLICY: [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline'",
-    "style-src 'self' 'unsafe-inline'",
+    "script-src 'self'",
+    "style-src 'self'",
     "font-src 'self'",
     "img-src 'self' data: https://static.apify.com",
     "connect-src 'self'",
@@ -93,9 +93,7 @@ export const SECURITY_HEADERS_VALUES = Object.freeze({
   NO_CACHE: "no-cache",
   KEEP_ALIVE: "keep-alive",
   NO: "no",
-  HSTS_HEADER: "Strict-Transport-Security",
   HSTS_VALUE: "max-age=31536000; includeSubDomains",
-  PERMISSIONS_POLICY_HEADER: "Permissions-Policy",
   PERMISSIONS_POLICY_VALUE: "geolocation=(), microphone=(), camera=()",
 });
 

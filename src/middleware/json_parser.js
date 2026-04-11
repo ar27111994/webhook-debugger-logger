@@ -21,27 +21,34 @@ import { HTTP_HEADERS, MIME_TYPES } from "../consts/http.js";
  * @param {NextFunction} next
  */
 export const jsonParserMiddleware = (req, _res, next) => {
-  if (!req.body || Buffer.isBuffer(req.body) === false) return next();
+  const isBufferBody = Buffer.isBuffer(req.body);
+  const isStringBody = typeof req.body === "string";
+
+  if (!req.body || (!isBufferBody && !isStringBody)) return next();
 
   // Preserve raw body for signature verification (Stripe/Shopify)
-  Object.defineProperty(req, "rawBody", {
-    value: req.body,
-    writable: false,
-    enumerable: false,
-    configurable: false,
-  });
+  if (!("rawBody" in req)) {
+    Object.defineProperty(req, "rawBody", {
+      value: req.body,
+      writable: false,
+      enumerable: false,
+      configurable: false,
+    });
+  }
 
   if (req.headers[HTTP_HEADERS.CONTENT_TYPE]?.includes(MIME_TYPES.JSON)) {
+    const bodyText = isStringBody ? req.body : req.body.toString();
+
     try {
-      req.body = JSON.parse(req.body.toString());
+      req.body = JSON.parse(bodyText);
       // eslint-disable-next-line sonarjs/no-ignored-exceptions
     } catch (_) {
       // Ignore JSON parse errors; payload might be partial or malformed.
       // We treat it as a raw string in that case.
-      req.body = req.body.toString();
+      req.body = bodyText;
     }
   }
-  // Else: Leave as Buffer. logger_middleware will handle encoding (utf8/base64).
+  // Else: Leave the original body intact. logger_middleware will handle encoding.
   next();
 };
 

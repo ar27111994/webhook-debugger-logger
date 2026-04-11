@@ -144,6 +144,8 @@ export const HTTP_HEADERS = Object.freeze({
   X_CONTENT_TYPE_OPTIONS: "X-Content-Type-Options",
   X_FRAME_OPTIONS: "X-Frame-Options",
   REFERRER_POLICY: "Referrer-Policy",
+  STRICT_TRANSPORT_SECURITY: "Strict-Transport-Security",
+  PERMISSIONS_POLICY: "Permissions-Policy",
   RETRY_AFTER: "Retry-After",
   X_RATELIMIT_LIMIT: "X-RateLimit-Limit",
   X_RATELIMIT_REMAINING: "X-RateLimit-Remaining",

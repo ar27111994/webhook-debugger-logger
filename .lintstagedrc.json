@@ -1,5 +1,6 @@
 {
-  "*.{js,json,md,yml,yaml,html}": ["eslint --fix", "prettier --write"],
+  "*.{js,mjs,cjs}": ["eslint --fix", "prettier --write"],
+  "*.{json,md,yml,yaml,html}": ["prettier --write"],
   "package.json": [
     "npm run sync:version",
     "git add .actor/actor.json .actor/web_server_schema.json"
