@@ -21,8 +21,9 @@ Use this playbook when an integration expects an immediate callback response and
 
 ## What This Matches in the Current Code
 
-- `customScript` runs inside a sandbox with `event`, a safe subset of `req`, `console`, and `HTTP_STATUS` available.
+- `customScript` runs inside a disposable worker-isolated sandbox with `event`, a safe subset of `req`, `console`, and `HTTP_STATUS` available.
 - The script can override `event.statusCode`, `event.responseBody`, and `event.responseHeaders`.
+- The sandbox does not expose `process`, `require`, filesystem, or network APIs, and blocks `eval()` / `Function()` string compilation.
 - Script timeouts and runtime failures are logged, but the request path still completes with the actor's normal response flow.
 - Response headers from the script are merged over `defaultResponseHeaders`.
 
@@ -54,11 +55,11 @@ GET /logs/<log-id>
 
 ## Common Failure Patterns
 
-| Signal | What it usually means | What to do |
-| :----- | :-------------------- | :--------- |
-| Script error in logs | The sandbox code threw an exception | Fix the script and resend or replay the callback. |
-| Script timeout log | The script exceeded the execution timeout | Reduce the script to simple response shaping and move heavy work elsewhere. |
-| Unexpected body shape in the script | The sender posted non-JSON content | Remember that only `application/json` is auto-parsed; form-encoded or binary payloads stay raw. |
+| Signal                              | What it usually means                     | What to do                                                                                      |
+| :---------------------------------- | :---------------------------------------- | :---------------------------------------------------------------------------------------------- |
+| Script error in logs                | The sandbox code threw an exception       | Fix the script and resend or replay the callback.                                               |
+| Script timeout log                  | The script exceeded the execution timeout | Reduce the script to simple response shaping and move heavy work elsewhere.                     |
+| Unexpected body shape in the script | The sender posted non-JSON content        | Remember that only `application/json` is auto-parsed; form-encoded or binary payloads stay raw. |
 
 ## Recommended Workflow
 

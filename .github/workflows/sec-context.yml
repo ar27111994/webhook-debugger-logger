@@ -31,10 +31,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Review dependency changes
-        uses: actions/dependency-review-action@v4
+        uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4.9.0
         with:
           fail-on-severity: high
           fail-on-scopes: runtime
@@ -51,7 +51,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
 
@@ -111,14 +111,14 @@ jobs:
           echo "No high-confidence secret patterns found in added source lines."
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v4
+        uses: github/codeql-action/init@f94817b9f0deeb3871261446912ae8f854d1b675 # codeql-bundle-v2.25.1
         with:
           languages: javascript-typescript
           build-mode: none
           queries: security-extended,security-and-quality
 
       - name: Analyze with CodeQL
-        uses: github/codeql-action/analyze@v4
+        uses: github/codeql-action/analyze@f94817b9f0deeb3871261446912ae8f854d1b675 # codeql-bundle-v2.25.1
 
   sec-context-pr-security:
     name: sec-context PR Security

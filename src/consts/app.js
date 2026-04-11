@@ -252,6 +252,8 @@ export const STREAM_EVENTS = Object.freeze({
   ERROR: "error",
   CLOSE: "close",
   END: "end",
+  MESSAGE: "message",
+  EXIT: "exit",
 });
 
 export const INTERNAL_EVENTS = Object.freeze({

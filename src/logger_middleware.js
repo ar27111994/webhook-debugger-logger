@@ -7,7 +7,6 @@
 import { Actor } from "apify";
 import Ajv from "ajv";
 import { nanoid } from "nanoid";
-import vm from "vm";
 import { validateAuth } from "./utils/auth.js";
 import { getSafeResponseDelay, parseWebhookOptions } from "./utils/config.js";
 import { checkIpInRanges } from "./utils/ssrf.js";
@@ -18,11 +17,7 @@ import {
   getKvsUrl,
   createReferenceBody,
 } from "./utils/storage_helper.js";
-import {
-  APP_CONSTS,
-  DEFAULT_ID_LENGTH,
-  STREAM_EVENTS,
-} from "./consts/app.js";
+import { APP_CONSTS, DEFAULT_ID_LENGTH, STREAM_EVENTS } from "./consts/app.js";
 import { STORAGE_CONSTS } from "./consts/storage.js";
 import {
   HTTP_HEADERS,
@@ -57,6 +52,10 @@ import {
   createChildLogger,
   serializeError as serializeErrorUtil,
 } from "./utils/logger.js";
+import {
+  executeCustomScript,
+  validateCustomScriptSource,
+} from "./utils/custom_script_executor.js";
 import { LOG_MESSAGES } from "./consts/messages.js";
 import { deepRedact, validateStatusCode } from "./utils/common.js";
 import { DEFAULT_ALERT_ON } from "./consts/alerting.js";
@@ -83,6 +82,126 @@ import { IS_TEST } from "./utils/env.js";
  * @typedef {import("./typedefs.js").LoggerMiddlewareFunction} LoggerMiddlewareFunction
  */
 
+/**
+ * @param {WebhookEvent | Record<string, unknown> | null | undefined} value
+ * @returns {WebhookEvent}
+ */
+function restoreSandboxEvent(value) {
+  const hasExplicitNullResponseHeaders =
+    value !== null &&
+    value !== undefined &&
+    typeof value === "object" &&
+    Object.hasOwn(value, "responseHeaders") &&
+    value.responseHeaders === null;
+  const event = Object.assign(Object.create(null), value ?? {});
+  event.headers = Object.assign(Object.create(null), event.headers ?? {});
+  event.query = Object.assign(Object.create(null), event.query ?? {});
+  event.params = Object.assign(Object.create(null), event.params ?? {});
+  event.responseHeaders = hasExplicitNullResponseHeaders
+    ? null
+    : Object.assign(Object.create(null), event.responseHeaders ?? {});
+  return /** @type {WebhookEvent} */ (event);
+}
+
+/**
+ * @param {CustomRequest} req
+ * @returns {Record<string, unknown>}
+ */
+function createCustomScriptSafeRequest(req) {
+  return Object.assign(Object.create(null), {
+    method: req.method,
+    url: req.url,
+    originalUrl: req.originalUrl,
+    requestId: req.requestId,
+    headers: Object.assign(Object.create(null), req.headers ?? {}),
+    query: Object.assign(Object.create(null), req.query ?? {}),
+    body: req.body,
+    params: Object.assign(Object.create(null), req.params ?? {}),
+  });
+}
+
+/**
+ * @param {Record<string, unknown> | null | undefined} value
+ * @returns {CommonError}
+ */
+function rehydrateSandboxError(value) {
+  if (!value || typeof value !== "object") {
+    return /** @type {CommonError} */ ({
+      name: "Error",
+      message: LOG_MESSAGES.UNKNOWN_ERROR,
+    });
+  }
+
+  return /** @type {CommonError} */ ({
+    name: typeof value.name === "string" ? value.name : "Error",
+    message:
+      typeof value.message === "string"
+        ? value.message
+        : LOG_MESSAGES.UNKNOWN_ERROR,
+    stack: typeof value.stack === "string" ? value.stack : undefined,
+    code: typeof value.code === "string" ? value.code : undefined,
+  });
+}
+
+/**
+ * @param {unknown} arg
+ * @returns {unknown}
+ */
+function normalizeScriptLogArg(arg) {
+  if (arg instanceof Error) {
+    return {
+      name: arg.name,
+      message: arg.message,
+      stack: typeof arg.stack === "string" ? arg.stack : undefined,
+    };
+  }
+
+  if (arg && typeof arg === "object") {
+    const errorLike =
+      /** @type {{ name?: unknown, message?: unknown, stack?: unknown }} */ (
+        arg
+      );
+
+    if (
+      typeof errorLike.name === "string" &&
+      typeof errorLike.message === "string"
+    ) {
+      return {
+        name: errorLike.name,
+        message: errorLike.message,
+        stack:
+          typeof errorLike.stack === "string" ? errorLike.stack : undefined,
+      };
+    }
+  }
+
+  return arg;
+}
+
+/**
+ * @param {unknown[]} args
+ * @returns {string}
+ */
+function createScriptLogMessage(args) {
+  if (args.length === 0) {
+    return "Custom script emitted a log entry";
+  }
+
+  return args
+    .map((arg) => {
+      if (typeof arg === "string") {
+        return arg;
+      }
+
+      try {
+        return JSON.stringify(arg);
+      } catch {
+        return String(arg);
+      }
+    })
+    .join(" ");
+}
+
 /** @type {AjvType} */
 // Force cast to handle ESM/CommonJS interop usually found with ajv
 const ajv = new Ajv.default();
@@ -96,7 +215,7 @@ export class LoggerMiddleware {
   #options;
   /** @type {ForwardingService} */
   #forwardingService;
-  /** @type {vm.Script | null} */
+  /** @type {string | null} */
   #compiledScript = null;
   /** @type {ValidateFunction} */
   #validate = null;
@@ -230,8 +349,7 @@ export class LoggerMiddleware {
     ) {
       this.#compiledScript = this.#compileResource(
         newOptions.customScript,
-        // eslint-disable-next-line sonarjs/code-eval
-        (src) => new vm.Script(src),
+        validateCustomScriptSource,
         LOG_MESSAGES.SCRIPT_COMPILED,
         LOG_TAGS.SCRIPT_ERROR,
       );
@@ -285,7 +403,7 @@ export class LoggerMiddleware {
     ];
     const webhookOverrides = Object.fromEntries(
       Object.entries(webhookData).filter(([key]) =>
-        allowedOverrides.includes(/** @type {keyof WebhookConfig} */(key)),
+        allowedOverrides.includes(/** @type {keyof WebhookConfig} */ (key)),
       ),
     );
 
@@ -391,7 +509,7 @@ export class LoggerMiddleware {
         ) {
           const result = createStreamVerifier(
             options.signatureVerification,
-            /** @type {Record<string, string>} */(req.headers),
+            /** @type {Record<string, string>} */ (req.headers),
           );
           if (result.hmac) {
             verifier = result;
@@ -503,7 +621,7 @@ export class LoggerMiddleware {
             id: webhookId,
           });
         }
-        return res.status(/** @type {number} */(validation.statusCode)).json({
+        return res.status(/** @type {number} */ (validation.statusCode)).json({
           error: validation.error,
           ip: validation.remoteIp,
           received: validation.contentLength,
@@ -581,7 +699,7 @@ export class LoggerMiddleware {
 
       // 3. Transform
       /** @type {WebhookEvent} */
-      const event = Object.assign(Object.create(null), {
+      let event = Object.assign(Object.create(null), {
         id: nanoid(DEFAULT_ID_LENGTH),
         timestamp: new Date().toISOString(),
         webhookId,
@@ -664,7 +782,7 @@ export class LoggerMiddleware {
         }
       }
 
-      this.#transformRequestData(event, req);
+      event = await this.#transformRequestData(event, req);
 
       // 4. Orchestration: Respond synchronous-ish, then race background tasks
       const delayMs = getSafeResponseDelay(mergedOptions.responseDelayMs);
@@ -716,10 +834,9 @@ export class LoggerMiddleware {
       };
 
       // Wrap background work in Promise.race to ensure we don't hang the Actor if storage is slow
-      const timeoutMs =
-        IS_TEST()
-          ? APP_CONSTS.BACKGROUND_TASK_TIMEOUT_TEST_MS
-          : APP_CONSTS.BACKGROUND_TASK_TIMEOUT_PROD_MS;
+      const timeoutMs = IS_TEST()
+        ? APP_CONSTS.BACKGROUND_TASK_TIMEOUT_TEST_MS
+        : APP_CONSTS.BACKGROUND_TASK_TIMEOUT_PROD_MS;
       /** @type {ReturnType<typeof setTimeout> | undefined} */
       let timeoutHandle;
       await Promise.race([
@@ -1005,37 +1122,47 @@ export class LoggerMiddleware {
    * @param {WebhookEvent} event
    * @param {CustomRequest} req
    */
-  #transformRequestData(event, req) {
+  async #transformRequestData(event, req) {
     if (this.#compiledScript) {
       try {
-        /** @type {Partial<Console>} */
-        const limitedConsole = {
-          log: (...args) => this.#log.debug({ source: "script" }, ...args),
-          error: (...args) => this.#log.error({ source: "script" }, ...args),
-          warn: (...args) => this.#log.warn({ source: "script" }, ...args),
-          info: (...args) => this.#log.info({ source: "script" }, ...args),
-        };
-        // Create a safe subset of request to prevent prototype access or mutation of internal state
-        /** @type {Readonly<Partial<CustomRequest>>} */
-        const safeReq = Object.assign(Object.create(null), {
-          method: req.method,
-          headers: Object.assign(Object.create(null), req.headers),
-          query: Object.assign(Object.create(null), req.query),
-          params: Object.assign(Object.create(null), req.params),
-          body: req.body,
-          url: req.url,
-          originalUrl: req.originalUrl,
-          requestId: req.requestId,
-        });
-        const sandbox = {
+        const executionResult = await executeCustomScript({
+          source: this.#compiledScript,
           event,
-          req: safeReq,
-          console: limitedConsole,
-          HTTP_STATUS,
-        };
-        this.#compiledScript.runInNewContext(sandbox, {
-          timeout: APP_CONSTS.SCRIPT_EXECUTION_TIMEOUT_MS,
+          req: createCustomScriptSafeRequest(req),
+          timeoutMs: APP_CONSTS.SCRIPT_EXECUTION_TIMEOUT_MS,
         });
+
+        for (const entry of executionResult.logs ?? []) {
+          const logArgs = Array.isArray(entry.args) ? entry.args : [];
+          const normalizedLogArgs = logArgs.map(normalizeScriptLogArg);
+          const logMessage = createScriptLogMessage(normalizedLogArgs);
+          const logMetadata = {
+            source: "script",
+            scriptArgs: normalizedLogArgs,
+          };
+          switch (entry.level) {
+            case "debug":
+              this.#log.debug(logMetadata, logMessage);
+              break;
+            case "error":
+              this.#log.error(logMetadata, logMessage);
+              break;
+            case "warn":
+              this.#log.warn(logMetadata, logMessage);
+              break;
+            case "info":
+              this.#log.info(logMetadata, logMessage);
+              break;
+            default:
+              break;
+          }
+        }
+
+        if (!executionResult.ok) {
+          throw rehydrateSandboxError(executionResult.error);
+        }
+
+        return restoreSandboxEvent(executionResult.event);
       } catch (err) {
         const error = /** @type {CommonError} */ (err);
         const isTimeout =
@@ -1049,12 +1176,14 @@ export class LoggerMiddleware {
           },
           isTimeout
             ? LOG_MESSAGES.SCRIPT_EXECUTION_TIMED_OUT(
-              APP_CONSTS.SCRIPT_EXECUTION_TIMEOUT_MS,
-            )
+                APP_CONSTS.SCRIPT_EXECUTION_TIMEOUT_MS,
+              )
             : LOG_MESSAGES.SCRIPT_EXECUTION_FAILED,
         );
       }
     }
+
+    return event;
   }
 
   /**

@@ -191,6 +191,7 @@ curl "https://example-run-id.runs.apify.net/webhook/wh_abc123?__status=503"
 - Applies per-webhook rate limiting before body parsing.
 - Streams large payloads to Apify KVS when they exceed the offload threshold.
 - Applies optional JSON parsing, JSON Schema validation, signature verification, custom script execution, forwarding, and alerting.
+- Executes `customScript` in a disposable worker isolate with access only to `event`, a safe copy of `req`, `console`, and `HTTP_STATUS`.
 - Blocks self-referential forwarding loops and returns `422 Unprocessable Entity` when recursion is detected.
 
 ---

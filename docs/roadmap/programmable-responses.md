@@ -176,7 +176,7 @@ This ensures that mocked requests appear in valid metrics (`GET /logs`) but can 
 
 - **Scope**: Full JavaScript Sandbox for response generation.
 - **Goal**: Complex logic (e.g., cryptographic signatures, stateful counting).
-- **Deliverable**: Integration with existing `vm.Script` capabilities.
+- **Deliverable**: Integration with the worker-isolated custom script executor.
 
 ---
 

@@ -56,7 +56,7 @@
  * @property {number} [size]
  * @property {number} statusCode
  * @property {string|Object} [responseBody]
- * @property {Object.<string, string>} [responseHeaders]
+ * @property {Object.<string, string> | null} [responseHeaders]
  * @property {number} processingTime
  * @property {string} [remoteIp]
  * @property {string} [userAgent]

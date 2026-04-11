@@ -191,7 +191,15 @@ export const ERROR_MESSAGES = Object.freeze({
      * @param {string} error
      * @returns {string}
      */
-    (envFileName, path, error) => `Failed to load project .env file '${envFileName}' from ${path}: ${error}`,
+    (envFileName, path, error) =>
+      `Failed to load project .env file '${envFileName}' from ${path}: ${error}`,
+  SCRIPT_COMPILATION_FAILED: "Custom script compilation failed",
+  SCRIPT_EXECUTION_FAILED:
+    /**
+     * @param {number} code
+     * @returns {string}
+     */
+    (code) => `Custom script worker exited unexpectedly with code ${code}`,
 });
 
 /**

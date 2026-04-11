@@ -5,7 +5,10 @@
  */
 
 import { LOG_MESSAGES } from "../../../src/consts/messages.js";
-import { ERROR_MESSAGES, SIGNATURE_ERRORS } from "../../../src/consts/errors.js";
+import {
+  ERROR_MESSAGES,
+  SIGNATURE_ERRORS,
+} from "../../../src/consts/errors.js";
 import {
   SIGNATURE_PROVIDERS,
   HASH_ALGORITHMS,
@@ -199,9 +202,25 @@ describe("Consts Logic", () => {
 
     it("should format PROJECT_ENV_LOAD_FAILED correctly", () => {
       expect(
-        ERROR_MESSAGES.PROJECT_ENV_LOAD_FAILED(".env", "/path/to/.env", "EACCES"),
+        ERROR_MESSAGES.PROJECT_ENV_LOAD_FAILED(
+          ".env",
+          "/path/to/.env",
+          "EACCES",
+        ),
       ).toBe(
         "Failed to load project .env file '.env' from /path/to/.env: EACCES",
+      );
+    });
+
+    it("should have SCRIPT_COMPILATION_FAILED message", () => {
+      expect(ERROR_MESSAGES.SCRIPT_COMPILATION_FAILED).toBe(
+        "Custom script compilation failed",
+      );
+    });
+
+    it("should format SCRIPT_EXECUTION_FAILED correctly", () => {
+      expect(ERROR_MESSAGES.SCRIPT_EXECUTION_FAILED(1)).toBe(
+        "Custom script worker exited unexpectedly with code 1",
       );
     });
   });
@@ -396,42 +415,42 @@ describe("Top-level Branch Coverage", () => {
       jest.unstable_mockModule("module", () => ({
         createRequire:
           () =>
-            /**
-             * @param {string} path
-             * @returns {object}
-             */
-            (path) => {
-              if (path.includes("actor.json")) {
-                return {
-                  environmentVariables: {
-                    ACTOR_WEB_SERVER_PORT: "3000",
-                  },
-                };
-              }
-              // Default to input_schema.json mock
+          /**
+           * @param {string} path
+           * @returns {object}
+           */
+          (path) => {
+            if (path.includes("actor.json")) {
               return {
-                properties: {
-                  defaultResponseCode: {}, // Critical: Missing default to test fallback
-                  // Minimal set to satisfy src/consts/app.js
-                  urlCount: { default: 100 },
-                  retentionHours: { default: 24 },
-                  rateLimitPerMinute: { default: 60 },
-                  maxPayloadSize: { default: 1024 },
-                  responseDelayMs: { default: 0 },
-                  replayMaxRetries: { default: 3 },
-                  replayTimeoutMs: { default: 30000 },
-                  maxForwardRetries: { default: 3 },
-                  useFixedMemory: { default: false },
-                  fixedMemoryMbytes: { default: 256 },
-                  duckdbFileName: { default: "logs.duckdb" },
-                  duckdbMemoryLimit: { default: "512MB" },
-                  duckdbVacuumEnabled: { default: false },
-                  maskSensitiveData: { default: true },
-                  enableJSONParsing: { default: true },
-                  forwardHeaders: { default: {} },
+                environmentVariables: {
+                  ACTOR_WEB_SERVER_PORT: "3000",
                 },
               };
-            },
+            }
+            // Default to input_schema.json mock
+            return {
+              properties: {
+                defaultResponseCode: {}, // Critical: Missing default to test fallback
+                // Minimal set to satisfy src/consts/app.js
+                urlCount: { default: 100 },
+                retentionHours: { default: 24 },
+                rateLimitPerMinute: { default: 60 },
+                maxPayloadSize: { default: 1024 },
+                responseDelayMs: { default: 0 },
+                replayMaxRetries: { default: 3 },
+                replayTimeoutMs: { default: 30000 },
+                maxForwardRetries: { default: 3 },
+                useFixedMemory: { default: false },
+                fixedMemoryMbytes: { default: 256 },
+                duckdbFileName: { default: "logs.duckdb" },
+                duckdbMemoryLimit: { default: "512MB" },
+                duckdbVacuumEnabled: { default: false },
+                maskSensitiveData: { default: true },
+                enableJSONParsing: { default: true },
+                forwardHeaders: { default: {} },
+              },
+            };
+          },
       }));
 
       mockApify({ env: { actorRunId: "mock-run-id" } });

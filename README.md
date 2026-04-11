@@ -297,7 +297,8 @@ curl -X POST "https://<run-id>.runs.apify.net/webhook/wh_demo123" \
 }
 ```
 
-The script receives `{ event, req }` and can normalize, enrich, or redact payload data before the event is stored.
+The script runs in a disposable worker isolate and receives `{ event, req, console, HTTP_STATUS }`.
+It can normalize, enrich, or redact payload data before the event is stored, but it does not get direct access to `process`, `require`, filesystem, or network primitives. String-based code generation such as `eval()` and `Function()` is disabled, and the runtime enforces bounded timeout and memory limits. If a script fails or times out, the error is logged and the webhook still completes through the normal response path.
 
 ## API surface
 
@@ -403,6 +404,8 @@ This is especially useful when the actor is running on Apify in standby mode or 
 
 The `customScript` input gives you an inline JavaScript hook for event transformation before storage.
 
+Scripts execute inside a throwaway worker thread that hosts an isolated `vm` context. Only the mutable `event` object, a safe copy of `req`, `console`, and `HTTP_STATUS` are injected into that context.
+
 Use it to:
 
 - normalize payload shapes from different providers
@@ -411,6 +414,15 @@ Use it to:
 - mark events for downstream routing or replay decisions
 
 Because the script receives both `event` and `req`, you can combine payload, header, and query information when preparing the stored record.
+
+Guardrails:
+
+- `req` is a copied, reduced request snapshot rather than the live Express request object.
+- `process`, `require`, filesystem, and network APIs are not exposed to the script.
+- `eval()` and `Function()` style code generation are disabled inside the isolate.
+- Timeouts and worker resource limits stop runaway scripts without blocking the main request handler.
+- Operators can raise only the worker heap ceilings via `CUSTOM_SCRIPT_WORKER_MAX_OLD_GENERATION_MB` (clamped to 16-256 MB, default 32) and `CUSTOM_SCRIPT_WORKER_MAX_YOUNG_GENERATION_MB` (clamped to 8-128 MB, default 16) when legitimate scripts need more headroom.
+- Script failures are logged, and the capture pipeline falls back to the actor's normal response flow.
 
 ## Architecture at a glance
 

@@ -4,7 +4,6 @@
  */
 
 import { jest } from "@jest/globals";
-import vm from "vm";
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import {
   useMockCleanup,
@@ -256,20 +255,16 @@ describe("LoggerMiddleware", () => {
       spy.mockRestore();
     });
 
-    it("should handle non-Error throw during script compilation", async () => {
-      // Passing a script that throws a non-Error value triggers the String(err ?? UNKNOWN) fallback
-      const error = "string-error";
-      jest.spyOn(vm, "Script").mockImplementationOnce(() => {
-        throw error;
-      });
+    it("should log invalid custom script compilation errors gracefully", async () => {
       const { middleware } = await createMiddlewareTestContext({
-        options: { customScript: "valid();" },
+        options: { customScript: "if (" },
       });
+
       expect(middleware.hasCompiledScript()).toBe(false);
       expect(loggerMock.error).toHaveBeenCalledWith(
         expect.objectContaining({
           errorPrefix: LOG_TAGS.SCRIPT_ERROR,
-          message: error,
+          message: expect.any(String),
         }),
         LOG_MESSAGES.RESOURCE_INVALID,
       );
@@ -638,6 +633,39 @@ describe("LoggerMiddleware", () => {
         expect(loggerMock.info).toHaveBeenCalledWith(
           expect.objectContaining({ source: "script" }),
           "i",
+        );
+      });
+
+      it("should serialize structured custom script console output safely", async () => {
+        const {
+          req,
+          res,
+          next,
+          middleware: scriptMw,
+        } = await createMiddlewareTestContext({
+          options: {
+            customScript:
+              "console.error(new Error('boom'), { nested: true }, ['x']);",
+          },
+        });
+
+        await scriptMw(req, res, next);
+
+        expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
+        expect(loggerMock.error).toHaveBeenCalledWith(
+          expect.objectContaining({
+            source: "script",
+            scriptArgs: [
+              expect.objectContaining({
+                name: "Error",
+                message: "boom",
+                stack: expect.any(String),
+              }),
+              expect.objectContaining({ nested: true }),
+              ["x"],
+            ],
+          }),
+          expect.stringContaining("boom"),
         );
       });
 
@@ -1145,27 +1173,32 @@ describe("LoggerMiddleware", () => {
       });
 
       it("should handle script execution timeouts softly via message fallback", async () => {
-        // Provide a script that explicitly throws an error containing the matched string without the error.code
-        const { req, res, next, middleware } =
-          await createMiddlewareTestContext({
-            options: {
-              customScript: `throw new Error("${LOG_MESSAGES.SCRIPT_EXECUTION_TIMEOUT_ERROR}");`,
-            },
-          });
+        jest.useRealTimers();
+        try {
+          // Provide a script that explicitly throws an error containing the matched string without the error.code
+          const { req, res, next, middleware } =
+            await createMiddlewareTestContext({
+              options: {
+                customScript: `throw new Error("${LOG_MESSAGES.SCRIPT_EXECUTION_TIMEOUT_ERROR}");`,
+              },
+            });
 
-        await middleware(req, res, next);
+          await middleware(req, res, next);
 
-        expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
-        expect(loggerMock.error).toHaveBeenCalledWith(
-          expect.objectContaining({
-            isTimeout: true,
-            webhookId: expect.any(String),
-            err: expect.any(Object),
-          }),
-          LOG_MESSAGES.SCRIPT_EXECUTION_TIMED_OUT(
-            APP_CONSTS.SCRIPT_EXECUTION_TIMEOUT_MS,
-          ),
-        );
+          expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
+          expect(loggerMock.error).toHaveBeenCalledWith(
+            expect.objectContaining({
+              isTimeout: true,
+              webhookId: expect.any(String),
+              err: expect.any(Object),
+            }),
+            LOG_MESSAGES.SCRIPT_EXECUTION_TIMED_OUT(
+              APP_CONSTS.SCRIPT_EXECUTION_TIMEOUT_MS,
+            ),
+          );
+        } finally {
+          jest.useFakeTimers();
+        }
       });
 
       it("should handle webhook storage key timeout", async () => {
@@ -1992,15 +2025,20 @@ describe("LoggerMiddleware", () => {
 
       // --- Branch: object response body ---
       it("should send object response body as JSON", async () => {
-        const responseObj = { success: true, data: { id: 1 } };
-        const { req, res, next, middleware } =
-          await createMiddlewareTestContext({
-            options: {
-              customScript: `event.responseBody = ${JSON.stringify(responseObj)};`,
-            },
-          });
-        await middleware(req, res, next);
-        expect(res.json).toHaveBeenCalledWith(responseObj);
+        jest.useRealTimers();
+        try {
+          const responseObj = { success: true, data: { id: 1 } };
+          const { req, res, next, middleware } =
+            await createMiddlewareTestContext({
+              options: {
+                customScript: `event.responseBody = ${JSON.stringify(responseObj)};`,
+              },
+            });
+          await middleware(req, res, next);
+          expect(res.json).toHaveBeenCalledWith(responseObj);
+        } finally {
+          jest.useFakeTimers();
+        }
       });
 
       // --- Branch: request with no IP and socket fallback ---

@@ -28,7 +28,8 @@ await setupCommonMocks({
 const { HTTP_HEADERS, HTTP_STATUS, HTTP_METHODS, MIME_TYPES, ENCODINGS } =
   await import("../../../src/consts/http.js");
 const { ERROR_MESSAGES } = await import("../../../src/consts/errors.js");
-const { APP_CONSTS, STREAM_EVENTS } = await import("../../../src/consts/app.js");
+const { APP_CONSTS, STREAM_EVENTS } =
+  await import("../../../src/consts/app.js");
 const { LOG_MESSAGES } = await import("../../../src/consts/messages.js");
 const { LOG_CONSTS } = await import("../../../src/consts/logging.js");
 const { AUTH_CONSTS } = await import("../../../src/consts/auth.js");
@@ -241,7 +242,7 @@ describe("LoggerMiddleware Hardening", () => {
       forwardingServiceMock.forwardWebhook.mockImplementation(
         (_event, _request, _options, _forwardingService, signal) => {
           capturedSignal = signal;
-          return new Promise(() => { });
+          return new Promise(() => {});
         },
       );
 
@@ -518,7 +519,8 @@ describe("LoggerMiddleware Hardening", () => {
     });
 
     it("should prefer explicit alertOn array over fallback and pass full config/context", async () => {
-      const { alertingMock } = await import("../../setup/helpers/shared-mocks.js");
+      const { alertingMock } =
+        await import("../../setup/helpers/shared-mocks.js");
       const context = await createMiddlewareTestContext({
         options: {
           alerts: {
@@ -552,46 +554,50 @@ describe("LoggerMiddleware Hardening", () => {
     });
 
     it("should handle multiple concurrent requests without data leakage", async () => {
-      const MARKER_1 = 1;
-      const MARKER_2 = 2;
-      const webhookId = "req1";
-      const webhookId2 = "req2";
-      const context1 = await createMiddlewareTestContext({
-        options: { customScript: `event.marker = ${MARKER_1};` },
-      });
-      context1.req.params.id = webhookId;
+      jest.useRealTimers();
+      try {
+        const MARKER_1 = 1;
+        const MARKER_2 = 2;
+        const webhookId = "req1";
+        const webhookId2 = "req2";
+        const context1 = await createMiddlewareTestContext({
+          options: { customScript: `event.marker = ${MARKER_1};` },
+        });
+        context1.req.params.id = webhookId;
 
-      const context2 = await createMiddlewareTestContext({
-        options: { customScript: `event.marker = ${MARKER_2};` },
-      });
-      context2.req.params.id = webhookId2;
+        const context2 = await createMiddlewareTestContext({
+          options: { customScript: `event.marker = ${MARKER_2};` },
+        });
+        context2.req.params.id = webhookId2;
 
-      const req1Promise = context1.middleware(
-        context1.req,
-        context1.res,
-        context1.next,
-      );
-      const req2Promise = context2.middleware(
-        context2.req,
-        context2.res,
-        context2.next,
-      );
+        const req1Promise = context1.middleware(
+          context1.req,
+          context1.res,
+          context1.next,
+        );
+        const req2Promise = context2.middleware(
+          context2.req,
+          context2.res,
+          context2.next,
+        );
 
-      await jest.runAllTimersAsync();
-      await Promise.all([req1Promise, req2Promise]);
+        await Promise.all([req1Promise, req2Promise]);
 
-      expect(context1.onEvent).toHaveBeenCalledTimes(1);
-      expect(context2.onEvent).toHaveBeenCalledTimes(1);
+        expect(context1.onEvent).toHaveBeenCalledTimes(1);
+        expect(context2.onEvent).toHaveBeenCalledTimes(1);
 
-      /** @type {any} */
-      const [evt1] = context1.onEvent.mock.calls[0];
-      /** @type {any} */
-      const [evt2] = context2.onEvent.mock.calls[0];
+        /** @type {any} */
+        const [evt1] = context1.onEvent.mock.calls[0];
+        /** @type {any} */
+        const [evt2] = context2.onEvent.mock.calls[0];
 
-      expect(evt1.marker).toBe(MARKER_1);
-      expect(evt2.marker).toBe(MARKER_2);
-      expect(evt1.webhookId).toBe(webhookId);
-      expect(evt2.webhookId).toBe(webhookId2);
+        expect(evt1.marker).toBe(MARKER_1);
+        expect(evt2.marker).toBe(MARKER_2);
+        expect(evt1.webhookId).toBe(webhookId);
+        expect(evt2.webhookId).toBe(webhookId2);
+      } finally {
+        jest.useFakeTimers();
+      }
     });
 
     it("should trigger ACTOR_PUSH_DATA_TIMEOUT during executeBackgroundTasks correctly", async () => {
@@ -600,7 +606,7 @@ describe("LoggerMiddleware Hardening", () => {
       context.req.params.id = WEBHOOK_ID;
 
       // Make pushData hang indefinitely so inner timeout triggers
-      apifyMock.pushData.mockImplementation(() => new Promise(() => { }));
+      apifyMock.pushData.mockImplementation(() => new Promise(() => {}));
 
       const middlewarePromise = context.middleware(
         context.req,
@@ -692,80 +698,88 @@ describe("LoggerMiddleware Hardening", () => {
     });
 
     it("should process requests through the same middleware instance producing distinct event objects", async () => {
-      const {
-        middleware,
-        req: req1,
-        res: res1,
-        next: next1,
-        onEvent,
-      } = await createMiddlewareTestContext({
-        options: { customScript: "event.id_copy = event.id;" },
-      });
+      jest.useRealTimers();
 
-      const {
-        req: req2,
-        res: res2,
-        next: next2,
-      } = await createMiddlewareTestContext();
+      try {
+        const {
+          middleware,
+          req: req1,
+          res: res1,
+          next: next1,
+          onEvent,
+        } = await createMiddlewareTestContext({
+          options: { customScript: "event.id_copy = event.id;" },
+        });
 
-      req1.params.id = "req1";
-      req2.params.id = "req2";
+        const {
+          req: req2,
+          res: res2,
+          next: next2,
+        } = await createMiddlewareTestContext();
 
-      // Two simultaneous requests through the SAME instance
-      const p1 = middleware(req1, res1, next1);
-      const p2 = middleware(req2, res2, next2);
-      await jest.runAllTimersAsync();
-      await Promise.all([p1, p2]);
+        req1.params.id = "req1";
+        req2.params.id = "req2";
 
-      const EXPECTED_CALL_COUNT = 2;
-      expect(onEvent).toHaveBeenCalledTimes(EXPECTED_CALL_COUNT);
+        // Two simultaneous requests through the SAME instance
+        const p1 = middleware(req1, res1, next1);
+        const p2 = middleware(req2, res2, next2);
+        await Promise.all([p1, p2]);
 
-      // Verify each call produced a distinct event with its own ID
-      const [evt1Args, evt2Args] = onEvent.mock.calls;
-      /** @type {any} */
-      const evt1 = evt1Args[0];
-      /** @type {any} */
-      const evt2 = evt2Args[0];
+        const EXPECTED_CALL_COUNT = 2;
+        expect(onEvent).toHaveBeenCalledTimes(EXPECTED_CALL_COUNT);
 
-      expect(evt1.id).not.toBe(evt2.id);
-      expect(evt1.id_copy).toBe(evt1.id);
-      expect(evt2.id_copy).toBe(evt2.id);
+        // Verify each call produced a distinct event with its own ID
+        const [evt1Args, evt2Args] = onEvent.mock.calls;
+        /** @type {any} */
+        const evt1 = evt1Args[0];
+        /** @type {any} */
+        const evt2 = evt2Args[0];
 
-      // Verify ID format
-      const idLength = APP_CONSTS.DEFAULT_ID_LENGTH;
-      expect(typeof evt1.id).toBe("string");
-      expect(evt1.id.length).toBe(idLength);
-      expect(evt2.id.length).toBe(idLength);
+        expect(evt1.id).not.toBe(evt2.id);
+        expect(evt1.id_copy).toBe(evt1.id);
+        expect(evt2.id_copy).toBe(evt2.id);
+
+        // Verify ID format
+        const idLength = APP_CONSTS.DEFAULT_ID_LENGTH;
+        expect(typeof evt1.id).toBe("string");
+        expect(evt1.id.length).toBe(idLength);
+        expect(evt2.id.length).toBe(idLength);
+      } finally {
+        jest.useFakeTimers();
+      }
     });
 
     it("should execute mid-flight requests utilizing the current script at prepareRequestData time", async () => {
-      const { middleware, req, res, next, onEvent } =
-        await createMiddlewareTestContext({
-          options: { customScript: "event.version = 1;" },
-        });
+      jest.useRealTimers();
 
-      req.params.id = WEBHOOK_ID;
+      try {
+        const { middleware, req, res, next, onEvent } =
+          await createMiddlewareTestContext({
+            options: { customScript: "event.version = 1;" },
+          });
 
-      // Start request — yields at await #prepareRequestData
-      const middlewarePromise = middleware(req, res, next);
+        req.params.id = WEBHOOK_ID;
 
-      // Hot-swap script synchronously before the microtask queue runs the middleware continuation
-      // This tests that #compiledScript isn't captured at the start of the request, but rather read
-      // later when #transformRequestData is invoked.
-      middleware.updateOptions({ customScript: "event.version = 2;" });
+        // Start request — yields at await #prepareRequestData
+        const middlewarePromise = middleware(req, res, next);
 
-      await jest.runAllTimersAsync();
+        // Hot-swap script synchronously before the microtask queue runs the middleware continuation
+        // This tests that #compiledScript isn't captured at the start of the request, but rather read
+        // later when #transformRequestData is invoked.
+        middleware.updateOptions({ customScript: "event.version = 2;" });
 
-      await jest.runAllTimersAsync();
-      await middlewarePromise;
+        await middlewarePromise;
 
-      expect(onEvent).toHaveBeenCalled();
-      /** @type {any} */
-      const [event] = onEvent.mock.calls[0];
-      // Due to the TOCTOU gap in how instances update compiled scripts but they are checked later
-      // The event uses the currently compiled script at transformRequestData time.
-      const EXPECTED_VERSION = 2;
-      expect(event.version).toBe(EXPECTED_VERSION);
+        expect(onEvent).toHaveBeenCalled();
+        /** @type {any} */
+        const [event] = onEvent.mock.calls[0];
+        // Due to the TOCTOU gap in how instances update compiled scripts but they are checked later
+        // The event uses the currently compiled script at transformRequestData time.
+        const EXPECTED_VERSION = 2;
+        expect(event.version).toBe(EXPECTED_VERSION);
+      } finally {
+        jest.useFakeTimers();
+      }
     });
   });
 });

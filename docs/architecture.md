@@ -140,6 +140,7 @@ graph LR
         CONFIG[config.js]
         SSRF[ssrf.js]
         SIG[signature.js]
+        SCRIPT_EXEC[custom_script_executor.js<br/>custom_script_worker.js]
         AUTH_U[auth.js]
         BOOT[bootstrap.js]
         STORE[storage_helper.js]
@@ -161,6 +162,7 @@ graph LR
 
     LM --> FWD_S
     LM --> SIG
+    LM --> SCRIPT_EXEC
     LM --> STORE
     LM --> ALERTING
     LM --> EVENTS
@@ -201,7 +203,7 @@ LoggerMiddleware.middleware
     ├── Validate webhook ID, IP, auth
     ├── Prepare data (parse, redact, encode)
     ├── Signature verification (if configured)
-    ├── Custom script execution (vm.Script sandbox)
+    ├── Custom script execution (worker-isolated vm context)
     ├── Send HTTP response to caller
     └── Background tasks (fire-and-forget with timeout):
         ├── Actor.pushData(event)  → Dataset (Write Model)
@@ -266,6 +268,12 @@ Retention updates are intentionally non-destructive for active webhooks. The cur
 
 Payloads exceeding the KVS offload threshold are streamed directly to Apify KVS before body-parser runs. The log entry stores a reference body with a public URL to the original payload.
 
+### 7. Worker-Isolated Custom Scripts
+
+`customScript` is syntax-validated up front, then executed inside a disposable worker thread with a dedicated `vm` context. The isolate receives only the mutable `event`, a safe copy of `req`, `console`, and `HTTP_STATUS`.
+
+This keeps the main request handler isolated from untrusted webhook transformation code while still allowing useful response shaping.
+
 ---
 
 ## Security Architecture
@@ -296,8 +304,22 @@ Payloads exceeding the KVS offload threshold are streamed directly to Apify KVS 
 │  │  • Circuit breaker                        │  │
 │  │  • AbortController timeouts               │  │
 │  └───────────────────────────────────────────┘  │
+│  ┌───────────────────────────────────────────┐  │
+│  │  Custom scripting isolate                 │  │
+│  │  • Worker-thread execution boundary       │  │
+│  │  • Safe copied req/event inputs           │  │
+│  │  • eval / Function disabled               │  │
+│  │  • Timeout + memory resource limits       │  │
+│  └───────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────┘
 ```
+
+### Custom Script Trust Boundary
+
+- Custom scripts never receive the live Express request object.
+- The isolate does not inject `process`, `require`, filesystem, or outbound networking primitives.
+- `codeGeneration.strings = false` and `codeGeneration.wasm = false` prevent dynamic code generation from strings.
+- Runtime failures are serialized back to the main process for logging, and the request pipeline continues with the actor's normal fallback behavior.
 
 ### Defense-in-Depth Layers
 
