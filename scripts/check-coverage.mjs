@@ -86,7 +86,7 @@ export function runChecks(summary, thresholds, label, io = {}) {
   const files = Object.entries(summary)
     .filter(([key]) => key !== "total")
     .map(([absPath, metrics]) => {
-      const normalized = String(absPath).replaceAll("\\\\", "/");
+      const normalized = String(absPath).replaceAll("\\", "/");
       let rel = normalized;
 
       if (normalized.startsWith(`${cwdNormalized}/`)) {

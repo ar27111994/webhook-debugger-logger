@@ -257,9 +257,9 @@ describe("Consts Logic", () => {
 
     it("should have a secure CSP policy defined", () => {
       expect(SECURITY_CONSTS.CSP_POLICY).toContain("default-src 'self'");
-      expect(SECURITY_CONSTS.CSP_POLICY).toContain(
-        "script-src 'self' 'unsafe-inline'",
-      );
+      expect(SECURITY_CONSTS.CSP_POLICY).toContain("script-src 'self'");
+      expect(SECURITY_CONSTS.CSP_POLICY).toContain("style-src 'self'");
+      expect(SECURITY_CONSTS.CSP_POLICY).not.toContain("'unsafe-inline'");
       expect(Object.isFrozen(SECURITY_CONSTS)).toBe(true);
     });
   });
@@ -297,6 +297,8 @@ describe("Consts Logic", () => {
       // but hardcoded strings. Let's verify the strings exist.
       expect(UNAUTHORIZED_HTML_TEMPLATE).toContain("{{ERROR_MESSAGE}}");
       expect(UNAUTHORIZED_HTML_TEMPLATE).toContain("{{APIFY_HOMEPAGE_URL}}");
+      expect(UNAUTHORIZED_HTML_TEMPLATE).toContain('href="/unauthorized.css"');
+      expect(UNAUTHORIZED_HTML_TEMPLATE).not.toContain("<style>");
     });
 
     it("should verify SQL_CONSTS operators map allows valid SQL comparison", () => {

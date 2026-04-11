@@ -98,7 +98,7 @@ try {
 /**
  * The interval at which the input is polled for changes.
  * Evaluated lazily inside initialize() to support dynamic environment switching.
- * 
+ *
  * @type {number}
  */
 let inputPollIntervalMs;
@@ -107,6 +107,8 @@ const APP_VERSION =
   process.env[ENV_VARS.NPM_PACKAGE_VERSION] ||
   packageJson.version ||
   APP_CONSTS.UNKNOWN;
+
+const PUBLIC_DIR_PATH = join(__dirname, "..", STORAGE_CONSTS.PUBLIC_DIR);
 
 /** @type {Server | undefined} */
 let server;
@@ -497,15 +499,16 @@ async function initialize(testOptions = {}) {
 
   app.use(
     APP_ROUTES.FONTS,
-    express.static(
-      join(
-        __dirname,
-        "..",
-        STORAGE_CONSTS.PUBLIC_DIR,
-        STORAGE_CONSTS.FONTS_DIR_NAME,
-      ),
-    ),
+    express.static(join(PUBLIC_DIR_PATH, STORAGE_CONSTS.FONTS_DIR_NAME)),
   );
+
+  app.get("/index.css", (_req, res) => {
+    res.sendFile(join(PUBLIC_DIR_PATH, "index.css"));
+  });
+
+  app.get("/unauthorized.css", (_req, res) => {
+    res.sendFile(join(PUBLIC_DIR_PATH, "unauthorized.css"));
+  });
 
   // eslint-disable-next-line sonarjs/cors
   app.use(cors());

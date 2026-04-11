@@ -183,7 +183,8 @@ describe("Route Utils", () => {
     });
 
     it("should handle client write failures, remove client, log error extracting code/name properties", async () => {
-      const { createChildLogger } = await import("../../../src/utils/logger.js");
+      const { createChildLogger } =
+        await import("../../../src/utils/logger.js");
       const mockLogger = createChildLogger({ component: "RouteUtilsTest" });
 
       /** @type {ServerResponse} */
@@ -236,7 +237,8 @@ describe("Route Utils", () => {
       const errorMsg = "Generic failure";
       const errorCode = APP_CONSTS.UNKNOWN;
       const errorName = "Error";
-      const { createChildLogger } = await import("../../../src/utils/logger.js");
+      const { createChildLogger } =
+        await import("../../../src/utils/logger.js");
       const mockLogger = createChildLogger({ component: "RouteUtilsTest" });
 
       /** @type {ServerResponse} */
@@ -387,6 +389,8 @@ describe("Route Utils", () => {
 
       const htmlOutput = jest.mocked(mockRes.send).mock.calls[0][0];
       expect(htmlOutput).toContain(APP_CONSTS.APIFY_HOMEPAGE_URL);
+      expect(htmlOutput).toContain('href="/unauthorized.css"');
+      expect(htmlOutput).not.toContain("<style>");
 
       // Should be escaped!
       expect(htmlOutput).toContain(escapeHtml(htmlErrorMsg));

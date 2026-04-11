@@ -24,7 +24,7 @@ export const jsonParserMiddleware = (req, _res, next) => {
   const isBufferBody = Buffer.isBuffer(req.body);
   const isStringBody = typeof req.body === "string";
 
-  if (!req.body || (!isBufferBody && !isStringBody)) return next();
+  if (req.body == null || (!isBufferBody && !isStringBody)) return next();
 
   // Preserve raw body for signature verification (Stripe/Shopify)
   if (!("rawBody" in req)) {

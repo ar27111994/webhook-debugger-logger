@@ -87,6 +87,17 @@ describe("JSON Parser Middleware", () => {
       expect(mockNext).toHaveBeenCalled();
     });
 
+    it("should preserve empty string bodies for signature verification", () => {
+      mockReq.body = "";
+      mockReq.headers[HTTP_HEADERS.CONTENT_TYPE] = MIME_TYPES.JSON;
+
+      middleware(mockReq, mockRes, mockNext);
+
+      expect(mockReq.rawBody).toBe("");
+      expect(mockReq.body).toBe("");
+      expect(mockNext).toHaveBeenCalled();
+    });
+
     it("should reuse an existing rawBody property instead of redefining it", () => {
       const bufferBody = Buffer.from('{"key":"value"}');
       const existingRawBody = "existing-raw-body";

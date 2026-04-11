@@ -245,6 +245,64 @@ describe("check-coverage script", () => {
       expect(stderr.writes).toHaveLength(0);
     });
 
+    it("normalizes Windows-style absolute paths that use single backslashes", () => {
+      const stdout = makeWriter();
+      const stderr = makeWriter();
+      const exit = jest.fn();
+
+      const summary = {
+        total: {
+          lines: { pct: 100 },
+          statements: { pct: 100 },
+          functions: { pct: 100 },
+          branches: { pct: 100 },
+        },
+        "C:\\workspace\\repo\\src\\main.js": {
+          lines: { total: 10, pct: 100 },
+          statements: { total: 10, pct: 100 },
+          functions: { total: 10, pct: 100 },
+          branches: { total: 10, pct: 100 },
+        },
+      };
+
+      const thresholds = {
+        global: {
+          lines: 100,
+          statements: 100,
+          functions: 100,
+          branches: 100,
+        },
+        rules: [
+          {
+            type: "exact",
+            pattern: SRC_MAIN,
+            thresholds: {
+              lines: 100,
+              statements: 100,
+              functions: 100,
+              branches: 100,
+            },
+          },
+        ],
+      };
+
+      const cwdSpy = jest
+        .spyOn(process, "cwd")
+        .mockReturnValue("C:\\workspace\\repo");
+      runChecks(summary, thresholds, "windows-rel", {
+        stdout: stdout.stream,
+        stderr: stderr.stream,
+        exit,
+      });
+      cwdSpy.mockRestore();
+
+      expect(exit).not.toHaveBeenCalled();
+      expect(stdout.writes.join("\n")).toContain(
+        "[windows-rel] Coverage gate passed.",
+      );
+      expect(stderr.writes).toHaveLength(0);
+    });
+
     it("fails and writes failure output", () => {
       const stdout = makeWriter();
       const stderr = makeWriter();
