@@ -55,6 +55,24 @@ describe("Custom Script Executor worker failure paths", () => {
     jest.resetModules();
   });
 
+  it("should reject SCRIPT_COMPILATION_FAILED when vm compilation does not yield a vm.Script instance", async () => {
+    const ScriptMock = jest.fn(function MockVmScript() {
+      return {};
+    });
+
+    jest.unstable_mockModule("node:vm", () => ({
+      default: { Script: ScriptMock },
+      Script: ScriptMock,
+    }));
+
+    const { validateCustomScriptSource } =
+      await import("../../../src/utils/custom_script_executor.js");
+
+    expect(() => validateCustomScriptSource(SUCCESS_SCRIPT_SOURCE)).toThrow(
+      ERROR_MESSAGES.SCRIPT_COMPILATION_FAILED,
+    );
+  });
+
   it("should pass the default bounded heap resource limits to Worker", async () => {
     const { workerInstances, workerOptions, MockWorker } =
       createMockWorkerHarness();
@@ -191,6 +209,40 @@ describe("Custom Script Executor worker failure paths", () => {
     workerInstances[0].emit(STREAM_EVENTS.ERROR, new Error(errorMsg));
 
     await expect(pendingResult).rejects.toThrow(errorMsg);
+    expect(terminateMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("should ignore worker terminate failures after the worker has already resolved", async () => {
+    const { workerInstances, terminateMock, MockWorker } =
+      createMockWorkerHarness();
+
+    terminateMock.mockRejectedValueOnce(new Error("terminate failed"));
+
+    jest.unstable_mockModule(WORKER_THREADS_MODULE, () => ({
+      Worker: MockWorker,
+    }));
+
+    const { executeCustomScript } =
+      await import("../../../src/utils/custom_script_executor.js");
+
+    const pendingResult = executeCustomScript({
+      source: SUCCESS_SCRIPT_SOURCE,
+      event: {},
+      req: {},
+      timeoutMs: 50,
+    });
+
+    workerInstances[0].emit(STREAM_EVENTS.MESSAGE, {
+      ok: true,
+      event: { ok: true },
+      logs: [],
+    });
+
+    await expect(pendingResult).resolves.toEqual({
+      ok: true,
+      event: { ok: true },
+      logs: [],
+    });
     expect(terminateMock).toHaveBeenCalledTimes(1);
   });
 });

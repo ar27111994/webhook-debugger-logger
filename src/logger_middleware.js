@@ -86,7 +86,7 @@ import { IS_TEST } from "./utils/env.js";
  * @param {WebhookEvent | Record<string, unknown> | null | undefined} value
  * @returns {WebhookEvent}
  */
-function restoreSandboxEvent(value) {
+export function restoreSandboxEvent(value) {
   const hasExplicitNullResponseHeaders =
     value !== null &&
     value !== undefined &&
@@ -107,7 +107,7 @@ function restoreSandboxEvent(value) {
  * @param {CustomRequest} req
  * @returns {Record<string, unknown>}
  */
-function createCustomScriptSafeRequest(req) {
+export function createCustomScriptSafeRequest(req) {
   return Object.assign(Object.create(null), {
     method: req.method,
     url: req.url,
@@ -124,7 +124,7 @@ function createCustomScriptSafeRequest(req) {
  * @param {Record<string, unknown> | null | undefined} value
  * @returns {CommonError}
  */
-function rehydrateSandboxError(value) {
+export function rehydrateSandboxError(value) {
   if (!value || typeof value !== "object") {
     return /** @type {CommonError} */ ({
       name: "Error",
@@ -147,7 +147,7 @@ function rehydrateSandboxError(value) {
  * @param {unknown} arg
  * @returns {unknown}
  */
-function normalizeScriptLogArg(arg) {
+export function normalizeScriptLogArg(arg) {
   if (arg instanceof Error) {
     return {
       name: arg.name,
@@ -182,7 +182,7 @@ function normalizeScriptLogArg(arg) {
  * @param {unknown[]} args
  * @returns {string}
  */
-function createScriptLogMessage(args) {
+export function createScriptLogMessage(args) {
   if (args.length === 0) {
     return "Custom script emitted a log entry";
   }
@@ -200,6 +200,44 @@ function createScriptLogMessage(args) {
       }
     })
     .join(" ");
+}
+
+/**
+ * @param {Logger} log
+ * @param {Array<{ level?: string, args?: unknown[] }> | null | undefined} entries
+ * @returns {void}
+ */
+export function emitCustomScriptLogs(log, entries) {
+  if (!Array.isArray(entries)) {
+    return;
+  }
+
+  for (const entry of entries) {
+    const logArgs = Array.isArray(entry.args) ? entry.args : [];
+    const normalizedLogArgs = logArgs.map(normalizeScriptLogArg);
+    const logMessage = createScriptLogMessage(normalizedLogArgs);
+    const logMetadata = {
+      source: "script",
+      scriptArgs: normalizedLogArgs,
+    };
+
+    switch (entry.level) {
+      case "debug":
+        log.debug(logMetadata, logMessage);
+        break;
+      case "error":
+        log.error(logMetadata, logMessage);
+        break;
+      case "warn":
+        log.warn(logMetadata, logMessage);
+        break;
+      case "info":
+        log.info(logMetadata, logMessage);
+        break;
+      default:
+        break;
+    }
+  }
 }
 
 /** @type {AjvType} */
@@ -1132,31 +1170,7 @@ export class LoggerMiddleware {
           timeoutMs: APP_CONSTS.SCRIPT_EXECUTION_TIMEOUT_MS,
         });
 
-        for (const entry of executionResult.logs ?? []) {
-          const logArgs = Array.isArray(entry.args) ? entry.args : [];
-          const normalizedLogArgs = logArgs.map(normalizeScriptLogArg);
-          const logMessage = createScriptLogMessage(normalizedLogArgs);
-          const logMetadata = {
-            source: "script",
-            scriptArgs: normalizedLogArgs,
-          };
-          switch (entry.level) {
-            case "debug":
-              this.#log.debug(logMetadata, logMessage);
-              break;
-            case "error":
-              this.#log.error(logMetadata, logMessage);
-              break;
-            case "warn":
-              this.#log.warn(logMetadata, logMessage);
-              break;
-            case "info":
-              this.#log.info(logMetadata, logMessage);
-              break;
-            default:
-              break;
-          }
-        }
+        emitCustomScriptLogs(this.#log, executionResult.logs);
 
         if (!executionResult.ok) {
           throw rehydrateSandboxError(executionResult.error);

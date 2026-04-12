@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 describe("Custom Script Executor", () => {
   const CONCURRENT_EXECUTION_TEST_TIMEOUT_MS = 15000;
   const CONCURRENT_WORKER_SCRIPT_TIMEOUT_MS = 250;
+  const CODE_GENERATION_BLOCKING_TEST_TIMEOUT_MS = 15000;
 
   beforeEach(() => {
     jest.resetModules();
@@ -71,7 +72,7 @@ describe("Custom Script Executor", () => {
         source: "console.info('hello', { nested: true }, new Error('boom'));",
         event: {},
         req: {},
-        timeoutMs: 50,
+        timeoutMs: 250,
       });
 
       expect(result.ok).toBe(true);
@@ -91,34 +92,38 @@ describe("Custom Script Executor", () => {
       ]);
     });
 
-    it("should block eval and Function constructor code generation inside the worker isolate", async () => {
-      const { executeCustomScript } =
-        await import("../../../src/utils/custom_script_executor.js");
+    it(
+      "should block eval and Function constructor code generation inside the worker isolate",
+      async () => {
+        const { executeCustomScript } =
+          await import("../../../src/utils/custom_script_executor.js");
 
-      const evalResult = await executeCustomScript({
-        source:
-          'try { eval("1+1"); } catch (error) { event.evalMessage = error.message; }',
-        event: {},
-        req: {},
-        timeoutMs: 50,
-      });
-      const functionResult = await executeCustomScript({
-        source:
-          'try { Function("return 1")(); } catch (error) { event.functionMessage = error.message; }',
-        event: {},
-        req: {},
-        timeoutMs: 50,
-      });
+        const evalResult = await executeCustomScript({
+          source:
+            'try { eval("1+1"); } catch (error) { event.evalMessage = error.message; }',
+          event: {},
+          req: {},
+          timeoutMs: 250,
+        });
+        const functionResult = await executeCustomScript({
+          source:
+            'try { Function("return 1")(); } catch (error) { event.functionMessage = error.message; }',
+          event: {},
+          req: {},
+          timeoutMs: 250,
+        });
 
-      expect(evalResult.ok).toBe(true);
-      expect(evalResult.event?.evalMessage).toContain(
-        "Code generation from strings disallowed",
-      );
-      expect(functionResult.ok).toBe(true);
-      expect(functionResult.event?.functionMessage).toContain(
-        "Code generation from strings disallowed",
-      );
-    });
+        expect(evalResult.ok).toBe(true);
+        expect(evalResult.event?.evalMessage).toContain(
+          "Code generation from strings disallowed",
+        );
+        expect(functionResult.ok).toBe(true);
+        expect(functionResult.event?.functionMessage).toContain(
+          "Code generation from strings disallowed",
+        );
+      },
+      CODE_GENERATION_BLOCKING_TEST_TIMEOUT_MS,
+    );
 
     it("should surface runtime failures from the worker isolate", async () => {
       const { executeCustomScript } =

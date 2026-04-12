@@ -107,8 +107,8 @@ AGENTS.md # AI agent instructions (this file)
 
 Due to the length of the schema specifications, they have been moved to separate files:
 
-- [Input/Output Schema](file:///home/ar27111994/Projects/Apify/Domain%20Availability%20Checker/.agent/rules/ts.INPUT_OUTPUT_SCHEMAS.md) (Input validation, Console form, Output templates)
-- [Storage Schema](file:///home/ar27111994/Projects/Apify/Domain%20Availability%20Checker/.agent/rules/ts.STORAGE_SCHEMAS.md) (Dataset and Key-Value Store specifications)
+- [Input/Output Schema](ts.INPUT_OUTPUT_SCHEMAS.md) (Input validation, Console form, Output templates)
+- [Storage Schema](ts.STORAGE_SCHEMAS.md) (Dataset and Key-Value Store specifications)
 
 If MCP server is configured, use these tools for documentation:
 

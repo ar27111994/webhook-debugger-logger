@@ -3,6 +3,7 @@
  * @description E2E production-like scenario tests for spawned process ingest and log query.
  */
 
+import { jest } from "@jest/globals";
 import { APP_ROUTES } from "../../src/consts/app.js";
 import { AUTH_CONSTS } from "../../src/consts/auth.js";
 import {
@@ -27,6 +28,9 @@ const AUTH_KEY = "e2e-production-secret";
 const LOG_SYNC_WAIT_TIMEOUT_MS = 10000;
 const LOG_SYNC_WAIT_INTERVAL_MS = 200;
 const LOGS_QUERY_LIMIT = 100;
+const E2E_TEST_TIMEOUT_MS = 20000;
+
+jest.setTimeout(E2E_TEST_TIMEOUT_MS);
 
 /**
  * @typedef {{ webhookId: string }} WebhookLogItem

@@ -1,0 +1,40 @@
+{
+  "global": {
+    "lines": 100,
+    "statements": 100,
+    "functions": 100,
+    "branches": 100
+  },
+  "rules": [
+    {
+      "type": "exact",
+      "pattern": "src/main.js",
+      "thresholds": {
+        "lines": 100,
+        "statements": 100,
+        "functions": 100,
+        "branches": 100
+      }
+    },
+    {
+      "type": "exact",
+      "pattern": "src/logger_middleware.js",
+      "thresholds": {
+        "lines": 100,
+        "statements": 100,
+        "functions": 100,
+        "branches": 100
+      }
+    },
+    {
+      "type": "prefix",
+      "pattern": "src/routes/",
+      "thresholds": {
+        "lines": 100,
+        "statements": 100,
+        "functions": 100,
+        "branches": 100
+      }
+    }
+  ]
+}

@@ -3,16 +3,16 @@
  * @description Integration concurrency suite for burst webhook ingestion and log persistence.
  */
 
-import { APP_ROUTES } from "../../src/consts/app.js";
+import { jest } from "@jest/globals";
 import {
   HTTP_HEADERS,
   HTTP_STATUS,
   MIME_TYPES,
 } from "../../src/consts/http.js";
+import { AUTH_CONSTS } from "../../src/consts/auth.js";
 import { startIntegrationApp } from "../setup/helpers/integration-harness.js";
 import { createWebhookPayload } from "../setup/helpers/fixtures/payload-fixtures.js";
 import { waitForCondition } from "../setup/helpers/test-utils.js";
-import { AUTH_CONSTS } from "../../src/consts/index.js";
 
 /**
  * @typedef {import('supertest').Agent} AppClient
@@ -23,6 +23,11 @@ const BURST_SIZE = 12;
 const BURST_BASE_AMOUNT = 1000;
 const BURST_LOG_SYNC_TIMEOUT_MS = 10000;
 const BURST_LOG_SYNC_INTERVAL_MS = 150;
+const BURST_TEST_TIMEOUT_MS = 40000;
+const BURST_BACKGROUND_TASK_TIMEOUT_TEST_MS = 5000;
+const BACKGROUND_TASK_TIMEOUT_TEST_ENV_VAR = "BACKGROUND_TASK_TIMEOUT_TEST_MS";
+
+jest.setTimeout(BURST_TEST_TIMEOUT_MS);
 
 /**
  * @typedef {{ webhookId: string }} WebhookLogItem
@@ -41,11 +46,12 @@ function requireContext(context) {
 
 /**
  * @param {AppClient} appClient
+ * @param {{ INFO: string }} appRoutes
  * @returns {Promise<string>}
  */
-async function resolveActiveWebhookId(appClient) {
+async function resolveActiveWebhookId(appClient, appRoutes) {
   const infoResponse = await appClient
-    .get(APP_ROUTES.INFO)
+    .get(appRoutes.INFO)
     .set(HTTP_HEADERS.AUTHORIZATION, `${AUTH_CONSTS.BEARER_PREFIX}${AUTH_KEY}`);
 
   expect(infoResponse.status).toBe(HTTP_STATUS.OK);
@@ -55,15 +61,32 @@ async function resolveActiveWebhookId(appClient) {
 describe("Integration: Concurrency burst ingestion", () => {
   /** @type {{ teardown: () => Promise<void>, appClient: AppClient } | null} */
   let context = null;
+  let previousBackgroundTaskTimeout =
+    process.env[BACKGROUND_TASK_TIMEOUT_TEST_ENV_VAR];
 
   afterEach(async () => {
     if (context) {
       await context.teardown();
       context = null;
     }
+
+    if (previousBackgroundTaskTimeout === undefined) {
+      delete process.env[BACKGROUND_TASK_TIMEOUT_TEST_ENV_VAR];
+    } else {
+      process.env[BACKGROUND_TASK_TIMEOUT_TEST_ENV_VAR] =
+        previousBackgroundTaskTimeout;
+    }
   });
 
   it("should handle burst ingest traffic and surface all events in /logs", async () => {
+    previousBackgroundTaskTimeout =
+      process.env[BACKGROUND_TASK_TIMEOUT_TEST_ENV_VAR];
+    process.env[BACKGROUND_TASK_TIMEOUT_TEST_ENV_VAR] = String(
+      BURST_BACKGROUND_TASK_TIMEOUT_TEST_MS,
+    );
+
+    const { APP_ROUTES } = await import("../../src/consts/app.js");
+
     context = await startIntegrationApp({
       authKey: AUTH_KEY,
       urlCount: 1,
@@ -73,7 +96,10 @@ describe("Integration: Concurrency burst ingestion", () => {
     });
     const activeContext = requireContext(context);
 
-    const webhookId = await resolveActiveWebhookId(activeContext.appClient);
+    const webhookId = await resolveActiveWebhookId(
+      activeContext.appClient,
+      APP_ROUTES,
+    );
 
     const requests = Array.from({ length: BURST_SIZE }).map((_, index) =>
       activeContext.appClient

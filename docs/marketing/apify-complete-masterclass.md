@@ -11,16 +11,16 @@
 
 ## TABLE OF CONTENTS
 
-1. [Challenge Overview & Eligibility](#challenge-overview)
-2. [Understanding Actor Quality Score](#actor-quality-score)
-3. [10 Feasible Actor Ideas](#actor-ideas)
-4. [Strategic Implementation Timeline](#implementation-timeline)
-5. [Development with Google Antigravity](#antigravity-guide)
-6. [README Masterclass](#readme-masterclass)
-7. [Monetization Psychology & Pricing](#monetization-guide)
-8. [Anonymous Marketing Strategy](#marketing-strategy)
-9. [Quality Optimization Checklist](#quality-checklist)
-10. [Success Metrics & KPIs](#success-metrics)
+1. [Challenge Overview & Eligibility](#challenge-overview--eligibility)
+2. [Understanding Actor Quality Score](#understanding-actor-quality-score)
+3. [10 Feasible Actor Ideas](#the-10-recommended-actor-ideas)
+4. [Strategic Implementation Timeline](#strategic-implementation-timeline)
+5. [Development with Google Antigravity](#google-antigravity-development-guide)
+6. [README Masterclass](#the-complete-readme-masterclass)
+7. [Monetization Psychology & Pricing](#monetization-psychology--pricing-strategy)
+8. [Anonymous Marketing Strategy](#anonymous-marketing-strategy)
+9. [Quality Optimization Checklist](#quality-optimization-checklist)
+10. [Success Metrics & KPIs](#success-metrics--kpis)
 
 ---
 
@@ -2557,7 +2557,7 @@ The only thing left is execution. Pick your first Actor, fire up Antigravity, an
 - [Challenge Terms & Conditions](https://docs.apify.com/legal/challenge-terms-and-conditions)
 - [Apify Discord Community](https://discord.gg/jyEM2PRvMU)
 - [Google Antigravity IDE](https://antigravity.google/)
-- [Gemini 3 API Documentation](https://ai.google.dev/gemini-2/docs)
+- [Gemini API Documentation](https://ai.google.dev/gemini-api/docs)
 
 ---
 

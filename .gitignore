@@ -9,4 +9,6 @@ _memory_/
 .env
 *.mp4
 coverage/
+!.github/coverage/
+!.github/coverage/*.json
 .tsbuildinfo

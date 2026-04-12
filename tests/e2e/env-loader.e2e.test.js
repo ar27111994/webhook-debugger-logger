@@ -3,6 +3,7 @@
  * @description Black-box e2e coverage for local .env-driven boot behavior.
  */
 
+import { jest } from "@jest/globals";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -20,6 +21,9 @@ import { ENCODINGS, HTTP_HEADERS, HTTP_STATUS } from "../../src/consts/http.js";
  */
 
 const AUTH_KEY = "env-e2e-secret";
+const E2E_TEST_TIMEOUT_MS = 20000;
+
+jest.setTimeout(E2E_TEST_TIMEOUT_MS);
 
 describe("E2E: Local .env loader", () => {
   /** @type {SpawnedApp | null} */

@@ -74,6 +74,7 @@ const {
   appStateMock,
   loggerMock,
   expressAppMock,
+  expressMock,
   constsMock,
   systemMock,
   commonUtilsMock,
@@ -448,7 +449,10 @@ describe("Main Entry Point", () => {
       const urlCount = 2;
       jest.mocked(webhookManagerMock.getAllActive).mockReturnValue([]);
       await mainModule.initialize({ urlCount, retentionHours });
-      expect(webhookManagerMock.generateWebhooks).toHaveBeenCalledWith(urlCount, retentionHours);
+      expect(webhookManagerMock.generateWebhooks).toHaveBeenCalledWith(
+        urlCount,
+        retentionHours,
+      );
     });
 
     it("should override input from process.env.INPUT when running locally with a valid JSON object", async () => {
@@ -676,7 +680,7 @@ describe("Main Entry Point", () => {
     });
 
     it("should force-exit via systemExit after SHUTDOWN_TIMEOUT_MS elapses", async () => {
-      syncServiceMock.stop.mockReturnValue(assertType(new Promise(() => { })));
+      syncServiceMock.stop.mockReturnValue(assertType(new Promise(() => {})));
       mainModule.shutdown(SHUTDOWN_SIGNALS.TEST_COMPLETE);
       jest.advanceTimersByTime(APP_CONSTS.SHUTDOWN_TIMEOUT_MS + 1);
       expect(loggerMock.error).toHaveBeenCalledWith(
@@ -1054,7 +1058,9 @@ describe("Main Entry Point", () => {
 
       jest.advanceTimersByTime(APP_CONSTS.SSE_HEARTBEAT_INTERVAL_MS);
 
-      expect(mockClient.write).toHaveBeenCalledWith(constsMock.SSE_CONSTS.HEARTBEAT_MESSAGE);
+      expect(mockClient.write).toHaveBeenCalledWith(
+        constsMock.SSE_CONSTS.HEARTBEAT_MESSAGE,
+      );
       clientsSet.delete(mockClient);
     });
 
@@ -1156,7 +1162,9 @@ describe("Main Entry Point", () => {
       jest.advanceTimersByTime(APP_CONSTS.SSE_HEARTBEAT_INTERVAL_MS);
 
       expect(clientsSet.has(failingClient)).toBe(false);
-      expect(healthyClient.write).toHaveBeenCalledWith(constsMock.SSE_CONSTS.HEARTBEAT_MESSAGE);
+      expect(healthyClient.write).toHaveBeenCalledWith(
+        constsMock.SSE_CONSTS.HEARTBEAT_MESSAGE,
+      );
     });
   });
 
@@ -1280,9 +1288,12 @@ describe("Main Entry Point", () => {
     });
 
     it("should return null from getSignatureStatus when provider is configured without a secret", async () => {
-      const { loggerMiddlewareMock } = await import("../setup/helpers/shared-mocks.js");
+      const { loggerMiddlewareMock } =
+        await import("../setup/helpers/shared-mocks.js");
       Object.defineProperty(loggerMiddlewareMock, "options", {
-        value: { signatureVerification: { provider: SIGNATURE_PROVIDERS.STRIPE } }, // no secret
+        value: {
+          signatureVerification: { provider: SIGNATURE_PROVIDERS.STRIPE },
+        }, // no secret
         configurable: true,
       });
       /** @type {DashboardDependencies} */
@@ -1293,7 +1304,8 @@ describe("Main Entry Point", () => {
     });
 
     it("should return null from getSignatureStatus when a secret is set without a provider", async () => {
-      const { loggerMiddlewareMock } = await import("../setup/helpers/shared-mocks.js");
+      const { loggerMiddlewareMock } =
+        await import("../setup/helpers/shared-mocks.js");
       Object.defineProperty(loggerMiddlewareMock, "options", {
         value: { signatureVerification: { secret: "orphaned-secret" } }, // no provider
         configurable: true,
@@ -1420,6 +1432,33 @@ describe("Main Entry Point", () => {
       expect(dashOpts.version.length).toBeGreaterThan(0);
       expect(infoOpts.version).toBe(dashOpts.version);
     });
+
+    it("should register public CSS assets with cacheable static middleware", () => {
+      const indexCssRoute = expressAppMock.get.mock.calls.find(
+        (call) => call[0] === "/index.css",
+      );
+      const unauthorizedCssRoute = expressAppMock.get.mock.calls.find(
+        (call) => call[0] === "/unauthorized.css",
+      );
+
+      expect(indexCssRoute).toBeDefined();
+      expect(unauthorizedCssRoute).toBeDefined();
+
+      const cssStaticCall = expressMock.static.mock.calls.find(
+        /** @param {unknown[]} call */
+        (call) => call[1] && typeof call[1] === "object",
+      );
+
+      expect(cssStaticCall).toBeDefined();
+      expect(cssStaticCall?.[0]).toEqual(expect.any(String));
+      expect(cssStaticCall?.[1]).toMatchObject({
+        cacheControl: true,
+        etag: true,
+        fallthrough: false,
+        lastModified: true,
+        maxAge: mainModule.CSS_ASSET_CACHE_MAX_AGE,
+      });
+    });
   });
 
   // ── Production Lifecycle ──────────────────────────────────────────────────
@@ -1475,7 +1514,7 @@ describe("Main Entry Point", () => {
      * Drains the auto-initialization that occurs when main.js is loaded in
      * production mode. This must be called after setupProductionLifecycle() and
      * before any shutdown-related assertions.
-     * 
+     *
      * @returns {Promise<void>}
      */
     const drainAutoInit = async () => {
@@ -1540,7 +1579,9 @@ describe("Main Entry Point", () => {
           statusCode: constsMock.HTTP_STATUS.OK,
         }),
       );
-      expect(loggerMock.info).toHaveBeenCalledWith(LOG_MESSAGES.STARTUP_COMPLETE);
+      expect(loggerMock.info).toHaveBeenCalledWith(
+        LOG_MESSAGES.STARTUP_COMPLETE,
+      );
     });
 
     it("should close the HTTP server and run finalCleanup during a production shutdown", async () => {
@@ -1617,7 +1658,9 @@ describe("Main Entry Point", () => {
       );
       await flushPromises();
 
-      expect(webhookManagerMock.cleanup).toHaveBeenCalledTimes(cleanupIntervalMultiplier);
+      expect(webhookManagerMock.cleanup).toHaveBeenCalledTimes(
+        cleanupIntervalMultiplier,
+      );
     });
 
     it("should listen on ACTOR_WEB_SERVER_PORT when the env var is set", async () => {
@@ -1678,17 +1721,19 @@ describe("Main Entry Point", () => {
         close: jest.fn(),
         closeAllConnections: jest.fn(),
       });
-      expressAppMock.listen.mockImplementationOnce(assertType(
-        /**
-         * @param {number} _port
-         * @param {(error?: Error) => void} cb
-         * @returns {Server}
-         */
-        (_port, cb) => {
-          if (typeof cb === "function") cb();
-          return stoppedServer;
-        },
-      ));
+      expressAppMock.listen.mockImplementationOnce(
+        assertType(
+          /**
+           * @param {number} _port
+           * @param {(error?: Error) => void} cb
+           * @returns {Server}
+           */
+          (_port, cb) => {
+            if (typeof cb === "function") cb();
+            return stoppedServer;
+          },
+        ),
+      );
       await jest.isolateModulesAsync(async () => {
         const freshMain = await getFreshMain();
         await drainAutoInit();
@@ -1707,7 +1752,9 @@ describe("Main Entry Point", () => {
 
       const cleanupIntervalMultiplier = 3;
       jest.mocked(webhookManagerMock.cleanup).mockClear();
-      jest.advanceTimersByTime(constsMock.APP_CONSTS.CLEANUP_INTERVAL_MS * cleanupIntervalMultiplier);
+      jest.advanceTimersByTime(
+        constsMock.APP_CONSTS.CLEANUP_INTERVAL_MS * cleanupIntervalMultiplier,
+      );
       await flushPromises();
       expect(webhookManagerMock.cleanup).not.toHaveBeenCalled();
     });

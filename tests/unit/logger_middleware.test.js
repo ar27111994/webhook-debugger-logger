@@ -73,8 +73,16 @@ const {
   configMock,
 } = await import("../setup/helpers/shared-mocks.js");
 
-const { LoggerMiddleware, createLoggerMiddleware } =
-  await import("../../src/logger_middleware.js");
+const {
+  LoggerMiddleware,
+  createLoggerMiddleware,
+  restoreSandboxEvent,
+  createCustomScriptSafeRequest,
+  rehydrateSandboxError,
+  normalizeScriptLogArg,
+  createScriptLogMessage,
+  emitCustomScriptLogs,
+} = await import("../../src/logger_middleware.js");
 const { appEvents, EVENT_NAMES } = await import("../../src/utils/events.js");
 const { webhookRateLimiter } =
   await import("../../src/utils/webhook_rate_limiter.js");
@@ -178,6 +186,9 @@ describe("LoggerMiddleware", () => {
       expect(
         LoggerMiddleware.getValidStatusCode(HTTP_STATUS.NOT_FOUND.toString()),
       ).toBe(HTTP_STATUS.NOT_FOUND);
+      expect(
+        LoggerMiddleware.getValidStatusCode(Symbol("forced"), HTTP_STATUS.OK),
+      ).toBe(HTTP_STATUS.OK);
     });
 
     it("should successfully update options at runtime", async () => {
@@ -666,6 +677,162 @@ describe("LoggerMiddleware", () => {
             ],
           }),
           expect.stringContaining("boom"),
+        );
+      });
+
+      it("should cover defensive custom script log and error fallback branches", () => {
+        const circular = {};
+        const syntheticErrorMessage = "synthetic boom";
+        const defaultScriptLogMessage = "Custom script emitted a log entry";
+        const stacklessError = new Error(syntheticErrorMessage);
+        circular.self = circular;
+        stacklessError.stack = undefined;
+
+        expect(restoreSandboxEvent(undefined)).toEqual(
+          expect.objectContaining({
+            headers: {},
+            query: {},
+            params: {},
+            responseHeaders: {},
+          }),
+        );
+        expect(
+          restoreSandboxEvent(
+            assertType({
+              responseHeaders: null,
+            }),
+          ),
+        ).toEqual(
+          expect.objectContaining({
+            headers: {},
+            query: {},
+            params: {},
+            responseHeaders: null,
+          }),
+        );
+
+        expect(
+          createCustomScriptSafeRequest(
+            createMockRequest({
+              headers: undefined,
+              query: undefined,
+              params: undefined,
+            }),
+          ),
+        ).toEqual(
+          expect.objectContaining({
+            headers: {},
+            query: {},
+            params: {},
+          }),
+        );
+
+        expect(rehydrateSandboxError(null)).toEqual(
+          expect.objectContaining({
+            name: "Error",
+            message: LOG_MESSAGES.UNKNOWN_ERROR,
+          }),
+        );
+        expect(
+          rehydrateSandboxError({
+            name: 1,
+            message: 2,
+            stack: 3,
+            code: 4,
+          }),
+        ).toEqual(
+          expect.objectContaining({
+            name: "Error",
+            message: LOG_MESSAGES.UNKNOWN_ERROR,
+            stack: undefined,
+            code: undefined,
+          }),
+        );
+        expect(
+          rehydrateSandboxError({
+            name: "ScriptError",
+            message: syntheticErrorMessage,
+            stack: "stack-trace",
+            code: "E_SCRIPT",
+          }),
+        ).toEqual(
+          expect.objectContaining({
+            name: "ScriptError",
+            message: syntheticErrorMessage,
+            stack: "stack-trace",
+            code: "E_SCRIPT",
+          }),
+        );
+        expect(normalizeScriptLogArg(new Error(syntheticErrorMessage))).toEqual(
+          expect.objectContaining({
+            name: "Error",
+            message: syntheticErrorMessage,
+            stack: expect.any(String),
+          }),
+        );
+        expect(normalizeScriptLogArg(stacklessError)).toEqual(
+          expect.objectContaining({
+            name: "Error",
+            message: syntheticErrorMessage,
+            stack: undefined,
+          }),
+        );
+        expect(
+          normalizeScriptLogArg({
+            name: "ScriptError",
+            message: syntheticErrorMessage,
+          }),
+        ).toEqual(
+          expect.objectContaining({
+            name: "ScriptError",
+            message: syntheticErrorMessage,
+            stack: undefined,
+          }),
+        );
+        expect(createScriptLogMessage([])).toBe(defaultScriptLogMessage);
+        expect(createScriptLogMessage([circular])).toBe("[object Object]");
+
+        loggerMock.info.mockClear();
+        loggerMock.debug.mockClear();
+        loggerMock.warn.mockClear();
+        loggerMock.error.mockClear();
+
+        emitCustomScriptLogs(assertType(loggerMock), null);
+        emitCustomScriptLogs(assertType(loggerMock), [
+          { level: "info", args: [] },
+          {
+            level: "debug",
+            args: [new Error(syntheticErrorMessage)],
+          },
+          { level: "error" },
+          { level: "warn", args: [circular] },
+          { level: "trace", args: ["ignored"] },
+        ]);
+
+        expect(loggerMock.info).toHaveBeenCalledWith(
+          expect.objectContaining({ source: "script", scriptArgs: [] }),
+          defaultScriptLogMessage,
+        );
+        expect(loggerMock.debug).toHaveBeenCalledWith(
+          expect.objectContaining({
+            source: "script",
+            scriptArgs: [
+              expect.objectContaining({
+                name: "Error",
+                message: syntheticErrorMessage,
+                stack: expect.any(String),
+              }),
+            ],
+          }),
+          expect.stringContaining(syntheticErrorMessage),
+        );
+        expect(loggerMock.warn).toHaveBeenCalledWith(
+          expect.objectContaining({ source: "script" }),
+          "[object Object]",
+        );
+        expect(loggerMock.error).toHaveBeenCalledWith(
+          expect.objectContaining({ source: "script", scriptArgs: [] }),
+          defaultScriptLogMessage,
         );
       });
 

@@ -1,0 +1,120 @@
+{
+  "global": {
+    "lines": 100,
+    "statements": 100,
+    "functions": 100,
+    "branches": 100
+  },
+  "rules": [
+    {
+      "type": "exact",
+      "pattern": "src/main.js",
+      "thresholds": {
+        "lines": 100,
+        "statements": 100,
+        "functions": 100,
+        "branches": 100
+      }
+    },
+    {
+      "type": "exact",
+      "pattern": "src/logger_middleware.js",
+      "thresholds": {
+        "lines": 100,
+        "statements": 100,
+        "functions": 100,
+        "branches": 100
+      }
+    },
+    {
+      "type": "exact",
+      "pattern": "src/webhook_manager.js",
+      "thresholds": {
+        "lines": 100,
+        "statements": 100,
+        "functions": 100,
+        "branches": 100
+      }
+    },
+    {
+      "type": "prefix",
+      "pattern": "src/consts/",
+      "thresholds": {
+        "lines": 100,
+        "statements": 100,
+        "functions": 100,
+        "branches": 100
+      }
+    },
+    {
+      "type": "prefix",
+      "pattern": "src/db/",
+      "thresholds": {
+        "lines": 100,
+        "statements": 100,
+        "functions": 100,
+        "branches": 100
+      }
+    },
+    {
+      "type": "prefix",
+      "pattern": "src/middleware/",
+      "thresholds": {
+        "lines": 100,
+        "statements": 100,
+        "functions": 100,
+        "branches": 100
+      }
+    },
+    {
+      "type": "prefix",
+      "pattern": "src/repositories/",
+      "thresholds": {
+        "lines": 100,
+        "statements": 100,
+        "functions": 100,
+        "branches": 100
+      }
+    },
+    {
+      "type": "prefix",
+      "pattern": "src/routes/",
+      "thresholds": {
+        "lines": 100,
+        "statements": 100,
+        "functions": 100,
+        "branches": 100
+      }
+    },
+    {
+      "type": "prefix",
+      "pattern": "src/services/",
+      "thresholds": {
+        "lines": 100,
+        "statements": 100,
+        "functions": 100,
+        "branches": 100
+      }
+    },
+    {
+      "type": "prefix",
+      "pattern": "src/utils/",
+      "thresholds": {
+        "lines": 100,
+        "statements": 100,
+        "functions": 100,
+        "branches": 100
+      }
+    },
+    {
+      "type": "prefix",
+      "pattern": "scripts/",
+      "thresholds": {
+        "lines": 100,
+        "statements": 100,
+        "functions": 100,
+        "branches": 100
+      }
+    }
+  ]
+}

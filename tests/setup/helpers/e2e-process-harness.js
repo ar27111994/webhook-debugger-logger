@@ -209,7 +209,42 @@ export async function spawnAppProcess(options) {
   );
 
   const baseUrl = `http://127.0.0.1:${port}`;
-  await waitForProcessReady(baseUrl);
+  try {
+    await waitForProcessReady(baseUrl);
+  } catch (error) {
+    if (child.exitCode === null && !child.killed) {
+      child.kill(SHUTDOWN_SIGNALS.SIGTERM);
+
+      const timeout = setTimeout(() => {
+        child.kill(SHUTDOWN_SIGNALS.SIGKILL);
+      }, PROCESS_SHUTDOWN_TIMEOUT_MS);
+
+      try {
+        await once(child, "exit");
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
+
+    await rm(storageDir, { recursive: true, force: true });
+
+    const stdoutText = Buffer.concat(stdoutChunks)
+      .toString(ENCODINGS.UTF)
+      .trim();
+    const stderrText = Buffer.concat(stderrChunks)
+      .toString(ENCODINGS.UTF)
+      .trim();
+    const diagnostics = [
+      `Failed to start spawned app at ${baseUrl}.`,
+      error instanceof Error ? error.message : String(error),
+      stdoutText ? `STDOUT:\n${stdoutText}` : "",
+      stderrText ? `STDERR:\n${stderrText}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+
+    throw new Error(diagnostics);
+  }
 
   const stop = async () => {
     if (child.killed || child.exitCode !== null) {

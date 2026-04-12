@@ -20,7 +20,7 @@ import {
 import { ERROR_LABELS, ERROR_MESSAGES } from "../../../src/consts/errors.js";
 import { STORAGE_CONSTS } from "../../../src/consts/storage.js";
 import { PAGINATION_CONSTS } from "../../../src/consts/database.js";
-import { SORT_DIRECTIONS } from "../../../src/consts/app.js";
+import { APP_ROUTES, SORT_DIRECTIONS } from "../../../src/consts/app.js";
 
 /**
  * @typedef {import('express').Request} Request
@@ -48,6 +48,7 @@ const { createLogsHandler, createLogDetailHandler, createLogPayloadHandler } =
   await import("../../../src/routes/logs.js");
 
 const MOCK_WH_ID = "wh-1";
+const EXAMPLE_HOST = "example.com";
 
 describe("Logs Routes", () => {
   /** @type {Request} */
@@ -60,7 +61,7 @@ describe("Logs Routes", () => {
   beforeEach(() => {
     mockReq = createMockRequest({
       protocol: "https",
-      get: assertType(jest.fn()).mockReturnValue("example.com"),
+      get: assertType(jest.fn()).mockReturnValue(EXAMPLE_HOST),
       baseUrl: "/admin/api/logs",
       params: {},
       query: {},
@@ -281,6 +282,92 @@ describe("Logs Routes", () => {
             expect.objectContaining({
               operator: "eq",
               value: mockReq.query.timestamp,
+            }),
+          ]),
+        }),
+      );
+    });
+
+    it("should fall back to req.path when baseUrl is empty while building detail URLs", async () => {
+      const req = createMockRequest({
+        protocol: "https",
+        get: assertType(jest.fn()).mockReturnValue(EXAMPLE_HOST),
+        baseUrl: "",
+        path: "/scoped/logs",
+        params: {},
+        query: {},
+      });
+      mockLogRepo.findLogs.mockResolvedValueOnce({
+        items: [
+          assertType({
+            id: "path-1",
+            webhookId: "wh1",
+            timestamp: new Date().toISOString(),
+            method: HTTP_METHODS.POST,
+            headers: {},
+            query: {},
+            body: {},
+            contentType: MIME_TYPES.JSON,
+            statusCode: HTTP_STATUS.OK,
+            processingTime: 0,
+          }),
+        ],
+        total: 1,
+      });
+
+      const handler = createLogsHandler(mockWebhookManager, {
+        logRepo: mockLogRepo,
+      });
+      await handler(req, mockRes, mockNext);
+
+      expect(mockRes.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          items: expect.arrayContaining([
+            expect.objectContaining({
+              detailUrl: "/scoped/logs/path-1",
+            }),
+          ]),
+        }),
+      );
+    });
+
+    it("should fall back to APP_ROUTES.LOGS when both baseUrl and path are empty", async () => {
+      const req = createMockRequest({
+        protocol: "https",
+        get: assertType(jest.fn()).mockReturnValue(EXAMPLE_HOST),
+        baseUrl: "",
+        path: "",
+        params: {},
+        query: {},
+      });
+      mockLogRepo.findLogs.mockResolvedValueOnce({
+        items: [
+          assertType({
+            id: "default-1",
+            webhookId: "wh1",
+            timestamp: new Date().toISOString(),
+            method: HTTP_METHODS.POST,
+            headers: {},
+            query: {},
+            body: {},
+            contentType: MIME_TYPES.JSON,
+            statusCode: HTTP_STATUS.OK,
+            processingTime: 0,
+          }),
+        ],
+        total: 1,
+      });
+
+      const handler = createLogsHandler(mockWebhookManager, {
+        logRepo: mockLogRepo,
+      });
+      await handler(req, mockRes, mockNext);
+
+      expect(mockRes.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          items: expect.arrayContaining([
+            expect.objectContaining({
+              detailUrl: `${APP_ROUTES.LOGS}/default-1`,
             }),
           ]),
         }),

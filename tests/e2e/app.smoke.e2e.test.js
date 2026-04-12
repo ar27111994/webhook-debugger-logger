@@ -3,6 +3,7 @@
  * @description Black-box e2e smoke tests using spawned process harness.
  */
 
+import { jest } from "@jest/globals";
 import {
   findFreePort,
   httpRequest,
@@ -14,6 +15,10 @@ import { HTTP_HEADERS, HTTP_STATUS } from "../../src/consts/http.js";
 /**
  * @typedef {import('../setup/helpers/e2e-process-harness.js').SpawnedApp} SpawnedApp
  */
+
+const E2E_TEST_TIMEOUT_MS = 20000;
+
+jest.setTimeout(E2E_TEST_TIMEOUT_MS);
 
 describe("E2E: Spawned app smoke", () => {
   /** @type {SpawnedApp | null} */

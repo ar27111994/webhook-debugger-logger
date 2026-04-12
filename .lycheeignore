@@ -9,3 +9,14 @@
 ^(?:http://|https://)\[[^]]+\](?:/|$)
 ^(?:http://|https://)(?:[A-Za-z0-9-]+\.)?ngrok\.(?:io|app)(?:/|$)
 ^(?:https://)hooks\.zapier\.com/hooks/catch/11111/aaaaa/?$
+^(?:http://|https://)[^/]+\.url(?:/|$)
+^(?:http://|https://)(?:[A-Za-z0-9-]+\.)*test(?:/|$)
+^(?:http://|https://)(?:[A-Za-z0-9-]+\.)*local(?:/|$)
+^(?:https://)mock-kvs-url(?:/|$)
+^(?:https://)(?:valid-target|ignored|unstable-target|not-in-state|nonexistent|stress|bad)\.com(?:/|$)
+^(?:https://)hooks\.slack\.com/(?:services/._|test)(?:/|$)
+^(?:https://)discord(?:app)?\.com/api/webhooks(?:/|/._)$
+^(?:https://)github\.com/user/repo(?:/.*)?$
+^(?:https://)www\.npmjs\.com/package/package-name(?:/|$)
+^(?:https://)(?:apify\.com|docs\.apify\.com)/\.\.\.(?:/|$)
+^(?:https://)\.\.\.(?:/|$)

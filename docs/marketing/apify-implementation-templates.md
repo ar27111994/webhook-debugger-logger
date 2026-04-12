@@ -6,16 +6,16 @@
 
 ## TABLE OF CONTENTS
 
-1. [Input Schema Templates](#input-schemas)
-2. [Output Schema Templates](#output-schemas)
+1. [Input Schema Templates](#input-schema-templates)
+2. [Output Schema Templates](#output-schema-templates)
 3. [README Templates](#readme-templates)
-4. [Error Handling Patterns](#error-patterns)
-5. [Marketing Post Templates](#marketing-templates)
-6. [Quality Optimization Examples](#quality-examples)
+4. [Error Handling Patterns](#error-handling-patterns)
+5. [Marketing Post Templates](#marketing-post-templates)
+6. [Quality Optimization Examples](#quality-optimization-examples)
 
 ---
 
-# INPUT SCHEMA TEMPLATES
+## INPUT SCHEMA TEMPLATES
 
 ## Template 1: Email Validator Input
 
@@ -168,7 +168,7 @@
 
 ---
 
-# OUTPUT SCHEMA TEMPLATES
+## OUTPUT SCHEMA TEMPLATES
 
 ## Template 1: Email Validator Output
 
@@ -277,11 +277,11 @@
 
 ---
 
-# README TEMPLATES
+## README TEMPLATES
 
 ## Template 1: Quick Start README (Webhook Debugger)
 
-```markdown
+````markdown
 # Webhook Debugger
 
 Test and inspect webhooks instantly without running localhost.
@@ -312,6 +312,7 @@ Debugging webhooks is painful:
 - ❌ Failed webhook tests require service reconfiguration
 
 ### The Solution
+
 ```
 
 1. Run Webhook Debugger
@@ -320,30 +321,31 @@ Debugging webhooks is painful:
 4. See all requests in real-time
 5. Export logs as JSON/CSV
 
-````
+```
 
 No setup required. No localhost tunneling. Takes 30 seconds.
 
 ## What can this Actor do?
 
-| Feature | Description |
-|---------|------------|
-| **URL Generation** | Generate 1-10 temporary webhook URLs |
-| **Request Logging** | Capture ALL incoming requests |
-| **Full Details** | Headers, body, query params, IP, timing |
-| **Auto-Cleanup** | URLs expire automatically (configurable) |
-| **Export** | Download logs as JSON or CSV |
-| **Live Viewing** | See requests in real-time in dataset |
+| Feature             | Description                              |
+| ------------------- | ---------------------------------------- |
+| **URL Generation**  | Generate 1-10 temporary webhook URLs     |
+| **Request Logging** | Capture ALL incoming requests            |
+| **Full Details**    | Headers, body, query params, IP, timing  |
+| **Auto-Cleanup**    | URLs expire automatically (configurable) |
+| **Export**          | Download logs as JSON or CSV             |
+| **Live Viewing**    | See requests in real-time in dataset     |
 
 ## Input example
 
 ### Simple mode (basic)
+
 ```json
 {
   "urlCount": 3,
   "retentionHours": 24
 }
-````
+```
 
 Copy the 3 webhook URLs from the output dataset.
 
@@ -498,12 +500,11 @@ Re-run Actor to generate new URLs.
 ---
 
 **Questions?** Comment below or join the Apify community Discord!
-
 ````
 
 ---
 
-# ERROR HANDLING PATTERNS
+## ERROR HANDLING PATTERNS
 
 ## Pattern 1: Express Error Handler (Node.js)
 
@@ -511,17 +512,17 @@ Re-run Actor to generate new URLs.
 // Error middleware
 app.use((err, req, res, next) => {
   // Log the error
-  Apify.utils.log.error('Request error:', err);
+  Apify.utils.log.error("Request error:", err);
 
   // Determine status code
   const statusCode = err.statusCode || 500;
-  const message = err.message || 'Internal Server Error';
+  const message = err.message || "Internal Server Error";
 
   // Send error response
   res.status(statusCode).json({
     error: message,
     statusCode: statusCode,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
 });
 
@@ -531,25 +532,28 @@ const asyncHandler = (fn) => (req, res, next) => {
 };
 
 // Usage
-app.post('/webhook/:id', asyncHandler(async (req, res) => {
-  if (!req.params.id) {
-    return res.status(400).json({
-      error: 'Webhook ID is required',
-      example: '/webhook/wh_abc123'
-    });
-  }
+app.post(
+  "/webhook/:id",
+  asyncHandler(async (req, res) => {
+    if (!req.params.id) {
+      return res.status(400).json({
+        error: "Webhook ID is required",
+        example: "/webhook/wh_abc123",
+      });
+    }
 
-  if (req.headers['content-length'] > MAX_PAYLOAD) {
-    return res.status(413).json({
-      error: 'Payload too large',
-      max: MAX_PAYLOAD,
-      received: req.headers['content-length']
-    });
-  }
+    if (req.headers["content-length"] > MAX_PAYLOAD) {
+      return res.status(413).json({
+        error: "Payload too large",
+        max: MAX_PAYLOAD,
+        received: req.headers["content-length"],
+      });
+    }
 
-  // Process request...
-}));
-````
+    // Process request...
+  }),
+);
+```
 
 ## Pattern 2: API Call with Retry Logic
 
@@ -612,7 +616,7 @@ for (const email of emails) {
 
 ---
 
-# MARKETING POST TEMPLATES
+## MARKETING POST TEMPLATES
 
 ## Template 1: Reddit Post (r/webdev)
 
@@ -655,7 +659,7 @@ scheduling tools if anyone's interested.
 
 ## Template 2: Stack Overflow Answer
 
-```
+````markdown
 Question: "How can I test webhooks locally for my Node.js application?"
 
 ---
@@ -669,6 +673,7 @@ Here's what I did:
 webhook URLs you can test against.
 
 **How it works**:
+
 ```
 
 1. Run Actor → Get 3 unique webhook URLs
@@ -676,19 +681,20 @@ webhook URLs you can test against.
 3. All requests get logged with full details
 4. Export logs to JSON/CSV for analysis
 
-````
+```
 
 **Code example**:
+
 ```javascript
-const webhookUrl = 'https://api.apify.com/webhook/wh_abc123';
+const webhookUrl = "https://api.apify.com/webhook/wh_abc123";
 
 // Send test webhook
 const response = await fetch(webhookUrl, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ event: 'test', timestamp: Date.now() })
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ event: "test", timestamp: Date.now() }),
 });
-````
+```
 
 **Benefits over localhost tunneling**:
 
@@ -701,12 +707,11 @@ const response = await fetch(webhookUrl, {
 Try it: [Webhook Debugger on Apify](https://apify.com/...)
 
 Hope this helps!
-
 ````
 
 ## Template 3: Dev.to Article
 
-```markdown
+````markdown
 ---
 title: "How to Test Webhooks Without Running Localhost (Free Tool)"
 description: "Stop using ngrok. Here's a better way to debug webhooks."
@@ -716,6 +721,7 @@ tags: webhooks, testing, nodejs, debugging
 # How to Test Webhooks Without Running Localhost
 
 Testing webhooks sucks. You need to:
+
 1. Set up localhost tunneling (ngrok, localtunnel, etc.)
 2. Keep your tunneling service running
 3. Constantly regenerate URLs
@@ -726,17 +732,18 @@ Testing webhooks sucks. You need to:
 ## The Old Way vs. The New Way
 
 ### Before: ngrok + localhost
+
 ```bash
 $ ngrok http 3000
 Forwarding: https://abc123.ngrok.io -> localhost:3000
 
 # Now configure webhook to: https://abc123.ngrok.io/webhook
 # But ngrok expires, URLs change, setup is manual...
-````
+```
 
 ### After: Temporary webhook URLs
 
-```
+```text
 1. Click "Start Actor"
 2. Get 3 unique URLs
 3. Configure service to use them
@@ -769,7 +776,7 @@ a tool that generates temporary webhook URLs with automatic logging.
 
 **Step 2: Get Your URLs**
 
-```
+```text
 Webhook 1: https://api.apify.com/webhook/wh_abc123
 Webhook 2: https://api.apify.com/webhook/wh_def456
 Webhook 3: https://api.apify.com/webhook/wh_ghi789
@@ -816,17 +823,17 @@ Takes 2 minutes to set up. No credit card required.
 
 Have you struggled with webhook testing? What's your workflow? Let me know
 in the comments!
-
 ````
 
 ---
 
-# QUALITY OPTIMIZATION EXAMPLES
+## QUALITY OPTIMIZATION EXAMPLES
 
 ## Example 1: Before → After README (Quality Score Impact)
 
 ### ❌ BEFORE (Quality Score: 55)
-```markdown
+
+````markdown
 # Email Validator
 
 Validates emails.
@@ -838,19 +845,19 @@ Use the input schema to enter your emails. The output will show if they're valid
 ## Input
 
 ```json
-{"emails": ["test@example.com"]}
-````
+{ "emails": ["test@example.com"] }
+```
 
 ## Output
 
 ```json
 { "valid": true }
 ```
-
 ````
 
 ### ✅ AFTER (Quality Score: 78)
-```markdown
+
+````markdown
 # Email Validator & B2B Enricher
 
 Validate email addresses and automatically enrich them with company data
@@ -867,22 +874,25 @@ prospect lists.
 ## Why use Email Validator & Enricher?
 
 ### The Problem
+
 - ❌ Manual validation wastes hours
 - ❌ No visibility into who you're targeting
 - ❌ Competitors charge $0.10+ per email
 - ❌ Need to manually research companies
 
 ### The Solution
-````
+
+```
 
 1. Upload your email list
 2. Actor validates + enriches automatically
 3. Get company info, industry, employee count
 4. Export clean list for outreach
 
-````
+```
 
 **Results**:
+
 - 30x faster than manual validation
 - 70% cheaper than competitors
 - 99% email accuracy
@@ -890,25 +900,26 @@ prospect lists.
 
 ## What can this Actor do?
 
-| Feature | Details |
-|---------|---------|
-| **Email Validation** | Format check, DNS verification, disposable detection |
-| **Company Enrichment** | Industry, employee count, website, location |
-| **Batch Processing** | Handle 500-10,000+ emails per run |
-| **Risk Scoring** | Deliverability confidence (0-100) |
-| **Export** | CSV, JSON, direct to Google Sheets |
-| **API Keys** | Use your own Hunter.io/Clearbit keys |
+| Feature                | Details                                              |
+| ---------------------- | ---------------------------------------------------- |
+| **Email Validation**   | Format check, DNS verification, disposable detection |
+| **Company Enrichment** | Industry, employee count, website, location          |
+| **Batch Processing**   | Handle 500-10,000+ emails per run                    |
+| **Risk Scoring**       | Deliverability confidence (0-100)                    |
+| **Export**             | CSV, JSON, direct to Google Sheets                   |
+| **API Keys**           | Use your own Hunter.io/Clearbit keys                 |
 
 ## Input example
 
 **Simple mode** (recommended for beginners)
+
 ```json
 {
   "emails": ["john@techcompany.com", "sarah@startup.io"],
   "enrichment": "full",
   "removeInvalid": true
 }
-````
+```
 
 **Advanced mode** (for power users)
 
@@ -1114,3 +1125,4 @@ Questions? Drop a comment below or join our Discord community!
 
 **Last Updated**: December 19, 2025 | **Status**: Ready to Use
 ```
+````

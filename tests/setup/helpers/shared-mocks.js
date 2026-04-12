@@ -16,6 +16,7 @@ import * as allConsts from "../../../src/consts/index.js";
  * @typedef {import("express").Application} Application
  * @typedef {import("express").Request} Request
  * @typedef {import("express").Response} Response
+ * @typedef {jest.MockedFunction<() => Application> & { static: jest.Mock }} ExpressMock
  * @typedef {import("@duckdb/node-api").DuckDBInstance} DuckDBInstance
  * @typedef {import("@duckdb/node-api").DuckDBValue} DuckDBValue
  * @typedef {import("vm").Script} VMScript
@@ -525,7 +526,7 @@ export const expressAppMock = assertType({
  * Includes static methods like express.static.
  */
 /**
- * @type {jest.Mock}
+ * @type {ExpressMock}
  */
 export const expressMock = Object.assign(
   jest.fn(() => expressAppMock),

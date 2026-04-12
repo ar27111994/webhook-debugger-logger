@@ -518,6 +518,6 @@ That delivers the real value users want, one endpoint that can safely validate m
 
 It also composes cleanly with the rest of the roadmap:
 
-- It complements [docs/roadmap/programmable-responses.md](docs/roadmap/programmable-responses.md) by making ingress validation programmable, not just egress responses.
-- It complements [docs/roadmap/webhook-analytics-api.md](docs/roadmap/webhook-analytics-api.md) by adding new dimensions for verification diagnostics.
-- It fits future observability work in [docs/roadmap/opentelemetry-integration.md](docs/roadmap/opentelemetry-integration.md) by creating stable rule and provider attributes for spans and metrics.
+- It complements [programmable-responses.md](programmable-responses.md) by making ingress validation programmable, not just egress responses.
+- It complements [webhook-analytics-api.md](webhook-analytics-api.md) by adding new dimensions for verification diagnostics.
+- It fits future observability work in [opentelemetry-integration.md](opentelemetry-integration.md) by creating stable rule and provider attributes for spans and metrics.

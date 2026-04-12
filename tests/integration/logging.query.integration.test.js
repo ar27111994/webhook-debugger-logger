@@ -23,6 +23,7 @@ const AUTH_KEY = "integration-log-secret";
 const LOG_SYNC_WAIT_TIMEOUT_MS = 5000;
 const LOG_SYNC_WAIT_INTERVAL_MS = 100;
 const LOGS_QUERY_LIMIT = 50;
+const LOGGING_QUERY_TEST_TIMEOUT_MS = 15000;
 
 /**
  * @typedef {{ id: string, webhookId: string, method: string, detailUrl: string }} LogListItem
@@ -66,94 +67,98 @@ describe("Integration: Logging and query contracts", () => {
     }
   });
 
-  it("should ingest webhook payloads and expose them via /logs query endpoint", async () => {
-    context = await startIntegrationApp({
-      authKey: AUTH_KEY,
-      urlCount: 1,
-      retentionHours: 1,
-      enableJSONParsing: true,
-      defaultResponseBody: "ingested",
-      defaultResponseCode: HTTP_STATUS.CREATED,
-    });
-    const activeContext = requireContext(context);
+  it(
+    "should ingest webhook payloads and expose them via /logs query endpoint",
+    async () => {
+      context = await startIntegrationApp({
+        authKey: AUTH_KEY,
+        urlCount: 1,
+        retentionHours: 1,
+        enableJSONParsing: true,
+        defaultResponseBody: "ingested",
+        defaultResponseCode: HTTP_STATUS.CREATED,
+      });
+      const activeContext = requireContext(context);
 
-    const webhookId = await resolveActiveWebhookId(activeContext.appClient);
-    const payload = createWebhookPayload({
-      id: "evt_integration_query_1",
-      source: "integration-suite",
-    });
+      const webhookId = await resolveActiveWebhookId(activeContext.appClient);
+      const payload = createWebhookPayload({
+        id: "evt_integration_query_1",
+        source: "integration-suite",
+      });
 
-    const ingestResponse = await activeContext.appClient
-      .post(APP_ROUTES.WEBHOOK.replace(":id", webhookId))
-      .set(
-        HTTP_HEADERS.AUTHORIZATION,
-        `${AUTH_CONSTS.BEARER_PREFIX}${AUTH_KEY}`,
-      )
-      .set(HTTP_HEADERS.CONTENT_TYPE, MIME_TYPES.JSON)
-      .send(payload);
+      const ingestResponse = await activeContext.appClient
+        .post(APP_ROUTES.WEBHOOK.replace(":id", webhookId))
+        .set(
+          HTTP_HEADERS.AUTHORIZATION,
+          `${AUTH_CONSTS.BEARER_PREFIX}${AUTH_KEY}`,
+        )
+        .set(HTTP_HEADERS.CONTENT_TYPE, MIME_TYPES.JSON)
+        .send(payload);
 
-    expect(ingestResponse.status).toBe(HTTP_STATUS.CREATED);
-    expect(String(ingestResponse.text)).toContain("ingested");
+      expect(ingestResponse.status).toBe(HTTP_STATUS.CREATED);
+      expect(String(ingestResponse.text)).toContain("ingested");
 
-    await waitForCondition(
-      async () => {
-        const logsResponse = await activeContext.appClient
-          .get(APP_ROUTES.LOGS)
-          .set(
-            HTTP_HEADERS.AUTHORIZATION,
-            `${AUTH_CONSTS.BEARER_PREFIX}${AUTH_KEY}`,
-          )
-          .query({ webhookId, limit: LOGS_QUERY_LIMIT });
+      await waitForCondition(
+        async () => {
+          const logsResponse = await activeContext.appClient
+            .get(APP_ROUTES.LOGS)
+            .set(
+              HTTP_HEADERS.AUTHORIZATION,
+              `${AUTH_CONSTS.BEARER_PREFIX}${AUTH_KEY}`,
+            )
+            .query({ webhookId, limit: LOGS_QUERY_LIMIT });
 
-        if (logsResponse.status !== HTTP_STATUS.OK) {
-          return false;
-        }
+          if (logsResponse.status !== HTTP_STATUS.OK) {
+            return false;
+          }
 
-        /** @type {LogListItem[]} */
-        const items = Array.isArray(logsResponse.body?.items)
-          ? logsResponse.body.items
-          : [];
+          /** @type {LogListItem[]} */
+          const items = Array.isArray(logsResponse.body?.items)
+            ? logsResponse.body.items
+            : [];
 
-        return items.some((item) => item.webhookId === webhookId);
-      },
-      LOG_SYNC_WAIT_TIMEOUT_MS,
-      LOG_SYNC_WAIT_INTERVAL_MS,
-    );
-
-    const finalLogsResponse = await activeContext.appClient
-      .get(APP_ROUTES.LOGS)
-      .set(
-        HTTP_HEADERS.AUTHORIZATION,
-        `${AUTH_CONSTS.BEARER_PREFIX}${AUTH_KEY}`,
-      )
-      .query({ webhookId, limit: LOGS_QUERY_LIMIT });
-
-    expect(finalLogsResponse.status).toBe(HTTP_STATUS.OK);
-    expect(Array.isArray(finalLogsResponse.body.items)).toBe(true);
-    expect(finalLogsResponse.body.items.length).toBeGreaterThan(0);
-
-    /** @type {LogListItem[]} */
-    const items = finalLogsResponse.body.items;
-    const createdItem = items.find((item) => item.webhookId === webhookId);
-
-    expect(createdItem).toBeDefined();
-    expect(String(createdItem?.id).length).toBeGreaterThan(0);
-    expect(String(createdItem?.method)).toBe(HTTP_METHODS.POST);
-    expect(String(createdItem?.detailUrl).startsWith("/")).toBe(true);
-    expect(String(createdItem?.detailUrl)).toContain(String(createdItem?.id));
-
-    const detailResponse = await activeContext.appClient
-      .get(`${String(createdItem?.detailUrl)}?fields=id,webhookId,method`)
-      .set(
-        HTTP_HEADERS.AUTHORIZATION,
-        `${AUTH_CONSTS.BEARER_PREFIX}${AUTH_KEY}`,
+          return items.some((item) => item.webhookId === webhookId);
+        },
+        LOG_SYNC_WAIT_TIMEOUT_MS,
+        LOG_SYNC_WAIT_INTERVAL_MS,
       );
 
-    expect([HTTP_STATUS.OK, HTTP_STATUS.NOT_FOUND]).toContain(
-      detailResponse.status,
-    );
-    if (detailResponse.status === HTTP_STATUS.OK) {
-      expect(String(detailResponse.body.webhookId)).toBe(webhookId);
-    }
-  });
+      const finalLogsResponse = await activeContext.appClient
+        .get(APP_ROUTES.LOGS)
+        .set(
+          HTTP_HEADERS.AUTHORIZATION,
+          `${AUTH_CONSTS.BEARER_PREFIX}${AUTH_KEY}`,
+        )
+        .query({ webhookId, limit: LOGS_QUERY_LIMIT });
+
+      expect(finalLogsResponse.status).toBe(HTTP_STATUS.OK);
+      expect(Array.isArray(finalLogsResponse.body.items)).toBe(true);
+      expect(finalLogsResponse.body.items.length).toBeGreaterThan(0);
+
+      /** @type {LogListItem[]} */
+      const items = finalLogsResponse.body.items;
+      const createdItem = items.find((item) => item.webhookId === webhookId);
+
+      expect(createdItem).toBeDefined();
+      expect(String(createdItem?.id).length).toBeGreaterThan(0);
+      expect(String(createdItem?.method)).toBe(HTTP_METHODS.POST);
+      expect(String(createdItem?.detailUrl).startsWith("/")).toBe(true);
+      expect(String(createdItem?.detailUrl)).toContain(String(createdItem?.id));
+
+      const detailResponse = await activeContext.appClient
+        .get(`${String(createdItem?.detailUrl)}?fields=id,webhookId,method`)
+        .set(
+          HTTP_HEADERS.AUTHORIZATION,
+          `${AUTH_CONSTS.BEARER_PREFIX}${AUTH_KEY}`,
+        );
+
+      expect([HTTP_STATUS.OK, HTTP_STATUS.NOT_FOUND]).toContain(
+        detailResponse.status,
+      );
+      if (detailResponse.status === HTTP_STATUS.OK) {
+        expect(String(detailResponse.body.webhookId)).toBe(webhookId);
+      }
+    },
+    LOGGING_QUERY_TEST_TIMEOUT_MS,
+  );
 });

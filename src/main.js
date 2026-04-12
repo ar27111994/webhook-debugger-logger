@@ -109,6 +109,7 @@ const APP_VERSION =
   APP_CONSTS.UNKNOWN;
 
 const PUBLIC_DIR_PATH = join(__dirname, "..", STORAGE_CONSTS.PUBLIC_DIR);
+const CSS_ASSET_CACHE_MAX_AGE = "5m";
 
 /** @type {Server | undefined} */
 let server;
@@ -502,13 +503,19 @@ async function initialize(testOptions = {}) {
     express.static(join(PUBLIC_DIR_PATH, STORAGE_CONSTS.FONTS_DIR_NAME)),
   );
 
-  app.get("/index.css", (_req, res) => {
-    res.sendFile(join(PUBLIC_DIR_PATH, "index.css"));
+  // Serve UI styles as cacheable static assets without consuming the
+  // management endpoint rate-limit budget.
+  const cssAssetMiddleware = express.static(PUBLIC_DIR_PATH, {
+    cacheControl: true,
+    etag: true,
+    fallthrough: false,
+    lastModified: true,
+    maxAge: CSS_ASSET_CACHE_MAX_AGE,
   });
 
-  app.get("/unauthorized.css", (_req, res) => {
-    res.sendFile(join(PUBLIC_DIR_PATH, "unauthorized.css"));
-  });
+  app.get("/index.css", cssAssetMiddleware);
+
+  app.get("/unauthorized.css", cssAssetMiddleware);
 
   // eslint-disable-next-line sonarjs/cors
   app.use(cors());
@@ -699,4 +706,5 @@ export {
   resetShutdownForTest,
   setupGracefulShutdown,
   APP_VERSION,
+  CSS_ASSET_CACHE_MAX_AGE,
 };

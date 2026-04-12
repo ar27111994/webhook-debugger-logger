@@ -47,7 +47,6 @@ jobs:
     permissions:
       actions: read
       contents: read
-      security-events: write
 
     steps:
       - name: Checkout code
@@ -63,7 +62,7 @@ jobs:
             echo "- Reference corpus: [Arcanum-Sec/sec-context](https://github.com/Arcanum-Sec/sec-context)"
             echo "- Dependency risks: reviewed by the Dependency Review job"
             echo "- Hardcoded secrets and embedded credentials: checked by the PR diff gate below"
-            echo "- Injection, XSS, auth/session, file-handling, and API anti-patterns: analyzed by CodeQL security queries"
+            echo "- Injection, XSS, auth/session, file-handling, and API anti-patterns: analyzed by the repository CodeQL default setup"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Detect high-confidence secret patterns in changed source
@@ -109,16 +108,6 @@ jobs:
           fi
 
           echo "No high-confidence secret patterns found in added source lines."
-
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@f94817b9f0deeb3871261446912ae8f854d1b675 # codeql-bundle-v2.25.1
-        with:
-          languages: javascript-typescript
-          build-mode: none
-          queries: security-extended,security-and-quality
-
-      - name: Analyze with CodeQL
-        uses: github/codeql-action/analyze@f94817b9f0deeb3871261446912ae8f854d1b675 # codeql-bundle-v2.25.1
 
   sec-context-pr-security:
     name: sec-context PR Security
