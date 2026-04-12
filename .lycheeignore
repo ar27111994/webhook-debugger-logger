@@ -18,15 +18,12 @@
 ^(?:https://)discord(?:app)?\.com/api/webhooks(?:/|/._)$
 ^(?:https://)github\.com/user/repo(?:/.*)?$
 ^(?:https://)www\.npmjs\.com/package/package-name(?:/|$)
-^(?:https://)(?:apify\.com|docs\.apify\.com)/\.\.\.(?:/|$)
-^(?:https://)\.\.\.(?:/|$)
 ^file:///.*/public/index\.css$
-^file:///.*/public/info$
+^file:///._/public/info$
 ^(?:https://)static\.apify\.com(?:/|$)
-^(?:https://)www\.npmjs\.com/package/(?:webhook-debugger-logger|isolated-vm)(?:\?.*)?$
 ^(?:https://)api\.apify\.com/v2/key-value-stores/default/records/(?:payload_123|mock-key)(?:/|$)
 ^(?:https?://)(?:a|b|c)\.com(?:/|$)
-^(?:https://)discord(?:app)?\.com/api/webhooks(?:/.*)?$
+^(?:https://)discord(?:app)?\.com/api/webhooks(?:/._)?$
 ^(?:http://)169\.254\.169\.254/latest(?:/|$)
 ^(?:http://)(?:empty\.domain|nonexistent\.domain)(?:/|$)
 ^(?:http://)(?:weird-dns|string-throw)\.com(?:/|$)
