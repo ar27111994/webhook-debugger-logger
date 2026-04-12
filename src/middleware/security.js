@@ -74,6 +74,22 @@ const getContentTypeFromWriteHeadArgs = (args) => {
 };
 
 /**
+ * @param {Request} req
+ * @returns {boolean}
+ */
+const isSecureRequest = (req) => {
+  if (req.secure === true) return true;
+  if (req.protocol === "https") return true;
+
+  const forwardedProto = req.get(HTTP_HEADERS.X_FORWARDED_PROTO);
+  return typeof forwardedProto === "string"
+    ? forwardedProto
+        .split(",")
+        .some((value) => value.trim().toLowerCase() === "https")
+    : false;
+};
+
+/**
  * Creates request ID middleware for tracing.
  * ALWAYS generates server-side IDs - never trusts client input.
  * @returns {RequestHandler}
@@ -97,8 +113,8 @@ export const createRequestIdMiddleware =
  */
 export const createCspMiddleware =
   () =>
-  /** @param {Request} _req @param {Response} res @param {NextFunction} next */
-  (_req, res, next) => {
+  /** @param {Request} req @param {Response} res @param {NextFunction} next */
+  (req, res, next) => {
     // Set universal security headers immediately (apply to ALL responses)
     res.setHeader(
       HTTP_HEADERS.X_CONTENT_TYPE_OPTIONS,
@@ -109,10 +125,12 @@ export const createCspMiddleware =
       HTTP_HEADERS.REFERRER_POLICY,
       SECURITY_HEADERS_VALUES.REF_STRICT_ORIGIN,
     );
-    res.setHeader(
-      HTTP_HEADERS.STRICT_TRANSPORT_SECURITY,
-      SECURITY_HEADERS_VALUES.HSTS_VALUE,
-    );
+    if (isSecureRequest(req)) {
+      res.setHeader(
+        HTTP_HEADERS.STRICT_TRANSPORT_SECURITY,
+        SECURITY_HEADERS_VALUES.HSTS_VALUE,
+      );
+    }
     res.setHeader(
       HTTP_HEADERS.PERMISSIONS_POLICY,
       SECURITY_HEADERS_VALUES.PERMISSIONS_POLICY_VALUE,

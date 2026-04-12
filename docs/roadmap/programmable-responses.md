@@ -116,14 +116,8 @@ The `MockMiddleware` will sit **before** the `LoggerMiddleware`'s logging logic 
 4. _If Match Found:_
    - Generate Response (Delay, Status, Body)
    - Log Event (Mark as `type: "mocked"`, include `mockRuleId`)
-5. Receive Request
-6. Parse Body & Headers
-7. **Evaluate Mock Rules** (In-Memory)
-8. _If Match Found:_
-   - Generate Response (Delay, Status, Body)
-   - Log Event (Mark as `type: "mocked"`, include `mockRuleId`)
    - Send Response -> **STOP**
-9. _If No Match:_
+5. _If No Match:_
    - Proceed to standard Logging & Forwarding logic.
 
 ### 3.3. Persistence

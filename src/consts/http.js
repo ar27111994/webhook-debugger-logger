@@ -136,6 +136,7 @@ export const HTTP_HEADERS = Object.freeze({
   X_REQUEST_ID: "x-request-id",
   X_REAL_IP: "x-real-ip",
   X_FORWARDED_FOR: "x-forwarded-for",
+  X_FORWARDED_PROTO: "x-forwarded-proto",
   HOST: "host",
   CONTENT_ENCODING: "content-encoding",
   CACHE_CONTROL: "cache-control",

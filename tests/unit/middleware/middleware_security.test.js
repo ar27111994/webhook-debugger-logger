@@ -161,7 +161,9 @@ describe("Security Middleware", () => {
       middleware = createCspMiddleware();
     });
 
-    it("should apply universal security headers immediately", () => {
+    it("should apply HSTS when the request is secure", () => {
+      mockReq.protocol = "https";
+
       middleware(mockReq, mockRes, mockNext);
 
       expect(mockRes.setHeader).toHaveBeenCalledWith(
@@ -186,6 +188,34 @@ describe("Security Middleware", () => {
       );
 
       expect(mockNext).toHaveBeenCalled();
+    });
+
+    it("should not apply HSTS when the request is not secure", () => {
+      mockReq.protocol = "http";
+
+      middleware(mockReq, mockRes, mockNext);
+
+      expect(mockRes.setHeader).not.toHaveBeenCalledWith(
+        HTTP_HEADERS.STRICT_TRANSPORT_SECURITY,
+        SECURITY_HEADERS_VALUES.HSTS_VALUE,
+      );
+      expect(mockRes.setHeader).toHaveBeenCalledWith(
+        HTTP_HEADERS.X_CONTENT_TYPE_OPTIONS,
+        SECURITY_HEADERS_VALUES.NOSNIFF,
+      );
+      expect(mockNext).toHaveBeenCalled();
+    });
+
+    it("should apply HSTS when x-forwarded-proto indicates https", () => {
+      mockReq.protocol = "http";
+      mockReq.headers[HTTP_HEADERS.X_FORWARDED_PROTO] = "https";
+
+      middleware(mockReq, mockRes, mockNext);
+
+      expect(mockRes.setHeader).toHaveBeenCalledWith(
+        HTTP_HEADERS.STRICT_TRANSPORT_SECURITY,
+        SECURITY_HEADERS_VALUES.HSTS_VALUE,
+      );
     });
 
     it("should default to not applying CSP if getHeader returns nothing", () => {
