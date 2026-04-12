@@ -44,7 +44,7 @@ This profile uses the current code-backed Stripe features: raw-body signature ve
 ```
 
 > [!IMPORTANT]
-> **Verify Stripe IPs (`allowedIps`)**: Stripe frequently updates their webhook IP ranges. Always consult the **Official Stripe Webhook IP Documentation**: [IP Addresses](https://docs.stripe.com/ips#ip-addresses?utm_campaign=stripe_hardening) and [Webhook Notifications](https://docs.stripe.com/ips#webhook-notifications?utm_campaign=stripe_hardening) to ensure your whitelist (if specified) is up to date.
+> **Verify Stripe IPs (`allowedIps`)**: Stripe frequently updates their webhook IP ranges. Always consult the **Official Stripe Webhook IP Documentation**: [IP Addresses](https://docs.stripe.com/ips#ip-addresses) and [Webhook Notifications](https://docs.stripe.com/ips#webhook-notifications) to ensure your whitelist (if specified) is up to date.
 
 ## 🛠️ Optional Hardening
 
@@ -80,11 +80,11 @@ GET /logs/<log-id>/payload
 
 ## 🔍 Common Stripe Failure Patterns
 
-| Signal | What it usually means | What to do |
-| :----- | :-------------------- | :--------- |
-| `signatureValid=false` | Wrong signing secret, modified raw body, or stale timestamp tolerance | Verify the `whsec_...` secret and inspect the captured request before any downstream transformation. |
-| 5xx sender response | Your test profile is intentionally simulating a failure, or your custom script changed `event.statusCode` | Remove the forced status or replay a healthy event after the downstream fix is deployed. |
-| Forwarding failures | The upstream webhook was accepted, but the downstream bridge failed later | Query `GET /logs?webhookId=<id>&method=SYSTEM` to inspect separate forwarding error entries. |
+| Signal                 | What it usually means                                                                                     | What to do                                                                                           |
+| :--------------------- | :-------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------- |
+| `signatureValid=false` | Wrong signing secret, modified raw body, or stale timestamp tolerance                                     | Verify the `whsec_...` secret and inspect the captured request before any downstream transformation. |
+| 5xx sender response    | Your test profile is intentionally simulating a failure, or your custom script changed `event.statusCode` | Remove the forced status or replay a healthy event after the downstream fix is deployed.             |
+| Forwarding failures    | The upstream webhook was accepted, but the downstream bridge failed later                                 | Query `GET /logs?webhookId=<id>&method=SYSTEM` to inspect separate forwarding error entries.         |
 
 ## 🔄 Recommended Workflow
 

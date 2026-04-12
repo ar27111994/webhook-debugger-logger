@@ -60,7 +60,7 @@ The native Node.js vm module is **not** a security mechanism.5 It provides conte
 
 ### **3.2 Industry Standard: isolated-vm**
 
-To securely execute untrusted code, the industry standard for Node.js is **isolated-vm**.6 This library provides access to V8's Isolate interface, creating a completely separate heap and garbage collector for the untrusted code.
+To securely execute untrusted code, the industry standard for Node.js is **isolated-vm**.6 This library provides access to V8's Isolate interface, creating a completely separate heap and garbage collector for the untrusted code. The project is maintained at <https://github.com/laverdet/isolated-vm>.
 
 #### **3.2.1 Implementation Strategy for Filter Functions**
 

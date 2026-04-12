@@ -10,7 +10,8 @@ import { ERROR_MESSAGES } from "../../../src/consts/errors.js";
 
 /**
  * @typedef {import("node:worker_threads").WorkerOptions} WorkerOptions
- * @typedef {EventEmitter & { terminate: jest.Mock }} MockWorkerInstance
+ * @typedef {jest.MockedFunction<() => Promise<void>>} TerminateMock
+ * @typedef {EventEmitter & { terminate: TerminateMock }} MockWorkerInstance
  */
 
 const WORKER_THREADS_MODULE = "node:worker_threads";
@@ -20,7 +21,7 @@ const SUCCESS_SCRIPT_SOURCE = "event.ok = true;";
  * @returns {{
  *   workerInstances: Array<MockWorkerInstance>;
  *   workerOptions: Array<WorkerOptions>;
- *   terminateMock: jest.Mock;
+ *   terminateMock: TerminateMock;
  *   MockWorker: new (
  *     _workerUrl: URL | string,
  *     options?: WorkerOptions,
@@ -32,6 +33,7 @@ function createMockWorkerHarness() {
   const workerInstances = [];
   /** @type {Array<WorkerOptions>} */
   const workerOptions = [];
+  /** @type {TerminateMock} */
   const terminateMock = jest.fn(async () => undefined);
 
   class MockWorker extends EventEmitter {
@@ -216,7 +218,9 @@ describe("Custom Script Executor worker failure paths", () => {
     const { workerInstances, terminateMock, MockWorker } =
       createMockWorkerHarness();
 
-    terminateMock.mockRejectedValueOnce(new Error("terminate failed"));
+    terminateMock.mockImplementationOnce(async () => {
+      throw new Error("terminate failed");
+    });
 
     jest.unstable_mockModule(WORKER_THREADS_MODULE, () => ({
       Worker: MockWorker,

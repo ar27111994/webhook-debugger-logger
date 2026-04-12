@@ -14,6 +14,19 @@ const WORKER_MODULE_PATH = "../../../src/utils/custom_script_worker.js";
 const NON_ERROR_THROWN_VALUE = 123;
 
 /**
+ * @typedef {{
+ *   event: Record<string, any>,
+ *   req: { headers: Record<string, any> },
+ *   console: {
+ *     log: (...args: unknown[]) => void,
+ *     warn: (...args: unknown[]) => void,
+ *     info: (...args: unknown[]) => void,
+ *     error: (...args: unknown[]) => void,
+ *   },
+ * }} MockScriptContext
+ */
+
+/**
  * @param {{
  *   workerData: Record<string, unknown>,
  *   vmFactory?: () => Promise<Record<string, unknown>> | Record<string, unknown>,
@@ -70,6 +83,9 @@ describe("Custom Script Worker", () => {
       },
       vmFactory: async () => {
         class MockScript {
+          /**
+           * @param {MockScriptContext} context
+           */
           runInContext(context) {
             context.event.accepted = true;
             context.event.headers.seen = context.req.headers.initial;
@@ -165,6 +181,9 @@ describe("Custom Script Worker", () => {
       },
       vmFactory: async () => {
         class MockScript {
+          /**
+           * @param {MockScriptContext} context
+           */
           runInContext(context) {
             context.console.error(new Error("logged vm failure"));
             throw Object.assign(new Error("vm failure"), { code: "E_VM" });

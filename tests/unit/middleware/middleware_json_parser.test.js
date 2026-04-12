@@ -130,6 +130,18 @@ describe("JSON Parser Middleware", () => {
       expect(mockNext).toHaveBeenCalled();
     });
 
+    it("should parse JSON when the content-type header casing differs", () => {
+      const jsonObject = { key: "value" };
+      const jsonStr = JSON.stringify(jsonObject);
+      mockReq.body = Buffer.from(jsonStr);
+      mockReq.headers = { "Content-Type": MIME_TYPES.JSON };
+
+      middleware(mockReq, mockRes, mockNext);
+
+      expect(mockReq.body).toEqual(jsonObject);
+      expect(mockNext).toHaveBeenCalled();
+    });
+
     it("should fallback to string body if JSON parsing fails and content-type is json", () => {
       const invalidJsonStr = '{"key": "missing quote}';
       mockReq.body = Buffer.from(invalidJsonStr);

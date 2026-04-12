@@ -78,8 +78,25 @@ export const createMockRequest = (overrides = {}) => {
     method: HTTP_METHODS.POST,
     requestId: "test_req_123", // Default requestId for error handler tests
     get: (/** @type {string} */ header) => {
-      if (header.toLowerCase() === "host") return "localhost";
-      return undefined;
+      const normalizedHeader = header.toLowerCase();
+
+      if (normalizedHeader === "host") return "localhost";
+
+      const headerEntry = Object.entries(req.headers).find(
+        ([headerName]) => headerName.toLowerCase() === normalizedHeader,
+      );
+
+      if (!headerEntry) return undefined;
+
+      const [, headerValue] = headerEntry;
+
+      if (Array.isArray(headerValue)) {
+        return headerValue.join(", ");
+      }
+
+      if (typeof headerValue === "string") return headerValue;
+
+      return headerValue == null ? undefined : String(headerValue);
     },
     ...(() => {
       /** @type {Record<string, Function[]>} */

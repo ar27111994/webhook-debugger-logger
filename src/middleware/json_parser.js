@@ -36,7 +36,9 @@ export const jsonParserMiddleware = (req, _res, next) => {
     });
   }
 
-  if (req.headers[HTTP_HEADERS.CONTENT_TYPE]?.includes(MIME_TYPES.JSON)) {
+  const contentType = req.get(HTTP_HEADERS.CONTENT_TYPE);
+
+  if (contentType?.includes(MIME_TYPES.JSON)) {
     const bodyText = isStringBody ? req.body : req.body.toString();
 
     try {

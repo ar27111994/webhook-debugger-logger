@@ -20,6 +20,58 @@ import { HTTP_HEADERS, MIME_TYPES } from "../consts/http.js";
 
 // WeakSet to track which responses have been wrapped (prevents double-wrapping)
 const wrappedResponses = new WeakSet();
+const RAW_HEADERS_STEP = 2;
+
+/**
+ * @param {unknown} value
+ * @returns {string | undefined}
+ */
+const getStringHeaderValue = (value) => {
+  if (typeof value === "string") return value;
+
+  if (Array.isArray(value)) {
+    return value.find((entry) => typeof entry === "string");
+  }
+
+  return undefined;
+};
+
+/**
+ * @param {unknown[]} args
+ * @returns {string | undefined}
+ */
+const getContentTypeFromWriteHeadArgs = (args) => {
+  for (const candidate of args) {
+    if (Array.isArray(candidate)) {
+      for (
+        let index = 0;
+        index < candidate.length - 1;
+        index += RAW_HEADERS_STEP
+      ) {
+        const headerName = candidate[index];
+
+        if (
+          typeof headerName === "string" &&
+          headerName.toLowerCase() === HTTP_HEADERS.CONTENT_TYPE
+        ) {
+          return getStringHeaderValue(candidate[index + 1]);
+        }
+      }
+
+      continue;
+    }
+
+    if (!candidate || typeof candidate !== "object") continue;
+
+    for (const [headerName, headerValue] of Object.entries(candidate)) {
+      if (headerName.toLowerCase() === HTTP_HEADERS.CONTENT_TYPE) {
+        return getStringHeaderValue(headerValue);
+      }
+    }
+  }
+
+  return undefined;
+};
 
 /**
  * Creates request ID middleware for tracing.
@@ -74,14 +126,12 @@ export const createCspMiddleware =
 
       /** @type {(this: Response, ...args: any[]) => Response} */
       res.writeHead = function (statusCode, ...args) {
-        const contentType = this.getHeader(HTTP_HEADERS.CONTENT_TYPE);
+        const contentType =
+          getStringHeaderValue(this.getHeader(HTTP_HEADERS.CONTENT_TYPE)) ??
+          getContentTypeFromWriteHeadArgs(args);
 
         // Apply CSP only to HTML responses
-        if (
-          contentType &&
-          typeof contentType === "string" &&
-          contentType.includes(MIME_TYPES.HTML)
-        ) {
+        if (contentType?.includes(MIME_TYPES.HTML)) {
           this.setHeader(
             HTTP_HEADERS.CONTENT_SECURITY_POLICY,
             SECURITY_CONSTS.CSP_POLICY,

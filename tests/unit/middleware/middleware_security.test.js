@@ -23,7 +23,7 @@ await setupCommonMocks();
 const { createRequestIdMiddleware, createCspMiddleware } =
   await import("../../../src/middleware/security.js");
 const { REQUEST_ID_PREFIX } = await import("../../../src/consts/app.js");
-const { HTTP_HEADERS, MIME_TYPES, HTTP_STATUS } =
+const { HTTP_HEADERS, MIME_TYPES, HTTP_STATUS, HTTP_CONSTS } =
   await import("../../../src/consts/http.js");
 const { SECURITY_CONSTS, SECURITY_HEADERS_VALUES } =
   await import("../../../src/consts/security.js");
@@ -235,6 +235,28 @@ describe("Security Middleware", () => {
         SECURITY_CONSTS.CSP_POLICY,
       );
       expect(originalWriteHead).toHaveBeenCalledWith(HTTP_STATUS.OK);
+    });
+
+    it("should apply CSP when HTML content type is provided via writeHead arguments", () => {
+      const originalWriteHead = mockRes.writeHead;
+      middleware(mockReq, mockRes, mockNext);
+
+      jest.mocked(mockRes.getHeader).mockReturnValue(undefined);
+      mockRes.writeHead(HTTP_STATUS.OK, HTTP_CONSTS.DEFAULT_SUCCESS_BODY, {
+        [HTTP_HEADERS.CONTENT_TYPE]: `${MIME_TYPES.HTML}; charset=${ENCODINGS.UTF8}`,
+      });
+
+      expect(mockRes.setHeader).toHaveBeenCalledWith(
+        HTTP_HEADERS.CONTENT_SECURITY_POLICY,
+        SECURITY_CONSTS.CSP_POLICY,
+      );
+      expect(originalWriteHead).toHaveBeenCalledWith(
+        HTTP_STATUS.OK,
+        HTTP_CONSTS.DEFAULT_SUCCESS_BODY,
+        {
+          [HTTP_HEADERS.CONTENT_TYPE]: `${MIME_TYPES.HTML}; charset=${ENCODINGS.UTF8}`,
+        },
+      );
     });
 
     it("should emit a CSP policy without unsafe-inline allowances", () => {
