@@ -141,7 +141,7 @@ describe("Dashboard Route", () => {
     });
 
     it("should serve HTML template from cache if available", async () => {
-      const rawTemplate = `${DASHBOARD_PLACEHOLDERS.VERSION}|${DASHBOARD_PLACEHOLDERS.ACTIVE_COUNT}|${DASHBOARD_PLACEHOLDERS.SIGNATURE_BADGE}|${DASHBOARD_PLACEHOLDERS.BRAND_HEADER}`;
+      const rawTemplate = `${DASHBOARD_PLACEHOLDERS.VERSION}|${DASHBOARD_PLACEHOLDERS.ACTIVE_COUNT}|${DASHBOARD_PLACEHOLDERS.SIGNATURE_BADGE_CLASS}|${DASHBOARD_PLACEHOLDERS.SIGNATURE_BADGE_LABEL}|${DASHBOARD_PLACEHOLDERS.BRAND_HEADER}`;
       templateCache = rawTemplate;
       jest.mocked(deps.getTemplate).mockReturnValueOnce(rawTemplate);
 
@@ -174,7 +174,7 @@ describe("Dashboard Route", () => {
     });
 
     it("should escape malicious signature provider names to prevent XSS", async () => {
-      templateCache = `${DASHBOARD_PLACEHOLDERS.SIGNATURE_BADGE}`;
+      templateCache = `${DASHBOARD_PLACEHOLDERS.SIGNATURE_BADGE_CLASS}|${DASHBOARD_PLACEHOLDERS.SIGNATURE_BADGE_LABEL}`;
       const unsafeProvider = '<script>alert("XSS")</script>';
       jest.mocked(deps.getSignatureStatus).mockReturnValueOnce(unsafeProvider);
 
@@ -226,7 +226,7 @@ describe("Dashboard Route", () => {
 
       // Mock a delayed file read
       /** @type {(value: string) => void} */
-      let resolveRead = () => { };
+      let resolveRead = () => {};
       const readPromise = new Promise((resolve) => {
         resolveRead = resolve;
       });
@@ -254,7 +254,7 @@ describe("Dashboard Route", () => {
     });
 
     it("should display inactive signature badge if no signature provider is registered", async () => {
-      templateCache = `${DASHBOARD_PLACEHOLDERS.SIGNATURE_BADGE}`;
+      templateCache = `${DASHBOARD_PLACEHOLDERS.SIGNATURE_BADGE_CLASS}|${DASHBOARD_PLACEHOLDERS.SIGNATURE_BADGE_LABEL}`;
       jest.mocked(deps.getSignatureStatus).mockReturnValueOnce(null);
 
       const handler = createDashboardHandler(deps);
@@ -279,7 +279,7 @@ describe("Dashboard Route", () => {
       );
       expect(mockRes.send).toHaveBeenCalledWith(
         HTTP_STATUS_MESSAGES[HTTP_STATUS.INTERNAL_SERVER_ERROR] ||
-        expect.any(String),
+          expect.any(String),
       );
 
       // Should have logged an error

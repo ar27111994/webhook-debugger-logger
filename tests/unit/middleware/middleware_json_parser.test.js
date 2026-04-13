@@ -133,6 +133,19 @@ describe("JSON Parser Middleware", () => {
       expect(mockNext).toHaveBeenCalled();
     });
 
+    it("should parse vendor and structured JSON media types", () => {
+      const jsonObject = { detail: "problem" };
+      const jsonStr = JSON.stringify(jsonObject);
+      mockReq.body = Buffer.from(jsonStr);
+      mockReq.headers[HTTP_HEADERS.CONTENT_TYPE] =
+        "Application/Problem+JSON; charset=utf-8";
+
+      middleware(mockReq, mockRes, mockNext);
+
+      expect(mockReq.body).toEqual(jsonObject);
+      expect(mockNext).toHaveBeenCalled();
+    });
+
     it("should parse JSON when the content-type header casing differs", () => {
       const jsonObject = { key: "value" };
       const jsonStr = JSON.stringify(jsonObject);

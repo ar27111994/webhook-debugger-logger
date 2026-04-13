@@ -68,13 +68,24 @@ jobs:
         id: lychee
         uses: lycheeverse/lychee-action@8646ba30535128ac92d33dfc9133794bfdd9b411 # v2.8.0
         with:
-          fail: true
-          jobSummary: true
+          fail: false
+          format: json
+          output: lychee/results.json
+          jobSummary: false
           args: >-
             --root-dir "$(pwd)"
             --exclude-path ".lycheeignore"
             --cache
             --max-cache-age 1d
+            --cache-exclude-status "403,429,500..=599"
+            --max-retries 5
+            --retry-wait-time 2
+            --timeout 30
+            --host-concurrency 4
+            --host-request-interval 250ms
+            --user-agent "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
+            --header "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+            --header "Accept-Language: en-US,en;q=0.9"
             --verbose
             --no-progress
             --include-fragments
@@ -94,6 +105,65 @@ jobs:
             "./tests/**/*.js"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Evaluate link check results
+        shell: bash
+        run: |
+          node - <<'EOF'
+          const fs = require('node:fs');
+
+          const results = JSON.parse(fs.readFileSync('lychee/results.json', 'utf8'));
+          const softHandledUrls = new Set([
+            'https://www.npmjs.com/package/webhook-debugger-logger',
+            'https://www.npmjs.com/package/isolated-vm?activeTab=readme',
+          ]);
+
+          const softFailures = [];
+          const hardFailures = [];
+
+          for (const [source, failures] of Object.entries(results.error_map ?? {})) {
+            for (const failure of failures) {
+              const url = failure.url;
+              const code = failure.status?.code;
+
+              if (softHandledUrls.has(url) && (code === 403 || code === 429)) {
+                softFailures.push({ source, url, code, text: failure.status?.text ?? '' });
+                continue;
+              }
+
+              hardFailures.push({
+                source,
+                url,
+                code,
+                text: failure.status?.text ?? 'Unknown link check error',
+              });
+            }
+          }
+
+          if ((results.timeouts ?? 0) > 0 || (results.unknown ?? 0) > 0 || (results.unsupported ?? 0) > 0) {
+            hardFailures.push({
+              source: 'lychee-summary',
+              url: null,
+              code: null,
+              text: `Unhandled summary counters: timeouts=${results.timeouts ?? 0}, unknown=${results.unknown ?? 0}, unsupported=${results.unsupported ?? 0}`,
+            });
+          }
+
+          if (softFailures.length > 0) {
+            console.log(`Soft-handled npmjs anti-bot failures: ${softFailures.length}`);
+            for (const failure of softFailures) {
+              console.log(`::warning title=Lychee soft-fail::${failure.url} returned ${failure.code} (${failure.text}) while checking ${failure.source}`);
+            }
+          }
+
+          if (hardFailures.length > 0) {
+            console.error('Unhandled lychee failures remain:');
+            console.error(JSON.stringify(hardFailures, null, 2));
+            process.exit(1);
+          }
+
+          console.log('Lychee completed with no failures beyond the targeted npmjs anti-bot soft-fail policy.');
+          EOF
 
       - name: Save lychee cache
         if: always()

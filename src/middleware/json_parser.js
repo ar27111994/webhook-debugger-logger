@@ -5,6 +5,21 @@
  */
 import { HTTP_HEADERS, MIME_TYPES } from "../consts/http.js";
 
+const STRUCTURED_JSON_SUFFIX = "+json";
+
+/**
+ * @param {string | undefined} contentType
+ * @returns {boolean}
+ */
+const isJsonContentType = (contentType) => {
+  const mediaType = contentType?.split(";")[0]?.trim()?.toLowerCase();
+
+  return (
+    mediaType === MIME_TYPES.JSON ||
+    mediaType?.endsWith(STRUCTURED_JSON_SUFFIX) === true
+  );
+};
+
 /**
  * @typedef {import('express').Request} Request
  * @typedef {import('express').Response} Response
@@ -38,7 +53,7 @@ export const jsonParserMiddleware = (req, _res, next) => {
 
   const contentType = req.get(HTTP_HEADERS.CONTENT_TYPE);
 
-  if (contentType?.includes(MIME_TYPES.JSON)) {
+  if (isJsonContentType(contentType)) {
     const bodyText = isStringBody ? req.body : req.body.toString();
 
     try {

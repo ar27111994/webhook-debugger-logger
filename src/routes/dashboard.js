@@ -101,14 +101,18 @@ export const createDashboardHandler =
       const escapedProvider = signatureProvider
         ? escapeHtml(signatureProvider)
         : null;
-      const sigBadge = escapedProvider
-        ? `<div class="status-badge signature-active">🔒 Verified: ${escapedProvider}</div>`
-        : `<div class="status-badge signature-inactive">🔓 ${STATUS_LABELS.NO_VERIFICATION}</div>`;
+      const sigBadgeClass = escapedProvider
+        ? "signature-active"
+        : "signature-inactive";
+      const sigBadgeLabel = escapedProvider
+        ? `🔒 Verified: ${escapedProvider}`
+        : `🔓 ${STATUS_LABELS.NO_VERIFICATION}`;
 
       const html = template
         .replaceAll(DASHBOARD_PLACEHOLDERS.VERSION, `v${escapedVersion}`)
         .replaceAll(DASHBOARD_PLACEHOLDERS.ACTIVE_COUNT, String(activeCount))
-        .replaceAll(DASHBOARD_PLACEHOLDERS.SIGNATURE_BADGE, sigBadge)
+        .replaceAll(DASHBOARD_PLACEHOLDERS.SIGNATURE_BADGE_CLASS, sigBadgeClass)
+        .replaceAll(DASHBOARD_PLACEHOLDERS.SIGNATURE_BADGE_LABEL, sigBadgeLabel)
         .replaceAll(
           DASHBOARD_PLACEHOLDERS.BRAND_HEADER,
           DASHBOARD_CONSTS.BRAND_HEADER,

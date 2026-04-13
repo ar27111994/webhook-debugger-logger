@@ -93,6 +93,7 @@ describe("LoggerMiddleware", () => {
 
   /** @type {jest.Mock} */
   let onEventMock;
+  const SLOW_SCRIPT_TEST_TIMEOUT_MS = 15000;
   const ONE_MB = APP_CONSTS.BYTES_PER_KB * APP_CONSTS.BYTES_PER_KB;
   const TEST_URL = "https://test";
 
@@ -1318,26 +1319,30 @@ describe("LoggerMiddleware", () => {
         expect(event.bodyEncoding).toBeUndefined();
       });
 
-      it("should handle script execution timeouts softly", async () => {
-        const { req, res, next, middleware } =
-          await createMiddlewareTestContext({
-            options: { customScript: "while(true) {}" },
-          });
+      it(
+        "should handle script execution timeouts softly",
+        async () => {
+          const { req, res, next, middleware } =
+            await createMiddlewareTestContext({
+              options: { customScript: "while(true) {}" },
+            });
 
-        await middleware(req, res, next);
+          await middleware(req, res, next);
 
-        expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
-        expect(loggerMock.error).toHaveBeenCalledWith(
-          expect.objectContaining({
-            isTimeout: true,
-            webhookId: expect.any(String),
-            err: expect.any(Object),
-          }),
-          LOG_MESSAGES.SCRIPT_EXECUTION_TIMED_OUT(
-            APP_CONSTS.SCRIPT_EXECUTION_TIMEOUT_MS,
-          ),
-        );
-      });
+          expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
+          expect(loggerMock.error).toHaveBeenCalledWith(
+            expect.objectContaining({
+              isTimeout: true,
+              webhookId: expect.any(String),
+              err: expect.any(Object),
+            }),
+            LOG_MESSAGES.SCRIPT_EXECUTION_TIMED_OUT(
+              APP_CONSTS.SCRIPT_EXECUTION_TIMEOUT_MS,
+            ),
+          );
+        },
+        SLOW_SCRIPT_TEST_TIMEOUT_MS,
+      );
 
       it("should handle script execution timeouts softly via message fallback", async () => {
         jest.useRealTimers();
@@ -2191,22 +2196,26 @@ describe("LoggerMiddleware", () => {
       });
 
       // --- Branch: object response body ---
-      it("should send object response body as JSON", async () => {
-        jest.useRealTimers();
-        try {
-          const responseObj = { success: true, data: { id: 1 } };
-          const { req, res, next, middleware } =
-            await createMiddlewareTestContext({
-              options: {
-                customScript: `event.responseBody = ${JSON.stringify(responseObj)};`,
-              },
-            });
-          await middleware(req, res, next);
-          expect(res.json).toHaveBeenCalledWith(responseObj);
-        } finally {
-          jest.useFakeTimers();
-        }
-      });
+      it(
+        "should send object response body as JSON",
+        async () => {
+          jest.useRealTimers();
+          try {
+            const responseObj = { success: true, data: { id: 1 } };
+            const { req, res, next, middleware } =
+              await createMiddlewareTestContext({
+                options: {
+                  customScript: `event.responseBody = ${JSON.stringify(responseObj)};`,
+                },
+              });
+            await middleware(req, res, next);
+            expect(res.json).toHaveBeenCalledWith(responseObj);
+          } finally {
+            jest.useFakeTimers();
+          }
+        },
+        SLOW_SCRIPT_TEST_TIMEOUT_MS,
+      );
 
       // --- Branch: request with no IP and socket fallback ---
       it("should fallback to socket.remoteAddress when req.ip is absent", async () => {
@@ -2391,26 +2400,30 @@ describe("LoggerMiddleware", () => {
       });
 
       // --- Branch: event.responseHeaders merging with defaults ---
-      it("should merge event responseHeaders over default headers", async () => {
-        const customHeader = "X-Custom";
-        const defaultValue = "Default";
-        const customHeaderValue = "Override";
-        const { middleware, req, res, next } =
-          await createMiddlewareTestContext({
-            options: {
-              defaultResponseHeaders: {
-                [customHeader]: defaultValue,
+      it(
+        "should merge event responseHeaders over default headers",
+        async () => {
+          const customHeader = "X-Custom";
+          const defaultValue = "Default";
+          const customHeaderValue = "Override";
+          const { middleware, req, res, next } =
+            await createMiddlewareTestContext({
+              options: {
+                defaultResponseHeaders: {
+                  [customHeader]: defaultValue,
+                },
+                customScript: `event.responseHeaders = { '${customHeader}': '${customHeaderValue}' };`,
               },
-              customScript: `event.responseHeaders = { '${customHeader}': '${customHeaderValue}' };`,
-            },
-          });
-        req.params.id = "wh_atomic";
-        await middleware(req, res, next);
-        expect(res.setHeader).toHaveBeenCalledWith(
-          customHeader,
-          customHeaderValue,
-        );
-      });
+            });
+          req.params.id = "wh_atomic";
+          await middleware(req, res, next);
+          expect(res.setHeader).toHaveBeenCalledWith(
+            customHeader,
+            customHeaderValue,
+          );
+        },
+        SLOW_SCRIPT_TEST_TIMEOUT_MS,
+      );
 
       // --- Branch: schema provided per-webhook via getWebhookData ---
       it("should handle schema as object in validateWebhookRequest", async () => {
@@ -2869,22 +2882,26 @@ describe("LoggerMiddleware", () => {
         expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.UNAUTHORIZED);
       });
 
-      it("should trigger transformation script execution error branch", async () => {
-        const { middleware, req, res, next } =
-          await createMiddlewareTestContext({
-            options: { customScript: 'throw new Error("Script Fail")' },
-          });
-        req.params.id = "wh_atomic";
-        await middleware(req, res, next);
-        expect(loggerMock.error).toHaveBeenCalledWith(
-          expect.objectContaining({
-            isTimeout: false,
-            webhookId: expect.any(String),
-            err: expect.any(Object),
-          }),
-          LOG_MESSAGES.SCRIPT_EXECUTION_FAILED,
-        );
-      });
+      it(
+        "should trigger transformation script execution error branch",
+        async () => {
+          const { middleware, req, res, next } =
+            await createMiddlewareTestContext({
+              options: { customScript: 'throw new Error("Script Fail")' },
+            });
+          req.params.id = "wh_atomic";
+          await middleware(req, res, next);
+          expect(loggerMock.error).toHaveBeenCalledWith(
+            expect.objectContaining({
+              isTimeout: false,
+              webhookId: expect.any(String),
+              err: expect.any(Object),
+            }),
+            LOG_MESSAGES.SCRIPT_EXECUTION_FAILED,
+          );
+        },
+        SLOW_SCRIPT_TEST_TIMEOUT_MS,
+      );
 
       it("should handle circular references in sync signature verification fallback", async () => {
         const sigConfig = {

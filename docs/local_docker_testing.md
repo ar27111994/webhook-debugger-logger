@@ -75,6 +75,9 @@ curl -v -N -H "Accept: text/event-stream" http://localhost:8081/log-stream
 
 You can automate this verification in your `ci.yml` by checking both Docker targets.
 
+> [!NOTE]
+> Apify publication uses the default final stage from the root `Dockerfile`. That stage intentionally stays on the same `node:24-bookworm-slim` runtime lineage as the dependency install stage so native modules such as DuckDB keep matching Node and libc expectations between install and runtime. The real CI workflow in `.github/workflows/ci.yml` already validates this Apify-target image with `/info` and `/log-stream` smoke checks before it verifies the `runtime-standalone` target.
+
 ### Proposed Job
 
 Add this to your `.github/workflows/ci.yml`:

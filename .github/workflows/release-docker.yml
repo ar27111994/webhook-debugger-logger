@@ -63,7 +63,8 @@ jobs:
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
         with:
           context: .
-          file: Dockerfile.standalone
+          file: Dockerfile
+          target: runtime-standalone
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.image_tags.outputs.tags }}

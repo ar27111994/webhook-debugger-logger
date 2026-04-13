@@ -22,6 +22,26 @@ const DEMO_STEP_DELAY_MS = {
   forcedUnauthorized: 4500,
 };
 
+/**
+ * @param {number} delayMs
+ * @param {string} label
+ * @param {() => Promise<void>} action
+ * @returns {void}
+ */
+function scheduleDemoStep(delayMs, label, action) {
+  setTimeout(() => {
+    void (async () => {
+      console.log(`[ACTION] ${label}...`);
+
+      try {
+        await action();
+      } catch (err) {
+        console.error(`[ACTION] ${label} failed: ${err.message}`);
+      }
+    })();
+  }, delayMs);
+}
+
 async function runDemo() {
   console.log("\n🚀 WEBHOOK DEBUGGER & LOGGER - LIVE DEMO");
   console.log(SECTION_DIVIDER);
@@ -80,35 +100,44 @@ async function runDemo() {
     };
 
     // 3. Send test requests
-    setTimeout(async () => {
-      console.log("[ACTION] Sending JSON payload...");
-      await axios.post(
-        `${BASE_URL}/webhook/${targetId}`,
-        {
-          hello: "Apify World!",
-        },
-        { headers },
-      );
-    }, DEMO_STEP_DELAY_MS.jsonPayload);
+    scheduleDemoStep(
+      DEMO_STEP_DELAY_MS.jsonPayload,
+      "Sending JSON payload",
+      async () => {
+        await axios.post(
+          `${BASE_URL}/webhook/${targetId}`,
+          {
+            hello: "Apify World!",
+          },
+          { headers },
+        );
+      },
+    );
 
-    setTimeout(async () => {
-      console.log("[ACTION] Sending Form Data...");
-      const params = new URLSearchParams();
-      params.append("user", "tester");
-      params.append("action", "login");
-      await axios.post(`${BASE_URL}/webhook/${targetId}`, params, { headers });
-    }, DEMO_STEP_DELAY_MS.formData);
+    scheduleDemoStep(
+      DEMO_STEP_DELAY_MS.formData,
+      "Sending Form Data",
+      async () => {
+        const params = new URLSearchParams();
+        params.append("user", "tester");
+        params.append("action", "login");
+        await axios.post(`${BASE_URL}/webhook/${targetId}`, params, {
+          headers,
+        });
+      },
+    );
 
-    setTimeout(async () => {
-      console.log(
-        "[ACTION] Forcing 401 Unauthorized (via __status parameter)...",
-      );
-      await axios
-        .get(`${BASE_URL}/webhook/${targetId}?__status=401`, { headers })
-        .catch(() => {});
+    scheduleDemoStep(
+      DEMO_STEP_DELAY_MS.forcedUnauthorized,
+      "Forcing 401 Unauthorized (via __status parameter)",
+      async () => {
+        await axios
+          .get(`${BASE_URL}/webhook/${targetId}?__status=401`, { headers })
+          .catch(() => {});
 
-      console.log("\n✨ Demo complete. Press Ctrl+C to exit.");
-    }, DEMO_STEP_DELAY_MS.forcedUnauthorized);
+        console.log("\n✨ Demo complete. Press Ctrl+C to exit.");
+      },
+    );
   } catch (err) {
     console.error(`[ERROR] Setup failed: ${err.message}`);
     console.log(

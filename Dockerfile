@@ -40,6 +40,8 @@ FROM runtime-base AS runtime-standalone
 
 LABEL org.opencontainers.image.description="Self-hosted container image for Webhook Debugger & Logger"
 
+# Keep the Apify publication target on the same runtime lineage as deps/runtime-base
+# so native modules such as DuckDB stay API-compatible between install and runtime.
 FROM runtime-base AS runtime-apify
 
 LABEL org.opencontainers.image.description="Apify publication image for Webhook Debugger & Logger"

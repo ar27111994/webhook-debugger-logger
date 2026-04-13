@@ -57,6 +57,18 @@ describe("Security Middleware", () => {
   };
 
   /**
+   * @param {boolean} isSecure
+   */
+  const setRequestSecure = (isSecure) => {
+    Object.defineProperty(mockReq, "secure", {
+      value: isSecure,
+      configurable: true,
+      enumerable: true,
+      writable: true,
+    });
+  };
+
+  /**
    * Helper to randomize case in a string for testing case-insensitivity of header parsing.
    * @param {string} str
    * @returns {string}
@@ -217,6 +229,18 @@ describe("Security Middleware", () => {
       expect(mockNext).toHaveBeenCalled();
     });
 
+    it("should apply HSTS when req.secure is true even if protocol is http", () => {
+      setRequestProtocol("http");
+      setRequestSecure(true);
+
+      middleware(mockReq, mockRes, mockNext);
+
+      expect(mockRes.setHeader).toHaveBeenCalledWith(
+        HTTP_HEADERS.STRICT_TRANSPORT_SECURITY,
+        SECURITY_HEADERS_VALUES.HSTS_VALUE,
+      );
+    });
+
     it("should not apply HSTS when the request is not secure", () => {
       setRequestProtocol("http");
 
@@ -240,6 +264,18 @@ describe("Security Middleware", () => {
       middleware(mockReq, mockRes, mockNext);
 
       expect(mockRes.setHeader).toHaveBeenCalledWith(
+        HTTP_HEADERS.STRICT_TRANSPORT_SECURITY,
+        SECURITY_HEADERS_VALUES.HSTS_VALUE,
+      );
+    });
+
+    it("should not apply HSTS when x-forwarded-proto does not include https", () => {
+      setRequestProtocol("http");
+      mockReq.headers[HTTP_HEADERS.X_FORWARDED_PROTO] = "http, ws";
+
+      middleware(mockReq, mockRes, mockNext);
+
+      expect(mockRes.setHeader).not.toHaveBeenCalledWith(
         HTTP_HEADERS.STRICT_TRANSPORT_SECURITY,
         SECURITY_HEADERS_VALUES.HSTS_VALUE,
       );
@@ -296,6 +332,39 @@ describe("Security Middleware", () => {
       expect(originalWriteHead).toHaveBeenCalledWith(HTTP_STATUS.OK);
     });
 
+    it("should apply CSP when getHeader returns a string array containing HTML content type", () => {
+      const originalWriteHead = mockRes.writeHead;
+      const mimeType = randomizeCase(MIME_TYPES.HTML);
+      middleware(mockReq, mockRes, mockNext);
+
+      jest
+        .mocked(mockRes.getHeader)
+        .mockReturnValue([`${mimeType}; charset=${ENCODINGS.UTF8}`]);
+      mockRes.writeHead(HTTP_STATUS.OK);
+
+      expect(mockRes.setHeader).toHaveBeenCalledWith(
+        HTTP_HEADERS.CONTENT_SECURITY_POLICY,
+        SECURITY_CONSTS.CSP_POLICY,
+      );
+      expect(originalWriteHead).toHaveBeenCalledWith(HTTP_STATUS.OK);
+    });
+
+    it("should not apply CSP when getHeader returns an array without string values", () => {
+      const originalWriteHead = mockRes.writeHead;
+      /** @type {any} */
+      const invalidHeaderValue = [null, {}];
+      middleware(mockReq, mockRes, mockNext);
+
+      jest.mocked(mockRes.getHeader).mockReturnValue(invalidHeaderValue);
+      mockRes.writeHead(HTTP_STATUS.OK);
+
+      expect(mockRes.setHeader).not.toHaveBeenCalledWith(
+        HTTP_HEADERS.CONTENT_SECURITY_POLICY,
+        expect.anything(),
+      );
+      expect(originalWriteHead).toHaveBeenCalledWith(HTTP_STATUS.OK);
+    });
+
     it("should apply CSP when HTML content type is provided via writeHead arguments", () => {
       const originalWriteHead = mockRes.writeHead;
       middleware(mockReq, mockRes, mockNext);
@@ -315,6 +384,55 @@ describe("Security Middleware", () => {
         {
           [HTTP_HEADERS.CONTENT_TYPE]: `${MIME_TYPES.HTML}; charset=${ENCODINGS.UTF8}`,
         },
+      );
+    });
+
+    it("should not apply CSP when writeHead object headers do not include content-type", () => {
+      const originalWriteHead = mockRes.writeHead;
+      middleware(mockReq, mockRes, mockNext);
+
+      jest.mocked(mockRes.getHeader).mockReturnValue(undefined);
+      mockRes.writeHead(HTTP_STATUS.OK, HTTP_CONSTS.DEFAULT_SUCCESS_BODY, {
+        [HTTP_HEADERS.CACHE_CONTROL]: "no-cache",
+      });
+
+      expect(mockRes.setHeader).not.toHaveBeenCalledWith(
+        HTTP_HEADERS.CONTENT_SECURITY_POLICY,
+        expect.anything(),
+      );
+      expect(originalWriteHead).toHaveBeenCalledWith(
+        HTTP_STATUS.OK,
+        HTTP_CONSTS.DEFAULT_SUCCESS_BODY,
+        {
+          [HTTP_HEADERS.CACHE_CONTROL]: "no-cache",
+        },
+      );
+    });
+
+    it("should apply CSP when writeHead object headers provide content-type as a string array", () => {
+      const originalWriteHead = mockRes.writeHead;
+      const mimeType = randomizeCase(MIME_TYPES.HTML);
+      /** @type {any} */
+      const headerBag = {
+        [HTTP_HEADERS.CONTENT_TYPE]: [`${mimeType}; charset=${ENCODINGS.UTF8}`],
+      };
+      middleware(mockReq, mockRes, mockNext);
+
+      jest.mocked(mockRes.getHeader).mockReturnValue(undefined);
+      mockRes.writeHead(
+        HTTP_STATUS.OK,
+        HTTP_CONSTS.DEFAULT_SUCCESS_BODY,
+        headerBag,
+      );
+
+      expect(mockRes.setHeader).toHaveBeenCalledWith(
+        HTTP_HEADERS.CONTENT_SECURITY_POLICY,
+        SECURITY_CONSTS.CSP_POLICY,
+      );
+      expect(originalWriteHead).toHaveBeenCalledWith(
+        HTTP_STATUS.OK,
+        HTTP_CONSTS.DEFAULT_SUCCESS_BODY,
+        headerBag,
       );
     });
 
@@ -340,6 +458,30 @@ describe("Security Middleware", () => {
         `${mimeType}; charset=${ENCODINGS.UTF8}`,
         HTTP_HEADERS.CACHE_CONTROL,
         "no-cache",
+      ]);
+    });
+
+    it("should not apply CSP when writeHead raw header tuples do not include content-type", () => {
+      const originalWriteHead = mockRes.writeHead;
+      middleware(mockReq, mockRes, mockNext);
+
+      jest.mocked(mockRes.getHeader).mockReturnValue(undefined);
+      mockRes.writeHead(HTTP_STATUS.OK, [
+        HTTP_HEADERS.CACHE_CONTROL,
+        "no-cache",
+        HTTP_HEADERS.CONNECTION,
+        "keep-alive",
+      ]);
+
+      expect(mockRes.setHeader).not.toHaveBeenCalledWith(
+        HTTP_HEADERS.CONTENT_SECURITY_POLICY,
+        expect.anything(),
+      );
+      expect(originalWriteHead).toHaveBeenCalledWith(HTTP_STATUS.OK, [
+        HTTP_HEADERS.CACHE_CONTROL,
+        "no-cache",
+        HTTP_HEADERS.CONNECTION,
+        "keep-alive",
       ]);
     });
 
