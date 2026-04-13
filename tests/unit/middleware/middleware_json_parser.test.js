@@ -57,17 +57,20 @@ describe("JSON Parser Middleware", () => {
       expect(mockReq.body).toEqual({ already: "parsed" });
     });
 
-    it("should preserve the original Buffer in req.rawBody", () => {
+    it("should snapshot Buffer bodies in req.rawBody", () => {
       const bufferBody = Buffer.from("test");
       mockReq.body = bufferBody;
 
       middleware(mockReq, mockRes, mockNext);
 
-      expect(mockReq.rawBody).toBe(bufferBody);
+      bufferBody.write("best");
+
+      expect(mockReq.rawBody).toEqual(Buffer.from("test"));
+      expect(mockReq.rawBody).not.toBe(bufferBody);
       // Verify defineProperty settings
       const descriptor = Object.getOwnPropertyDescriptor(mockReq, "rawBody");
       expect(descriptor).toEqual({
-        value: bufferBody,
+        value: mockReq.rawBody,
         writable: false,
         enumerable: false,
         configurable: false,
@@ -196,7 +199,8 @@ describe("JSON Parser Middleware", () => {
       middleware(mockReq, mockRes, mockNext);
 
       expect(mockReq.body).toBe(bufferBody);
-      expect(mockReq.rawBody).toBe(bufferBody);
+      expect(mockReq.rawBody).toEqual(bufferBody);
+      expect(mockReq.rawBody).not.toBe(bufferBody);
       expect(mockNext).toHaveBeenCalled();
     });
   });

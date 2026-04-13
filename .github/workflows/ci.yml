@@ -102,7 +102,7 @@ jobs:
         run: docker rm -f debugger-apify || true
 
       - name: Build Standalone Docker Image
-        run: docker build -f Dockerfile.standalone -t webhook-debugger-standalone .
+        run: docker build --target runtime-standalone -t webhook-debugger-standalone .
 
       - name: Run Standalone Container
         run: |

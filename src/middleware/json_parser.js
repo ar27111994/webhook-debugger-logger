@@ -29,7 +29,7 @@ export const jsonParserMiddleware = (req, _res, next) => {
   // Preserve raw body for signature verification (Stripe/Shopify)
   if (!("rawBody" in req)) {
     Object.defineProperty(req, "rawBody", {
-      value: req.body,
+      value: isBufferBody ? Buffer.from(req.body) : req.body,
       writable: false,
       enumerable: false,
       configurable: false,

@@ -495,7 +495,7 @@ docker run --rm -p 8080:8080 \
   webhook-debugger-logger
 ```
 
-There is also a dedicated standalone image target in [Dockerfile.standalone](Dockerfile.standalone). For a fuller local validation flow, including SSE verification, see [docs/local_docker_testing.md](docs/local_docker_testing.md).
+There is also a dedicated standalone image target in [Dockerfile](Dockerfile) via `--target runtime-standalone`. For a fuller local validation flow, including SSE verification, see [docs/local_docker_testing.md](docs/local_docker_testing.md).
 
 ## Pricing
 

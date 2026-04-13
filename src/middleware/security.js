@@ -37,6 +37,17 @@ const getStringHeaderValue = (value) => {
 };
 
 /**
+ * @param {unknown} value
+ * @returns {string | undefined}
+ */
+const getNormalizedMediaType = (value) => {
+  const headerValue = getStringHeaderValue(value);
+  if (!headerValue) return undefined;
+
+  return headerValue.split(";")[0]?.trim().toLowerCase();
+};
+
+/**
  * @param {unknown[]} args
  * @returns {string | undefined}
  */
@@ -144,12 +155,12 @@ export const createCspMiddleware =
 
       /** @type {(this: Response, ...args: any[]) => Response} */
       res.writeHead = function (statusCode, ...args) {
-        const contentType =
-          getStringHeaderValue(this.getHeader(HTTP_HEADERS.CONTENT_TYPE)) ??
-          getContentTypeFromWriteHeadArgs(args);
+        const mediaType =
+          getNormalizedMediaType(this.getHeader(HTTP_HEADERS.CONTENT_TYPE)) ??
+          getNormalizedMediaType(getContentTypeFromWriteHeadArgs(args));
 
         // Apply CSP only to HTML responses
-        if (contentType?.includes(MIME_TYPES.HTML)) {
+        if (mediaType === MIME_TYPES.HTML.toLowerCase()) {
           this.setHeader(
             HTTP_HEADERS.CONTENT_SECURITY_POLICY,
             SECURITY_CONSTS.CSP_POLICY,

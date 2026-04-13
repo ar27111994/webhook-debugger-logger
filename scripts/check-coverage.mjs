@@ -10,6 +10,7 @@ import { ENCODINGS } from "../src/consts/http.js";
 
 const METRICS = ["lines", "statements", "functions", "branches"];
 const FRACTION_DIGITS = 2;
+const NODE_AND_SCRIPT_ARG_COUNT = 2;
 
 /**
  * @param {string[]} argv
@@ -164,7 +165,10 @@ export function runChecks(summary, thresholds, label, io = {}) {
  *   exit?: (code?: number) => unknown
  * }} [deps]
  */
-export function main(argv = process.argv.slice(1 + 1), deps = {}) {
+export function main(
+  argv = process.argv.slice(NODE_AND_SCRIPT_ARG_COUNT),
+  deps = {},
+) {
   const args = parseArgs(argv);
   const readFileSyncFn = deps.readFileSyncFn || readFileSync;
   const resolveFn = deps.resolveFn || resolve;

@@ -19,11 +19,11 @@
 ^(?:https://)github\.com/user/repo(?:/.*)?$
 ^(?:https://)www\.npmjs\.com/package/package-name(?:/|$)
 ^file:///.*/index\.css$
-^file:///.\*/info$
+^file:///._/info$
 ^(?:https://)static\.apify\.com(?:/|$)
-^(?:https://)api\.apify\.com/v2/key-value-stores/default/records/(?:payload*123|mock-key)(?:/|$)
+^(?:https://)api\.apify\.com/v2/key-value-stores/default/records/(?:payload_123|mock-key)(?:/|$)
 ^(?:https?://)(?:a|b|c)\.com(?:/|$)
-^(?:https://)discord(?:app)?\.com/api/webhooks(?:/.*)?$
+^(?:https://)discord(?:app)?\.com/api/webhooks(?:/._)?$
 ^(?:http://)169\.254\.169\.254/latest(?:/|$)
 ^(?:http://)(?:empty\.domain|nonexistent\.domain)(?:/|$)
 ^(?:http://)(?:weird-dns|string-throw)\.com(?:/|$)

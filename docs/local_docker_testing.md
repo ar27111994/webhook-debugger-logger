@@ -2,10 +2,10 @@
 
 To catch production issues like the SSE infinite loading bug without deploying to Apify, you can simulate the production environment using Docker locally or in CI/CD.
 
-The repository now maintains **two** Docker build targets:
+The repository now maintains **two named Docker build targets in a single Dockerfile**:
 
-- `Dockerfile`: Apify-targeted image used by `.actor/actor.json`
-- `Dockerfile.standalone`: self-hosted/public image published from GitHub Releases
+- `runtime-apify`: Apify-targeted image used by `.actor/actor.json`
+- `runtime-standalone`: self-hosted/public image published from GitHub Releases
 
 ## 1. Manual Local Verification
 
@@ -16,11 +16,11 @@ You can build and run either image locally depending on which deployment path yo
 1. **Build the Apify Image**:
 
 ```bash
-docker build -t webhook-debugger-apify .
+docker build --target runtime-apify -t webhook-debugger-apify .
 ```
 
 1. **Run the Apify Container**:
-We map port 8080 and set the environment variable.
+   We map port 8080 and set the environment variable.
 
 ```bash
 docker run --rm -p 8080:8080 \
@@ -30,7 +30,7 @@ docker run --rm -p 8080:8080 \
 ```
 
 1. **Verify the Apify Image**:
-Test the `/log-stream` endpoint specifically to check for buffering/compression issues.
+   Test the `/log-stream` endpoint specifically to check for buffering/compression issues.
 
 ```bash
 curl -v -N -H "Accept: text/event-stream" http://localhost:8080/log-stream
@@ -46,7 +46,7 @@ curl -v -N -H "Accept: text/event-stream" http://localhost:8080/log-stream
 1. **Build the Standalone Image**:
 
 ```bash
-docker build -f Dockerfile.standalone -t webhook-debugger-standalone .
+docker build --target runtime-standalone -t webhook-debugger-standalone .
 ```
 
 1. **Run the Standalone Container**:
@@ -127,8 +127,8 @@ verify-docker:
           echo "✅ No harmful Content-Encoding detected"
         fi
 
-    - name: Build Standalone Docker Image
-      run: docker build -f Dockerfile.standalone -t webhook-debugger-standalone .
+      - name: Build Standalone Docker Image
+        run: docker build --target runtime-standalone -t webhook-debugger-standalone .
 
     - name: Run Standalone Container
       run: |
@@ -148,8 +148,8 @@ verify-docker:
 
 ## 3. Why This Works
 
-- **Publication Parity**: Uses the root `Dockerfile` referenced by `.actor/actor.json`, which is the exact image definition Apify will publish from this repository.
-- **Public Image Validation**: Verifies the standalone image path that GitHub Releases publish to GHCR.
+- **Publication Parity**: Uses the root `Dockerfile` referenced by `.actor/actor.json`, with the `runtime-apify` target matching the image definition Apify will publish from this repository.
+- **Public Image Validation**: Verifies the `runtime-standalone` target that GitHub Releases publish to GHCR.
 - **Middleware Check**: Verifies that your `main.js` logic (like the `compression` filter) works correctly inside the container environment.
 - **Cost**: **$0**. Uses your local machine or GitHub Actions free tier.
 

@@ -44,6 +44,33 @@ describe("Security Middleware", () => {
     jest.clearAllMocks();
   });
 
+  /**
+   * @param {string} protocol
+   */
+  const setRequestProtocol = (protocol) => {
+    Object.defineProperty(mockReq, "protocol", {
+      value: protocol,
+      configurable: true,
+      enumerable: true,
+      writable: true,
+    });
+  };
+
+  /**
+   * Helper to randomize case in a string for testing case-insensitivity of header parsing.
+   * @param {string} str
+   * @returns {string}
+   */
+  const randomizeCase = (str) =>
+    str
+      .split("")
+      .map((c) => {
+        if (!/[a-z]/i.test(c)) return c;
+        // eslint-disable-next-line sonarjs/pseudo-random, no-magic-numbers
+        return Math.random() < 0.5 ? c.toLowerCase() : c.toUpperCase();
+      })
+      .join("");
+
   describe("createRequestIdMiddleware", () => {
     /** @type {RequestHandler} */
     let middleware;
@@ -162,7 +189,7 @@ describe("Security Middleware", () => {
     });
 
     it("should apply HSTS when the request is secure", () => {
-      mockReq.protocol = "https";
+      setRequestProtocol("https");
 
       middleware(mockReq, mockRes, mockNext);
 
@@ -191,7 +218,7 @@ describe("Security Middleware", () => {
     });
 
     it("should not apply HSTS when the request is not secure", () => {
-      mockReq.protocol = "http";
+      setRequestProtocol("http");
 
       middleware(mockReq, mockRes, mockNext);
 
@@ -207,7 +234,7 @@ describe("Security Middleware", () => {
     });
 
     it("should apply HSTS when x-forwarded-proto indicates https", () => {
-      mockReq.protocol = "http";
+      setRequestProtocol("http");
       mockReq.headers[HTTP_HEADERS.X_FORWARDED_PROTO] = "https";
 
       middleware(mockReq, mockRes, mockNext);
@@ -257,7 +284,9 @@ describe("Security Middleware", () => {
 
       jest
         .mocked(mockRes.getHeader)
-        .mockReturnValue(`${MIME_TYPES.HTML}; charset=${ENCODINGS.UTF8}`);
+        .mockReturnValue(
+          `${randomizeCase(MIME_TYPES.HTML)}; charset=${ENCODINGS.UTF8}`,
+        );
       mockRes.writeHead(HTTP_STATUS.OK);
 
       expect(mockRes.setHeader).toHaveBeenCalledWith(
@@ -287,6 +316,31 @@ describe("Security Middleware", () => {
           [HTTP_HEADERS.CONTENT_TYPE]: `${MIME_TYPES.HTML}; charset=${ENCODINGS.UTF8}`,
         },
       );
+    });
+
+    it("should apply CSP when HTML content type is provided via writeHead raw header tuples", () => {
+      const originalWriteHead = mockRes.writeHead;
+      middleware(mockReq, mockRes, mockNext);
+
+      const mimeType = randomizeCase(MIME_TYPES.HTML);
+      jest.mocked(mockRes.getHeader).mockReturnValue(undefined);
+      mockRes.writeHead(HTTP_STATUS.OK, [
+        HTTP_HEADERS.CONTENT_TYPE,
+        `${mimeType}; charset=${ENCODINGS.UTF8}`,
+        HTTP_HEADERS.CACHE_CONTROL,
+        "no-cache",
+      ]);
+
+      expect(mockRes.setHeader).toHaveBeenCalledWith(
+        HTTP_HEADERS.CONTENT_SECURITY_POLICY,
+        SECURITY_CONSTS.CSP_POLICY,
+      );
+      expect(originalWriteHead).toHaveBeenCalledWith(HTTP_STATUS.OK, [
+        HTTP_HEADERS.CONTENT_TYPE,
+        `${mimeType}; charset=${ENCODINGS.UTF8}`,
+        HTTP_HEADERS.CACHE_CONTROL,
+        "no-cache",
+      ]);
     });
 
     it("should emit a CSP policy without unsafe-inline allowances", () => {
