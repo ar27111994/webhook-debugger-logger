@@ -127,8 +127,8 @@ verify-docker:
           echo "✅ No harmful Content-Encoding detected"
         fi
 
-      - name: Build Standalone Docker Image
-        run: docker build --target runtime-standalone -t webhook-debugger-standalone .
+    - name: Build Standalone Docker Image
+      run: docker build --target runtime-standalone -t webhook-debugger-standalone .
 
     - name: Run Standalone Container
       run: |
