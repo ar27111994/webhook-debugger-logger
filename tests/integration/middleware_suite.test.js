@@ -74,6 +74,7 @@ describe("Integration: Middleware suite", () => {
 
     const response = await activeContext.appClient
       .post(APP_ROUTES.WEBHOOK.replace(":id", webhookId))
+      .set(HTTP_HEADERS.X_FORWARDED_PROTO, "https")
       .set(HTTP_HEADERS.CONTENT_TYPE, MIME_TYPES.JSON)
       .send({ event: "unauthorized" });
 
