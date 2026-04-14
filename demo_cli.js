@@ -149,7 +149,9 @@ async function runDemo() {
       },
     );
   } catch (err) {
-    console.error(`[ERROR] Setup failed: ${err.message}`);
+    console.error(
+      `[ERROR] Setup failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
     console.log(
       "👉 Make sure the Actor is running locally on port 8080 (npm start).",
     );

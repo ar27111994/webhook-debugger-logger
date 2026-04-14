@@ -9,6 +9,7 @@ import { ERROR_LABELS } from "../consts/errors.js";
 import { LOG_COMPONENTS } from "../consts/logging.js";
 import { LOG_MESSAGES } from "../consts/messages.js";
 import { APP_CONSTS } from "../consts/app.js";
+import { validateStatusCode } from "../utils/common.js";
 
 const log = createChildLogger({ component: LOG_COMPONENTS.ERROR_HANDLER });
 
@@ -36,8 +37,13 @@ export const createErrorHandler =
    */
   (err, req, res, next) => {
     if (res.headersSent) return next(err);
+    const rawStatus = Number(
+      err.statusCode || err.status || HTTP_STATUS.INTERNAL_SERVER_ERROR,
+    );
     const status = /** @type {HttpStatus} */ (
-      err.statusCode || err.status || HTTP_STATUS.INTERNAL_SERVER_ERROR
+      validateStatusCode(rawStatus)
+        ? rawStatus
+        : HTTP_STATUS.INTERNAL_SERVER_ERROR
     );
     // Sanitize: don't leak internal error details for 500-level errors
     const isServerError = status >= HTTP_STATUS.INTERNAL_SERVER_ERROR;

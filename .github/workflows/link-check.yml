@@ -74,7 +74,6 @@ jobs:
           jobSummary: false
           args: >-
             --root-dir "$(pwd)"
-            --exclude-path ".lycheeignore"
             --cache
             --max-cache-age 1d
             --cache-exclude-status "403,429,500..=599"

@@ -161,9 +161,11 @@ describe("Error Handling Middleware", () => {
 
       middleware(err, mockReq, mockRes, mockNext);
 
-      expect(mockRes.status).toHaveBeenCalledWith(status); // Express natively handles string statuses.
+      expect(mockRes.status).toHaveBeenCalledWith(
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+      );
       expect(mockRes.json).toHaveBeenCalledWith({
-        status,
+        status: HTTP_STATUS.INTERNAL_SERVER_ERROR,
         requestId: REQUEST_ID,
         error: ERROR_LABELS.INTERNAL_SERVER_ERROR,
         message: ERROR_LABELS.INTERNAL_SERVER_ERROR, // Message is masked
@@ -172,11 +174,41 @@ describe("Error Handling Middleware", () => {
       expect(loggerMock.error).toHaveBeenCalled();
     });
 
-    it("should use ERROR_LABELS.GENERIC if HTTP_STATUS_MESSAGES lacks the status message", () => {
+    it("should fallback to 500 if downstream passes an invalid status string", () => {
+      const errorMsg = "Invalid status type";
+      /** @type {CommonError} */
+      const err = new Error(errorMsg);
+      err.status = assertType("oops");
+
+      middleware(err, mockReq, mockRes, mockNext);
+
+      expect(mockRes.status).toHaveBeenCalledWith(
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+      );
+      expect(mockRes.json).toHaveBeenCalledWith({
+        status: HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        requestId: REQUEST_ID,
+        error: ERROR_LABELS.INTERNAL_SERVER_ERROR,
+        message: ERROR_LABELS.INTERNAL_SERVER_ERROR,
+      });
+
+      expect(loggerMock.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestId: REQUEST_ID,
+          status: HTTP_STATUS.INTERNAL_SERVER_ERROR,
+          path: "/api/test",
+          method: HTTP_METHODS.POST,
+          err: expect.objectContaining({ message: errorMsg }),
+        }),
+        LOG_MESSAGES.SERVER_ERROR,
+      );
+    });
+
+    it("should use ERROR_LABELS.GENERIC if a known status lacks a mapped message", () => {
       const errorMsg = "Weird code";
       /** @type {CommonError} */
       const err = new Error(errorMsg);
-      err.status = 495; // Assume not mapped in HTTP_STATUS_MESSAGES
+      err.status = HTTP_STATUS.SSL_CERTIFICATE_ERROR;
 
       middleware(err, mockReq, mockRes, mockNext);
 
