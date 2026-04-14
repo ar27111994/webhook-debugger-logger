@@ -16,6 +16,7 @@ import {
   SECURITY_CONSTS,
 } from "../../../src/consts/security.js";
 import { APP_CONSTS, ENV_VARS } from "../../../src/consts/app.js";
+import { AUTH_PLACEHOLDERS } from "../../../src/consts/auth.js";
 import { SSRF_BLOCKED_RANGES } from "../../../src/consts/network.js";
 import { LOG_CONSTS } from "../../../src/consts/logging.js";
 import { DUCKDB_SCHEMA, SQL_CONSTS } from "../../../src/consts/database.js";
@@ -293,10 +294,12 @@ describe("Consts Logic", () => {
     });
 
     it("should verify UNAUTHORIZED_HTML_TEMPLATE contains required placeholders", () => {
-      // ui.js doesn't use the DASHBOARD_PLACEHOLDERS enum keys for the unauthorized template directly,
-      // but hardcoded strings. Let's verify the strings exist.
-      expect(UNAUTHORIZED_HTML_TEMPLATE).toContain("{{ERROR_MESSAGE}}");
-      expect(UNAUTHORIZED_HTML_TEMPLATE).toContain("{{APIFY_HOMEPAGE_URL}}");
+      expect(UNAUTHORIZED_HTML_TEMPLATE).toContain(
+        AUTH_PLACEHOLDERS.ESCAPED_ERROR_MESSAGE,
+      );
+      expect(UNAUTHORIZED_HTML_TEMPLATE).toContain(
+        AUTH_PLACEHOLDERS.APIFY_HOMEPAGE_URL,
+      );
       expect(UNAUTHORIZED_HTML_TEMPLATE).toContain('href="/unauthorized.css"');
       expect(UNAUTHORIZED_HTML_TEMPLATE).not.toContain("<style>");
     });
