@@ -27,6 +27,6 @@ export const AUTH_ERRORS = Object.freeze({
  * @enum {string}
  */
 export const AUTH_PLACEHOLDERS = Object.freeze({
-  ERROR_MESSAGE: "{{ERROR_MESSAGE}}",
+  ESCAPED_ERROR_MESSAGE: "{{ESCAPED_ERROR_MESSAGE}}",
   APIFY_HOMEPAGE_URL: "{{APIFY_HOMEPAGE_URL}}",
 });

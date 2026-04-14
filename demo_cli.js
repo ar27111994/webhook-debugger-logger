@@ -10,7 +10,8 @@ import { EventSource } from "eventsource";
  * of your newly created Actor.
  */
 
-const BASE_URL = process.env.APIFY_ACTOR_URL || "http://localhost:8080";
+const DEFAULT_BASE_URL = "http://localhost:8080";
+const ALLOWED_BASE_URL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 const AUTH_KEY = process.env.AUTH_KEY || "";
 const SECTION_DIVIDER = "------------------------------------------";
 const API_CONTRACT_PATH = ".actor/web_server_schema.json";
@@ -21,6 +22,34 @@ const DEMO_STEP_DELAY_MS = {
   formData: 3000,
   forcedUnauthorized: 4500,
 };
+
+/**
+ * Restrict demo traffic to loopback origins so APIFY_ACTOR_URL cannot turn the
+ * local helper into a generic outbound request client.
+ * @param {string | undefined} rawBaseUrl
+ * @returns {string}
+ */
+function resolveSafeBaseUrl(rawBaseUrl) {
+  if (!rawBaseUrl) return DEFAULT_BASE_URL;
+
+  try {
+    const parsed = new URL(rawBaseUrl);
+    const isHttp = parsed.protocol === "http:" || parsed.protocol === "https:";
+
+    if (isHttp && ALLOWED_BASE_URL_HOSTS.has(parsed.hostname)) {
+      return parsed.origin;
+    }
+  } catch {
+    // Ignore invalid URLs and fall back to the safe default below.
+  }
+
+  console.warn(
+    `[WARN] Ignoring unsafe APIFY_ACTOR_URL value. Falling back to ${DEFAULT_BASE_URL}.`,
+  );
+  return DEFAULT_BASE_URL;
+}
+
+const BASE_URL = resolveSafeBaseUrl(process.env.APIFY_ACTOR_URL);
 
 /**
  * @param {number} delayMs

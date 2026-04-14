@@ -2557,7 +2557,7 @@ The only thing left is execution. Pick your first Actor, fire up Antigravity, an
 - [Challenge Terms & Conditions](https://docs.apify.com/legal/challenge-terms-and-conditions)
 - [Apify Discord Community](https://discord.gg/jyEM2PRvMU)
 - [Google Antigravity IDE](https://antigravity.google/)
-- [Gemini API Documentation](https://ai.google.dev/gemini-api/docs)
+- [Gemini API Documentation](https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/inference)
 
 ---
 

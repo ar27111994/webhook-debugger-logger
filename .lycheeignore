@@ -8,6 +8,7 @@
 ^(?:http://|https://)<[^>]+>(?:/|$)
 ^(?:http://|https://)\[[^]]+\](?:/|$)
 ^(?:http://|https://)(?:[A-Za-z0-9-]+\.)?ngrok\.(?:io|app)(?:/|$)
+^data:image/
 ^(?:https://)hooks\.zapier\.com/hooks/catch/11111/aaaaa/?$
 ^(?:http://|https://)[^/]+\.url(?:/|$)
 ^(?:http://|https://)(?:[A-Za-z0-9-]+\.)*test(?:/|$)

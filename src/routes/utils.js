@@ -111,7 +111,10 @@ export const sendUnauthorizedResponse = (req, res, options = {}) => {
         UNAUTHORIZED_HTML_TEMPLATE.replaceAll(
           AUTH_PLACEHOLDERS.APIFY_HOMEPAGE_URL,
           APP_CONSTS.APIFY_HOMEPAGE_URL,
-        ).replaceAll(AUTH_PLACEHOLDERS.ERROR_MESSAGE, escapeHtml(error)),
+        ).replaceAll(
+          AUTH_PLACEHOLDERS.ESCAPED_ERROR_MESSAGE,
+          escapeHtml(error),
+        ),
       );
     return;
   }

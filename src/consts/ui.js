@@ -81,7 +81,7 @@ export const UNAUTHORIZED_HTML_TEMPLATE = `
 <body class="unauthorized-page">
   <div class="unauthorized-card">
         <h1>401 Unauthorized</h1>
-        <p>{{ERROR_MESSAGE}}</p>
+        <p>{{ESCAPED_ERROR_MESSAGE}}</p>
         <p>Please check your API key and try again. (Strict Mode)</p>
     <a href="{{APIFY_HOMEPAGE_URL}}" class="unauthorized-link">Learn More</a>
     </div>
