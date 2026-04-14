@@ -204,7 +204,7 @@ describe("Error Handling Middleware", () => {
       );
     });
 
-    it("should use ERROR_LABELS.GENERIC if a known status lacks a mapped message", () => {
+    it("should use the mapped message for known custom statuses", () => {
       const errorMsg = "Weird code";
       /** @type {CommonError} */
       const err = new Error(errorMsg);
@@ -215,9 +215,65 @@ describe("Error Handling Middleware", () => {
       expect(mockRes.json).toHaveBeenCalledWith({
         status: err.status,
         requestId: REQUEST_ID,
+        error: HTTP_STATUS_MESSAGES[HTTP_STATUS.SSL_CERTIFICATE_ERROR],
+        message: errorMsg,
+      });
+    });
+
+    it("should use ERROR_LABELS.GENERIC if a known status lacks a mapped message", async () => {
+      jest.resetModules();
+      await setupCommonMocks({ logger: true });
+
+      const actualHttpModule = await import("../../../src/consts/http.js");
+      const statusWithoutMessage =
+        actualHttpModule.HTTP_STATUS.SSL_CERTIFICATE_ERROR;
+      const httpStatusMessagesWithoutCustomMessage = Object.freeze(
+        Object.fromEntries(
+          Object.entries(actualHttpModule.HTTP_STATUS_MESSAGES).filter(
+            ([statusCode]) => Number(statusCode) !== statusWithoutMessage,
+          ),
+        ),
+      );
+
+      jest.unstable_mockModule("../../../src/consts/http.js", () => ({
+        ...actualHttpModule,
+        HTTP_STATUS_MESSAGES: httpStatusMessagesWithoutCustomMessage,
+      }));
+
+      /** @type {ErrorRequestHandler | null} */
+      let isolatedMiddleware = null;
+
+      await jest.isolateModulesAsync(async () => {
+        const { createErrorHandler: createIsolatedErrorHandler } =
+          await import("../../../src/middleware/error.js");
+
+        isolatedMiddleware = createIsolatedErrorHandler();
+      });
+
+      if (!isolatedMiddleware) {
+        throw new Error("Failed to create isolated error handler");
+      }
+      const errorMsg = "Generic fallback";
+      /** @type {CommonError} */
+      const err = new Error(errorMsg);
+      err.status = statusWithoutMessage;
+
+      /** @type {ErrorRequestHandler} */ (isolatedMiddleware)(
+        err,
+        mockReq,
+        mockRes,
+        mockNext,
+      );
+
+      expect(mockRes.status).toHaveBeenCalledWith(statusWithoutMessage);
+      expect(mockRes.json).toHaveBeenCalledWith({
+        status: statusWithoutMessage,
+        requestId: REQUEST_ID,
         error: ERROR_LABELS.GENERIC,
         message: errorMsg,
       });
+
+      expect(loggerMock.error).not.toHaveBeenCalled();
     });
   });
 });
