@@ -475,14 +475,14 @@ INPUT={"urlCount":1,"retentionHours":24,"authKey":"local-dev-key"}
 
 Useful environment variables:
 
-| Variable                                 | Purpose                                                             |
-| ---------------------------------------- | ------------------------------------------------------------------- |
-| `ACTOR_WEB_SERVER_PORT`                  | Local HTTP port override                                            |
-| `INPUT`                                  | Full actor input JSON for local or container boot                   |
-| `AUTH_KEY`                               | Used by [demo_cli.js](demo_cli.js) when calling protected endpoints |
-| `APIFY_ACTOR_URL`                        | Used by [demo_cli.js](demo_cli.js) to target a non-default base URL |
-| `APIFY_LOCAL_STORAGE_DIR`                | Local storage location for state, datasets, and offloaded payloads  |
-| `DUCKDB_STORAGE_DIR` / `DUCKDB_FILENAME` | Override DuckDB storage location and file name                      |
+| Variable                                 | Purpose                                                                                   |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `ACTOR_WEB_SERVER_PORT`                  | Local HTTP port override                                                                  |
+| `INPUT`                                  | Full actor input JSON for local or container boot                                         |
+| `AUTH_KEY`                               | Used by [demo_cli.js](demo_cli.js) when calling protected endpoints                       |
+| `DEMO_TARGET`                            | Used by [demo_cli.js](demo_cli.js) to select a local target (`localhost`, `ipv4`, `ipv6`) |
+| `APIFY_LOCAL_STORAGE_DIR`                | Local storage location for state, datasets, and offloaded payloads                        |
+| `DUCKDB_STORAGE_DIR` / `DUCKDB_FILENAME` | Override DuckDB storage location and file name                                            |
 
 ### Run with Docker
 

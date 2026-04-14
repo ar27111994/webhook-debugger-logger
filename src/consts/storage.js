@@ -19,7 +19,7 @@ export const STORAGE_CONSTS = Object.freeze({
      * @returns {string}
      */
     (key) =>
-      `Key: ${key} (Use Actor.getValue(${JSON.stringify(String(key))}) to retrieve)`,
+      `Key: ${key} (Use "await Actor.getValue(${JSON.stringify(String(key))})" to retrieve)`,
   CURSOR_SEPARATOR: ":",
   INPUT_JSON: "INPUT.json",
   OFFLOAD_MARKER_SYNC: "[OFFLOADED_TO_KVS]",

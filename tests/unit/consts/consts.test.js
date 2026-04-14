@@ -392,6 +392,21 @@ describe("Top-level Branch Coverage", () => {
         await import("../../../src/consts/storage.js");
       expect(DEFAULT_STORAGE_DIR).toBe("./storage");
     });
+
+    it("should have KVS_OFFLOAD_THRESHOLD as a number", async () => {
+      const { STORAGE_CONSTS } = await import("../../../src/consts/storage.js");
+      expect(typeof STORAGE_CONSTS.KVS_OFFLOAD_THRESHOLD).toBe("number");
+    });
+
+    it("should format KVS_URL_FALLBACK correctly", async () => {
+      const { STORAGE_CONSTS } = await import("../../../src/consts/storage.js");
+      const key = "test-key";
+      expect(STORAGE_CONSTS.KVS_URL_FALLBACK(key)).toBe(
+        `Key: ${key} (Use "await Actor.getValue(${JSON.stringify(
+          String(key),
+        )})" to retrieve)`,
+      );
+    });
   });
 
   describe("src/consts/database.js", () => {

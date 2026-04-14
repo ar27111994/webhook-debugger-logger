@@ -9,7 +9,7 @@ All notable changes to this project will be documented in this file.
 - **Standby Web Server Contract**: Added `.actor/web_server_schema.json` and wired it through `.actor/actor.json` with `usesStandbyMode: true`, turning the Actor into a documented long-lived web service.
 - **Expanded HTTP Surface**: Added or formalized routes for dashboard, runtime info, log queries, log detail, payload retrieval, replay, streaming, health, readiness, and system metrics.
 - **Webhook Signature Verification**: Added provider-aware verification for Stripe, Shopify, GitHub, Slack, and custom HMAC integrations.
-- **Standalone Self-Hosting Track**: Added `Dockerfile.standalone` for running the product outside the default Apify image path.
+- **Standalone Self-Hosting Track**: Added a `runtime-standalone` target in the main `Dockerfile` for running the product outside the default Apify image path.
 - **Environment Bootstrapping**: Added `.env.example` and project-level `.env` loading support for local CLI and self-hosted workflows.
 - **Documentation Set**: Added `docs/api-reference.md`, `docs/architecture.md`, multiple operational playbooks, roadmap notes, and expanded publication/release guidance.
 
