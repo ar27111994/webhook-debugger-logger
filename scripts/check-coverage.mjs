@@ -46,7 +46,7 @@ export function parseArgs(argv) {
  * @returns {Record<string, any>}
  */
 export function asObject(value) {
-  return value && typeof value === "object"
+  return value !== null && typeof value === "object" && !Array.isArray(value)
     ? /** @type {Record<string, any>} */ (value)
     : {};
 }

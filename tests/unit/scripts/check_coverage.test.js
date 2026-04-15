@@ -64,6 +64,7 @@ describe("check-coverage script", () => {
       expect(asObject(null)).toEqual({});
       expect(asObject("x")).toEqual({});
       expect(asObject(1)).toEqual({});
+      expect(asObject([])).toEqual({});
     });
   });
 

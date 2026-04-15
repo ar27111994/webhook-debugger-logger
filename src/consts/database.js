@@ -6,9 +6,8 @@
 
 import { Actor } from "apify";
 import { getInt } from "../utils/env.js";
-import { APP_CONSTS, SORT_DIRECTIONS } from "./app.js";
+import { APP_CONSTS, SORT_DIRECTIONS, ENV_VARS } from "./app.js";
 import { DEFAULT_STORAGE_DIR } from "./storage.js";
-import { ENV_VARS } from "./app.js";
 
 export const DUCKDB_STORAGE_DIR_DEFAULT = DEFAULT_STORAGE_DIR;
 

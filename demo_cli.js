@@ -28,6 +28,18 @@ const DEMO_STEP_DELAY_MS = {
 const BASE_URL = resolveDemoBaseUrl(process.env[DEMO_TARGET_ENV_VAR]);
 
 /**
+ * Resolves the error message from an error object or string.
+ * @param {unknown} err - The error object or string.
+ * @returns {string} The resolved error message.
+ */
+function resolveErrorMessage(err) {
+  return err instanceof Error ||
+    (err && typeof err === "object" && "message" in err)
+    ? err.message
+    : String(err);
+}
+
+/**
  * @param {number} delayMs
  * @param {string} label
  * @param {() => Promise<void>} action
@@ -41,9 +53,7 @@ function scheduleDemoStep(delayMs, label, action) {
       try {
         await action();
       } catch (err) {
-        console.error(
-          `[ACTION] ${label} failed: ${err instanceof Error ? err.message : String(err)}`,
-        );
+        console.error(`[ACTION] ${label} failed: ${resolveErrorMessage(err)}`);
       }
     })();
   }, delayMs);
@@ -106,7 +116,7 @@ async function runDemo() {
     };
 
     es.onerror = (err) => {
-      console.error("[STREAM] Connection error:", err.message);
+      console.error("[STREAM] Connection error:", resolveErrorMessage(err));
     };
 
     // 3. Send test requests
@@ -149,9 +159,7 @@ async function runDemo() {
       },
     );
   } catch (err) {
-    console.error(
-      `[ERROR] Setup failed: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    console.error(`[ERROR] Setup failed: ${resolveErrorMessage(err)}`);
     console.log(
       "👉 Make sure the Actor is running locally on port 8080 (npm start).",
     );
