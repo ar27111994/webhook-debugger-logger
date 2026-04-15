@@ -3,21 +3,6 @@ name: Link Check
 on:
   pull_request:
     branches: [main]
-    paths:
-      - "*.md"
-      - "*.txt"
-      - "*.js"
-      - "*.mjs"
-      - "*.cjs"
-      - ".github/**/*.md"
-      - ".claude/**/*.md"
-      - "docs/**/*.md"
-      - "docs/**/*.html"
-      - "public/**/*.html"
-      - "src/**/*.js"
-      - "scripts/**/*.js"
-      - "scripts/**/*.mjs"
-      - "tests/**/*.js"
   push:
     branches: [main]
     paths:

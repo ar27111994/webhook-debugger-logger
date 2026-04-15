@@ -7,6 +7,8 @@ All notable changes to this project will be documented in this file.
 ### Fixed (3.0.1)
 
 - **CI/CD**: Make the release publish workflow use an explicit Jest invocation that force-exits after the suite completes.
+- **CI/CD**: Make the release-only npm and Docker workflows report successful pull request checks without publishing artifacts, so Dependabot PRs do not remain stuck waiting on required checks.
+- **CI/CD**: Make the required `Link Check` workflow run on every pull request so dependency-only PRs no longer remain stuck in an expected state when path filters skip the job.
 - **Apify**: Move the webhook signing secret to a top-level `signatureVerificationSecret` input with `isSecret: true`, while keeping runtime compatibility with older nested secret values.
 
 ## [3.0.0] - 2026-04-02

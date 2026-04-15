@@ -3,6 +3,8 @@ name: Publish Docker Image
 "on":
   release:
     types: [published]
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: read
@@ -10,7 +12,7 @@ permissions:
   packages: write
 
 concurrency:
-  group: release-docker-${{ github.event.release.tag_name }}
+  group: release-docker-${{ github.event.release.tag_name || github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -36,7 +38,7 @@ jobs:
           RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
         run: |
           owner="${GITHUB_REPOSITORY_OWNER,,}"
-          release_tag="${RELEASE_TAG}"
+          release_tag="${RELEASE_TAG:-pr-${{ github.event.pull_request.number || github.run_number }}}"
           version="${release_tag#v}"
           minor="$(echo "${version}" | cut -d. -f1,2)"
           image_name="webhook-debugger-logger"
@@ -53,6 +55,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Log In to GitHub Container Registry
+        if: github.event_name == 'release'
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
         with:
           registry: ghcr.io
@@ -60,6 +63,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and Publish Standalone Image
+        if: github.event_name == 'release'
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
         with:
           context: .
@@ -72,3 +76,7 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: true
           sbom: true
+
+      - name: Verify Docker release workflow wiring on pull requests
+        if: github.event_name != 'release'
+        run: echo "PR validation complete; Docker publishing only runs for published releases."

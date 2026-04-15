@@ -3,6 +3,8 @@ name: Publish to NPM
 on:
   release:
     types: [published]
+  pull_request:
+    branches: [main]
 
 jobs:
   publish:
@@ -29,11 +31,16 @@ jobs:
       - name: Verify Builds/Tests
         run: npm run test:jest -- --detectOpenHandles --forceExit
 
+      - name: Skip publish outside release events
+        if: github.event_name != 'release'
+        run: echo "PR validation complete; npm publish only runs for published releases."
+
       # unset NODE_AUTH_TOKEN because it's automatically set by the setup-node action
       # node@v24.0.0+
       # https://github.com/orgs/community/discussions/176761
       # https://github.com/actions/setup-node/issues/1440#issuecomment-3705123143
       - name: Publish to NPM
+        if: github.event_name == 'release'
         run: |
           unset NODE_AUTH_TOKEN
           npm publish
