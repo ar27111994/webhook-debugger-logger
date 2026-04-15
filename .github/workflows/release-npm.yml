@@ -27,7 +27,7 @@ jobs:
         run: npm run validate:web-server-schema
 
       - name: Verify Builds/Tests
-        run: npm test
+        run: npm run test:jest -- --detectOpenHandles --forceExit
 
       # unset NODE_AUTH_TOKEN because it's automatically set by the setup-node action
       # node@v24.0.0+

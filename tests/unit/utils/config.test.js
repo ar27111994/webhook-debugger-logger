@@ -10,6 +10,7 @@ import { LOG_MESSAGES } from "../../../src/consts/messages.js";
 import { setupCommonMocks } from "../../setup/helpers/mock-setup.js";
 import { loggerMock, constsMock } from "../../setup/helpers/shared-mocks.js";
 import { assertType } from "../../setup/helpers/test-utils.js";
+import { SIGNATURE_PROVIDERS } from "../../../src/consts/security.js";
 
 /**
  * @typedef {import('../../../src/utils/config.js')} ConfigUtils
@@ -330,6 +331,32 @@ describe("Config Utils", () => {
       const input = { urlCount: String(correctUrlCount) };
       const result = configUtils.parseWebhookOptions(assertType(input));
       expect(result.urlCount).toBe(correctUrlCount);
+    });
+
+    it("should map the top-level signature verification secret into runtime options", () => {
+      const result = configUtils.parseWebhookOptions({
+        signatureVerification: { provider: SIGNATURE_PROVIDERS.STRIPE },
+        signatureVerificationSecret: " top-level-secret ",
+      });
+
+      expect(result.signatureVerification).toEqual({
+        provider: SIGNATURE_PROVIDERS.STRIPE,
+        secret: "top-level-secret",
+      });
+    });
+
+    it("should preserve the nested signature secret for backward compatibility", () => {
+      const result = configUtils.parseWebhookOptions({
+        signatureVerification: {
+          provider: SIGNATURE_PROVIDERS.GITHUB,
+          secret: "existing-secret",
+        },
+      });
+
+      expect(result.signatureVerification).toEqual({
+        provider: SIGNATURE_PROVIDERS.GITHUB,
+        secret: "existing-secret",
+      });
     });
   });
 });

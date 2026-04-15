@@ -23,6 +23,8 @@ import { createChildLogger } from "./logger.js";
  * @returns {WebhookConfig} Normalized configuration object
  */
 export function parseWebhookOptions(options = {}) {
+  const signatureVerification = normalizeSignatureVerification(options);
+
   return {
     allowedIps: options.allowedIps ?? [],
     defaultResponseCode:
@@ -40,10 +42,41 @@ export function parseWebhookOptions(options = {}) {
     redactBodyPaths: options.redactBodyPaths ?? [],
     enableJSONParsing:
       options.enableJSONParsing ?? APP_CONSTS.DEFAULT_ENABLE_JSON_PARSING,
-    signatureVerification: options.signatureVerification,
+    signatureVerification,
     alerts: options.alerts,
     alertOn: options.alertOn,
     ...coerceRuntimeOptions(options),
+  };
+}
+
+/**
+ * Maps the top-level Apify secret input into the nested runtime config while
+ * keeping backward compatibility with older persisted inputs.
+ *
+ * @param {WebhookConfig} options
+ * @returns {WebhookConfig["signatureVerification"]}
+ */
+function normalizeSignatureVerification(options) {
+  if (
+    !options.signatureVerification &&
+    typeof options.signatureVerificationSecret !== "string"
+  ) {
+    return options.signatureVerification;
+  }
+
+  const normalizedSecret =
+    typeof options.signatureVerificationSecret === "string"
+      ? options.signatureVerificationSecret.trim()
+      : undefined;
+
+  const fallbackSecret =
+    typeof options.signatureVerification?.secret === "string"
+      ? options.signatureVerification.secret.trim()
+      : undefined;
+
+  return {
+    ...options.signatureVerification,
+    secret: normalizedSecret || fallbackSecret,
   };
 }
 

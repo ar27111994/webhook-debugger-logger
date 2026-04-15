@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.1] - 2026-04-15
+
+### Fixed (3.0.1)
+
+- **CI/CD**: Make the release publish workflow use an explicit Jest invocation that force-exits after the suite completes.
+- **Apify**: Move the webhook signing secret to a top-level `signatureVerificationSecret` input with `isSecret: true`, while keeping runtime compatibility with older nested secret values.
+
 ## [3.0.0] - 2026-04-02
 
 ### Added (3.0.0)
