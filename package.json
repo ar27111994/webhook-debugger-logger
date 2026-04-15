@@ -1,6 +1,6 @@
 {
   "name": "webhook-debugger-logger",
-  "version": "2.8.7",
+  "version": "3.0.0",
   "type": "module",
   "description": "Generate temporary webhook URLs and log all incoming requests with full details.",
   "main": "src/main.js",
@@ -13,31 +13,61 @@
   },
   "scripts": {
     "start": "node src/main.js",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
-    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
-    "lint": "eslint src tests",
-    "lint:fix": "eslint src tests --fix",
-    "typecheck": "tsc --noEmit"
+    "test:jest": "node --experimental-vm-modules --max-old-space-size=8192 node_modules/jest/bin/jest.js --runInBand",
+    "test": "npm run test:jest -- --detectOpenHandles",
+    "test:stress": "NODE_OPTIONS=\"$NODE_OPTIONS --expose-gc\" npm run test -- tests/e2e/stress.test.js",
+    "test:coverage": "npm run test:jest -- --coverage --forceExit",
+    "test:coverage:new-scopes": "npm run test:jest -- --config jest.coverage.new-scopes.config.mjs --coverageDirectory coverage/new-scopes --silent --forceExit",
+    "test:coverage:matrix": "npm run test:jest -- --config jest.coverage.matrix.config.mjs --coverageDirectory coverage/full --silent --forceExit",
+    "coverage:check:new-scopes": "node scripts/check-coverage.mjs --summary coverage/new-scopes/coverage-summary.json --thresholds .github/coverage/new-scopes.thresholds.json --label new-scopes",
+    "coverage:check:matrix": "node scripts/check-coverage.mjs --summary coverage/full/coverage-summary.json --thresholds .github/coverage/source-matrix.thresholds.json --label source-matrix",
+    "coverage:gate": "npm run test:coverage:new-scopes && npm run coverage:check:new-scopes && npm run test:coverage:matrix && npm run coverage:check:matrix",
+    "lint": "eslint --no-error-on-unmatched-pattern .actor public src tests",
+    "lint:fix": "npm run lint -- --fix",
+    "typecheck": "tsc --noEmit",
+    "validate:web-server-schema": "node scripts/validate-web-server-schema.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "sync:version": "node scripts/sync-version.js",
+    "prepare": "husky"
   },
   "dependencies": {
+    "@duckdb/node-api": "^1.4.3-r.3",
     "ajv": "^8.17.1",
     "apify": "^3.5.3",
-    "axios": "^1.13.2",
-    "body-parser": "^2.2.2",
+    "axios": "^1.15.0",
+    "bottleneck": "^2.19.5",
     "compression": "^1.8.1",
     "cors": "^2.8.5",
-    "eventsource": "^4.1.0",
+    "dotenv": "^17.4.0",
     "express": "^5.2.1",
     "ipaddr.js": "^2.3.0",
     "nanoid": "^5.1.6",
-    "qs": "^6.14.1"
+    "pino": "^10.3.0",
+    "pino-http": "^11.0.0"
   },
-  "author": "",
+  "keywords": [
+    "apify",
+    "webhook",
+    "debugger",
+    "logger",
+    "serverless",
+    "actor"
+  ],
+  "author": "Apify",
   "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ar27111994/webhook-debugger-logger/issues"
+  },
+  "homepage": "https://github.com/ar27111994/webhook-debugger-logger#readme",
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
+  },
+  "overrides": {
+    "basic-ftp": "5.2.2"
   },
   "devDependencies": {
+    "@apify/actor-memory-expression": "^0.1.6",
     "@eslint/js": "^9.39.2",
     "@types/compression": "^1.8.1",
     "@types/cors": "^2.8.19",
@@ -45,23 +75,17 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^25.0.6",
     "@types/supertest": "^6.0.3",
-    "eslint": "^9.39.2",
+    "eslint": "^10.0.0",
+    "eslint-plugin-sonarjs": "^3.0.7",
+    "eventsource": "^4.1.0",
     "globals": "^17.0.0",
+    "husky": "^9.1.7",
     "jest": "^30.2.0",
-    "node-mocks-http": "^1.17.2",
+    "lint-staged": "^16.2.7",
+    "prettier": "^3.8.0",
     "supertest": "^7.2.2",
+    "ts-api-utils": "^2.4.0",
     "typescript": "^5.9.3"
-  },
-  "jest": {
-    "transform": {},
-    "coverageThreshold": {
-      "global": {
-        "branches": 80,
-        "functions": 90,
-        "lines": 90,
-        "statements": 90
-      }
-    }
   },
   "publishConfig": {
     "access": "public",

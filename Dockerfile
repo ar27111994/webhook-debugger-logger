@@ -1,16 +1,47 @@
-# Specify the parent image from which we build
-FROM apify/actor-node:20
+FROM node:24-bookworm-slim AS deps
 
-# Set working directory
 WORKDIR /app
 
-# Copy source code
-COPY . ./
+COPY package.json package-lock.json ./
 
-# Install packages, skip optional and development dependencies
-RUN npm --quiet set progress=false \
-    && npm install --omit=dev --omit=optional \
-    && echo "Installed dependencies"
+RUN npm pkg delete scripts.prepare \
+    && npm ci --omit=dev --legacy-peer-deps \
+    && npm cache clean --force
 
-# Run the image
-CMD [ "npm", "start", "--silent" ]
+FROM node:24-bookworm-slim AS runtime-base
+
+LABEL org.opencontainers.image.title="webhook-debugger-logger" \
+    org.opencontainers.image.licenses="ISC"
+
+ENV NODE_ENV=production \
+    ACTOR_WEB_SERVER_PORT=8080 \
+    APIFY_LOCAL_STORAGE_DIR=/app/storage
+
+WORKDIR /app
+
+RUN mkdir -p /app/storage/key_value_stores/default \
+    && chown -R node:node /app
+
+COPY --from=deps --chown=node:node /app/node_modules ./node_modules
+COPY --chown=node:node package.json ./
+COPY --chown=node:node .actor ./.actor
+COPY --chown=node:node public ./public
+COPY --chown=node:node src ./src
+
+USER node
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD ["node", "-e", "const port = process.env.ACTOR_WEB_SERVER_PORT || 8080; fetch(`http://127.0.0.1:${port}/ready`).then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1));"]
+
+CMD ["node", "src/main.js"]
+
+FROM runtime-base AS runtime-standalone
+
+LABEL org.opencontainers.image.description="Self-hosted container image for Webhook Debugger & Logger"
+
+# Keep the Apify publication target on the same runtime lineage as deps/runtime-base
+# so native modules such as DuckDB stay API-compatible between install and runtime.
+FROM runtime-base AS runtime-apify
+
+LABEL org.opencontainers.image.description="Apify publication image for Webhook Debugger & Logger"

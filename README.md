@@ -1,523 +1,577 @@
-# 🚀 Webhook Debugger & Logger v2.8.x (Enterprise Suite)
+# Webhook Debugger, Logger & API Mocking Suite
 
-[![Build Status](https://github.com/ar27111994/webhook-debugger-logger/actions/workflows/ci.yml/badge.svg)](https://github.com/ar27111994/webhook-debugger-logger/actions)
+![Webhook Debugger and Logger logo](assets/icon-160.png)
+
+Generate temporary webhook URLs, inspect every incoming request, replay failures, and simulate callback behavior without tunneling localhost.
+
+## Status
+
+[![Build Status](https://github.com/ar27111994/webhook-debugger-logger/actions/workflows/ci.yml/badge.svg)](https://github.com/ar27111994/webhook-debugger-logger/actions/workflows/ci.yml)
+[![GitHub release](https://img.shields.io/github/v/release/ar27111994/webhook-debugger-logger)](https://github.com/ar27111994/webhook-debugger-logger/releases)
+[![npm version](https://img.shields.io/npm/v/webhook-debugger-logger)](https://www.npmjs.com/package/webhook-debugger-logger)
+[![npm downloads](https://img.shields.io/npm/dm/webhook-debugger-logger)](https://www.npmjs.com/package/webhook-debugger-logger)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
-[![Code Style: Prettier](https://img.shields.io/badge/code_style-prettier-ff69b4.svg)](https://github.com/prettier/prettier)
-[![GitHub issues](https://img.shields.io/github/issues/ar27111994/webhook-debugger-logger)](https://github.com/ar27111994/webhook-debugger-logger/issues)
+[![GHCR](https://img.shields.io/badge/GHCR-Container%20Image-2496ED?logo=docker&logoColor=white)](docs/local_docker_testing.md)
 ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/ar27111994/webhook-debugger-logger?utm_source=oss&utm_medium=github&utm_campaign=ar27111994%2Fwebhook-debugger-logger&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
-
-![Dashboard Mockup](https://raw.githubusercontent.com/ar27111994/webhook-debugger-logger/main/assets/dashboard.png)
-
 [![Webhook Debugger, Logger & API Mocker - Debug webhooks 90% faster without localhost tunneling | Product Hunt](https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1057655&theme=light&t=1767529788592)](https://www.producthunt.com/products/webhook-debugger-logger-api-mocker?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-webhook-debugger-logger-api-mocker)
 
-A high-performance Apify Actor built for developers to test, inspect, and automate incoming webhooks in real-time. This Actor is optimized for **Apify Standby Mode**, providing sub-10ms logic execution and zero cold-start latency.
+## Run & Docs
 
-**Interactive Demos:**
+[![Open actor in the Apify Store](https://img.shields.io/badge/Apify%20Store-Open%20Actor-5A4FCF?logo=apify&logoColor=white)](https://apify.com/ar27111994/webhook-debugger-logger)
+[![Run actor on Apify](https://img.shields.io/badge/Run%20on-Apify-6B46FF?logo=apify&logoColor=white)](https://console.apify.com/actors/ar27111994~webhook-debugger-logger/input)
+[![Read the API reference](https://img.shields.io/badge/API-Reference-0F766E?logo=swagger&logoColor=white)](docs/api-reference.md)
+[![Self-host with Docker](https://img.shields.io/badge/Self--host-Docker-2496ED?logo=docker&logoColor=white)](docs/local_docker_testing.md)
 
-- **Webhook Debugging & Response Simulation:** [Try it →](https://app.arcade.software/share/j4bq45Us5BTZz6Bn9rML)
-- **Access Control:** [Try it →](https://app.usehexus.com/flow/3b046e8d-c0ba-4b78-951c-10349bb0fe3f)
-- **Request Replay:** [Try it →](https://app.usehexus.com/flow/398af11b-7ad0-4cd6-9300-784326e3ed8e)
+## Contribute
 
-## ⚡ Quick Start: Live Demo (Local)
+[![Report a bug](https://img.shields.io/badge/Report-Bug-d73a4a?logo=github&logoColor=white)](https://github.com/ar27111994/webhook-debugger-logger/issues/new?template=bug_report.md)
+[![Request a feature](https://img.shields.io/badge/Request-Feature-1f883d?logo=github&logoColor=white)](https://github.com/ar27111994/webhook-debugger-logger/issues/new?template=feature_request.md)
+[![View changelog](https://img.shields.io/badge/View-Changelog-6f42c1?logo=readthedocs&logoColor=white)](CHANGELOG.md)
+[![Security policy](https://img.shields.io/badge/Security-Policy-ffb000?logo=shield&logoColor=white)](SECURITY.md)
+[![Contributing](https://img.shields.io/badge/Contributing-Guide-0969da?logo=github&logoColor=white)](CONTRIBUTING.md)
 
-Run the following command while the Actor is active to see real-time streaming:
+Webhook Debugger, Logger & API Mocking Suite is an [Apify Actor](https://apify.com/ar27111994/webhook-debugger-logger) for testing webhook integrations end to end. It generates temporary endpoints, captures the full request envelope, exposes live and queryable logs, and lets you replay or forward captured traffic to another destination.
 
-```bash
-# Make sure the Actor is running locally on port 8080
-npm start
+It is designed for developers working with providers such as Stripe, GitHub, Shopify, Slack, and custom internal webhooks who need more than a generic request bin.
 
-# If authKey is configured, run with:
-# AUTH_KEY=your-secret node demo_cli.js
-node demo_cli.js
-```
+> [!NOTE]
+> This actor is optimized for testing, debugging, replay, and callback simulation. If you need permanent public ingress or long-term retention, place it behind your own infrastructure or run the self-hosted container with persistent storage.
+> [!WARNING]
+> Generated webhook URLs are public unless you enable `authKey`, `allowedIps`, or signature verification. Do not point sensitive production traffic to unsecured endpoints.
 
-Test and inspect webhooks instantly without running localhost or complex tunneling tools.
+## Screenshots
 
-> **Tip for Contributors**: Want to test the Docker image locally? Check out our **[Local Docker Testing Guide](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/local_docker_testing.md)**.
+> [!NOTE]
+> The Apify Store input tab always reflects the most recently published build. To avoid showing stale configuration fields, this README documents input options from the current repo schema in [.actor/input_schema.json](.actor/input_schema.json) and uses a live local runtime screenshot below.
 
-**[Watch the 2-min Narrated Walkthrough](https://youtu.be/uefialldYYw)**
+### Built-in dashboard
 
-## ☁️ Self-Hosting (Standalone)
+![Self-hosted dashboard page showing the actor title, online status, active webhook count, and quick link to the info endpoint](assets/dashboard-live.png)
 
-You can run this Actor anywhere—on your local machine, VPS, or internal cloud—without an Apify account. It works as a standard Node.js application.
+## Key input options
 
-### Basic Usage
+The current repo schema is defined in [.actor/input_schema.json](.actor/input_schema.json). These are the settings most users touch first.
 
-```bash
-# Option A: Run via npx (Zero Install)
-npx webhook-debugger-logger
+| Input                   | Purpose                                                                                                           | Default    |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------- | ---------- |
+| `urlCount`              | Number of temporary webhook endpoints to generate                                                                 | `3`        |
+| `retentionHours`        | How long generated webhook URLs remain active                                                                     | `24`       |
+| `maxPayloadSize`        | Maximum accepted request body size in bytes; values above 100 MB are clamped                                      | `10485760` |
+| `enableJSONParsing`     | Parse JSON payloads into structured objects for search                                                            | `true`     |
+| `maskSensitiveData`     | Redact sensitive headers such as `Authorization`, `Cookie`, `Set-Cookie`, and API key headers from logs           | `true`     |
+| `authKey`               | Protect management routes and optionally webhook ingest with a shared key                                         | unset      |
+| `allowedIps`            | Restrict traffic to specific IPs or CIDR blocks                                                                   | empty      |
+| `signatureVerification` | Verify Stripe, Shopify, GitHub, Slack, or custom signatures                                                       | unset      |
+| `forwardUrl`            | Forward every captured request to another destination                                                             | unset      |
+| `defaultResponseCode`   | Return a custom HTTP status to the sender                                                                         | `200`      |
+| `responseDelayMs`       | Simulate network latency or slow callback processing; accepted range is 0-10,000 ms and higher values are clamped | `0`        |
+| `jsonSchema`            | Reject payloads that do not match a JSON Schema                                                                   | unset      |
+| `customScript`          | Transform or enrich the captured event before storage                                                             | unset      |
 
-# Option B: Clone & Install
-git clone https://github.com/ar27111994/webhook-debugger-logger.git
-cd webhook-debugger-logger
-npm install
-npm start
-```
+![Input schema preview from the Apify Actor input tab](assets/input_schema_preview.png)
 
-**Note**: When running via `npx` or `npm start` for the first time, the Actor will automatically generate a configuration file at `storage/key_value_stores/default/INPUT.json`. You can edit this file to change settings (like `urlCount`) in real-time! (The location respects `APIFY_LOCAL_STORAGE_DIR` if set).
+## What does this actor do?
 
-### Advanced Configuration (Production)
+This project gives you a disposable webhook test environment with a documented HTTP API.
 
-For custom deployments, you can configure the Actor via environment variables or JSON input:
+It helps you:
 
-```bash
-# Example: 5 URLs, 72h retention, 100MB payload limit
-INPUT='{"urlCount": 5, "retentionHours": 72, "maxPayloadSize": 104857600}' npm start
-```
+- generate 1 to 50 unique webhook URLs for a run
+- inspect headers, query params, payloads, response status, timing, IP, and signature state
+- stream events live over Server-Sent Events (SSE)
+- replay captured requests to a new destination
+- forward incoming traffic to another endpoint with retries and circuit breaking
+- simulate downstream behavior with custom status codes, response bodies, headers, and latency
+- trigger Slack or Discord alerts when a webhook run needs attention
+- handle large request bodies by enforcing size limits and offloading oversized accepted payloads to storage
+- validate JSON payloads and run custom JavaScript transformation scripts before storage
+- plug the actor into Apify-native workflows, API automation, and MCP-enabled tooling that orchestrates Apify runs and datasets
 
-#### Unrestricted Limits 🔓
+## Why use it?
 
-When running locally or self-hosted, you are **not bound** by the UI constraints of the Apify Platform:
+Webhook debugging is usually split across too many tools.
 
-- **URL Count**: Create 100+ webhooks (vs Platform UI limits) if your self-hosted instance has enough resources.
-- **Retention**: Keep data for 365 days (`"retentionHours": 8760`). Fully configurable.
-- **Payloads**: Parse up to 100MB payloads (default 10MB) by setting `maxPayloadSize`.
-- **Rate Limit**: Fully configurable (e.g., 10,000+ per min) for management endpoints (/logs, /info, /replay). Applied per client IP.
+- You need one tool to expose a public URL.
+- Another tool stores payloads.
+- Another tool replays failures.
+- Another tool simulates custom responses.
 
-**Response Delay**: Capped at **10s** (10,000ms) even in self-hosted mode to ensure connection stability. (Reason: Prevents the server from freezing if thousands of requests are held open simultaneously).
+This actor combines those workflows in one place.
 
-**Hot-Reload**: To change settings while running (e.g., enable debug logging), simply edit `storage/key_value_stores/default/INPUT.json`. The Actor polls for changes every **5 seconds** and applies them automatically.
+### Problems it solves
 
-> [!IMPORTANT]
-> **Retention is Activity-Based**: The expiration timer resets whenever the Actor is active (restarts/hot-reloads). This ensures your webhooks don't expire mid-debugging session. They only expire if you abandon the Actor for the full duration.
+- No more tunneling localhost just to inspect a payload.
+- No more guessing what a provider actually posted.
+- No more manually rebuilding failed callbacks for retries.
+- No more separate mock server just to test response codes or latency.
 
-## What does it do?
+### Why teams pick it over a generic request bin
 
-Webhook Debugger generates temporary webhook URLs and logs every incoming request with full details (headers, body, query params). Perfect for testing webhook integrations from Stripe, GitHub, Shopify, or any service.
+- It captures requests and exposes a searchable API, not just raw dumps.
+- It supports replay and forwarding, not only passive logging.
+- It can validate signatures for common webhook providers.
+- It can alert Slack or Discord when capture, validation, or downstream delivery fails.
+- It supports inline custom scripting for payload cleanup and transformation.
+- It includes health, readiness, and metrics endpoints for operational setups.
+- It can run on Apify or as a self-hosted Node/Docker service.
 
-## 💡 Popular Use Cases
+## What can this actor do?
 
-- **Stripe & PayPal Debugging**: Mock successful or failed payment responses to test your order fulfillment logic.
-- **GitHub CD/CI Testing**: Verify complex payloads from CI/CD triggers without waiting for real builds.
-- **Shopify Webhook Relay**: Securely forward Shopify hooks to your local development environment.
-- **n8n & Zapier Buffer**: Acts as a high-performance validator for your automation workflows.
-- **API Mocking**: Simulate slow or faulty 3rd party APIs with custom responses and latency.
+| Feature                | What you get                                                                                             |
+| ---------------------- | -------------------------------------------------------------------------------------------------------- |
+| Temporary webhook URLs | Generate 1-50 unique endpoints per run with configurable retention                                       |
+| Full request capture   | Method, headers, query, body, response body, response headers, size, latency, IP                         |
+| Searchable logs        | DuckDB-backed `/logs` queries with pagination and detailed retrieval                                     |
+| Live streaming         | Real-time event feed over `/log-stream` using SSE                                                        |
+| Replay workflows       | Replay a captured request to a different target URL                                                      |
+| HTTP forwarding        | Forward every incoming request to a destination with retries and circuit breaker protection              |
+| API mocking            | Return custom status codes, headers, bodies, and artificial latency                                      |
+| Alert notifications    | Send Slack or Discord notifications for `error`, `4xx`, `5xx`, `timeout`, or `signature_invalid` events  |
+| Security controls      | Global API key, IP allowlist, sensitive header masking, provider signature verification                  |
+| Large payload handling | Enforce request size limits and offload large accepted payloads so inspection stays practical            |
+| Payload validation     | Optional JSON Schema validation and custom JavaScript transforms                                         |
+| Platform integrations  | Apify web server, Dataset, Key-Value Store, saved runs, API automation, and MCP-friendly Apify workflows |
+| Ops endpoints          | `/health`, `/ready`, `/system/metrics`, and `/info`                                                      |
 
-## 📖 Workflow Playbooks & "Launch Packs"
+## Quick start on Apify
 
-Stop building generic tools and start solving real problems. Use these pre-configured setup guides for your specific tech stack:
-
-- **[💳 Stripe Hardening Pack](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/playbooks/stripe.md?utm_campaign=stripe_hardening)**: Verify signatures, inspect payloads, and replay payment events safely.
-- **[🛍️ Shopify Launch Pack](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/playbooks/shopify.md?utm_campaign=shopify_launch)**: Bridge Shopify webhooks to your local machine with 72h retention for high-traffic windows.
-- **[💬 Slack & Messaging](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/playbooks/slack.md?utm_campaign=slack_bot)**: Test complex message blocks and interactive components.
-- **[💰 Revenue Recovery](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/playbooks/revenue-recovery.md?utm_campaign=revenue_recovery)**: Recover missed payments and reconcile Stripe/Shopify orders during high-burst launches.
-- **[🌉 Low-Code Bridge](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/playbooks/low-code-bridge.md?utm_campaign=low_code_bridge)**: Optimize Zapier and Make (Integromat) costs by using the Actor as a smart pre-filter.
-- **[📑 Legacy Migration](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/playbooks/legacy-migration.md?utm_campaign=legacy_migration)**: Safely compare raw payloads side-by-side when upgrading API versions or switching providers.
-
----
-
-## Why use Webhook Debugger?
-
-### The Problem
-
-Debugging webhooks is painful:
-
-- ❌ Can't see what data services send
-- ❌ No way to inspect payloads
-- ❌ Localhost tunneling is complicated (ngrok, etc.)
-- ❌ Failed webhook tests require service reconfiguration
-
-### The Solution
-
-1. **Run Webhook Debugger**
-2. **Get 3 unique webhook URLs**
-3. **Configure service to send to those URLs**
-4. **See all requests in real-time**
-5. **Export logs as JSON/CSV**
-
-No setup required. No localhost tunneling. Takes 30 seconds.
-
-## What can this Actor do?
-
-| Feature             | Description                                                                          |
-| ------------------- | ------------------------------------------------------------------------------------ |
-| **URL Generation**  | Generate 1-10 temporary webhook URLs (**Unlimited** for self-hosted)                 |
-| **Request Logging** | Capture ALL incoming requests (GET, POST, etc.)                                      |
-| **Full Details**    | Headers, body, query params, IP, timing                                              |
-| **Multi-Format**    | Handles JSON, Text, XML, and Form Data                                               |
-| **URL Expiry**      | Webhook URLs expire automatically (configurable 1-72h, or **Unlimited** self-hosted) |
-| **Hot-Reloading**   | Configuration changes apply instantly without restarts (v2.7)                        |
-| **Export**          | Download logs as JSON or CSV from dataset                                            |
-
-## 🚀 v2.0 Enterprise Features
-
-The Enterprise Update transforms this Actor into a professional API mocking and workflow tool.
-
-### 🛡️ Security & Access Control
-
-- **API Key Auth**: Require a secret token for every incoming webhook.
-- **IP Whitelisting**: Lock down your endpoints to specific IPs or CIDR ranges.
-- **Rate Limiting (v2.6)**: Protect your management endpoints (`/logs`, `/info`, `/replay`) with configurable per-IP rate limits.
-- **Sensitive Data Masking (v2.6)**: Automatically redact known sensitive headers like `Authorization` and `Cookie` from your logs.
-- **SSRF Protection (v2.8)**: Enterprise-grade Server-Side Request Forgery protection prevents your Actor from being used to scan internal networks (localhost, 10.x.x.x, etc.) during forwarding or replay.
-
-### 🔥 Zero-Downtime Hot Reload
-
-Updates to the following settings are applied immediately without restarting the Actor:
-
-- `authKey`
-- `maxPayloadSize`
-- `customScript`
-- `rateLimitPerMinute`
-- `retentionHours`
-- `urlCount`
-- `responseDelayMs`
-
-> **Note for Platform Users**: The Apify Console "Input" tab only applies changes to _future_ runs. To hot-reload a **running** Actor, you must update the "INPUT" key in the running Actor's **Default Key-Value Store** directly (e.g., via Apify API or Client), as the Console UI does not support editing Key-Value entries for running actors.
-
-### 🔒 Enterprise Security (New in v2.0)
-
-- **Dynamic Infrastructure Scaling (v2.7)**: Increase your `urlCount` without restarting. The Actor intelligently reconciles state, generating new IDs while preserving your existing ones.
-
-### 🎭 API Mocking & Latency
-
-- **Custom Responses**: Define the exact Body, Headers, and Status Code to return to the sender.
-- **Latency Simulation**: Simulate slow network conditions by delaying responses (up to 10s, configurable).
-- **JSON Schema Validation**: Reject invalid payloads automatically and log the errors.
-
-### 🔄 Advanced Workflows
-
-- **Real-time Forwarding**: Automatically pipe captured webhooks to another destination (e.g., your local dev server).
-- **Request Replay (v2.8 Deep Search)**: Resend any captured event to a new URL using the `/replay` API. Includes robust paginated lookup to find events even in massive 1M+ item datasets without memory issues.
-
-### ⚡ Technical Excellence & Platform Quality (v2.5)
-
-- **Standby Mode Ready**: Built for sub-10ms response times with full support for Apify's warm-start infrastructure.
-- **Scalable Real-time Feed**: v2.6 features a high-performance global SSE heartbeat mechanism, supporting hundreds of concurrent watchers with minimal memory footprint.
-- **Readiness Probes**: Explicit handling of platform health checks for maximum uptime.
-- **Graceful Termination**: Advanced shutdown sequence that ensures state persistence even during platform migrations.
-- **QA Certified**: Specialized startup logic ensures consistent success in automated platform tests.
-
----
-
-### Simple mode (basic)
+### 1. Start the actor with a minimal config
 
 ```json
 {
   "urlCount": 3,
-  "retentionHours": 24
-}
-```
-
-### Advanced mode
-
-```json
-{
-  "urlCount": 5,
-  "retentionHours": 72,
-  "maxPayloadSize": 10485760,
-  "enableJSONParsing": true
-}
-```
-
-### Enterprise/CI integration
-
-```json
-{
-  "urlCount": 1,
-  "authKey": "my-secure-ci-token",
-  "allowedIps": ["34.250.0.0/16"],
-  "jsonSchema": "{\"type\":\"object\",\"required\":[\"commit_id\"]}",
-  "forwardUrl": "https://ci-collector.internal.com/hooks",
+  "retentionHours": 24,
+  "enableJSONParsing": true,
   "maskSensitiveData": true
 }
 ```
 
-### ⚙️ Input Schema Preview
+### 2. Open the generated runtime info
 
-![Input Schema Preview](https://raw.githubusercontent.com/ar27111994/webhook-debugger-logger/main/assets/input_schema_preview.png)
-
-## Output example
-
-### JSON format (Dataset)
+After the actor starts, open the web server URL and call `/info`.
 
 ```json
 {
-  "timestamp": "2025-12-19T14:31:45Z",
-  "webhookId": "wh_abc123",
-  "method": "POST",
-  "headers": {
-    "content-type": "application/json",
-    "user-agent": "Stripe/1.0"
+  "version": "3.0.0",
+  "status": "Enterprise Suite Online",
+  "system": {
+    "authActive": false,
+    "retentionHours": 24,
+    "maxPayloadLimit": "10.0MB",
+    "webhookCount": 3,
+    "activeWebhooks": [
+      {
+        "id": "wh_demo123",
+        "expiresAt": "2026-04-03T10:20:14.527Z"
+      }
+    ]
   },
-  "body": "{\"type\": \"payment.success\", \"amount\": 9999}",
-  "size": 78,
-  "contentType": "application/json",
-  "processingTime": 12,
-  "remoteIp": "1.2.3.4"
+  "features": [
+    "High-Performance Logging & Payload Forensics",
+    "Real-time SSE Log Streaming",
+    "Smart Forwarding & Replay Workflows",
+    "Isomorphic Custom Scripting & Latency Simulation",
+    "Provider Signature Verification & Enterprise Security",
+    "Large Payload Handling & Operational Health"
+  ],
+  "endpoints": {
+    "logs": "https://<run-id>.runs.apify.net/logs?limit=100",
+    "logDetail": "https://<run-id>.runs.apify.net/logs/:logId",
+    "logPayload": "https://<run-id>.runs.apify.net/logs/:logId/payload",
+    "stream": "https://<run-id>.runs.apify.net/log-stream",
+    "webhook": "https://<run-id>.runs.apify.net/webhook/:id",
+    "replay": "https://<run-id>.runs.apify.net/replay/:webhookId/:itemId?url=http://your-goal.com",
+    "info": "https://<run-id>.runs.apify.net/info",
+    "systemMetrics": "https://<run-id>.runs.apify.net/system/metrics",
+    "health": "https://<run-id>.runs.apify.net/health",
+    "ready": "https://<run-id>.runs.apify.net/ready"
+  },
+  "docs": "https://apify.com/ar27111994/webhook-debugger-logger"
 }
 ```
 
-### Advanced Event Metadata (v2.7+)
+### 3. Send a test webhook
+
+```bash
+curl -X POST "https://<run-id>.runs.apify.net/webhook/wh_demo123" \
+  -H "Content-Type: application/json" \
+  -d '{"event":"payment.success","provider":"stripe","amount":9999}'
+```
+
+### 4. Inspect the captured event
 
 ```json
 {
-  "id": "evt_8m2L5p9xR",
-  "timestamp": "2025-12-28T12:00:00Z",
-  "webhookId": "wh_ci_prod_1",
-  "method": "POST",
-  "statusCode": 201,
-  "processingTime": 450,
-  "remoteIp": "34.250.12.34",
-  "forwardStatus": "SUCCESS",
-  "originalEventId": null
+  "count": 1,
+  "items": [
+    {
+      "id": "evt_demo123",
+      "timestamp": "2026-04-02T10:25:02.319Z",
+      "webhookId": "wh_demo123",
+      "requestId": "req_demo123",
+      "method": "POST",
+      "statusCode": 200,
+      "contentType": "application/json",
+      "processingTime": 10,
+      "size": 61,
+      "remoteIp": "203.0.113.10",
+      "requestUrl": "/webhook/wh_demo123",
+      "body": {
+        "event": "payment.success",
+        "provider": "stripe",
+        "amount": 9999
+      }
+    }
+  ]
 }
 ```
 
-### CSV Output Format (Preview)
+![Dataset view showing captured webhook events with metadata and payload fields](assets/dataset_view.png)
 
-| Timestamp        | Webhook ID | Method | Status | Content-Type                      | Size (B) | Latency (ms) |
-| :--------------- | :--------- | :----- | :----- | :-------------------------------- | :------- | :----------- |
-| 2025-12-19 14:31 | wh_abc123  | POST   | 200    | application/json                  | 1,240    | 12           |
-| 2025-12-19 14:35 | wh_xyz789  | GET    | 401    | -                                 | 0        | 5            |
-| 2025-12-19 14:40 | wh_abc123  | POST   | 200    | application/x-www-form-urlencoded | 450      | 8            |
+## Advanced configuration examples
 
-### 📊 Dataset View
+### Secure an endpoint and verify a Stripe signature
 
-![Dataset View](https://raw.githubusercontent.com/ar27111994/webhook-debugger-logger/main/assets/dataset_view.png)
-
-## How to get started
-
-**Step 1**: Start the Actor and wait for it to enter "Running" state.
-
-**Step 2**: Click on the **Live View** or check the **Key-Value Store** for the `WEBHOOK_STATE` key to see your assigned IDs.
-
-**Step 3**: Use the URL format: `https://<actor-run-id>.runs.apify.net/webhook/<id>`
-
-**Step 4**: Configure your service (Stripe, GitHub, etc.) to send to this URL.
-
-**Step 5**: When webhooks arrive, they'll appear in the **Dataset** tab in real-time.
-
-## Usage Examples
-
-### 1. Simple GET request
-
-```bash
-curl -v https://<ACTOR-RUN-URL>/webhook/wh_abc123?test=true
+```json
+{
+  "urlCount": 1,
+  "retentionHours": 72,
+  "authKey": "demo-shared-secret",
+  "allowedIps": ["203.0.113.10/32"],
+  "signatureVerification": {
+    "provider": "stripe",
+    "secret": "whsec_demo",
+    "tolerance": 300
+  }
+}
 ```
 
-### 2. Post JSON data
+### Forward captured traffic to another system
 
-```bash
-curl -X POST -H "Content-Type: application/json" \
-  -d '{"event": "user_signup", "userId": "123"}' \
-  https://<ACTOR-RUN-URL>/webhook/wh_abc123
+```json
+{
+  "urlCount": 2,
+  "forwardUrl": "https://example.com/ingest",
+  "forwardHeaders": true,
+  "maxForwardRetries": 3,
+  "alertOn": ["error", "5xx", "signature_invalid"]
+}
 ```
 
-### 3. Send raw text/XML
+### Mock a slow callback with a custom response
 
-```bash
-curl -X POST -H "Content-Type: text/xml" \
-  -d '<event><type>ping</type></event>' \
-  https://<ACTOR-RUN-URL>/webhook/wh_abc123
+```json
+{
+  "defaultResponseCode": 202,
+  "defaultResponseBody": "{\"received\":true,\"queued\":true}",
+  "defaultResponseHeaders": {
+    "Content-Type": "application/json",
+    "X-Debug-Source": "webhook-debugger"
+  },
+  "responseDelayMs": 1500
+}
 ```
 
-### 4. Upload a small file
+### Send alerts to Slack or Discord
 
-```bash
-curl --upload-file document.txt https://<ACTOR-RUN-URL>/webhook/wh_abc123
+```json
+{
+  "alerts": {
+    "slack": {
+      "webhookUrl": "https://hooks.slack.com/services/T000/B000/XXXX"
+    },
+    "discord": {
+      "webhookUrl": "https://discord.com/api/webhooks/..."
+    }
+  },
+  "alertOn": ["error", "4xx", "5xx", "timeout", "signature_invalid"]
+}
 ```
 
-### 5. Check active webhooks (Management API)
+### Transform payloads with custom scripting
+
+```json
+{
+  "customScript": "if (event.contentType === 'application/json') { const body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body; event.body = { ...body, normalized: true, source: 'webhook-debugger' }; }"
+}
+```
+
+The script runs in a disposable worker isolate and receives `{ event, req, console, HTTP_STATUS }`.
+It can normalize, enrich, or redact payload data before the event is stored, but it does not get direct access to `process`, `require`, filesystem, or network primitives. String-based code generation such as `eval()` and `Function()` is disabled, and the runtime enforces bounded timeout and memory limits. If a script fails or times out, the error is logged and the webhook still completes through the normal response path.
+
+## API surface
+
+The actor exposes a small but practical HTTP surface.
+
+`/health` and `/ready` are intentionally rate-limited but not protected by `authKey`, so orchestrators and load balancers can probe them even when management routes require authentication.
+
+| Endpoint                          | Purpose                                           |
+| --------------------------------- | ------------------------------------------------- |
+| `GET /`                           | Lightweight dashboard page                        |
+| `GET /info`                       | Runtime info, active webhooks, endpoint discovery |
+| `ANY /webhook/:id`                | Capture incoming webhook traffic                  |
+| `GET /logs`                       | Query captured events                             |
+| `GET /logs/:logId`                | Fetch one log entry                               |
+| `GET /logs/:logId/payload`        | Retrieve the stored payload for an event          |
+| `GET /log-stream`                 | SSE live feed of captured events                  |
+| `POST /replay/:webhookId/:itemId` | Replay a captured event to a target URL           |
+| `GET /system/metrics`             | Sync and operational metrics                      |
+| `GET /health`                     | Liveness probe                                    |
+| `GET /ready`                      | Readiness probe                                   |
+
+For the full contract, see [docs/api-reference.md](docs/api-reference.md) and the machine-readable schema in [.actor/web_server_schema.json](.actor/web_server_schema.json).
+
+### Live stream preview
+
+![SSE stream output showing heartbeat events and real-time webhook captures](assets/sse_stream.png)
+
+## Platform and MCP workflows
+
+This project is built as an Apify Actor first, not as a standalone one-off webhook bin.
+
+### Apify platform integrations
+
+- Run it from the Apify Console or API and get public `runs.apify.net` webhook URLs immediately.
+- Persist captured events to the Apify Dataset for export, filtering, or downstream automation.
+- Persist active webhook state and large-payload offloads in the Apify Key-Value Store.
+- Reuse runs in saved tasks, schedules, and other Apify automation flows.
+- Expose the web server surface through `.actor/web_server_schema.json`, which makes the HTTP contract discoverable and easier to automate.
+- When you keep the actor warm with Apify Standby mode, the HTTP endpoints stay ready for webhook-style traffic instead of paying a cold-start penalty on each request.
+
+### MCP-enabled workflows through Apify
+
+This actor is not itself an MCP server, but it fits cleanly into MCP-enabled automation built around Apify.
+
+- MCP clients can trigger or inspect Apify Actors, runs, datasets, and KVS records through Apify tooling.
+- Agent-driven workflows can use this actor as a disposable webhook target while another MCP tool verifies payloads, dashboards, or downstream effects.
+- The repo includes MCP-oriented development assets and guidance under the repo rules for using Apify and Chrome DevTools MCP during development.
+
+![MCP configuration screenshot showing how to connect Apify tooling in an MCP client](assets/mcp_config.png)
+
+In practice, that means AI-assisted integration tests can create a run, post webhook traffic, inspect `/info` or `/logs`, and then continue through the rest of an Apify or browser automation workflow.
+
+## Operational behavior
+
+### Hot-reload input configuration
+
+The runtime can apply input changes without a full restart.
+
+- On Apify, `HotReloadManager` polls the Key-Value Store for updated actor input.
+- In local development, it watches the generated `storage/key_value_stores/default/INPUT.json` file with `fs.watch`.
+- Reloadable settings flow through `AppState.applyConfigUpdate()`, which updates rate limiters, auth, retention, replay settings, forwarding settings, and parser limits in place.
+- Set `DISABLE_HOT_RELOAD=true` if you want a fixed configuration for reproducible local runs.
+
+This is useful when you want to tune forwarding, replay, auth, or limits while the actor is already receiving traffic.
+
+### Rate limiting
+
+The actor protects both ingress and management endpoints.
+
+- `rateLimitPerMinute` controls the main API and management route limiter.
+- Webhook ingestion also applies a dedicated per-webhook limiter tuned for higher event throughput.
+- When limits are exceeded, the runtime returns standard HTTP throttling responses and emits rate-limit metadata in the normal request path.
+
+Use tighter limits for public debugging endpoints and looser limits for high-throughput provider tests.
+
+### Retries and timeouts
+
+Retry and timeout behavior exists in several places and serves different goals.
+
+| Setting             | What it controls                                | Default behavior                                                                |
+| ------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------- |
+| `maxForwardRetries` | Retries for outbound forwarding to `forwardUrl` | Retries transient delivery failures with backoff and circuit breaker protection |
+| `replayMaxRetries`  | Retries for replay requests                     | Retries replay delivery attempts before marking them failed                     |
+| `replayTimeoutMs`   | Per-attempt replay timeout                      | Bounds replay requests so a dead downstream does not hang the actor             |
+| `responseDelayMs`   | Artificial response latency to the sender       | Simulates slow callbacks for client timeout testing                             |
+
+In addition to input-level settings, the runtime has internal bounded timeouts for alert delivery, background tasks, custom script execution, shutdown, DNS resolution, and outbound forwarding.
+
+If you need the detailed implementation model behind these controls, see [docs/architecture.md](docs/architecture.md).
+
+## Alert notifications
+
+When debugging webhook pipelines, passive logs are often not enough. The actor can push notifications to Slack and Discord so failures surface immediately.
+
+- Slack incoming webhook notifications
+- Discord webhook notifications
+- Trigger conditions for `error`, `4xx`, `5xx`, `timeout`, and `signature_invalid`
+- Works well with forwarding and replay workflows when you need to know that downstream delivery broke
+
+This is especially useful when the actor is running on Apify in standby mode or as a long-lived debugging endpoint.
+
+## Custom scripting
+
+The `customScript` input gives you an inline JavaScript hook for event transformation before storage.
+
+Scripts execute inside a throwaway worker thread that hosts an isolated `vm` context. Only the mutable `event` object, a safe copy of `req`, `console`, and `HTTP_STATUS` are injected into that context.
+
+Use it to:
+
+- normalize payload shapes from different providers
+- parse JSON bodies and inject debug metadata
+- strip or remap fields before persisting
+- mark events for downstream routing or replay decisions
+
+Because the script receives both `event` and `req`, you can combine payload, header, and query information when preparing the stored record.
+
+Guardrails:
+
+- `req` is a copied, reduced request snapshot rather than the live Express request object.
+- `process`, `require`, filesystem, and network APIs are not exposed to the script.
+- `eval()` and `Function()` style code generation are disabled inside the isolate.
+- Timeouts and worker resource limits stop runaway scripts without blocking the main request handler.
+- Operators can raise only the worker heap ceilings via `CUSTOM_SCRIPT_WORKER_MAX_OLD_GENERATION_MB` (clamped to 16-256 MB, default 32) and `CUSTOM_SCRIPT_WORKER_MAX_YOUNG_GENERATION_MB` (clamped to 8-128 MB, default 16) when legitimate scripts need more headroom.
+- Script failures are logged, and the capture pipeline falls back to the actor's normal response flow.
+
+## Architecture at a glance
+
+The runtime uses a CQRS-style split:
+
+- **Write model**: Apify Dataset stores captured events as the durable source of truth.
+- **Read model**: DuckDB mirrors event metadata as a disposable local query layer for fast filtering and retrieval on `/logs`.
+- **State store**: Apify Key-Value Store keeps active webhook state, large payload offloads, and other runtime state.
+
+That design lets the actor keep ingesting even if DuckDB needs to rebuild from the Dataset.
+
+For deeper implementation detail, see [docs/architecture.md](docs/architecture.md).
+
+## Self-hosting
+
+### Run directly with Node.js
 
 ```bash
-# Via Header
-curl -H "Authorization: Bearer YOUR_KEY" https://<ACTOR-RUN-URL>/info
-
-# Via Query Parameter
-curl https://<ACTOR-RUN-URL>/info?key=YOUR_KEY
+npm install
+npm start
 ```
+
+The web server listens on `http://localhost:8080` by default.
+
+#### CLI demo screenshots
+
+![VS Code terminal showing local actor startup and generated webhook IDs](assets/demo_cli.PNG)
+
+![CLI output showing JSON/form submissions and a forced 401 scenario](assets/demo_cli_output.PNG)
+
+![Terminal output of SSE stream with heartbeat and live captured events](assets/demo_cli_sse_output.PNG)
+
+### Local .env loading and override order
+
+For local CLI and self-hosted runs, the app automatically loads a `.env` file from the current working directory.
+
+- Existing process environment variables win over `.env` values.
+- `.env` loading is skipped during Jest runs so tests stay deterministic.
+- The main entrypoint imports the loader explicitly, and the shared env helper also imports it so env-backed constants still resolve correctly in modules that are evaluated outside `src/main.js`.
+
+Use [.env.example](.env.example) as the starting point for local configuration.
+
+Typical local overrides:
+
+```dotenv
+ACTOR_WEB_SERVER_PORT=8080
+LOG_LEVEL=debug
+INPUT={"urlCount":1,"retentionHours":24,"authKey":"local-dev-key"}
+```
+
+Useful environment variables:
+
+| Variable                                 | Purpose                                                                                   |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `ACTOR_WEB_SERVER_PORT`                  | Local HTTP port override                                                                  |
+| `INPUT`                                  | Full actor input JSON for local or container boot                                         |
+| `AUTH_KEY`                               | Used by [demo_cli.js](demo_cli.js) when calling protected endpoints                       |
+| `DEMO_TARGET`                            | Used by [demo_cli.js](demo_cli.js) to select a local target (`localhost`, `ipv4`, `ipv6`) |
+| `APIFY_LOCAL_STORAGE_DIR`                | Local storage location for state, datasets, and offloaded payloads                        |
+| `DUCKDB_STORAGE_DIR` / `DUCKDB_FILENAME` | Override DuckDB storage location and file name                                            |
+
+### Run with Docker
+
+```bash
+docker build -t webhook-debugger-logger .
+
+docker run --rm -p 8080:8080 \
+  -e ACTOR_WEB_SERVER_PORT=8080 \
+  -e APIFY_LOCAL_STORAGE_DIR=/app/storage \
+  webhook-debugger-logger
+```
+
+There is also a dedicated standalone image target in [Dockerfile](Dockerfile) via `--target runtime-standalone`. For a fuller local validation flow, including SSE verification, see [docs/local_docker_testing.md](docs/local_docker_testing.md).
+
+## Pricing
+
+This actor is configured for Apify pay-per-event pricing.
+
+At the time of writing, the Apify Store listing advertises:
+
+- **$10 / 1,000 captured webhooks**
+
+Examples:
+
+- 100 captured webhooks: about **$1**
+- 1,000 captured webhooks: about **$10**
+- 10,000 captured webhooks: about **$100**
 
 > [!NOTE]
-> If you have not configured an `authKey` in the input, you can omit the authentication headers/parameters.
+> Always check the live [Apify Store listing](https://apify.com/ar27111994/webhook-debugger-logger) for the current price before running large test campaigns.
 
-## Advanced Features
+## Typical use cases
 
-### Real-time Log Stream (SSE)
+- Inspect webhook payloads from Stripe, Shopify, GitHub, Slack, or custom services.
+- Validate that your application handles success, delay, 4xx, and 5xx callback scenarios.
+- Replay captured payloads against staging after fixing a bug.
+- Forward test traffic into another service while still keeping a full audit trail.
+- Run temporary or self-hosted debug endpoints for QA, integration, or support teams.
 
-You can stream webhook logs in real-time as they arrive using Server-Sent Events (SSE). This is perfect for terminal monitoring or custom dashboards.
+## Playbooks
 
-**Endpoint**: `https://<ACTOR-RUN-URL>/log-stream`
+The repo includes focused operational guides for common debugging and rollout scenarios:
 
-**How to monitor via CLI**:
+- [Zapier, Make, and n8n bridge](docs/playbooks/low-code-bridge.md)
+- [GitHub App and CI webhook debugging](docs/playbooks/github-ci.md)
+- [Incident response and replay recovery](docs/playbooks/incident-response.md)
+- [Large payload and binary forensics](docs/playbooks/large-payload-forensics.md)
+- [PII-safe production capture](docs/playbooks/pii-safe-production-capture.md)
+- [Custom HMAC partner integrations](docs/playbooks/custom-hmac-partner.md)
+- [Callback sandbox prototyping](docs/playbooks/callback-sandbox.md)
+- [Canary validation and shadow replay](docs/playbooks/canary-shadow-rollout.md)
 
-```bash
-curl -N https://<ACTOR-RUN-URL>/log-stream
-```
+## Frequently asked questions
 
-![SSE Stream](https://raw.githubusercontent.com/ar27111994/webhook-debugger-logger/main/assets/sse_stream.png)
+### How long do generated webhook URLs stay active?
 
-### Forced Status Codes
+Set `retentionHours` anywhere from 1 to 168 hours. Expired webhooks immediately stop accepting traffic. Their logs are purged from the `/logs` query endpoint during the next cleanup cycle (roughly every 10 minutes). Reducing `retentionHours` via hot-reload only affects newly generated webhooks — pre-existing webhooks keep their original, longer expiry window. Events already written to the Apify Dataset are retained independently of this setting.
 
-You can force a specific HTTP status response by adding the `__status` query parameter to your webhook URL.
+### Can I secure my webhook endpoints?
 
-- `https://<URL>/webhook/wh_123?__status=401` -> Returns 401 Unauthorized
-- `https://<URL>/webhook/wh_123?__status=500` -> Returns 500 Internal Server Error
+Yes. You can combine `authKey`, `allowedIps`, signature verification, and masked header logging.
 
-### Filtering & Querying Logs (API)
+### Does it support replaying captured traffic?
 
-You can retrieve and filter logs programmatically via the `/logs` endpoint.
+Yes. Use the replay endpoint to send a stored event to another target URL.
 
-**Endpoint**: `https://<ACTOR-RUN-URL>/logs`
+### Can I use it as a mock callback server?
 
-**Query Parameters**:
+Yes. You can return custom status codes, bodies, headers, and artificial latency to simulate downstream behavior.
 
-- `webhookId`: Filter by a specific ID (e.g., `wh_abc123`)
-- `method`: Filter by HTTP method (e.g., `POST`)
-- `statusCode`: Filter by response code (e.g., `201`)
-- `contentType`: Search for specific content types (e.g., `json`)
-- `limit`: Number of items to return (default: 100)
+### Where are logs stored?
 
-**Example**:
+Captured events are written to the Apify Dataset as the durable source of truth. DuckDB keeps a disposable read model for fast log queries, and the Apify Key-Value Store holds active webhook state plus large payload offloads.
 
-```bash
-curl "https://<ACTOR-RUN-URL>/logs?method=POST&statusCode=200"
-```
+### What happens with large payloads?
 
-### Filtering Logs (Platform)
+The actor enforces `maxPayloadSize` and rejects requests that exceed the configured hard limit. For large payloads that are still within the accepted range, the runtime can offload the payload content to the Apify Key-Value Store so the event remains queryable without forcing every large body through the in-memory read model.
 
-Apify Datasets support basic filtering via API parameters.
+### Can I run it outside Apify?
 
-- **Newest first**: Add `?desc=true`
-- **JSON Clean**: Add `?clean=true` (omits Apify Metadata).
-- **Specific fields**: Add `?fields=timestamp,method,body`
+Yes. You can run it locally with Node.js or Docker, or deploy the container into your own environment.
 
-## Integrations (Zapier / Make)
+## Documentation and related resources
 
-Webhook Debugger is the perfect "safe buffer" for your automations.
+- [API reference](docs/api-reference.md)
+- [Architecture overview](docs/architecture.md)
+- [Local Docker testing guide](docs/local_docker_testing.md)
+- [Manual demo guide](MANUAL_DEMO_GUIDE.md)
+- [Publication guide](PUBLICATION_GUIDE.md)
+- [Security policy](SECURITY.md)
 
-### Why integrate?
-
-- **Logs everything**: Even if your Zap fails, you have the raw request in Apify.
-- **Payload transformation**: Apify datasets make it easy to clean/inspect data before it hits your automation.
-
-### Setup Guide (Zapier/Make/n8n)
-
-You can integrate your debugger with external tools in two distinct ways:
-
-#### Option A: Real-time Forwarding (Recommended 🚀)
-
-Use this if you want your automation to trigger **immediately** (sub-100ms) when a webhook is received.
-
-1. **In Zapier**: Create a Zap and use the **"Webhooks by Zapier"** app with the **"Catch Webhook"** trigger. Copy the generated URL.
-2. **In Apify**: Paste that URL into the **"Automated Pipe URL"** field in your Actor's input.
-3. **Control**: Use the **"Pass Original Headers"** toggle to decide if your automation needs the original source headers or just the raw payload.
-
-#### Option B: Platform Integrations (Monitoring 📊)
-
-Use this to trigger actions based on lifecycle events or safely after data is stored.
-
-1. **In Apify**: Go to the **Integrations** tab of your Actor.
-2. **Setup**: Add a "Webhooks" integration triggered on **"Dataset item created"**.
-3. **Flow**: `Source` -> `Debugger` -> `Apify Storage` -> `Zapier`.
-4. **Benefit**: Guaranteed delivery even if your external tool is temporarily down (via Apify's retry logic).
-
-## 🤖 AI & MCP Integration (New)
-
-This Actor is fully compatible with the **Model Context Protocol (MCP)**, allowing you to connect it directly to AI agents like **Claude Desktop**, **Cursor**, or **Windsurf**.
-
-### Why connect to AI?
-
-- **Real-time Debugging**: Ask Claude to "Watch for the next Stripe webhook and tell me if the signature is valid."
-- **Automated Verification**: Have an agent listen to webhooks while it triggers actions in another system, ensuring the expected side-effects occur.
-
-### How to Connect (Apify MCP Server)
-
-1. Go to the Actor page in Apify Console.
-2. Click the **"AI"** button in the top-right corner.
-3. Select **"Open MCP configuration"**.
-4. Copy the configuration snippet and add it to your `claude_desktop_config.json` or MCP client settings.
-
-![MCP Configuration](https://raw.githubusercontent.com/ar27111994/webhook-debugger-logger/main/assets/mcp_config.png)
-
-## 💰 Pricing & Economics
-
-This Actor uses a transparent **Pay-per-Event (PPE)** pricing model. This means you only pay for the resources you actually consume during active debugging, with no monthly subscription overhead.
-
-- **Rate**: $0.01 per 1 captured webhook.
-- **Batching**: 100 webhooks = $1.00.
-- **Batching**: 1,000 webhooks = $10.00.
-
-**Why PPE?**
-Standard tools like ngrok or dedicated SaaS webhooks charge fixed monthly fees. With Webhook Debugger, you can keep an endpoint active for a month and only pay if you actually trigger a test.
-
-## 📈 Performance & Limits
-
-| Parameter         | Default   | Buffer                          | Note                      |
-| ----------------- | --------- | ------------------------------- | ------------------------- |
-| **Max Payload**   | 10MB      | Up to 100MB                     | Configurable in input     |
-| **Concurrency**   | Unlimited | Platform-dependent              | Limited by memory         |
-| **Latency**       | <10ms     | Sub-5ms in Standby              | Internal processing time  |
-| **SSE Heartbeat** | 30s       | -                               | Global efficient interval |
-| **URL Validity**  | 24h       | 1-72h (**Unlimited** Self-Host) | Auto-expiry active        |
-
-## FAQ
-
-**Q: How long are webhook URLs valid?**
-A: By default, 24 hours. You can set 1-72 hours in the input (or **Unlimited** for self-hosted).
-
-**Q: Will you store my data?**
-A: No. Data is stored only in your Apify dataset (you own this). After the retention period expires:
-
-- The webhook URL is deactivated
-- Logs are filtered out from the `/logs` API endpoint
-- Historical data remains accessible in your dataset for your own analysis
-
-**Q: What's the payload size limit?**
-A: 10MB by default to ensure stability. Configurable in input up to 100MB.
-
-**Q: Can I use this with Zapier or Make?**
-A: Yes! It's an ideal "safe buffer." You can point your service to this Actor, then use an Apify Webhook to trigger your Zapier/Make flow whenever a new item is added to the dataset.
-
-**Q: Can I customize the response headers and body?**
-A: Yes! Enterprise features (v2.0+) allow you to define custom JSON/XML response bodies, arbitrary headers, and even simulate network latency (delay).
-
-**Q: Can I validate incoming data?**
-A: Yes. You can provide a JSON Schema in the input parameters, and the Actor will automatically reject invalid requests with a 400 Bad Request.
-
-**Q: Can I transform data or override responses?**
-A: Yes! Use the **Custom Scripting (v2.7)** feature to write JavaScript that modifies the `event` object dynamically. Beyond logging, your script can now override the response sent back to the provider (e.g., `event.statusCode = 201; event.responseBody = { success: true };`).
-
-## Troubleshooting
-
-**Issue**: "Webhook not found or expired"
-**Solution**: Verify the webhook ID is correct. Check the `/info` endpoint of your running Actor to see active IDs. If you need more, simply increase the `urlCount` in input—the Actor will hot-reload and add them instantly.
-
-**Issue**: "Script Execution Error"
-**Solution**: Check your `customScript` for syntax errors. The Actor runs scripts in a secure sandbox with a 1s timeout.
-
-**Issue**: "JSON Schema Validation Failed"
-**Solution**: The incoming payload did not match your provided schema. Check the `/logs` or the webhook response for specific validation error details.
-
-**Q: How do I handle heavy traffic?**
-A: The Actor is built on a high-performance Express server. For heavy traffic, ensure you have enough memory (1024MB+ recommended) and consider using **HTTP Forwarding** to offload processing to your own infrastructure.
-
-**Q: Is there a limit on the number of webhooks?**
-A: You can generate up to 10 unique endpoints per Actor run (Platform Limit). For self-hosted instances, this is **Unlimited**. If you need more on the platform, you can start multiple runs or use different IDs with the same endpoint by routing logic in your `customScript`.
-
----
-
-## 🆘 Support & Community
-
-We are committed to providing first-class support for our "Enterprise Suite" users.
-
-- 💬 **Apify Discord**: Join the [Apify Discord Community](https://discord.gg/jyEM2PRvMU?utm_campaign=readme_support) to chat with other developers.
-- 📚 **Learning**: Explore the [Apify Academy](https://docs.apify.com/academy?utm_campaign=readme_support) for best practices on building resilient Actors.
-- 📖 **Documentation**: Read the [Apify SDK Documentation](https://sdk.apify.com/?utm_campaign=readme_support) for technical deep dives.
-- 🔗 **Console**: Manage your active runs in the [Apify Console](https://console.apify.com?utm_campaign=readme_support).
-- 🛠️ **Alternative**: Compare with [Webhook.site](https://webhook.site) if you need a desktop-only alternative.
-- 📝 **Issues**: Found a bug? Open an issue on our [GitHub Repository](https://github.com/ar27111994/webhook-debugger-logger?utm_campaign=readme_support).
-
-**Developer Support Guarantee**: I am an active maintainer and respond to all comments, bug reports, and feature requests on the [Apify Store Console](https://apify.com/ar27111994/webhook-debugger-logger/comments?utm_campaign=readme_support) within **24 hours**.
-
-## Privacy
-
-We do **not** store any personal data. All captured request data is stored directly in your own **Apify Dataset** (you own this). After the configured retention period expires (default 24h):
-
-- The webhook URL is deactivated.
-- Its logs start getting filtered out from the `/logs` API endpoint from the next request.
-- Historical data remains accessible in your **Apify Dataset** for your own record and analysis until you manually clear or delete the dataset.
-
-No data is shared with third parties.
-
-For more details, see the [Apify Privacy Policy](https://apify.com/privacy).
+If you are looking for implementation and marketing guidance used during development, see the materials under [docs/marketing](docs/marketing).

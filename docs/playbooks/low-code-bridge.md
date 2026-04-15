@@ -1,49 +1,92 @@
-# 🌉 Low-Code Bridge Playbook: Zapier & Make (Integromat)
+# 🌉 Low-Code Bridge Playbook: Zapier, Make, and n8n
 
-Stop wasting money on Zapier Tasks or Make Operations for filtered-out webhooks. Use the Webhook Debugger as a "Smart Firewall" to clean, validate, and authenticate data before it touches your low-code workflows.
+Use Webhook Debugger as a buffer between a source system and a workflow tool when you need better observability, safer forwarding, and optional schema-based gating.
 
-## 🚀 The Scenario: "Cost Optimization"
+## ⚠️ Important Behavior to Know First
 
-Automation platforms like Zapier often charge per successful trigger. If Shopify fires `order.updated` every time a tag changes, but you only care about `financial_status: 'paid'`, you might be wasting 90% of your task quota.
+- The built-in forwarder always sends `POST` requests to `forwardUrl`.
+- Forwarding failures are recorded as separate system log entries.
+- `jsonSchema` is a hard gate. Invalid payloads get a `400` response before normal webhook log persistence, so they are not preserved as standard captured events.
 
-## 📋 Recommended Quick-Start (JSON)
+That means the safest rollout is usually **observe first**, then **enforce later**.
 
-Copy this into the **Input** tab in Apify Console to set up your cost-saving bridge:
+## 📋 Phase 1: Observe Mode
+
+Start here when you still need to learn the payload shape.
 
 ```json
 {
-  "authKey": "zapier-smart-bridge",
-  "forwardUrl": "https://hooks.zapier.com/hooks/catch/12345/abcde/",
+  "urlCount": 1,
+  "retentionHours": 48,
+  "authKey": "automation-bridge-key",
+  "enableJSONParsing": true,
+  "maskSensitiveData": true,
+  "forwardUrl": "https://hooks.zapier.com/hooks/catch/11111/aaaaa/",
   "forwardHeaders": true,
   "defaultResponseCode": 200,
-  "jsonSchema": "{\"type\":\"object\",\"properties\":{\"financial_status\":{\"const\":\"paid\"}},\"required\":[\"financial_status\"]}"
+  "defaultResponseBody": "{\"received\":true}"
 }
 ```
 
-## 🛠️ Performance & Pricing Strategy
+## 📋 Phase 2: Enforce Mode
 
-- **The Filter Discount**: By using `jsonSchema` inside the Actor, events that don't match your criteria are logged in Apify but **never forwarded** to Zapier.
-- **Cost Comparison**:
-  - **Zapier Direct**: 10,000 events = 10,000 Tasks Used ($$$).
-  - **Bridge Mode**: 10,000 events = $1.00 (Actor cost) + 1,000 Filtered Tasks ($).
-- **Sub-10ms Acknowledgment**: Zapier and Make often time out if their internal processing is slow. The Actor acknowledges the provider immediately, preventing missing data due to "Trigger Timeouts."
+Add a schema only after you know the source payload is stable enough to gate.
 
-## 🔍 Common "Low-Code" Pain Points
+```json
+{
+  "urlCount": 1,
+  "retentionHours": 48,
+  "authKey": "automation-bridge-key",
+  "enableJSONParsing": true,
+  "maskSensitiveData": true,
+  "forwardUrl": "https://hooks.zapier.com/hooks/catch/11111/aaaaa/",
+  "forwardHeaders": true,
+  "defaultResponseCode": 200,
+  "defaultResponseBody": "{\"received\":true}",
+  "jsonSchema": "{\"type\":\"object\",\"required\":[\"financial_status\"],\"properties\":{\"financial_status\":{\"const\":\"paid\"}}}"
+}
+```
 
-| Platform Pain       | Solution                                                                                                                                                                |
-| :------------------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **"Nesting Hell"**  | Use the Actor to log the raw payload. Copy-paste the raw JSON into Zapier's "Test Trigger" to ensure fields are mapped correctly without firing real events.            |
-| **Rate Limiting**   | Zapier can "hold" tasks. The Actor's **SSE View** shows you the live data stream so you can verify if a hook was actually sent, regardless of when Zapier processes it. |
-| **Silent Failures** | Check for `forward_error` items in the Dataset. If Zapier is down, the Actor logs the exact error code (e.g., `503`) and keeps the payload safe for later.              |
+## 🧭 Safer Alternatives to Hard Gating
 
-## 🔄 The "Smart Filter" Workflow
+If you still need full visibility into everything the source sends, use `customScript` to normalize or annotate the event instead of rejecting it with `jsonSchema`.
 
-1. **Gatekeep**: Point Shopify/Stripe to the Actor URL.
-2. **Validate**: Configure `jsonSchema` to only allow high-value events through.
-3. **Bridge**: The Actor forwards valid requests to Zapier/Make.
-4. **Resend**: If a Zap fails due to a configuration error, don't trigger a new sale. Just go to the Actor's dataset and use the **Replay API** to resend the exact payload to your fixed Zap.
+## 🔎 Investigation Queries That Match the Current API
+
+- Forwarded source events with a parsed field:
+
+```text
+GET /logs?webhookId=<your-webhook-id>&body.financial_status=paid
+```
+
+- Downstream bridge failures:
+
+```text
+GET /logs?webhookId=<your-webhook-id>&method=SYSTEM
+```
+
+- Header-based routing issues:
+
+```text
+GET /logs?webhookId=<your-webhook-id>&headers.x-shopify-topic=orders/create
+```
+
+## 🔍 Common Low-Code Pain Points
+
+| Pain point | What the current code supports |
+| :--------- | :----------------------------- |
+| Mapping nested JSON into Zapier or Make | Capture the real payload first with `enableJSONParsing`, then copy exact fields from `/logs` into your workflow tool. |
+| Silent downstream failures | Query `method=SYSTEM` to surface forwarding error entries created after the sender already got a successful response. |
+| Wanting to reject noise without losing observability | Do not start with `jsonSchema`. Sample the traffic first, then turn the schema on once you know the event shape is stable. |
+
+## 🔄 Recommended Workflow
+
+1. Run in observe mode and collect a representative sample.
+2. Build or fix your Zap, Make scenario, or n8n flow using the captured payloads.
+3. Add `jsonSchema` only after your mapping is stable.
+4. If the downstream tool fails later, replay the captured event:
 
 ```bash
-# Replay to Zapier once the mapping is fixed
-curl -X GET "https://webhook-debugger-logger.apify.actor/replay/wh_zap/evt_77?url=https://hooks.zapier.com/hooks/catch/fixed"
+curl -X POST \
+  "https://<your-actor-host>/replay/<webhookId>/<logId>?url=https%3A%2F%2Fhooks.zapier.com%2Fhooks%2Fcatch%2F11111%2Faaaaa%2F"
 ```

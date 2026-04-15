@@ -1,5 +1,10 @@
+import "./src/utils/load_env.js";
 import axios from "axios";
 import { EventSource } from "eventsource";
+import {
+  DEMO_TARGET_ENV_VAR,
+  resolveDemoBaseUrl,
+} from "./src/utils/demo_base_url.js";
 
 /**
  * 🚀 WEBHOOK DEBUGGER & LOGGER - LIVE DEMO
@@ -9,12 +14,60 @@ import { EventSource } from "eventsource";
  * of your newly created Actor.
  */
 
-const BASE_URL = process.env.APIFY_ACTOR_URL || "http://localhost:8080";
 const AUTH_KEY = process.env.AUTH_KEY || "";
+const SECTION_DIVIDER = "------------------------------------------";
+const API_CONTRACT_PATH = ".actor/web_server_schema.json";
+const PRETTY_JSON_INDENT = 2;
+const BODY_PREVIEW_LENGTH = 100;
+const DEMO_STEP_DELAY_MS = {
+  jsonPayload: 1500,
+  formData: 3000,
+  forcedUnauthorized: 4500,
+};
+
+const BASE_URL = resolveDemoBaseUrl(process.env[DEMO_TARGET_ENV_VAR]);
+
+/**
+ * Resolves the error message from an error object or string.
+ * @param {unknown} err - The error object or string.
+ * @returns {string} The resolved error message.
+ */
+function resolveErrorMessage(err) {
+  return err instanceof Error ||
+    (err && typeof err === "object" && "message" in err)
+    ? err.message
+    : String(err);
+}
+
+/**
+ * @param {number} delayMs
+ * @param {string} label
+ * @param {() => Promise<void>} action
+ * @returns {void}
+ */
+function scheduleDemoStep(delayMs, label, action) {
+  setTimeout(() => {
+    void (async () => {
+      console.log(`[ACTION] ${label}...`);
+
+      try {
+        await action();
+      } catch (err) {
+        console.error(`[ACTION] ${label} failed: ${resolveErrorMessage(err)}`);
+      }
+    })();
+  }, delayMs);
+}
 
 async function runDemo() {
   console.log("\n🚀 WEBHOOK DEBUGGER & LOGGER - LIVE DEMO");
-  console.log("------------------------------------------");
+  console.log(SECTION_DIVIDER);
+  console.log(`[API] Contract: ${API_CONTRACT_PATH}`);
+  console.log("[API] Validate: npm run validate:web-server-schema");
+  console.log(
+    `[DEMO] Base URL: ${BASE_URL} (${DEMO_TARGET_ENV_VAR}=localhost|ipv4|ipv6)`,
+  );
+  console.log(SECTION_DIVIDER);
 
   try {
     const headers = {};
@@ -25,7 +78,7 @@ async function runDemo() {
 
     // 1. Get active webhooks
     const infoRes = await axios.get(`${BASE_URL}/info`, { headers });
-    const active = infoRes.data.activeWebhooks;
+    const active = infoRes.data.system?.activeWebhooks || [];
 
     if (active.length === 0) {
       console.log("[ERROR] No active webhooks found. Is the Actor running?");
@@ -36,7 +89,7 @@ async function runDemo() {
     console.log(`[URLS] Generated: ${active.map((a) => a.id).join(", ")}`);
     console.log(`[URLS] Using for demo: ${targetId}`);
 
-    if (infoRes.data.authActive) {
+    if (infoRes.data.system?.authActive) {
       console.log(
         "[WARN] Authentication is ENABLED. This demo might return 401s if not configured with the key.",
       );
@@ -57,47 +110,56 @@ async function runDemo() {
       console.log(`- Status: ${data.statusCode}`);
       console.log(`- Path:   /webhook/${data.webhookId}`);
       console.log(
-        `- Body:   ${JSON.stringify(data.body, null, 2).substring(0, 100)}...`,
+        `- Body:   ${JSON.stringify(data.body, null, PRETTY_JSON_INDENT).substring(0, BODY_PREVIEW_LENGTH)}...`,
       );
-      console.log("------------------------------------------");
+      console.log(SECTION_DIVIDER);
     };
 
     es.onerror = (err) => {
-      console.error("[STREAM] Connection error:", err.message);
+      console.error("[STREAM] Connection error:", resolveErrorMessage(err));
     };
 
     // 3. Send test requests
-    setTimeout(async () => {
-      console.log("[ACTION] Sending JSON payload...");
-      await axios.post(
-        `${BASE_URL}/webhook/${targetId}`,
-        {
-          hello: "Apify World!",
-        },
-        { headers },
-      );
-    }, 1500);
+    scheduleDemoStep(
+      DEMO_STEP_DELAY_MS.jsonPayload,
+      "Sending JSON payload",
+      async () => {
+        await axios.post(
+          `${BASE_URL}/webhook/${targetId}`,
+          {
+            hello: "Apify World!",
+          },
+          { headers },
+        );
+      },
+    );
 
-    setTimeout(async () => {
-      console.log("[ACTION] Sending Form Data...");
-      const params = new URLSearchParams();
-      params.append("user", "tester");
-      params.append("action", "login");
-      await axios.post(`${BASE_URL}/webhook/${targetId}`, params, { headers });
-    }, 3000);
+    scheduleDemoStep(
+      DEMO_STEP_DELAY_MS.formData,
+      "Sending Form Data",
+      async () => {
+        const params = new URLSearchParams();
+        params.append("user", "tester");
+        params.append("action", "login");
+        await axios.post(`${BASE_URL}/webhook/${targetId}`, params, {
+          headers,
+        });
+      },
+    );
 
-    setTimeout(async () => {
-      console.log(
-        "[ACTION] Forcing 401 Unauthorized (via __status parameter)...",
-      );
-      await axios
-        .get(`${BASE_URL}/webhook/${targetId}?__status=401`, { headers })
-        .catch(() => {});
+    scheduleDemoStep(
+      DEMO_STEP_DELAY_MS.forcedUnauthorized,
+      "Forcing 401 Unauthorized (via __status parameter)",
+      async () => {
+        await axios
+          .get(`${BASE_URL}/webhook/${targetId}?__status=401`, { headers })
+          .catch(() => {});
 
-      console.log("\n✨ Demo complete. Press Ctrl+C to exit.");
-    }, 4500);
+        console.log("\n✨ Demo complete. Press Ctrl+C to exit.");
+      },
+    );
   } catch (err) {
-    console.error(`[ERROR] Setup failed: ${err.message}`);
+    console.error(`[ERROR] Setup failed: ${resolveErrorMessage(err)}`);
     console.log(
       "👉 Make sure the Actor is running locally on port 8080 (npm start).",
     );

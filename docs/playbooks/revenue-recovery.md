@@ -1,53 +1,86 @@
-# 💰 Revenue Recovery Playbook: Stripe & Shopify
+# 💰 Revenue Recovery Playbook: Stripe and Shopify
 
-High-burst launches (Flash Sales, Product Hunt drops) often lead to ingestion failures where your backend misses a `checkout.session.completed` hook. Use this playbook to identify exactly why payments are failing to reconcile and re-run fulfillment logic with absolute confidence.
+Use this playbook during high-burst launches when you need a durable buffer between the provider and your reconciliation endpoint, plus a reliable way to replay missed events after you patch downstream failures.
 
-## 🚀 The Scenario: "Launch Week Stress"
-
-During a burst, your server might experience:
-
-- **Rate Limits (429)**: The destination API (Zapier, Make, or your own) is overwhelmed.
-- **Timeouts**: Your server takes >10s to process a complex order, causing the provider to retry.
-- **Schema Drift**: A new Stripe API version changed a field name, breaking your parser.
-
-## 📋 Configuration (JSON)
-
-Copy this into the **Input** tab in Apify Console to set up a dedicated Revenue Recovery bridge:
+## 📋 Recommended Recovery Profile (JSON)
 
 ```json
 {
-  "authKey": "recovery-mode-v2",
-  "allowedIps": ["3.18.12.63", "3.130.192.160"],
-  "forwardUrl": "https://your-api.com/webhooks/reconcile",
+  "urlCount": 1,
+  "retentionHours": 168,
+  "authKey": "recovery-mode-key",
+  "enableJSONParsing": true,
+  "maskSensitiveData": true,
+  "signatureVerification": {
+    "provider": "stripe",
+    "secret": "whsec_replace_me"
+  },
+  "forwardUrl": "https://api.example.com/webhooks/reconcile",
   "forwardHeaders": true,
   "defaultResponseCode": 200,
-  "defaultResponseBody": "{\"status\":\"buffered\",\"provider\":\"apify-bridge\"}",
-  "maskSensitiveData": true,
-  "jsonSchema": "{\"type\":\"object\",\"required\":[\"type\"]}"
+  "defaultResponseBody": "{\"status\":\"buffered\"}",
+  "replayMaxRetries": 5,
+  "replayTimeoutMs": 15000,
+  "alerts": {
+    "slack": {
+      "webhookUrl": "https://hooks.slack.com/services/AAA/BBB/CCC"
+    }
+  },
+  "alertOn": ["signature_invalid", "5xx"]
 }
 ```
 
-## 🛠️ Performance & Pricing Strategy
+If the launch is Shopify-based, change `signatureVerification.provider` to `shopify` and replace the secret accordingly.
 
-- **Absorb the Burst**: Set the Actor to respond with `200 OK` in **sub-10ms**. This stops the provider (Stripe/Shopify) from retrying and potentially banning your endpoint.
-- **Standby Mode**: Keep the Actor running during your 24-72h launch window. You only pay for the events you actually log ($0.01 per request), making it a cheap "insurance policy" against downtime.
+## ✅ What the Current Implementation Actually Logs
 
-## 🔍 Debugging "Invisible" Failures
+- The original provider event is stored as a normal webhook log entry.
+- If forwarding to your reconciliation service fails later, the actor writes a separate system log entry with `method=SYSTEM`, `statusCode=500`, and an `originalEventId` reference.
+- Replay can hydrate payloads that were offloaded to KVS because they were too large for inline storage.
 
-| Symptom          | Detection Method                               | Solution                                                                                   |
-| :--------------- | :--------------------------------------------- | :----------------------------------------------------------------------------------------- |
-| **Silent Drop**  | Check Dataset for events with `forward_error`. | If the Actor couldn't hit your API, it logs a system error. Replay that specific ID later. |
-| **Partial Data** | Inspect the `body` in the SSE Live View.       | Verify if nested fields (like `metadata` or `line_items`) are missing or malformed.        |
-| **Auth Failure** | Look for `401 Unauthorized`.                   | Ensure the `Stripe-Signature` is being forwarded correctly via `forwardHeaders: true`.     |
+## 🔎 Investigation Queries That Match the Current API
 
-## 🔄 The Recovery Workflow
+- Original provider deliveries:
 
-1. **Capture**: Point your provider to the Actor. It buffers high-traffic bursts and returns early success.
-2. **Audit**: Filter logs by `statusCode: 429` or `method: POST` to find failed reconcile attempts.
-3. **Fix**: Patch your backend code based on the raw payload stored in the Actor's dataset.
-4. **Resurrect**: Use the **Replay API** to resend the exact failed payloads once your backend is ready.
+```text
+GET /logs?webhookId=<your-webhook-id>&method=POST
+```
+
+- Downstream reconciliation failures:
+
+```text
+GET /logs?webhookId=<your-webhook-id>&method=SYSTEM
+```
+
+- Signature failures during peak traffic:
+
+```text
+GET /logs?webhookId=<your-webhook-id>&signatureValid=false
+```
+
+- Large event body retrieval:
+
+```text
+GET /logs/<log-id>/payload
+```
+
+## 🔍 Failure Modes to Watch Closely
+
+| Failure mode | How it appears in the current system | Recovery step |
+| :----------- | :----------------------------------- | :------------ |
+| Downstream API outage | Separate `method=SYSTEM` log entries after the original webhook succeeded | Fix the receiver, then replay the original event by its captured log ID. |
+| Signature drift | `signatureValid=false` on the captured event | Verify the provider secret before retrying anything downstream. |
+| Large payload truncation concerns | Body is replaced with an offload marker in normal log views | Use `/logs/:logId/payload` before you replay or diff the event. |
+
+## 🔄 Recommended Recovery Workflow
+
+1. Point the provider to the actor before the launch starts.
+2. Keep the actor running for the full recovery window by setting `retentionHours` high enough for your team.
+3. Query `method=SYSTEM` to isolate forwarding failures instead of assuming the provider-facing `statusCode` tells the whole story.
+4. Fix the downstream service.
+5. Replay the original captured event:
 
 ```bash
-# Replay a specific failed payment
-curl -X GET "https://webhook-debugger-logger.apify.actor/replay/wh_reconcile/evt_99?url=https://your-api.com/fix"
+curl -X POST \
+  "https://<your-actor-host>/replay/<webhookId>/<logId>?url=https%3A%2F%2Fapi.example.com%2Fwebhooks%2Freconcile"
 ```

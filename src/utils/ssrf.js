@@ -1,52 +1,31 @@
+/**
+ * @file src/utils/ssrf.js
+ * @description Server-Side Request Forgery protection utilities.
+ * Validates URLs, resolves DNS, and checks IPs against blocklists.
+ * @module utils/ssrf
+ */
 import dns from "dns/promises";
 import ipaddr from "ipaddr.js";
-import { SSRF_INTERNAL_ERRORS, SSRF_LOG_MESSAGES } from "../consts.js";
+import {
+  SSRF_INTERNAL_ERRORS,
+  SSRF_LOG_MESSAGES,
+  NETWORK_TIMEOUTS,
+  SSRF_BLOCKED_RANGES,
+  ALLOWED_PROTOCOLS,
+  CIDR_PREFIX_BITS,
+} from "../consts/network.js";
+import { SSRF_ERRORS } from "../consts/security.js";
+import { LOG_COMPONENTS } from "../consts/logging.js";
+import { createChildLogger } from "./logger.js";
 
-/** @typedef {import('ipaddr.js').IPv6} IP */
+const log = createChildLogger({ component: LOG_COMPONENTS.SSRF });
 
 /**
- * IP ranges to block for SSRF prevention.
- * Includes loopback, private, link-local, and cloud metadata IPs.
+ * @typedef {import('ipaddr.js').IPv6} IP
+ * @typedef {import('../typedefs.js').SsrfValidationResult} SsrfValidationResult
  */
-export const SSRF_BLOCKED_RANGES = Object.freeze([
-  // IPv4 private/reserved ranges
-  "0.0.0.0/8", // Current network
-  "10.0.0.0/8", // Private Class A
-  "100.64.0.0/10", // Carrier-grade NAT
-  "127.0.0.0/8", // Loopback
-  "169.254.0.0/16", // Link-local
-  "172.16.0.0/12", // Private Class B
-  "192.168.0.0/16", // Private Class C
-  "224.0.0.0/4", // Multicast
-  "240.0.0.0/4", // Reserved
-  "255.255.255.255/32", // Broadcast
-
-  // Cloud metadata endpoints
-  "169.254.169.254/32", // AWS/GCP/Azure metadata
-  "100.100.100.200/32", // Alibaba Cloud metadata
-
-  // IPv6 equivalents
-  "::1/128", // Loopback
-  "fc00::/7", // Unique local
-  "fe80::/10", // Link-local
-  "ff00::/8", // Multicast
-]);
 
 /**
- * Error messages for SSRF validation.
- */
-export const SSRF_ERRORS = Object.freeze({
-  INVALID_URL: "Invalid URL format",
-  PROTOCOL_NOT_ALLOWED: "Only http/https URLs are allowed",
-  CREDENTIALS_NOT_ALLOWED: "Credentials in URL are not allowed",
-  HOSTNAME_RESOLUTION_FAILED: "Unable to resolve hostname",
-  INVALID_IP: "URL resolves to invalid IP address",
-  INTERNAL_IP: "URL resolves to internal/reserved IP range",
-  VALIDATION_FAILED: "URL validation failed",
-});
-
-/**
- * Checks if an IP address falls within any of the specified CIDR ranges.
  * Checks if an IP address falls within any of the specified CIDR ranges or single IP addresses.
  * Uses ipaddr.js for robust parsing and matching.
  *
@@ -82,7 +61,10 @@ export function checkIpInRanges(ipStr, ranges) {
       } else {
         // Treat as a single IP address
         rangeIp = ipaddr.parse(rangeStr);
-        prefix = rangeIp.kind() === "ipv4" ? 32 : 128;
+        prefix =
+          rangeIp.kind() === "ipv4"
+            ? CIDR_PREFIX_BITS.IPV4
+            : CIDR_PREFIX_BITS.IPV6;
       }
 
       // Ensure IP families match before comparing
@@ -104,7 +86,7 @@ export function checkIpInRanges(ipStr, ranges) {
  * Checks protocol, resolves hostname to IPs, and validates against blocked ranges.
  *
  * @param {string} urlString - The URL to validate
- * @returns {Promise<import('../typedefs.js').SsrfValidationResult>}
+ * @returns {Promise<SsrfValidationResult>}
  */
 export async function validateUrlForSsrf(urlString) {
   // Parse URL
@@ -117,7 +99,7 @@ export async function validateUrlForSsrf(urlString) {
   }
 
   // Validate protocol
-  if (!["http:", "https:"].includes(target.protocol)) {
+  if (!ALLOWED_PROTOCOLS.includes(target.protocol)) {
     return { safe: false, error: SSRF_ERRORS.PROTOCOL_NOT_ALLOWED };
   }
 
@@ -142,17 +124,32 @@ export async function validateUrlForSsrf(urlString) {
       ipsToCheck = [hostnameUnbracketed];
     } else {
       // Resolve DNS - get both A and AAAA records
-      const timeoutPromise = (/** @type {number} */ ms) =>
-        new Promise((_, reject) =>
-          setTimeout(
-            () => reject(new Error(SSRF_INTERNAL_ERRORS.DNS_TIMEOUT)),
-            ms,
-          ),
-        );
+      const withTimeout =
+        /**
+         * Helper function to wrap a promise with a timeout.
+         * @template T
+         * @param {Promise<T>} promise
+         * @param {number} ms
+         * @returns {Promise<T>}
+         */
+        async (promise, ms) => {
+          let timeoutId;
+          const timeout = new Promise((_, reject) => {
+            timeoutId = setTimeout(
+              () => reject(new Error(SSRF_INTERNAL_ERRORS.DNS_TIMEOUT)),
+              ms,
+            );
+          });
+          try {
+            return await Promise.race([promise, timeout]);
+          } finally {
+            clearTimeout(timeoutId);
+          }
+        };
 
       const [ipv4Results, ipv6Results] = await Promise.allSettled([
-        Promise.race([dns.resolve4(hostname), timeoutPromise(5000)]),
-        Promise.race([dns.resolve6(hostname), timeoutPromise(5000)]),
+        withTimeout(dns.resolve4(hostname), NETWORK_TIMEOUTS.DNS_RESOLUTION),
+        withTimeout(dns.resolve6(hostname), NETWORK_TIMEOUTS.DNS_RESOLUTION),
       ]);
       ipsToCheck = [
         ...(ipv4Results.status === "fulfilled" ? ipv4Results.value : []),
@@ -199,11 +196,14 @@ export async function validateUrlForSsrf(urlString) {
   } catch (e) {
     // Sanitize error to avoid leaking full URL/credentials in logs
     const msg = e instanceof Error ? e.message : String(e);
-    console.error(
-      "[SSRF] Validation error:",
-      msg === SSRF_INTERNAL_ERRORS.DNS_TIMEOUT
-        ? SSRF_LOG_MESSAGES.DNS_TIMEOUT
-        : SSRF_LOG_MESSAGES.RESOLUTION_FAILED,
+    log.error(
+      {
+        error:
+          msg === SSRF_INTERNAL_ERRORS.DNS_TIMEOUT
+            ? SSRF_LOG_MESSAGES.DNS_TIMEOUT
+            : SSRF_LOG_MESSAGES.RESOLUTION_FAILED,
+      },
+      SSRF_LOG_MESSAGES.VALIDATION_ERROR,
     );
     return { safe: false, error: SSRF_ERRORS.VALIDATION_FAILED };
   }

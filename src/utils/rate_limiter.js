@@ -1,31 +1,61 @@
 /**
- * Simple in-memory rate limiter with background pruning and eviction.
+ * @file src/utils/rate_limiter.js
+ * @description Simple in-memory rate limiter with background pruning and eviction.
+ * @module utils/rate_limiter
  */
 import net from "node:net";
-import { DEFAULT_RATE_LIMIT_WINDOW_MS } from "../consts.js";
+import { APP_CONSTS } from "../consts/app.js";
+import {
+  HTTP_HEADERS,
+  HTTP_CONSTS,
+  HTTP_STATUS,
+  HTTP_STATUS_MESSAGES,
+} from "../consts/http.js";
+import { LOG_COMPONENTS, LOG_CONSTS } from "../consts/logging.js";
+import { LOG_MESSAGES } from "../consts/messages.js";
+import { ERROR_MESSAGES } from "../consts/errors.js";
+import { createChildLogger } from "./logger.js";
+import { IS_TEST } from "./env.js";
+
+const log = createChildLogger({ component: LOG_COMPONENTS.RATE_LIMITER });
+
+/**
+ * @typedef {import('express').RequestHandler} RequestHandler
+ */
 
 export class RateLimiter {
+  /** @type {number} */
+  #limit;
+  /** @type {number} */
+  #windowMs;
+  /** @type {number} */
+  #maxEntries;
+  /** @type {boolean} */
+  #trustProxy;
+  /** @type {ReturnType<typeof setInterval> | undefined} */
+  #cleanupInterval;
+
+  /** @type {Map<string, number[]>} */
+  #hits = new Map();
+
   /**
    * @param {number} limit - Max requests per window
    * @param {number} windowMs - Window size in milliseconds
    * @param {number} maxEntries - Max unique IPs to track before eviction
    * @param {boolean} trustProxy - Whether to trust X-Forwarded-For/X-Real-IP headers
    */
-  constructor(limit, windowMs, maxEntries = 1000, trustProxy = false) {
-    if (
-      typeof limit !== "number" ||
-      !Number.isFinite(limit) ||
-      !Number.isInteger(limit) ||
-      limit < 0
-    ) {
-      throw new Error("RateLimiter: limit must be a finite integer >= 0");
-    }
+  constructor(
+    limit,
+    windowMs,
+    maxEntries = APP_CONSTS.DEFAULT_RATE_LIMIT_MAX_ENTRIES,
+    trustProxy = false,
+  ) {
     if (
       typeof windowMs !== "number" ||
       !Number.isFinite(windowMs) ||
       windowMs <= 0
     ) {
-      throw new Error("RateLimiter: windowMs must be a finite number > 0");
+      throw new Error(ERROR_MESSAGES.RATE_LIMITER_INVALID_WINDOW);
     }
     if (
       typeof maxEntries !== "number" ||
@@ -33,38 +63,80 @@ export class RateLimiter {
       !Number.isInteger(maxEntries) ||
       maxEntries <= 0
     ) {
-      throw new Error("RateLimiter: maxEntries must be a finite integer > 0");
+      throw new Error(ERROR_MESSAGES.RATE_LIMITER_INVALID_MAX_ENTRIES);
     }
 
-    this.limit = limit;
-    this.windowMs = windowMs;
-    this.maxEntries = maxEntries;
-    this.trustProxy = trustProxy;
-    this.hits = /** @type {Map<string, number[]>} */ (new Map());
+    // Initialize fields
+    this.#limit = limit; // Explicit initialization before setter used (though this.limit sets it too)
+    this.limit = limit; // Validate and set via setter
+    this.#windowMs = windowMs;
+    this.#maxEntries = maxEntries;
+    this.#trustProxy = trustProxy;
 
     // Background pruning to avoid blocking the request path
-    this.cleanupInterval = setInterval(() => {
+    this.#cleanupInterval = global.setInterval(() => {
       const now = Date.now();
-      const threshold = now - this.windowMs;
+      const threshold = now - this.#windowMs;
       let prunedCount = 0;
 
-      for (const [key, timestamps] of this.hits.entries()) {
+      for (const [key, timestamps] of this.#hits.entries()) {
         const fresh = timestamps.filter((t) => t > threshold);
         if (fresh.length === 0) {
-          this.hits.delete(key);
+          this.#hits.delete(key);
           prunedCount++;
         } else {
-          this.hits.set(key, fresh);
+          this.#hits.set(key, fresh);
         }
       }
 
-      if (prunedCount > 0 && process.env.NODE_ENV !== "test") {
-        console.log(
-          `[SYSTEM] RateLimiter pruned ${prunedCount} expired entries.`,
-        );
+      if (
+        prunedCount > 0 &&
+        !IS_TEST()
+      ) {
+        log.info({ prunedCount }, LOG_MESSAGES.RATELIMIT_PRUNED);
       }
-    }, DEFAULT_RATE_LIMIT_WINDOW_MS);
-    if (this.cleanupInterval.unref) this.cleanupInterval.unref();
+    }, APP_CONSTS.DEFAULT_RATE_LIMIT_WINDOW_MS);
+    if (this.#cleanupInterval?.unref) this.#cleanupInterval.unref();
+  }
+
+  /**
+   * @returns {number}
+   */
+  get limit() {
+    return this.#limit;
+  }
+
+  /**
+   * @param {number} value
+   */
+  set limit(value) {
+    if (
+      typeof value !== "number" ||
+      !Number.isFinite(value) ||
+      !Number.isInteger(value) ||
+      value < 0
+    ) {
+      throw new Error(ERROR_MESSAGES.RATE_LIMITER_INVALID_LIMIT);
+    }
+    this.#limit = value;
+  }
+
+  /**
+   * Returns specific metric for validation/monitoring
+   */
+  get entryCount() {
+    return this.#hits.size;
+  }
+
+  /**
+   * Test-only helper to check if IP is tracked
+   * @param {string} ip
+   */
+  hasIp(ip) {
+    if (IS_TEST()) {
+      return this.#hits.has(ip);
+    }
+    return false;
   }
 
   /**
@@ -73,14 +145,20 @@ export class RateLimiter {
    * @returns {string}
    */
   maskIp(ip) {
-    if (!ip) return "unknown";
+    if (!ip) return LOG_MESSAGES.MASK_HIDDEN;
     if (ip.includes(":")) {
-      // IPv6: Keep first 2 segments
+      // IPv6: Keep first significant segments
       const segments = ip.split(":");
-      return segments.slice(0, 2).join(":") + ":****";
+      return (
+        segments.slice(0, LOG_CONSTS.IPV6_MASK_SEGMENTS).join(":") +
+        LOG_MESSAGES.MASK_IPV6_SUFFIX
+      );
     }
     // IPv4: Mask last octet
-    return ip.split(".").slice(0, 3).join(".") + ".****";
+    return (
+      ip.split(".").slice(0, LOG_CONSTS.IPV4_MASK_OCTETS).join(".") +
+      LOG_MESSAGES.MASK_IPV4_SUFFIX
+    );
   }
 
   /**
@@ -112,7 +190,7 @@ export class RateLimiter {
   }
 
   destroy() {
-    if (this.cleanupInterval) clearInterval(this.cleanupInterval);
+    if (this.#cleanupInterval) global.clearInterval(this.#cleanupInterval);
   }
 
   /**
@@ -121,85 +199,114 @@ export class RateLimiter {
    * @security trustProxy allows spoofing if the Actor is exposed directly to the internet.
    * Only enable trustProxy if the Actor is behind a trusted reverse proxy (e.g., Apify API).
    * Headers are strictly validated to prevent malformed or malicious IP data propagation.
-   * @returns {import('express').RequestHandler}
+   * @returns {RequestHandler}
    */
   middleware() {
     return (req, res, next) => {
       /** @type {string | undefined} */
       let ip = req.ip || req.socket?.remoteAddress;
 
-      if (this.trustProxy) {
+      if (this.#trustProxy) {
         const forwardedIp = this.extractFirstValidIp(
-          req.headers?.["x-forwarded-for"],
+          req.headers?.[HTTP_HEADERS.X_FORWARDED_FOR],
         );
-        const realIp = this.extractFirstValidIp(req.headers?.["x-real-ip"]);
+        const realIp = this.extractFirstValidIp(
+          req.headers?.[HTTP_HEADERS.X_REAL_IP],
+        );
         ip = forwardedIp || realIp || ip;
       }
 
       // Test hook to simulate missing IP metadata
-      if (process.env.NODE_ENV === "test" && req.headers["x-simulate-no-ip"]) {
+      if (
+        IS_TEST() &&
+        req.headers[HTTP_HEADERS.X_SIMULATE_NO_IP]
+      ) {
         ip = undefined;
       }
 
       if (!ip) {
-        const safeHeaders = ["user-agent", "accept-language", "referer"];
+        /** @type {string[]} */
+        const safeHeaders = HTTP_CONSTS.SAFE_HEADERS;
         const loggedHeaders = Object.fromEntries(
           Object.entries(req.headers).filter(([key]) =>
             safeHeaders.includes(key.toLowerCase()),
           ),
         );
 
-        console.warn("[SECURITY] Rejecting request with unidentifiable IP:", {
-          userAgent: req.headers["user-agent"],
-          headers: loggedHeaders,
-        });
-        return res.status(400).json({
-          status: 400,
-          error: "Bad Request",
-          message:
-            "Client IP could not be identified. Ensure your request includes standard IP headers if behind a proxy.",
+        log.warn(
+          {
+            userAgent: req.headers[HTTP_HEADERS.USER_AGENT],
+            headers: loggedHeaders,
+          },
+          LOG_MESSAGES.RATELIMIT_REJECT_NO_IP,
+        );
+        return res.status(HTTP_STATUS.BAD_REQUEST).json({
+          status: HTTP_STATUS.BAD_REQUEST,
+          error: HTTP_STATUS_MESSAGES[HTTP_STATUS.BAD_REQUEST],
+          message: ERROR_MESSAGES.RATE_LIMIT_NO_IP,
         });
       }
 
       const now = Date.now();
-      let userHits = this.hits.get(ip);
+      let userHits = this.#hits.get(ip);
 
       if (!userHits) {
         // Enforce maxEntries cap for new clients
-        if (this.hits.size >= this.maxEntries) {
-          const oldestKey = this.hits.keys().next().value;
-          if (typeof oldestKey === "string") this.hits.delete(oldestKey);
+        if (this.#hits.size >= this.#maxEntries) {
+          const oldestKey = this.#hits.keys().next().value;
+          if (typeof oldestKey === "string") this.#hits.delete(oldestKey);
           if (
-            process.env.NODE_ENV !== "test" &&
+            !IS_TEST() &&
             typeof oldestKey === "string"
           ) {
-            console.log(
-              `[SYSTEM] RateLimiter evicted entry for ${this.maskIp(
-                oldestKey,
-              )} (Cap: ${this.maxEntries})`,
+            log.info(
+              {
+                evictedIp: this.maskIp(oldestKey),
+                maxEntries: this.#maxEntries,
+              },
+              LOG_MESSAGES.RATELIMIT_EVICTED,
             );
           }
         }
         userHits = [];
       } else {
         // LRU: Re-insert to mark as recently used
-        this.hits.delete(ip);
+        this.#hits.delete(ip);
       }
 
       // Filter hits within the window
-      const recentHits = userHits.filter((h) => now - h < this.windowMs);
-      if (recentHits.length >= this.limit) {
-        return res.status(429).json({
-          status: 429,
-          error: "Too Many Requests",
-          message: `Rate limit exceeded. Max ${this.limit} requests per ${
-            this.windowMs / 1000
-          }s.`,
+      const recentHits = userHits.filter((h) => now - h < this.#windowMs);
+
+      // Set rate limit headers for all responses
+      const resetTime = Math.ceil(
+        (now + this.#windowMs) / APP_CONSTS.MS_PER_SECOND,
+      );
+      res.setHeader(HTTP_HEADERS.X_RATELIMIT_LIMIT, this.#limit);
+      res.setHeader(
+        HTTP_HEADERS.X_RATELIMIT_REMAINING,
+        Math.max(0, this.#limit - recentHits.length - 1),
+      );
+      res.setHeader(HTTP_HEADERS.X_RATELIMIT_RESET, resetTime);
+
+      if (recentHits.length >= this.#limit) {
+        // Restore existing hits before returning error (otherwise user is forgotten/reset)
+        this.#hits.set(ip, recentHits);
+        res.setHeader(
+          HTTP_HEADERS.RETRY_AFTER,
+          Math.ceil(this.#windowMs / APP_CONSTS.MS_PER_SECOND),
+        );
+        return res.status(HTTP_STATUS.TOO_MANY_REQUESTS).json({
+          status: HTTP_STATUS.TOO_MANY_REQUESTS,
+          error: HTTP_STATUS_MESSAGES[HTTP_STATUS.TOO_MANY_REQUESTS],
+          message: ERROR_MESSAGES.RATE_LIMIT_EXCEEDED(
+            this.#limit,
+            this.#windowMs / APP_CONSTS.MS_PER_SECOND,
+          ),
         });
       }
 
       recentHits.push(now);
-      this.hits.set(ip, recentHits);
+      this.#hits.set(ip, recentHits);
       next();
     };
   }

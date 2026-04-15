@@ -2,42 +2,81 @@
 
 To catch production issues like the SSE infinite loading bug without deploying to Apify, you can simulate the production environment using Docker locally or in CI/CD.
 
+The repository now maintains **two named Docker build targets in a single Dockerfile**:
+
+- `runtime-apify`: Apify-targeted image used by `.actor/actor.json`
+- `runtime-standalone`: self-hosted/public image published from GitHub Releases
+
 ## 1. Manual Local Verification
 
-You can build and run the exact same Docker image that Apify uses.
+You can build and run either image locally depending on which deployment path you want to validate.
 
 ### Steps
 
-1.  **Build the Image**:
+1. **Build the Apify Image**:
 
-    ```bash
-    docker build -t webhook-debugger .
-    ```
+```bash
+docker build --target runtime-apify -t webhook-debugger-apify .
+```
 
-2.  **Run the Container**:
-    We map port 8080 and set the environment variable.
+1. **Run the Apify Container**:
+   We map port 8080 and set the environment variable.
 
-    ```bash
-    docker run --rm -p 8080:8080 \
-      -e ACTOR_WEB_SERVER_PORT=8080 \
-      -e APIFY_TOKEN=your_token_if_needed \
-      webhook-debugger
-    ```
+```bash
+docker run --rm -p 8080:8080 \
+  -e ACTOR_WEB_SERVER_PORT=8080 \
+  -e APIFY_TOKEN=your_token_if_needed \
+  webhook-debugger-apify
+```
 
-3.  **Verify**:
-    Test the `/log-stream` endpoint specifically to check for buffering/compression issues.
-    ```bash
-    curl -v -N -H "Accept: text/event-stream" http://localhost:8080/log-stream
-    ```
-    **Success Criteria**:
-    - `HTTP/1.1 200 OK`
-    - `cache-control: no-cache`
-    - `content-type: text/event-stream`
-    - **Crucial**: `content-encoding` should NOT be `gzip` or `deflate` (it should be `identity` or missing).
+1. **Verify the Apify Image**:
+   Test the `/log-stream` endpoint specifically to check for buffering/compression issues.
+
+```bash
+curl -v -N -H "Accept: text/event-stream" http://localhost:8080/log-stream
+```
+
+**Success Criteria**:
+
+- `HTTP/1.1 200 OK`
+- `cache-control: no-cache`
+- `content-type: text/event-stream`
+- **Crucial**: `content-encoding` should NOT be `gzip` or `deflate` (it should be `identity` or missing).
+
+1. **Build the Standalone Image**:
+
+```bash
+docker build --target runtime-standalone -t webhook-debugger-standalone .
+```
+
+1. **Run the Standalone Container**:
+
+```bash
+docker run --rm -p 8081:8080 \
+  -e ACTOR_WEB_SERVER_PORT=8080 \
+  -v webhook-debugger-storage:/app/storage \
+  webhook-debugger-standalone
+```
+
+1. **Verify the Standalone Image**:
+
+```bash
+curl -s http://localhost:8081/ready
+curl -v -N -H "Accept: text/event-stream" http://localhost:8081/log-stream
+```
+
+**Success Criteria**:
+
+- `GET /ready` returns `{"status":"ready",...}`
+- `content-type: text/event-stream`
+- `content-encoding` is `identity` or absent
 
 ## 2. CI/CD Integration (GitHub Actions)
 
-You can automate this verification in your `ci.yml`.
+You can automate this verification in your `ci.yml` by checking both Docker targets.
+
+> [!NOTE]
+> Apify publication uses the default final stage from the root `Dockerfile`. That stage intentionally stays on the same `node:24-bookworm-slim` runtime lineage as the dependency install stage so native modules such as DuckDB keep matching Node and libc expectations between install and runtime. The real CI workflow in `.github/workflows/ci.yml` already validates this Apify-target image with `/info` and `/log-stream` smoke checks before it verifies the `runtime-standalone` target.
 
 ### Proposed Job
 
@@ -51,14 +90,14 @@ verify-docker:
   steps:
     - uses: actions/checkout@v4
 
-    - name: Build Docker Image
-      run: docker build -t webhook-debugger .
+    - name: Build Apify Docker Image
+      run: docker build -t webhook-debugger-apify .
 
-    - name: Run Container
+    - name: Run Apify Container
       run: |
-        docker run -d --name debugger -p 8080:8080 \
+        docker run -d --name debugger-apify -p 8080:8080 \
           -e ACTOR_WEB_SERVER_PORT=8080 \
-          webhook-debugger
+          webhook-debugger-apify
 
         # Poll for startup (max 30 attempts, 1s apart)
         for i in $(seq 1 30); do
@@ -71,7 +110,7 @@ verify-docker:
         echo "❌ Container failed to start"
         exit 1
 
-    - name: Verify SSE Headers (Anti-Regression)
+    - name: Verify Apify SSE Headers (Anti-Regression)
       run: |
         # Check for 200 OK and NO compression
         # Use timeout because SSE is an infinite stream
@@ -91,14 +130,29 @@ verify-docker:
           echo "✅ No harmful Content-Encoding detected"
         fi
 
+    - name: Build Standalone Docker Image
+      run: docker build --target runtime-standalone -t webhook-debugger-standalone .
+
+    - name: Run Standalone Container
+      run: |
+        docker run -d --name debugger-standalone -p 8081:8080 \
+          -e ACTOR_WEB_SERVER_PORT=8080 \
+          webhook-debugger-standalone
+
+    - name: Verify Standalone Ready Probe
+      run: curl -s http://localhost:8081/ready
+
     - name: Docker Logs (on failure)
       if: failure()
-      run: docker logs debugger
+      run: |
+        docker logs debugger-apify || true
+        docker logs debugger-standalone || true
 ```
 
 ## 3. Why This Works
 
-- **Production Parity**: Uses `apify/actor-node:20` base image, same as production.
+- **Publication Parity**: Uses the root `Dockerfile` referenced by `.actor/actor.json`, with the `runtime-apify` target matching the image definition Apify will publish from this repository.
+- **Public Image Validation**: Verifies the `runtime-standalone` target that GitHub Releases publish to GHCR.
 - **Middleware Check**: Verifies that your `main.js` logic (like the `compression` filter) works correctly inside the container environment.
 - **Cost**: **$0**. Uses your local machine or GitHub Actions free tier.
 

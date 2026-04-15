@@ -1,0 +1,14 @@
+{
+  "chat.hookFilesLocations": {
+    ".github/hooks": false
+  },
+  "jest.runMode": {
+    "type": "on-demand",
+    "coverage": true
+  },
+  "jest.useJest30": true,
+  "karmaTestExplorer.autoWatchEnabled": false,
+  "chat.agentSkillsLocations": {
+    "~/.agents/skills": false
+  }
+}

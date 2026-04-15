@@ -15,19 +15,39 @@
     "urlCount": {
       "type": "integer",
       "title": "Number of Endpoints",
-      "description": "How many unique webhook URLs to generate for this run (1-10). Default is 3.",
+      "description": "How many unique webhook URLs to generate for this run (1-50). Default is 3.",
       "minimum": 1,
+      "maximum": 50,
+      "default": 3,
+      "prefill": 3,
+      "editor": "number"
+    },
+    "replayMaxRetries": {
+      "type": "integer",
+      "title": "Replay Max Retries",
+      "description": "Maximum number of retry attempts for failed replay requests. Default is 3.",
+      "minimum": 0,
       "maximum": 10,
       "default": 3,
       "prefill": 3,
       "editor": "number"
     },
+    "replayTimeoutMs": {
+      "type": "integer",
+      "title": "Replay Timeout (ms)",
+      "description": "Timeout for each replay attempt in milliseconds. Default is 10000 (10s).",
+      "minimum": 1000,
+      "maximum": 60000,
+      "default": 10000,
+      "prefill": 10000,
+      "editor": "number"
+    },
     "retentionHours": {
       "type": "integer",
       "title": "Retention Window (Hours)",
-      "description": "How long to keep your webhook URLs active (1-72 hours). Note: Logs for expired webhooks are filtered out from the '/logs' endpoint.",
+      "description": "How long to keep your webhook URLs active (1-168 hours). After expiry, the webhook stops accepting traffic immediately and its logs are removed from '/logs' during the next cleanup cycle (up to 10 minutes later). Reducing this value via hot-reload only affects new webhooks — pre-existing webhooks keep their original expiry. Logs already pushed to the Apify Dataset are not affected by retention.",
       "minimum": 1,
-      "maximum": 72,
+      "maximum": 168,
       "default": 24,
       "prefill": 24,
       "editor": "number"
@@ -57,6 +77,23 @@
       "default": true,
       "editor": "checkbox"
     },
+    "useFixedMemory": {
+      "type": "boolean",
+      "title": "Use Fixed Memory (Opt-out)",
+      "description": "If enabled, the Actor will bypass dynamic RAM calculation and use the manual value specified below.",
+      "default": false,
+      "editor": "checkbox"
+    },
+    "fixedMemoryMbytes": {
+      "type": "integer",
+      "title": "Manual Memory Allocation (MB)",
+      "description": "Specify the exact RAM (MB) to use when 'Use Fixed Memory' is enabled (e.g., 1024, 2048, 4096). Rounded to nearest power of 2.",
+      "minimum": 256,
+      "maximum": 32768,
+      "default": 2048,
+      "prefill": 2048,
+      "editor": "number"
+    },
     "section_v2_security": {
       "title": "🔑 Enterprise-Grade Security",
       "type": "string",
@@ -72,10 +109,17 @@
       "default": true,
       "editor": "checkbox"
     },
+    "redactBodyPaths": {
+      "type": "array",
+      "title": "Redact Payload Paths",
+      "description": "List of dot-notation paths in the JSON body to redact. Must start with 'body.' (e.g., 'body.token', 'body.auth', 'body.user.password', 'body.payment.card', etc.).",
+      "editor": "stringList",
+      "default": []
+    },
     "rateLimitPerMinute": {
       "type": "integer",
       "title": "Management Rate Limit",
-      "description": "Maximum requests per minute for management endpoints (/logs, /info, /replay). Applied per client IP.",
+      "description": "Maximum requests per minute for management endpoints (/logs, /info, /replay, etc.). Applied per client IP.",
       "minimum": 1,
       "maximum": 1000,
       "default": 60,
@@ -94,6 +138,113 @@
       "type": "array",
       "title": "IP Whitelist (CIDR)",
       "description": "Only accept traffic from these specific IPs or CIDR blocks. Leave blank for public access.",
+      "editor": "stringList"
+    },
+    "signatureVerification": {
+      "type": "object",
+      "title": "Webhook Signature Verification",
+      "description": "Verify incoming webhook signatures from providers like Stripe, Shopify, GitHub, or Slack.",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "title": "Provider",
+          "description": "Webhook provider for signature verification.",
+          "enum": ["stripe", "shopify", "github", "slack", "custom"],
+          "editor": "select"
+        },
+        "secret": {
+          "type": "string",
+          "title": "Signing Secret",
+          "description": "The webhook signing secret from your provider.",
+          "isSecret": true,
+          "editor": "textfield"
+        },
+        "headerName": {
+          "type": "string",
+          "title": "Custom Header Name",
+          "description": "(Custom Provider Only) The header containing the signature.",
+          "editor": "textfield"
+        },
+        "timestampKey": {
+          "type": "string",
+          "title": "Timestamp Header Name",
+          "description": "(Custom Provider Only) The header containing the timestamp for replay protection.",
+          "editor": "textfield"
+        },
+        "algorithm": {
+          "type": "string",
+          "title": "Hash Algorithm",
+          "description": "(Custom Provider Only) The HMAC algorithm (sha256 or sha1).",
+          "enum": ["sha256", "sha1"],
+          "default": "sha256",
+          "editor": "select"
+        },
+        "encoding": {
+          "type": "string",
+          "title": "Signature Encoding",
+          "description": "(Custom Provider Only) The encoding of the signature string.",
+          "enum": ["hex", "base64"],
+          "default": "hex",
+          "editor": "select"
+        },
+        "tolerance": {
+          "type": "integer",
+          "title": "Timestamp Tolerance (seconds)",
+          "description": "Maximum age of request timestamp for replay protection (default: 300).",
+          "minimum": 60,
+          "maximum": 3600,
+          "default": 300,
+          "editor": "number"
+        }
+      },
+      "editor": "json"
+    },
+    "section_alerting": {
+      "title": "🔔 Alerting & Notifications",
+      "type": "string",
+      "sectionCaption": "Real-time Alerts",
+      "sectionDescription": "Get notified when webhooks fail or require attention.",
+      "description": "Alerting configuration.",
+      "editor": "hidden"
+    },
+    "alerts": {
+      "type": "object",
+      "title": "Alert Configuration",
+      "description": "Configure Slack or Discord notifications for webhook events.",
+      "properties": {
+        "slack": {
+          "type": "object",
+          "title": "Slack",
+          "properties": {
+            "webhookUrl": {
+              "type": "string",
+              "title": "Slack Webhook URL",
+              "description": "Slack incoming webhook URL for notifications.",
+              "editor": "textfield"
+            }
+          }
+        },
+        "discord": {
+          "type": "object",
+          "title": "Discord",
+          "properties": {
+            "webhookUrl": {
+              "type": "string",
+              "title": "Discord Webhook URL",
+              "description": "Discord webhook URL for notifications.",
+              "editor": "textfield"
+            }
+          }
+        }
+      },
+      "editor": "json"
+    },
+    "alertOn": {
+      "type": "array",
+      "title": "Alert Triggers",
+      "description": "When to send alerts: error, 4xx, 5xx, timeout, signature_invalid",
+      "default": ["error", "5xx"],
+      "prefill": ["error", "5xx"],
       "editor": "stringList"
     },
     "section_v2_response": {
@@ -158,6 +309,16 @@
       "description": "If enabled, all incoming headers will be forwarded to the destination. Disable this to send a 'clean' request (Type/Length only).",
       "default": true,
       "editor": "checkbox"
+    },
+    "maxForwardRetries": {
+      "type": "integer",
+      "title": "Forward Max Retries",
+      "description": "Maximum number of retry attempts for failed forward requests. Default is 3.",
+      "minimum": 0,
+      "maximum": 10,
+      "default": 3,
+      "prefill": 3,
+      "editor": "number"
     },
     "jsonSchema": {
       "type": "string",
