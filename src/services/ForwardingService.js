@@ -268,20 +268,22 @@ export class ForwardingService {
 
     // 3. Defensive Body Size Check
     const MAX_FORWARD_BODY = APP_CONSTS.MAX_ALLOWED_PAYLOAD_SIZE;
+    const parsedContentLength = parseInt(
+      String(req.headers[HTTP_HEADERS.CONTENT_LENGTH] ?? ""),
+      10,
+    );
     let bodySize;
-    if (req.headers[HTTP_HEADERS.CONTENT_LENGTH]) {
-      bodySize = parseInt(String(req.headers[HTTP_HEADERS.CONTENT_LENGTH]), 10);
+    if (Number.isFinite(parsedContentLength)) {
+      bodySize = parsedContentLength;
+    } else if (Buffer.isBuffer(req.body)) {
+      bodySize = req.body.length;
+    } else if (typeof req.body === "string") {
+      bodySize = Buffer.byteLength(req.body);
     } else {
-      if (Buffer.isBuffer(req.body)) {
-        bodySize = req.body.length;
-      } else if (typeof req.body === "string") {
-        bodySize = Buffer.byteLength(req.body);
-      } else {
-        try {
-          bodySize = Buffer.byteLength(JSON.stringify(req.body));
-        } catch {
-          bodySize = 0;
-        }
+      try {
+        bodySize = Buffer.byteLength(JSON.stringify(req.body));
+      } catch {
+        bodySize = 0;
       }
     }
 

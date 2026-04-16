@@ -61,7 +61,7 @@
   },
   "homepage": "https://github.com/ar27111994/webhook-debugger-logger#readme",
   "engines": {
-    "node": ">=20"
+    "node": ">=20.19.0"
   },
   "overrides": {
     "basic-ftp": "5.2.2"
