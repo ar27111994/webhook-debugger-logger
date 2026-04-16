@@ -268,13 +268,7 @@ export class ForwardingService {
 
     // 3. Defensive Body Size Check
     const MAX_FORWARD_BODY = APP_CONSTS.MAX_ALLOWED_PAYLOAD_SIZE;
-    if (Array.isArray(req.body)) {
-      log.warn(
-        { bodyType: "array" },
-        LOG_MESSAGES.FORWARD_PAYLOAD_TOO_LARGE,
-      );
-      return;
-    }
+
     // parseInt on a missing/empty/non-numeric header returns NaN; Number.isFinite
     // rejects NaN/Infinity so we fall through to measure the body directly.
     const parsedContentLength = parseInt(
