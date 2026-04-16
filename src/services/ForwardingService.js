@@ -268,7 +268,7 @@ export class ForwardingService {
 
     // 3. Defensive Body Size Check
     const MAX_FORWARD_BODY = APP_CONSTS.MAX_ALLOWED_PAYLOAD_SIZE;
-    let bodySize = 0;
+    let bodySize;
     if (req.headers[HTTP_HEADERS.CONTENT_LENGTH]) {
       bodySize = parseInt(String(req.headers[HTTP_HEADERS.CONTENT_LENGTH]), 10);
     } else {
