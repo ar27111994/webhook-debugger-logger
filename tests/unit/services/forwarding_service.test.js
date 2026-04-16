@@ -564,6 +564,7 @@ describe("ForwardingService", () => {
       ["non-numeric", "not-a-number"],
       ["partially numeric", "123abc"],
       ["scientific notation", "1e9"],
+      ["unsafe integer", "9007199254740992"],
     ])(
       "should fallback to measured body size when content-length header is %s",
       async (_label, headerValue) => {
