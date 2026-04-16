@@ -243,7 +243,7 @@ export async function spawnAppProcess(options) {
       .filter(Boolean)
       .join("\n\n");
 
-    throw new Error(diagnostics);
+    throw new Error(diagnostics, { cause: error });
   }
 
   const stop = async () => {
