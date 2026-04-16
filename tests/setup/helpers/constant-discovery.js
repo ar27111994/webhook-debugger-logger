@@ -39,6 +39,7 @@ for (const entry of readdirSync(dir, { withFileTypes: true })) {
   } catch (error) {
     throw new Error(
       `Failed to discover constant modules at ${constsDir}: ${/** @type {Error} */ (error).message}`,
+      { cause: error },
     );
   }
 }
