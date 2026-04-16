@@ -33,6 +33,27 @@ import { CircuitBreaker } from "./CircuitBreaker.js";
 const log = createChildLogger({ component: LOG_COMPONENTS.FORWARDING_SERVICE });
 
 /**
+ * Parses a Content-Length header only when it is a single, non-negative decimal value.
+ * Array-valued or malformed headers are ignored so callers can fall back to measuring
+ * the actual request body size.
+ * @param {string | string[] | undefined} value
+ * @returns {number | null}
+ */
+function parseStrictContentLength(value) {
+  if (Array.isArray(value) || typeof value !== "string") {
+    return null;
+  }
+
+  const normalizedValue = value.trim();
+  if (!/^\d+$/.test(normalizedValue)) {
+    return null;
+  }
+
+  const parsedValue = Number(normalizedValue);
+  return Number.isSafeInteger(parsedValue) ? parsedValue : null;
+}
+
+/**
  * @typedef {import('axios').AxiosInstance} AxiosInstance
  * @typedef {import('axios').AxiosResponse} AxiosResponse
  * @typedef {import('http').IncomingHttpHeaders} IncomingHttpHeaders
@@ -269,14 +290,13 @@ export class ForwardingService {
     // 3. Defensive Body Size Check
     const MAX_FORWARD_BODY = APP_CONSTS.MAX_ALLOWED_PAYLOAD_SIZE;
 
-    // parseInt on a missing/empty/non-numeric header returns NaN; Number.isFinite
-    // rejects NaN/Infinity so we fall through to measure the body directly.
-    const parsedContentLength = parseInt(
-      String(req.headers[HTTP_HEADERS.CONTENT_LENGTH] ?? ""),
-      10,
+    // Only trust a strictly decimal Content-Length header. Arrays and malformed
+    // values fall back to measuring the body directly.
+    const parsedContentLength = parseStrictContentLength(
+      req.headers[HTTP_HEADERS.CONTENT_LENGTH],
     );
     let bodySize;
-    if (Number.isFinite(parsedContentLength)) {
+    if (parsedContentLength !== null) {
       bodySize = parsedContentLength;
     } else if (Buffer.isBuffer(req.body)) {
       bodySize = req.body.length;

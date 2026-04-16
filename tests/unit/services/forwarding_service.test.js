@@ -14,7 +14,6 @@ import {
   flushPromises,
 } from "../../setup/helpers/test-utils.js";
 import { setupCommonMocks } from "../../setup/helpers/mock-setup.js";
-import { HTTP_STATUS_MESSAGES, MIME_TYPES } from "../../../src/consts/http.js";
 
 /**
  * @typedef {import("../../../src/services/ForwardingService.js").ForwardingService} ForwardingServiceInstance
@@ -40,6 +39,8 @@ const {
   HTTP_HEADERS,
   RECURSION_HEADER_NAME,
   RECURSION_HEADER_VALUE,
+  HTTP_STATUS_MESSAGES,
+  MIME_TYPES,
 } = await import("../../../src/consts/http.js");
 const { ERROR_MESSAGES, ERROR_LABELS } =
   await import("../../../src/consts/errors.js");
@@ -561,6 +562,8 @@ describe("ForwardingService", () => {
     it.each([
       ["empty", ""],
       ["non-numeric", "not-a-number"],
+      ["partially numeric", "123abc"],
+      ["scientific notation", "1e9"],
     ])(
       "should fallback to measured body size when content-length header is %s",
       async (_label, headerValue) => {
@@ -578,6 +581,21 @@ describe("ForwardingService", () => {
         expect(apifyMock.pushData).not.toHaveBeenCalled();
       },
     );
+
+    it("should fallback to measured body size when content-length header is an array", async () => {
+      mockReq.headers[HTTP_HEADERS.CONTENT_LENGTH] = assertType(["1", "999"]);
+      mockReq.body = "A".repeat(APP_CONSTS.MAX_ALLOWED_PAYLOAD_SIZE + 1);
+
+      await service.forwardWebhook(
+        mockEvent,
+        mockReq,
+        mockOptions,
+        TEST_URL_HTTP,
+      );
+
+      expect(mockAxiosInstance.request).not.toHaveBeenCalled();
+      expect(apifyMock.pushData).not.toHaveBeenCalled();
+    });
 
     it("should gracefully handle non-json serializable bodies when length checking", async () => {
       mockReq.headers = {};
