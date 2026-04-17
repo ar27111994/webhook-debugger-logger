@@ -99,6 +99,23 @@ describe("Sync Version Script", () => {
       },
     },
   });
+  const WEB_SERVER_SCHEMA_WITHOUT_EXAMPLE = JSON.stringify({
+    openapi: "3.0.3",
+    info: { title: WEBHOOK_API_TITLE, version: PACKAGE_VERSION },
+    paths: {
+      [APP_ROUTES.DASHBOARD]: {
+        get: {
+          responses: {
+            [HTTP_STATUS.OK]: {
+              content: {
+                [MIME_TYPES.TEXT]: {},
+              },
+            },
+          },
+        },
+      },
+    },
+  });
   const ACTOR_JSON = "actor.json";
   const WEB_SERVER_SCHEMA_JSON = "web_server_schema.json";
   const PACKAGE_JSON_PATH = "package.json";
@@ -253,6 +270,32 @@ describe("Sync Version Script", () => {
         HTTP_STATUS.OK.toString()
       ].content[MIME_TYPES.TEXT].example,
     ).toContain(`(v${PACKAGE_VERSION})`);
+  });
+
+  it("should skip schema writes when the dashboard example is missing and versions already match", () => {
+    fsMock.readFileSync.mockImplementation(
+      assertType(
+        /**
+         * @param {PathOrFileDescriptor} path
+         * @returns {string}
+         */
+        (path) => {
+          if (String(path).includes(PACKAGE_JSON_PATH)) return PACKAGE_JSON;
+          if (String(path).includes(ACTOR_JSON)) return ACTOR_JSON_MATCH;
+          if (String(path).includes(WEB_SERVER_SCHEMA_JSON)) {
+            return WEB_SERVER_SCHEMA_WITHOUT_EXAMPLE;
+          }
+          return "{}";
+        },
+      ),
+    );
+
+    syncVersion();
+
+    expect(fsMock.writeFileSync).not.toHaveBeenCalled();
+    expect(loggerMock.info).toHaveBeenCalledWith(
+      expect.stringContaining("already in sync"),
+    );
   });
 
   it("should handle errors gracefully", () => {
