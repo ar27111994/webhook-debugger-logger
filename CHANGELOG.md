@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.2] - 2026-04-17
+
+### Fixed (3.0.2)
+
+- **Apify**: Restore valid Actor input schema metadata by adding the missing nested alert channel descriptions required by Apify schema validation.
+- **CI/CD**: Validate the Actor input schema with `apify validate-schema` alongside the web server schema so Apify build-time schema errors are caught before release.
+- **Tooling**: Stop hardcoding the Apify CLI package version inside the validation script by invoking the project-installed `apify` binary instead.
+
 ## [3.0.1] - 2026-04-15
 
 ### Fixed (3.0.1)
@@ -10,6 +18,8 @@ All notable changes to this project will be documented in this file.
 - **CI/CD**: Make the release-only npm and Docker workflows report successful pull request checks without publishing artifacts, so Dependabot PRs do not remain stuck waiting on required checks.
 - **CI/CD**: Make the required `Link Check` workflow run on every pull request so dependency-only PRs no longer remain stuck in an expected state when path filters skip the job.
 - **Apify**: Move the webhook signing secret to a top-level `signatureVerificationSecret` input with `isSecret: true`, while keeping runtime compatibility with older nested secret values.
+- **Forwarding**: Implement strict Content-Length parsing and enhance fallback logic in ForwardingService.
+- **GitHub/NPM**: Update CI/CD, `package.json` and `package-lock.json` to use the latest versions of various dependencies.
 
 ## [3.0.0] - 2026-04-02
 
