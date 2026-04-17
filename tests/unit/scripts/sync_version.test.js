@@ -33,6 +33,9 @@ describe("Sync Version Script", () => {
   const PACKAGE_VERSION = "1.2.3";
   const OUTDATED_VERSION = "0.0.0";
   const WEBHOOK_API_TITLE = "Webhook API";
+  const NON_MATCHING_DASHBOARD_EXAMPLE =
+    "Dashboard summary unavailable for this environment";
+  const ALREADY_SYNCED_LOG_FRAGMENT = "already in sync";
   const PACKAGE_JSON = JSON.stringify({ version: PACKAGE_VERSION });
   const ACTOR_JSON_OLD = JSON.stringify({
     version: OUTDATED_VERSION,
@@ -109,6 +112,25 @@ describe("Sync Version Script", () => {
             [HTTP_STATUS.OK]: {
               content: {
                 [MIME_TYPES.TEXT]: {},
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+  const WEB_SERVER_SCHEMA_WITH_NON_MATCHING_EXAMPLE = JSON.stringify({
+    openapi: "3.0.3",
+    info: { title: WEBHOOK_API_TITLE, version: PACKAGE_VERSION },
+    paths: {
+      [APP_ROUTES.DASHBOARD]: {
+        get: {
+          responses: {
+            [HTTP_STATUS.OK]: {
+              content: {
+                [MIME_TYPES.TEXT]: {
+                  example: NON_MATCHING_DASHBOARD_EXAMPLE,
+                },
               },
             },
           },
@@ -205,7 +227,7 @@ describe("Sync Version Script", () => {
     expect(fsMock.readFileSync).toHaveBeenCalledTimes(READ_FILE_COUNT);
     expect(fsMock.writeFileSync).not.toHaveBeenCalled();
     expect(loggerMock.info).toHaveBeenCalledWith(
-      expect.stringContaining("already in sync"),
+      expect.stringContaining(ALREADY_SYNCED_LOG_FRAGMENT),
     );
   });
 
@@ -294,7 +316,33 @@ describe("Sync Version Script", () => {
 
     expect(fsMock.writeFileSync).not.toHaveBeenCalled();
     expect(loggerMock.info).toHaveBeenCalledWith(
-      expect.stringContaining("already in sync"),
+      expect.stringContaining(ALREADY_SYNCED_LOG_FRAGMENT),
+    );
+  });
+
+  it("should skip schema writes when the dashboard example does not match the version pattern", () => {
+    fsMock.readFileSync.mockImplementation(
+      assertType(
+        /**
+         * @param {PathOrFileDescriptor} path
+         * @returns {string}
+         */
+        (path) => {
+          if (String(path).includes(PACKAGE_JSON_PATH)) return PACKAGE_JSON;
+          if (String(path).includes(ACTOR_JSON)) return ACTOR_JSON_MATCH;
+          if (String(path).includes(WEB_SERVER_SCHEMA_JSON)) {
+            return WEB_SERVER_SCHEMA_WITH_NON_MATCHING_EXAMPLE;
+          }
+          return "{}";
+        },
+      ),
+    );
+
+    syncVersion();
+
+    expect(fsMock.writeFileSync).not.toHaveBeenCalled();
+    expect(loggerMock.info).toHaveBeenCalledWith(
+      expect.stringContaining(ALREADY_SYNCED_LOG_FRAGMENT),
     );
   });
 
