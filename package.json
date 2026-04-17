@@ -70,6 +70,7 @@
   },
   "devDependencies": {
     "@apify/actor-memory-expression": "^0.1.6",
+    "@apify/input_secrets": "^1.2.30",
     "@eslint/js": "^10.0.1",
     "@types/compression": "^1.8.1",
     "@types/cors": "^2.8.19",

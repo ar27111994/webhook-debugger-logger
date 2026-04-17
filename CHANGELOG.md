@@ -7,8 +7,12 @@ All notable changes to this project will be documented in this file.
 ### Fixed (3.0.2)
 
 - **Apify**: Restore valid Actor input schema metadata by adding the missing nested alert channel descriptions required by Apify schema validation.
+- **Apify**: Reorder `signatureVerificationSecret` so it appears directly above `signatureVerification` in the Actor input UI while preserving the same backward-compatible runtime mapping.
 - **CI/CD**: Validate the Actor input schema with `apify validate-schema` alongside the web server schema so Apify build-time schema errors are caught before release.
+- **CI/CD**: Split npm validation from npm publishing so `id-token: write` is granted only during release publishing, and keep Docker PR validation tags limited to the single synthetic PR tag.
+- **CI/CD**: Normalize known flaky external link handling in the link check workflow by matching stable URL origin-and-path keys instead of full query-string URLs.
 - **Tooling**: Stop hardcoding the Apify CLI package version inside the validation script by invoking the project-installed `apify` binary instead.
+- **Tooling**: Add `@apify/input_secrets` as an explicit development dependency and align sync-version test fixtures with the production HTTP status key style.
 
 ## [3.0.1] - 2026-04-15
 

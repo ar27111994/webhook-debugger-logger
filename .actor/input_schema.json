@@ -134,18 +134,18 @@
       "example": "my-secret-key-123",
       "editor": "textfield"
     },
+    "allowedIps": {
+      "type": "array",
+      "title": "IP Whitelist (CIDR)",
+      "description": "Only accept traffic from these specific IPs or CIDR blocks. Leave blank for public access.",
+      "editor": "stringList"
+    },
     "signatureVerificationSecret": {
       "type": "string",
       "title": "Webhook Signing Secret",
       "description": "Signing secret used by the webhook provider selected in the 'Webhook Signature Verification' settings below.",
       "isSecret": true,
       "editor": "textfield"
-    },
-    "allowedIps": {
-      "type": "array",
-      "title": "IP Whitelist (CIDR)",
-      "description": "Only accept traffic from these specific IPs or CIDR blocks. Leave blank for public access.",
-      "editor": "stringList"
     },
     "signatureVerification": {
       "type": "object",

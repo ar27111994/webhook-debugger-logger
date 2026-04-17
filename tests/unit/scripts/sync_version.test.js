@@ -71,7 +71,7 @@ describe("Sync Version Script", () => {
       [APP_ROUTES.DASHBOARD]: {
         get: {
           responses: {
-            [HTTP_STATUS.OK]: {
+            [HTTP_STATUS.OK.toString()]: {
               content: {
                 [MIME_TYPES.TEXT]: {
                   example: `Webhook Debugger & Logger (v${PACKAGE_VERSION})\nActive Webhooks: 1\nSignature Verification: STRIPE`,
@@ -90,7 +90,7 @@ describe("Sync Version Script", () => {
       [APP_ROUTES.DASHBOARD]: {
         get: {
           responses: {
-            [HTTP_STATUS.OK]: {
+            [HTTP_STATUS.OK.toString()]: {
               content: {
                 [MIME_TYPES.TEXT]: {
                   example: `Webhook Debugger & Logger (v${OUTDATED_VERSION})\nActive Webhooks: 1\nSignature Verification: STRIPE`,
@@ -109,7 +109,7 @@ describe("Sync Version Script", () => {
       [APP_ROUTES.DASHBOARD]: {
         get: {
           responses: {
-            [HTTP_STATUS.OK]: {
+            [HTTP_STATUS.OK.toString()]: {
               content: {
                 [MIME_TYPES.TEXT]: {},
               },
@@ -126,7 +126,7 @@ describe("Sync Version Script", () => {
       [APP_ROUTES.DASHBOARD]: {
         get: {
           responses: {
-            [HTTP_STATUS.OK]: {
+            [HTTP_STATUS.OK.toString()]: {
               content: {
                 [MIME_TYPES.TEXT]: {
                   example: NON_MATCHING_DASHBOARD_EXAMPLE,

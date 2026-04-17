@@ -7,11 +7,10 @@ on:
     branches: [main]
 
 jobs:
-  publish:
+  validate:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write # Required for provenance (used in package.json) (optional but good practice)
     steps:
       - name: Checkout Code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -31,16 +30,35 @@ jobs:
       - name: Verify Builds/Tests
         run: npm run test:jest -- --detectOpenHandles --forceExit
 
-      - name: Skip publish outside release events
+      - name: Confirm publish is deferred outside release events
         if: github.event_name != 'release'
-        run: echo "PR validation complete; npm publish only runs for published releases."
+        run: echo "Validation complete; npm publishing only runs in the release-only publish job."
+
+  publish:
+    if: github.event_name == 'release'
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # Required for npm provenance on published releases.
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install Dependencies
+        run: npm ci --legacy-peer-deps
 
       # unset NODE_AUTH_TOKEN because it's automatically set by the setup-node action
       # node@v24.0.0+
       # https://github.com/orgs/community/discussions/176761
       # https://github.com/actions/setup-node/issues/1440#issuecomment-3705123143
       - name: Publish to NPM
-        if: github.event_name == 'release'
         run: |
           unset NODE_AUTH_TOKEN
           npm publish
