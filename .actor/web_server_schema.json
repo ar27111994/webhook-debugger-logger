@@ -54,9 +54,7 @@
   "paths": {
     "/": {
       "get": {
-        "tags": [
-          "Dashboard"
-        ],
+        "tags": ["Dashboard"],
         "summary": "Get dashboard",
         "description": "Returns the dashboard HTML page. If the Accept header includes text/plain, the route returns a compact plain-text summary instead.",
         "operationId": "getDashboard",
@@ -82,7 +80,7 @@
                 "schema": {
                   "type": "string"
                 },
-                "example": "Webhook Debugger & Logger (v3.0.0)\nActive Webhooks: 1\nSignature Verification: STRIPE"
+                "example": "Webhook Debugger & Logger (v3.0.1)\nActive Webhooks: 1\nSignature Verification: STRIPE"
               }
             }
           },
@@ -100,9 +98,7 @@
     },
     "/webhook/{id}": {
       "post": {
-        "tags": [
-          "Webhooks"
-        ],
+        "tags": ["Webhooks"],
         "summary": "Capture webhook request",
         "description": "Captures incoming webhook traffic. The Express route accepts any HTTP method; this OpenAPI operation documents the common POST workflow. If authKey is configured, this route also accepts bearer token or key query authentication.",
         "operationId": "captureWebhook",
@@ -193,9 +189,7 @@
     },
     "/info": {
       "get": {
-        "tags": [
-          "Dashboard"
-        ],
+        "tags": ["Dashboard"],
         "summary": "Get runtime information",
         "description": "Returns runtime metadata, active webhook state, discoverable endpoints, and the feature list.",
         "operationId": "getRuntimeInfo",
@@ -230,9 +224,7 @@
     },
     "/logs": {
       "get": {
-        "tags": [
-          "Logs"
-        ],
+        "tags": ["Logs"],
         "summary": "List logs",
         "description": "Queries captured webhook events from the DuckDB read model using offset-based or cursor-based pagination.",
         "operationId": "listLogs",
@@ -332,9 +324,7 @@
     },
     "/logs/{logId}": {
       "get": {
-        "tags": [
-          "Logs"
-        ],
+        "tags": ["Logs"],
         "summary": "Get log detail",
         "description": "Returns a single log entry. Use the optional fields parameter for sparse responses.",
         "operationId": "getLogById",
@@ -380,9 +370,7 @@
     },
     "/logs/{logId}/payload": {
       "get": {
-        "tags": [
-          "Logs"
-        ],
+        "tags": ["Logs"],
         "summary": "Get original payload",
         "description": "Returns the original captured payload. If the payload was offloaded to Apify KVS, it is hydrated on demand.",
         "operationId": "getLogPayload",
@@ -437,9 +425,7 @@
     },
     "/replay/{webhookId}/{itemId}": {
       "post": {
-        "tags": [
-          "Replay"
-        ],
+        "tags": ["Replay"],
         "summary": "Replay captured request",
         "description": "Replays a captured webhook event to a new destination URL after SSRF and DNS validation.",
         "operationId": "replayCapturedRequest",
@@ -497,9 +483,7 @@
     },
     "/log-stream": {
       "get": {
-        "tags": [
-          "Streaming"
-        ],
+        "tags": ["Streaming"],
         "summary": "Stream live logs",
         "description": "Opens a Server-Sent Events stream for live webhook monitoring. The current implementation broadcasts plain data frames and keepalive comments rather than named event frames.",
         "operationId": "streamLogs",
@@ -538,9 +522,7 @@
     },
     "/system/metrics": {
       "get": {
-        "tags": [
-          "System"
-        ],
+        "tags": ["System"],
         "summary": "Get system metrics",
         "description": "Returns sync-service metrics for the Dataset-to-DuckDB replication loop.",
         "operationId": "getSystemMetrics",
@@ -575,9 +557,7 @@
     },
     "/health": {
       "get": {
-        "tags": [
-          "Health"
-        ],
+        "tags": ["Health"],
         "summary": "Get liveness status",
         "description": "Liveness probe for container and uptime monitoring.",
         "operationId": "getHealth",
@@ -600,9 +580,7 @@
     },
     "/ready": {
       "get": {
-        "tags": [
-          "Health"
-        ],
+        "tags": ["Health"],
         "summary": "Get readiness status",
         "description": "Readiness probe for orchestrators and load balancers.",
         "operationId": "getReadiness",
@@ -1004,11 +982,7 @@
             "format": "uri"
           }
         },
-        "required": [
-          "status",
-          "error",
-          "message"
-        ],
+        "required": ["status", "error", "message"],
         "additionalProperties": true
       },
       "RateLimitedResponse": {
@@ -1026,11 +1000,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "status",
-          "error",
-          "message"
-        ]
+        "required": ["status", "error", "message"]
       },
       "WebhookRateLimitedResponse": {
         "type": "object",
@@ -1051,11 +1021,7 @@
             "example": 60
           }
         },
-        "required": [
-          "status",
-          "error",
-          "message"
-        ]
+        "required": ["status", "error", "message"]
       },
       "WebhookStatusResponse": {
         "type": "object",
@@ -1080,9 +1046,7 @@
             "format": "date-time"
           }
         },
-        "required": [
-          "id"
-        ],
+        "required": ["id"],
         "additionalProperties": true
       },
       "InfoResponse": {
@@ -1195,10 +1159,7 @@
             "format": "uri"
           }
         },
-        "required": [
-          "id",
-          "detailUrl"
-        ],
+        "required": ["id", "detailUrl"],
         "additionalProperties": true
       },
       "LogListResponse": {
@@ -1234,11 +1195,7 @@
             "nullable": true
           }
         },
-        "required": [
-          "filters",
-          "count",
-          "items"
-        ]
+        "required": ["filters", "count", "items"]
       },
       "LogDetailResponse": {
         "type": "object",
@@ -1323,9 +1280,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "id"
-        ],
+        "required": ["id"],
         "additionalProperties": true
       },
       "ReplayResponse": {
@@ -1350,11 +1305,7 @@
             }
           }
         },
-        "required": [
-          "status",
-          "targetUrl",
-          "targetResponseCode"
-        ],
+        "required": ["status", "targetUrl", "targetResponseCode"],
         "additionalProperties": true
       },
       "SyncMetrics": {
@@ -1396,10 +1347,7 @@
             "$ref": "#/components/schemas/SyncMetrics"
           }
         },
-        "required": [
-          "timestamp",
-          "sync"
-        ]
+        "required": ["timestamp", "sync"]
       },
       "HealthResponse": {
         "type": "object",
@@ -1432,20 +1380,10 @@
                 "example": "MB"
               }
             },
-            "required": [
-              "heapUsed",
-              "heapTotal",
-              "rss",
-              "unit"
-            ]
+            "required": ["heapUsed", "heapTotal", "rss", "unit"]
           }
         },
-        "required": [
-          "status",
-          "uptime",
-          "timestamp",
-          "memory"
-        ]
+        "required": ["status", "uptime", "timestamp", "memory"]
       },
       "ReadyResponse": {
         "type": "object",
@@ -1470,18 +1408,12 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "status"
-              ],
+              "required": ["status"],
               "additionalProperties": true
             }
           }
         },
-        "required": [
-          "status",
-          "timestamp",
-          "checks"
-        ]
+        "required": ["status", "timestamp", "checks"]
       }
     }
   }

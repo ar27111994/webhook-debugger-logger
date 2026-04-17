@@ -100,6 +100,7 @@ jobs:
           const softHandledUrls = new Set([
             'https://www.npmjs.com/package/webhook-debugger-logger',
             'https://www.npmjs.com/package/isolated-vm?activeTab=readme',
+            'https://img.shields.io/coderabbit/prs/github/ar27111994/webhook-debugger-logger?utm_source=oss&utm_medium=github&utm_campaign=ar27111994%2Fwebhook-debugger-logger&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews',
           ]);
 
           const softFailures = [];
@@ -110,7 +111,7 @@ jobs:
               const url = failure.url;
               const code = failure.status?.code;
 
-              if (softHandledUrls.has(url) && (code === 403 || code === 429)) {
+              if (softHandledUrls.has(url) && (code === 403 || code === 408 || code === 429)) {
                 softFailures.push({ source, url, code, text: failure.status?.text ?? '' });
                 continue;
               }
@@ -134,7 +135,7 @@ jobs:
           }
 
           if (softFailures.length > 0) {
-            console.log(`Soft-handled npmjs anti-bot failures: ${softFailures.length}`);
+            console.log(`Soft-handled known external link failures: ${softFailures.length}`);
             for (const failure of softFailures) {
               console.log(`::warning title=Lychee soft-fail::${failure.url} returned ${failure.code} (${failure.text}) while checking ${failure.source}`);
             }
@@ -146,7 +147,7 @@ jobs:
             process.exit(1);
           }
 
-          console.log('Lychee completed with no failures beyond the targeted npmjs anti-bot soft-fail policy.');
+          console.log('Lychee completed with no failures beyond the targeted external soft-fail policy.');
           EOF
 
       - name: Save lychee cache

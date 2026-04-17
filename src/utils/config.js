@@ -57,26 +57,46 @@ export function parseWebhookOptions(options = {}) {
  * @returns {WebhookConfig["signatureVerification"]}
  */
 function normalizeSignatureVerification(options) {
-  if (
-    !options.signatureVerification &&
-    typeof options.signatureVerificationSecret !== "string"
-  ) {
-    return options.signatureVerification;
+  const existingConfig = options.signatureVerification;
+  const hasTopLevelSecret =
+    typeof options.signatureVerificationSecret === "string";
+
+  if (!existingConfig && !hasTopLevelSecret) {
+    return existingConfig;
   }
 
-  const normalizedSecret =
-    typeof options.signatureVerificationSecret === "string"
-      ? options.signatureVerificationSecret.trim()
-      : undefined;
+  if (hasTopLevelSecret) {
+    const normalizedSecret = options.signatureVerificationSecret?.trim();
 
-  const fallbackSecret =
-    typeof options.signatureVerification?.secret === "string"
-      ? options.signatureVerification.secret.trim()
-      : undefined;
+    if (normalizedSecret) {
+      return {
+        ...existingConfig,
+        secret: normalizedSecret,
+      };
+    }
+
+    if (!existingConfig) {
+      return existingConfig;
+    }
+
+    const { secret: _ignoredSecret, ...signatureVerification } = existingConfig;
+    return signatureVerification;
+  }
+
+  if (typeof existingConfig?.secret !== "string") {
+    return existingConfig;
+  }
+
+  const fallbackSecret = existingConfig.secret.trim();
+
+  if (!fallbackSecret) {
+    const { secret: _ignoredSecret, ...signatureVerification } = existingConfig;
+    return signatureVerification;
+  }
 
   return {
-    ...options.signatureVerification,
-    secret: normalizedSecret || fallbackSecret,
+    ...existingConfig,
+    secret: fallbackSecret,
   };
 }
 
