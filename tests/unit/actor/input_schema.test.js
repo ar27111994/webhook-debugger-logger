@@ -52,6 +52,42 @@ function findNestedSecretPaths(schemaNode, schemaPath) {
   return matches;
 }
 
+/**
+ * @param {Record<string, unknown>} schemaNode
+ * @param {string} schemaPath
+ * @returns {string[]}
+ */
+function findMissingDescriptions(schemaNode, schemaPath) {
+  const properties = isPlainObject(schemaNode.properties)
+    ? schemaNode.properties
+    : null;
+
+  if (!properties) {
+    return [];
+  }
+
+  /** @type {string[]} */
+  const matches = [];
+
+  for (const [propertyName, propertyValue] of Object.entries(properties)) {
+    if (!isPlainObject(propertyValue)) {
+      continue;
+    }
+
+    const propertyPath = `${schemaPath}.properties.${propertyName}`;
+
+    if (
+      typeof propertyValue.description !== "string" ||
+      propertyValue.description.trim() === ""
+    ) {
+      matches.push(propertyPath);
+    }
+
+    matches.push(...findMissingDescriptions(propertyValue, propertyPath));
+  }
+
+  return matches;
+}
 describe("Apify input schema", () => {
   it("keeps isSecret flags only on top-level properties", () => {
     const topLevelProperties = isPlainObject(inputSchema.properties)
@@ -86,5 +122,11 @@ describe("Apify input schema", () => {
     }
 
     expect(nestedSecretPaths).toEqual([]);
+  });
+
+  it("defines descriptions for all nested input schema properties", () => {
+    const missingDescriptions = findMissingDescriptions(inputSchema, "schema");
+
+    expect(missingDescriptions).toEqual([]);
   });
 });

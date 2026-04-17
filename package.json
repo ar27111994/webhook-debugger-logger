@@ -1,6 +1,6 @@
 {
   "name": "webhook-debugger-logger",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "type": "module",
   "description": "Generate temporary webhook URLs and log all incoming requests with full details.",
   "main": "src/main.js",
@@ -25,6 +25,8 @@
     "lint": "eslint --no-error-on-unmatched-pattern .actor public src tests",
     "lint:fix": "npm run lint -- --fix",
     "typecheck": "tsc --noEmit",
+    "validate:input-schema": "apify validate-schema",
+    "validate:schemas": "npm run validate:input-schema && npm run validate:web-server-schema",
     "validate:web-server-schema": "node scripts/validate-web-server-schema.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -68,6 +70,7 @@
   },
   "devDependencies": {
     "@apify/actor-memory-expression": "^0.1.6",
+    "@apify/input_secrets": "^1.2.30",
     "@eslint/js": "^10.0.1",
     "@types/compression": "^1.8.1",
     "@types/cors": "^2.8.19",
@@ -75,6 +78,7 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^25.0.6",
     "@types/supertest": "^7.2.0",
+    "apify-cli": "^1.4.1",
     "eslint": "^10.0.0",
     "eslint-plugin-sonarjs": "^4.0.2",
     "eventsource": "^4.1.0",

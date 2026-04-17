@@ -39,16 +39,18 @@ jobs:
         run: |
           owner="${GITHUB_REPOSITORY_OWNER,,}"
           release_tag="${RELEASE_TAG:-pr-${{ github.event.pull_request.number || github.run_number }}}"
-          version="${release_tag#v}"
-          minor="$(echo "${version}" | cut -d. -f1,2)"
           image_name="webhook-debugger-logger"
 
           {
             echo "tags<<EOF"
             echo "ghcr.io/${owner}/${image_name}:${release_tag}"
-            echo "ghcr.io/${owner}/${image_name}:${version}"
-            echo "ghcr.io/${owner}/${image_name}:${minor}"
-            if [[ "${RELEASE_PRERELEASE}" != "true" ]]; then
+            if [[ "${GITHUB_EVENT_NAME}" == 'release' ]]; then
+              version="${release_tag#v}"
+              minor="$(echo "${version}" | cut -d. -f1,2)"
+              echo "ghcr.io/${owner}/${image_name}:${version}"
+              echo "ghcr.io/${owner}/${image_name}:${minor}"
+            fi
+            if [[ "${GITHUB_EVENT_NAME}" == 'release' && "${RELEASE_PRERELEASE}" != 'true' ]]; then
               echo "ghcr.io/${owner}/${image_name}:latest"
             fi
             echo "EOF"

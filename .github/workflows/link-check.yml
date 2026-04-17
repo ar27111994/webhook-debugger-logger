@@ -96,12 +96,28 @@ jobs:
           node - <<'EOF'
           const fs = require('node:fs');
 
+          const normalizeUrlKey = (value) => {
+            if (typeof value !== 'string' || value.length === 0) {
+              return null;
+            }
+
+            try {
+              const { origin, pathname } = new URL(value);
+              return `${origin}${pathname}`;
+            } catch {
+              return null;
+            }
+          };
+
           const results = JSON.parse(fs.readFileSync('lychee/results.json', 'utf8'));
-          const softHandledUrls = new Set([
+          const softHandledUrls = [
             'https://www.npmjs.com/package/webhook-debugger-logger',
             'https://www.npmjs.com/package/isolated-vm?activeTab=readme',
             'https://img.shields.io/coderabbit/prs/github/ar27111994/webhook-debugger-logger?utm_source=oss&utm_medium=github&utm_campaign=ar27111994%2Fwebhook-debugger-logger&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews',
-          ]);
+          ];
+          const softHandledUrlKeys = new Set(
+            softHandledUrls.map((value) => normalizeUrlKey(value)).filter(Boolean),
+          );
 
           const softFailures = [];
           const hardFailures = [];
@@ -110,8 +126,13 @@ jobs:
             for (const failure of failures) {
               const url = failure.url;
               const code = failure.status?.code;
+              const normalizedUrl = normalizeUrlKey(url);
 
-              if (softHandledUrls.has(url) && (code === 403 || code === 408 || code === 429)) {
+              if (
+                normalizedUrl
+                && softHandledUrlKeys.has(normalizedUrl)
+                && (code === 403 || code === 408 || code === 429)
+              ) {
                 softFailures.push({ source, url, code, text: failure.status?.text ?? '' });
                 continue;
               }
