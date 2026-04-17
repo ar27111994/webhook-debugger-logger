@@ -88,7 +88,6 @@ function findMissingDescriptions(schemaNode, schemaPath) {
 
   return matches;
 }
-
 describe("Apify input schema", () => {
   it("keeps isSecret flags only on top-level properties", () => {
     const topLevelProperties = isPlainObject(inputSchema.properties)
