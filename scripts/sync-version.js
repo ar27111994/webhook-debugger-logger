@@ -6,9 +6,9 @@
 
 import { readFileSync, writeFileSync } from "fs";
 import { fileURLToPath } from "url";
-import { APP_CONSTS, EXIT_CODES } from "../src/consts/app.js";
+import { APP_CONSTS, APP_ROUTES, EXIT_CODES } from "../src/consts/app.js";
 import { FILE_NAMES } from "../src/consts/storage.js";
-import { ENCODINGS } from "../src/consts/http.js";
+import { ENCODINGS, HTTP_STATUS, MIME_TYPES } from "../src/consts/http.js";
 import { LOG_COMPONENTS } from "../src/consts/logging.js";
 import { LOG_MESSAGES } from "../src/consts/messages.js";
 import { ERROR_MESSAGES } from "../src/consts/errors.js";
@@ -26,6 +26,8 @@ const webServerSchemaPath = fileURLToPath(
 const packageJsonPath = fileURLToPath(
   new URL(FILE_NAMES.PACKAGE_JSON, import.meta.url),
 );
+const DASHBOARD_EXAMPLE_VERSION_PATTERN =
+  /(Webhook Debugger & Logger \(v)([^)]+)(\))/;
 
 /**
  * @param {string} path
@@ -33,7 +35,40 @@ const packageJsonPath = fileURLToPath(
  * @returns {void}
  */
 const writeJsonFile = (path, data) => {
-  writeFileSync(path, JSON.stringify(data, null, APP_CONSTS.JSON_INDENT) + "\n");
+  writeFileSync(
+    path,
+    JSON.stringify(data, null, APP_CONSTS.JSON_INDENT) + "\n",
+  );
+};
+
+/**
+ * @param {Record<string, any>} webServerSchema
+ * @param {string} packageVersion
+ * @returns {boolean}
+ */
+const syncDashboardExampleVersion = (webServerSchema, packageVersion) => {
+  const dashboardExample =
+    webServerSchema.paths?.[APP_ROUTES.DASHBOARD]?.get?.responses?.[
+      HTTP_STATUS.OK.toString()
+    ]?.content?.[MIME_TYPES.TEXT]?.example;
+
+  if (typeof dashboardExample !== "string") {
+    return false;
+  }
+
+  const updatedExample = dashboardExample.replace(
+    DASHBOARD_EXAMPLE_VERSION_PATTERN,
+    `$1${packageVersion}$3`,
+  );
+
+  if (updatedExample === dashboardExample) {
+    return false;
+  }
+
+  webServerSchema.paths[APP_ROUTES.DASHBOARD].get.responses[
+    HTTP_STATUS.OK.toString()
+  ].content[MIME_TYPES.TEXT].example = updatedExample;
+  return true;
 };
 
 export const syncVersion = () => {
@@ -59,11 +94,21 @@ export const syncVersion = () => {
       didSync = true;
     }
 
+    let didSyncSchema = false;
+
     if (webServerSchema.info?.version !== packageVersion) {
       webServerSchema.info = {
         ...webServerSchema.info,
         version: packageVersion,
       };
+      didSyncSchema = true;
+    }
+
+    if (syncDashboardExampleVersion(webServerSchema, packageVersion)) {
+      didSyncSchema = true;
+    }
+
+    if (didSyncSchema) {
       writeJsonFile(webServerSchemaPath, webServerSchema);
       didSync = true;
     }

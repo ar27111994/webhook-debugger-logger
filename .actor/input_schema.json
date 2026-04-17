@@ -134,6 +134,13 @@
       "example": "my-secret-key-123",
       "editor": "textfield"
     },
+    "signatureVerificationSecret": {
+      "type": "string",
+      "title": "Webhook Signing Secret",
+      "description": "Signing secret used by the webhook provider selected in the 'Webhook Signature Verification' settings below.",
+      "isSecret": true,
+      "editor": "textfield"
+    },
     "allowedIps": {
       "type": "array",
       "title": "IP Whitelist (CIDR)",
@@ -143,21 +150,14 @@
     "signatureVerification": {
       "type": "object",
       "title": "Webhook Signature Verification",
-      "description": "Verify incoming webhook signatures from providers like Stripe, Shopify, GitHub, or Slack.",
+      "description": "Verify incoming webhook signatures from providers like Stripe, Shopify, GitHub, or Slack. Choose the provider here, then enter its shared secret in the top-level 'Webhook Signing Secret' field above.",
       "properties": {
         "provider": {
           "type": "string",
           "title": "Provider",
-          "description": "Webhook provider for signature verification.",
+          "description": "Webhook provider for signature verification. Its shared secret is configured in the top-level 'Webhook Signing Secret' field above.",
           "enum": ["stripe", "shopify", "github", "slack", "custom"],
           "editor": "select"
-        },
-        "secret": {
-          "type": "string",
-          "title": "Signing Secret",
-          "description": "The webhook signing secret from your provider.",
-          "isSecret": true,
-          "editor": "textfield"
         },
         "headerName": {
           "type": "string",

@@ -10,6 +10,7 @@ import { LOG_MESSAGES } from "../../../src/consts/messages.js";
 import { setupCommonMocks } from "../../setup/helpers/mock-setup.js";
 import { loggerMock, constsMock } from "../../setup/helpers/shared-mocks.js";
 import { assertType } from "../../setup/helpers/test-utils.js";
+import { SIGNATURE_PROVIDERS } from "../../../src/consts/security.js";
 
 /**
  * @typedef {import('../../../src/utils/config.js')} ConfigUtils
@@ -293,6 +294,8 @@ describe("Config Utils", () => {
   });
 
   describe("parseWebhookOptions", () => {
+    const signatureVerificationSecret = " top-level-secret ";
+
     it("should apply defaults for complex fields", () => {
       const result = configUtils.parseWebhookOptions({});
       expect(result.allowedIps).toEqual([]);
@@ -330,6 +333,91 @@ describe("Config Utils", () => {
       const input = { urlCount: String(correctUrlCount) };
       const result = configUtils.parseWebhookOptions(assertType(input));
       expect(result.urlCount).toBe(correctUrlCount);
+    });
+
+    it("should map the top-level signature verification secret into runtime options", () => {
+      const result = configUtils.parseWebhookOptions({
+        signatureVerification: { provider: SIGNATURE_PROVIDERS.STRIPE },
+        signatureVerificationSecret,
+      });
+
+      expect(result.signatureVerification).toEqual({
+        provider: SIGNATURE_PROVIDERS.STRIPE,
+        secret: signatureVerificationSecret.trim(),
+      });
+    });
+
+    it("should allow a top-level secret without a nested signature config", () => {
+      const result = configUtils.parseWebhookOptions({
+        signatureVerificationSecret,
+      });
+
+      expect(result.signatureVerification).toEqual({
+        secret: signatureVerificationSecret.trim(),
+      });
+    });
+
+    it("should ignore a blank top-level secret when no signature config exists", () => {
+      const result = configUtils.parseWebhookOptions({
+        signatureVerificationSecret: "   ",
+      });
+
+      expect(result.signatureVerification).toBeUndefined();
+    });
+
+    it("should preserve the nested signature secret for backward compatibility", () => {
+      const result = configUtils.parseWebhookOptions({
+        signatureVerification: {
+          provider: SIGNATURE_PROVIDERS.GITHUB,
+          secret: "existing-secret",
+        },
+      });
+
+      expect(result.signatureVerification).toEqual({
+        provider: SIGNATURE_PROVIDERS.GITHUB,
+        secret: "existing-secret",
+      });
+    });
+
+    it("should preserve a nested signature config without a secret", () => {
+      const result = configUtils.parseWebhookOptions({
+        signatureVerification: {
+          provider: SIGNATURE_PROVIDERS.CUSTOM,
+          headerName: "X-Custom-Signature",
+        },
+      });
+
+      expect(result.signatureVerification).toEqual({
+        provider: SIGNATURE_PROVIDERS.CUSTOM,
+        headerName: "X-Custom-Signature",
+      });
+    });
+
+    it("should clear the nested signature secret when the top-level secret is blank", () => {
+      const result = configUtils.parseWebhookOptions({
+        signatureVerification: {
+          provider: SIGNATURE_PROVIDERS.SHOPIFY,
+          secret: "nested-secret",
+        },
+        signatureVerificationSecret: "   ",
+      });
+
+      expect(result.signatureVerification).toEqual({
+        provider: SIGNATURE_PROVIDERS.SHOPIFY,
+      });
+    });
+
+    it("should trim and drop a blank nested signature secret", () => {
+      const result = configUtils.parseWebhookOptions({
+        signatureVerification: {
+          provider: SIGNATURE_PROVIDERS.GITHUB,
+          secret: "   ",
+        },
+      });
+
+      expect(result.signatureVerification).toEqual({
+        provider: SIGNATURE_PROVIDERS.GITHUB,
+      });
     });
   });
 });

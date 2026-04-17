@@ -11,6 +11,8 @@ import {
   systemMock,
 } from "../../setup/helpers/shared-mocks.js";
 import { assertType } from "../../setup/helpers/test-utils.js";
+import { APP_ROUTES } from "../../../src/consts/app.js";
+import { HTTP_STATUS, MIME_TYPES } from "../../../src/consts/http.js";
 
 /**
  * @typedef {import('node:fs').PathOrFileDescriptor} PathOrFileDescriptor
@@ -29,19 +31,112 @@ const { syncVersion } = await import("../../../scripts/sync-version.js");
 describe("Sync Version Script", () => {
   // Constants for test data
   const PACKAGE_VERSION = "1.2.3";
+  const OUTDATED_VERSION = "0.0.0";
+  const WEBHOOK_API_TITLE = "Webhook API";
+  const NON_MATCHING_DASHBOARD_EXAMPLE =
+    "Dashboard summary unavailable for this environment";
+  const ALREADY_SYNCED_LOG_FRAGMENT = "already in sync";
   const PACKAGE_JSON = JSON.stringify({ version: PACKAGE_VERSION });
-  const ACTOR_JSON_OLD = JSON.stringify({ version: "0.0.0", name: "actor" });
+  const ACTOR_JSON_OLD = JSON.stringify({
+    version: OUTDATED_VERSION,
+    name: "actor",
+  });
   const ACTOR_JSON_MATCH = JSON.stringify({
     version: PACKAGE_VERSION,
     name: "actor",
   });
   const WEB_SERVER_SCHEMA_OLD = JSON.stringify({
     openapi: "3.0.3",
-    info: { title: "Webhook API", version: "0.0.0" },
+    info: { title: WEBHOOK_API_TITLE, version: OUTDATED_VERSION },
+    paths: {
+      [APP_ROUTES.DASHBOARD]: {
+        get: {
+          responses: {
+            [HTTP_STATUS.OK.toString()]: {
+              content: {
+                [MIME_TYPES.TEXT]: {
+                  example: `Webhook Debugger & Logger (v${OUTDATED_VERSION})\nActive Webhooks: 1\nSignature Verification: STRIPE`,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
   });
   const WEB_SERVER_SCHEMA_MATCH = JSON.stringify({
     openapi: "3.0.3",
-    info: { title: "Webhook API", version: PACKAGE_VERSION },
+    info: { title: WEBHOOK_API_TITLE, version: PACKAGE_VERSION },
+    paths: {
+      [APP_ROUTES.DASHBOARD]: {
+        get: {
+          responses: {
+            [HTTP_STATUS.OK]: {
+              content: {
+                [MIME_TYPES.TEXT]: {
+                  example: `Webhook Debugger & Logger (v${PACKAGE_VERSION})\nActive Webhooks: 1\nSignature Verification: STRIPE`,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+  const WEB_SERVER_SCHEMA_EXAMPLE_OLD = JSON.stringify({
+    openapi: "3.0.3",
+    info: { title: WEBHOOK_API_TITLE, version: PACKAGE_VERSION },
+    paths: {
+      [APP_ROUTES.DASHBOARD]: {
+        get: {
+          responses: {
+            [HTTP_STATUS.OK]: {
+              content: {
+                [MIME_TYPES.TEXT]: {
+                  example: `Webhook Debugger & Logger (v${OUTDATED_VERSION})\nActive Webhooks: 1\nSignature Verification: STRIPE`,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+  const WEB_SERVER_SCHEMA_WITHOUT_EXAMPLE = JSON.stringify({
+    openapi: "3.0.3",
+    info: { title: WEBHOOK_API_TITLE, version: PACKAGE_VERSION },
+    paths: {
+      [APP_ROUTES.DASHBOARD]: {
+        get: {
+          responses: {
+            [HTTP_STATUS.OK]: {
+              content: {
+                [MIME_TYPES.TEXT]: {},
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+  const WEB_SERVER_SCHEMA_WITH_NON_MATCHING_EXAMPLE = JSON.stringify({
+    openapi: "3.0.3",
+    info: { title: WEBHOOK_API_TITLE, version: PACKAGE_VERSION },
+    paths: {
+      [APP_ROUTES.DASHBOARD]: {
+        get: {
+          responses: {
+            [HTTP_STATUS.OK]: {
+              content: {
+                [MIME_TYPES.TEXT]: {
+                  example: NON_MATCHING_DASHBOARD_EXAMPLE,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
   });
   const ACTOR_JSON = "actor.json";
   const WEB_SERVER_SCHEMA_JSON = "web_server_schema.json";
@@ -98,6 +193,11 @@ describe("Sync Version Script", () => {
 
     const writtenSchema = JSON.parse(assertType(schemaContent));
     expect(writtenSchema.info.version).toBe(PACKAGE_VERSION);
+    expect(
+      writtenSchema.paths[APP_ROUTES.DASHBOARD].get.responses[
+        HTTP_STATUS.OK.toString()
+      ].content[MIME_TYPES.TEXT].example,
+    ).toContain(`(v${PACKAGE_VERSION})`);
 
     expect(loggerMock.info).toHaveBeenCalledWith(
       expect.stringContaining(PACKAGE_VERSION),
@@ -127,7 +227,7 @@ describe("Sync Version Script", () => {
     expect(fsMock.readFileSync).toHaveBeenCalledTimes(READ_FILE_COUNT);
     expect(fsMock.writeFileSync).not.toHaveBeenCalled();
     expect(loggerMock.info).toHaveBeenCalledWith(
-      expect.stringContaining("already in sync"),
+      expect.stringContaining(ALREADY_SYNCED_LOG_FRAGMENT),
     );
   });
 
@@ -158,6 +258,92 @@ describe("Sync Version Script", () => {
 
     const writtenSchema = JSON.parse(assertType(content));
     expect(writtenSchema.info.version).toBe(PACKAGE_VERSION);
+  });
+
+  it("should update only the web server schema example when the info version already matches", () => {
+    fsMock.readFileSync.mockImplementation(
+      assertType(
+        /**
+         * @param {PathOrFileDescriptor} path
+         * @returns {string}
+         */
+        (path) => {
+          if (String(path).includes(PACKAGE_JSON_PATH)) return PACKAGE_JSON;
+          if (String(path).includes(ACTOR_JSON)) return ACTOR_JSON_MATCH;
+          if (String(path).includes(WEB_SERVER_SCHEMA_JSON)) {
+            return WEB_SERVER_SCHEMA_EXAMPLE_OLD;
+          }
+          return "{}";
+        },
+      ),
+    );
+
+    syncVersion();
+
+    expect(fsMock.writeFileSync).toHaveBeenCalledTimes(1);
+
+    const [path, content] = fsMock.writeFileSync.mock.calls[0];
+    expect(path).toContain(WEB_SERVER_SCHEMA_JSON);
+
+    const writtenSchema = JSON.parse(assertType(content));
+    expect(writtenSchema.info.version).toBe(PACKAGE_VERSION);
+    expect(
+      writtenSchema.paths[APP_ROUTES.DASHBOARD].get.responses[
+        HTTP_STATUS.OK.toString()
+      ].content[MIME_TYPES.TEXT].example,
+    ).toContain(`(v${PACKAGE_VERSION})`);
+  });
+
+  it("should skip schema writes when the dashboard example is missing and versions already match", () => {
+    fsMock.readFileSync.mockImplementation(
+      assertType(
+        /**
+         * @param {PathOrFileDescriptor} path
+         * @returns {string}
+         */
+        (path) => {
+          if (String(path).includes(PACKAGE_JSON_PATH)) return PACKAGE_JSON;
+          if (String(path).includes(ACTOR_JSON)) return ACTOR_JSON_MATCH;
+          if (String(path).includes(WEB_SERVER_SCHEMA_JSON)) {
+            return WEB_SERVER_SCHEMA_WITHOUT_EXAMPLE;
+          }
+          return "{}";
+        },
+      ),
+    );
+
+    syncVersion();
+
+    expect(fsMock.writeFileSync).not.toHaveBeenCalled();
+    expect(loggerMock.info).toHaveBeenCalledWith(
+      expect.stringContaining(ALREADY_SYNCED_LOG_FRAGMENT),
+    );
+  });
+
+  it("should skip schema writes when the dashboard example does not match the version pattern", () => {
+    fsMock.readFileSync.mockImplementation(
+      assertType(
+        /**
+         * @param {PathOrFileDescriptor} path
+         * @returns {string}
+         */
+        (path) => {
+          if (String(path).includes(PACKAGE_JSON_PATH)) return PACKAGE_JSON;
+          if (String(path).includes(ACTOR_JSON)) return ACTOR_JSON_MATCH;
+          if (String(path).includes(WEB_SERVER_SCHEMA_JSON)) {
+            return WEB_SERVER_SCHEMA_WITH_NON_MATCHING_EXAMPLE;
+          }
+          return "{}";
+        },
+      ),
+    );
+
+    syncVersion();
+
+    expect(fsMock.writeFileSync).not.toHaveBeenCalled();
+    expect(loggerMock.info).toHaveBeenCalledWith(
+      expect.stringContaining(ALREADY_SYNCED_LOG_FRAGMENT),
+    );
   });
 
   it("should handle errors gracefully", () => {

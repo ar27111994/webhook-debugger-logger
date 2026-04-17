@@ -251,6 +251,7 @@
 /**
  * @typedef {Object} WebhookConfig
  * @property {string} [authKey]
+ * @property {string} [signatureVerificationSecret]
  * @property {string[]} [allowedIps]
  * @property {number} [defaultResponseCode]
  * @property {string | Object} [defaultResponseBody]
