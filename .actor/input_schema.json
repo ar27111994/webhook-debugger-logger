@@ -215,6 +215,7 @@
         "slack": {
           "type": "object",
           "title": "Slack",
+          "description": "Slack alert channel settings for webhook notifications.",
           "properties": {
             "webhookUrl": {
               "type": "string",
@@ -227,6 +228,7 @@
         "discord": {
           "type": "object",
           "title": "Discord",
+          "description": "Discord alert channel settings for webhook notifications.",
           "properties": {
             "webhookUrl": {
               "type": "string",

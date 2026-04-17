@@ -25,6 +25,8 @@
     "lint": "eslint --no-error-on-unmatched-pattern .actor public src tests",
     "lint:fix": "npm run lint -- --fix",
     "typecheck": "tsc --noEmit",
+    "validate:input-schema": "npx --yes apify-cli@1.4.1 validate-schema",
+    "validate:schemas": "npm run validate:input-schema && npm run validate:web-server-schema",
     "validate:web-server-schema": "node scripts/validate-web-server-schema.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
