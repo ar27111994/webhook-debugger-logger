@@ -1,6 +1,6 @@
 # Webhook Debugger, Logger & API Mocking Suite
 
-![Webhook Debugger and Logger logo](assets/icon-160.png)
+![Webhook Debugger and Logger logo](https://raw.githubusercontent.com/ar27111994/webhook-debugger-logger/main/assets/icon-160.png)
 
 Generate temporary webhook URLs, inspect every incoming request, replay failures, and simulate callback behavior without tunneling localhost.
 
@@ -12,7 +12,7 @@ Generate temporary webhook URLs, inspect every incoming request, replay failures
 [![npm downloads](https://img.shields.io/npm/dm/webhook-debugger-logger)](https://www.npmjs.com/package/webhook-debugger-logger)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
-[![GHCR](https://img.shields.io/badge/GHCR-Container%20Image-2496ED?logo=docker&logoColor=white)](docs/local_docker_testing.md)
+[![GHCR](https://img.shields.io/badge/GHCR-Container%20Image-2496ED?logo=docker&logoColor=white)](https://github.com/ar27111994/webhook-debugger-logger/pkgs/container/webhook-debugger-logger)
 ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/ar27111994/webhook-debugger-logger?utm_source=oss&utm_medium=github&utm_campaign=ar27111994%2Fwebhook-debugger-logger&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 [![Webhook Debugger, Logger & API Mocker - Debug webhooks 90% faster without localhost tunneling | Product Hunt](https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1057655&theme=light&t=1767529788592)](https://www.producthunt.com/products/webhook-debugger-logger-api-mocker?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-webhook-debugger-logger-api-mocker)
 
@@ -20,16 +20,16 @@ Generate temporary webhook URLs, inspect every incoming request, replay failures
 
 [![Open actor in the Apify Store](https://img.shields.io/badge/Apify%20Store-Open%20Actor-5A4FCF?logo=apify&logoColor=white)](https://apify.com/ar27111994/webhook-debugger-logger)
 [![Run actor on Apify](https://img.shields.io/badge/Run%20on-Apify-6B46FF?logo=apify&logoColor=white)](https://console.apify.com/actors/ar27111994~webhook-debugger-logger/input)
-[![Read the API reference](https://img.shields.io/badge/API-Reference-0F766E?logo=swagger&logoColor=white)](docs/api-reference.md)
-[![Self-host with Docker](https://img.shields.io/badge/Self--host-Docker-2496ED?logo=docker&logoColor=white)](docs/local_docker_testing.md)
+[![Read the API reference](https://img.shields.io/badge/API-Reference-0F766E?logo=swagger&logoColor=white)](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/api-reference.md)
+[![Self-host with Docker](https://img.shields.io/badge/Self--host-Docker-2496ED?logo=docker&logoColor=white)](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/local_docker_testing.md)
 
 ## Contribute
 
 [![Report a bug](https://img.shields.io/badge/Report-Bug-d73a4a?logo=github&logoColor=white)](https://github.com/ar27111994/webhook-debugger-logger/issues/new?template=bug_report.md)
 [![Request a feature](https://img.shields.io/badge/Request-Feature-1f883d?logo=github&logoColor=white)](https://github.com/ar27111994/webhook-debugger-logger/issues/new?template=feature_request.md)
-[![View changelog](https://img.shields.io/badge/View-Changelog-6f42c1?logo=readthedocs&logoColor=white)](CHANGELOG.md)
-[![Security policy](https://img.shields.io/badge/Security-Policy-ffb000?logo=shield&logoColor=white)](SECURITY.md)
-[![Contributing](https://img.shields.io/badge/Contributing-Guide-0969da?logo=github&logoColor=white)](CONTRIBUTING.md)
+[![View changelog](https://img.shields.io/badge/View-Changelog-6f42c1?logo=readthedocs&logoColor=white)](https://github.com/ar27111994/webhook-debugger-logger/blob/main/CHANGELOG.md)
+[![Security policy](https://img.shields.io/badge/Security-Policy-ffb000?logo=shield&logoColor=white)](https://github.com/ar27111994/webhook-debugger-logger/blob/main/SECURITY.md)
+[![Contributing](https://img.shields.io/badge/Contributing-Guide-0969da?logo=github&logoColor=white)](https://github.com/ar27111994/webhook-debugger-logger/blob/main/CONTRIBUTING.md)
 
 Webhook Debugger, Logger & API Mocking Suite is an [Apify Actor](https://apify.com/ar27111994/webhook-debugger-logger) for testing webhook integrations end to end. It generates temporary endpoints, captures the full request envelope, exposes live and queryable logs, and lets you replay or forward captured traffic to another destination.
 
@@ -43,15 +43,15 @@ It is designed for developers working with providers such as Stripe, GitHub, Sho
 ## Screenshots
 
 > [!NOTE]
-> The Apify Store input tab always reflects the most recently published build. To avoid showing stale configuration fields, this README documents input options from the current repo schema in [.actor/input_schema.json](.actor/input_schema.json) and uses a live local runtime screenshot below.
+> The Apify Store input tab always reflects the most recently published build. To avoid showing stale configuration fields, this README documents input options from the current repo schema in [.actor/input_schema.json](https://github.com/ar27111994/webhook-debugger-logger/blob/main/.actor/input_schema.json) and uses a live local runtime screenshot below.
 
 ### Built-in dashboard
 
-![Self-hosted dashboard page showing the actor title, online status, active webhook count, and quick link to the info endpoint](assets/dashboard-live.png)
+![Self-hosted dashboard page showing the actor title, online status, active webhook count, and quick link to the info endpoint](https://raw.githubusercontent.com/ar27111994/webhook-debugger-logger/main/assets/dashboard-live.png)
 
 ## Key input options
 
-The current repo schema is defined in [.actor/input_schema.json](.actor/input_schema.json). These are the settings most users touch first.
+The current repo schema is defined in [.actor/input_schema.json](https://github.com/ar27111994/webhook-debugger-logger/blob/main/.actor/input_schema.json). These are the settings most users touch first.
 
 | Input                   | Purpose                                                                                                           | Default    |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------- | ---------- |
@@ -69,7 +69,7 @@ The current repo schema is defined in [.actor/input_schema.json](.actor/input_sc
 | `jsonSchema`            | Reject payloads that do not match a JSON Schema                                                                   | unset      |
 | `customScript`          | Transform or enrich the captured event before storage                                                             | unset      |
 
-![Input schema preview from the Apify Actor input tab](assets/input_schema_preview.png)
+![Input schema preview from the Apify Actor input tab](https://raw.githubusercontent.com/ar27111994/webhook-debugger-logger/main/assets/input_schema_preview.png)
 
 ## What does this actor do?
 
@@ -227,7 +227,7 @@ curl -X POST "https://<run-id>.runs.apify.net/webhook/wh_demo123" \
 }
 ```
 
-![Dataset view showing captured webhook events with metadata and payload fields](assets/dataset_view.png)
+![Dataset view showing captured webhook events with metadata and payload fields](https://raw.githubusercontent.com/ar27111994/webhook-debugger-logger/main/assets/dataset_view.png)
 
 ## Advanced configuration examples
 
@@ -320,11 +320,11 @@ The actor exposes a small but practical HTTP surface.
 | `GET /health`                     | Liveness probe                                    |
 | `GET /ready`                      | Readiness probe                                   |
 
-For the full contract, see [docs/api-reference.md](docs/api-reference.md) and the machine-readable schema in [.actor/web_server_schema.json](.actor/web_server_schema.json).
+For the full contract, see [docs/api-reference.md](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/api-reference.md) and the machine-readable schema in [.actor/web_server_schema.json](https://github.com/ar27111994/webhook-debugger-logger/blob/main/.actor/web_server_schema.json).
 
 ### Live stream preview
 
-![SSE stream output showing heartbeat events and real-time webhook captures](assets/sse_stream.png)
+![SSE stream output showing heartbeat events and real-time webhook captures](https://raw.githubusercontent.com/ar27111994/webhook-debugger-logger/main/assets/sse_stream.png)
 
 ## Platform and MCP workflows
 
@@ -347,7 +347,7 @@ This actor is not itself an MCP server, but it fits cleanly into MCP-enabled aut
 - Agent-driven workflows can use this actor as a disposable webhook target while another MCP tool verifies payloads, dashboards, or downstream effects.
 - The repo includes MCP-oriented development assets and guidance under the repo rules for using Apify and Chrome DevTools MCP during development.
 
-![MCP configuration screenshot showing how to connect Apify tooling in an MCP client](assets/mcp_config.png)
+![MCP configuration screenshot showing how to connect Apify tooling in an MCP client](https://raw.githubusercontent.com/ar27111994/webhook-debugger-logger/main/assets/mcp_config.png)
 
 In practice, that means AI-assisted integration tests can create a run, post webhook traffic, inspect `/info` or `/logs`, and then continue through the rest of an Apify or browser automation workflow.
 
@@ -387,7 +387,7 @@ Retry and timeout behavior exists in several places and serves different goals.
 
 In addition to input-level settings, the runtime has internal bounded timeouts for alert delivery, background tasks, custom script execution, shutdown, DNS resolution, and outbound forwarding.
 
-If you need the detailed implementation model behind these controls, see [docs/architecture.md](docs/architecture.md).
+If you need the detailed implementation model behind these controls, see [docs/architecture.md](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/architecture.md).
 
 ## Alert notifications
 
@@ -434,7 +434,7 @@ The runtime uses a CQRS-style split:
 
 That design lets the actor keep ingesting even if DuckDB needs to rebuild from the Dataset.
 
-For deeper implementation detail, see [docs/architecture.md](docs/architecture.md).
+For deeper implementation detail, see [docs/architecture.md](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/architecture.md).
 
 ## Self-hosting
 
@@ -449,11 +449,11 @@ The web server listens on `http://localhost:8080` by default.
 
 #### CLI demo screenshots
 
-![VS Code terminal showing local actor startup and generated webhook IDs](assets/demo_cli.PNG)
+![VS Code terminal showing local actor startup and generated webhook IDs](https://raw.githubusercontent.com/ar27111994/webhook-debugger-logger/main/assets/demo_cli.PNG)
 
-![CLI output showing JSON/form submissions and a forced 401 scenario](assets/demo_cli_output.PNG)
+![CLI output showing JSON/form submissions and a forced 401 scenario](https://raw.githubusercontent.com/ar27111994/webhook-debugger-logger/main/assets/demo_cli_output.PNG)
 
-![Terminal output of SSE stream with heartbeat and live captured events](assets/demo_cli_sse_output.PNG)
+![Terminal output of SSE stream with heartbeat and live captured events](https://raw.githubusercontent.com/ar27111994/webhook-debugger-logger/main/assets/demo_cli_sse_output.PNG)
 
 ### Local .env loading and override order
 
@@ -463,7 +463,7 @@ For local CLI and self-hosted runs, the app automatically loads a `.env` file fr
 - `.env` loading is skipped during Jest runs so tests stay deterministic.
 - The main entrypoint imports the loader explicitly, and the shared env helper also imports it so env-backed constants still resolve correctly in modules that are evaluated outside `src/main.js`.
 
-Use [.env.example](.env.example) as the starting point for local configuration.
+Use [.env.example](https://github.com/ar27111994/webhook-debugger-logger/blob/main/.env.example) as the starting point for local configuration.
 
 Typical local overrides:
 
@@ -475,14 +475,14 @@ INPUT={"urlCount":1,"retentionHours":24,"authKey":"local-dev-key"}
 
 Useful environment variables:
 
-| Variable                                 | Purpose                                                                                   |
-| ---------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `ACTOR_WEB_SERVER_PORT`                  | Local HTTP port override                                                                  |
-| `INPUT`                                  | Full actor input JSON for local or container boot                                         |
-| `AUTH_KEY`                               | Used by [demo_cli.js](demo_cli.js) when calling protected endpoints                       |
-| `DEMO_TARGET`                            | Used by [demo_cli.js](demo_cli.js) to select a local target (`localhost`, `ipv4`, `ipv6`) |
-| `APIFY_LOCAL_STORAGE_DIR`                | Local storage location for state, datasets, and offloaded payloads                        |
-| `DUCKDB_STORAGE_DIR` / `DUCKDB_FILENAME` | Override DuckDB storage location and file name                                            |
+| Variable                                 | Purpose                                                                                                                                                   |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ACTOR_WEB_SERVER_PORT`                  | Local HTTP port override                                                                                                                                  |
+| `INPUT`                                  | Full actor input JSON for local or container boot                                                                                                         |
+| `AUTH_KEY`                               | Used by [demo_cli.js](https://github.com/ar27111994/webhook-debugger-logger/blob/main/demo_cli.js) when calling protected endpoints                       |
+| `DEMO_TARGET`                            | Used by [demo_cli.js](https://github.com/ar27111994/webhook-debugger-logger/blob/main/demo_cli.js) to select a local target (`localhost`, `ipv4`, `ipv6`) |
+| `APIFY_LOCAL_STORAGE_DIR`                | Local storage location for state, datasets, and offloaded payloads                                                                                        |
+| `DUCKDB_STORAGE_DIR` / `DUCKDB_FILENAME` | Override DuckDB storage location and file name                                                                                                            |
 
 ### Run with Docker
 
@@ -495,7 +495,7 @@ docker run --rm -p 8080:8080 \
   webhook-debugger-logger
 ```
 
-There is also a dedicated standalone image target in [Dockerfile](Dockerfile) via `--target runtime-standalone`. For a fuller local validation flow, including SSE verification, see [docs/local_docker_testing.md](docs/local_docker_testing.md).
+There is also a dedicated standalone image target in [Dockerfile](https://github.com/ar27111994/webhook-debugger-logger/blob/main/Dockerfile) via `--target runtime-standalone`. For a fuller local validation flow, including SSE verification, see [docs/local_docker_testing.md](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/local_docker_testing.md).
 
 ## Pricing
 
@@ -526,14 +526,14 @@ Examples:
 
 The repo includes focused operational guides for common debugging and rollout scenarios:
 
-- [Zapier, Make, and n8n bridge](docs/playbooks/low-code-bridge.md)
-- [GitHub App and CI webhook debugging](docs/playbooks/github-ci.md)
-- [Incident response and replay recovery](docs/playbooks/incident-response.md)
-- [Large payload and binary forensics](docs/playbooks/large-payload-forensics.md)
-- [PII-safe production capture](docs/playbooks/pii-safe-production-capture.md)
-- [Custom HMAC partner integrations](docs/playbooks/custom-hmac-partner.md)
-- [Callback sandbox prototyping](docs/playbooks/callback-sandbox.md)
-- [Canary validation and shadow replay](docs/playbooks/canary-shadow-rollout.md)
+- [Zapier, Make, and n8n bridge](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/playbooks/low-code-bridge.md)
+- [GitHub App and CI webhook debugging](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/playbooks/github-ci.md)
+- [Incident response and replay recovery](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/playbooks/incident-response.md)
+- [Large payload and binary forensics](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/playbooks/large-payload-forensics.md)
+- [PII-safe production capture](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/playbooks/pii-safe-production-capture.md)
+- [Custom HMAC partner integrations](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/playbooks/custom-hmac-partner.md)
+- [Callback sandbox prototyping](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/playbooks/callback-sandbox.md)
+- [Canary validation and shadow replay](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/playbooks/canary-shadow-rollout.md)
 
 ## Frequently asked questions
 
@@ -567,11 +567,11 @@ Yes. You can run it locally with Node.js or Docker, or deploy the container into
 
 ## Documentation and related resources
 
-- [API reference](docs/api-reference.md)
-- [Architecture overview](docs/architecture.md)
-- [Local Docker testing guide](docs/local_docker_testing.md)
-- [Manual demo guide](MANUAL_DEMO_GUIDE.md)
-- [Publication guide](PUBLICATION_GUIDE.md)
-- [Security policy](SECURITY.md)
+- [API reference](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/api-reference.md)
+- [Architecture overview](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/architecture.md)
+- [Local Docker testing guide](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/local_docker_testing.md)
+- [Manual demo guide](https://github.com/ar27111994/webhook-debugger-logger/blob/main/MANUAL_DEMO_GUIDE.md)
+- [Publication guide](https://github.com/ar27111994/webhook-debugger-logger/blob/main/PUBLICATION_GUIDE.md)
+- [Security policy](https://github.com/ar27111994/webhook-debugger-logger/blob/main/SECURITY.md)
 
-If you are looking for implementation and marketing guidance used during development, see the materials under [docs/marketing](docs/marketing).
+If you are looking for implementation and marketing guidance used during development, see the materials under [docs/marketing](https://github.com/ar27111994/webhook-debugger-logger/tree/main/docs/marketing).
