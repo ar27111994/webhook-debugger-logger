@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.4] - 2026-04-18
+
+### Fixed (3.0.4)
+
+- **Apify**: Relax the dataset storage schema for `body` and `responseBody` so webhook events can be stored when request or response payloads are captured as parsed JSON objects instead of plain strings.
+- **Tests**: Add a regression test that keeps the Actor dataset schema aligned with the webhook payload shapes persisted by the runtime.
+
 ## [3.0.3] - 2026-04-18
 
 ### Fixed (3.0.3)

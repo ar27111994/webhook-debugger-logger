@@ -3,7 +3,7 @@
   "info": {
     "title": "Webhook Debugger & Logger API",
     "description": "OpenAPI description for the Webhook Debugger & Logger Actor web server. Authentication is configuration-driven: when authKey is configured, management routes require either a bearer token or the key query parameter; when authKey is unset, those routes remain accessible without credentials.",
-    "version": "3.0.3"
+    "version": "3.0.4"
   },
   "servers": [
     {
@@ -80,7 +80,7 @@
                 "schema": {
                   "type": "string"
                 },
-                "example": "Webhook Debugger & Logger (v3.0.3)\nActive Webhooks: 1\nSignature Verification: STRIPE"
+                "example": "Webhook Debugger & Logger (v3.0.4)\nActive Webhooks: 1\nSignature Verification: STRIPE"
               }
             }
           },
