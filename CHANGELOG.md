@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Fixed (3.0.4)
 
-- **Apify**: Relax the dataset storage schema for `body` and `responseBody` so webhook events can be stored when request or response payloads are captured as parsed JSON objects instead of plain strings.
+- **Apify**: Relax the dataset storage schema for `body` and `responseBody` so webhook events can be stored when request or response payloads are captured as any JSON-compatible values instead of only strings and objects.
 - **Tests**: Add a regression test that keeps the Actor dataset schema aligned with the webhook payload shapes persisted by the runtime.
 
 ## [3.0.3] - 2026-04-18

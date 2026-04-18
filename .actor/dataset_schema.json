@@ -64,10 +64,22 @@
           },
           {
             "type": "object"
+          },
+          {
+            "type": "array"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
           }
         ],
         "title": "Body",
-        "description": "The raw request body as text, or a parsed/offloaded payload object",
+        "description": "The raw request body as text, or a parsed/offloaded JSON payload",
         "example": {
           "status": "success"
         }
@@ -121,6 +133,18 @@
           },
           {
             "type": "object"
+          },
+          {
+            "type": "array"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
           }
         ],
         "title": "Response Body",

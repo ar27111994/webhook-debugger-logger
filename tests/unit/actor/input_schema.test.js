@@ -134,8 +134,8 @@ describe("Apify input schema", () => {
 });
 
 describe("Apify dataset schema", () => {
-  it("allows webhook body fields to be stored as either string or object", () => {
-    const ajv = new Ajv({ strict: false });
+  it("allows webhook body fields to be stored in the runtime-supported JSON shapes", () => {
+    const ajv = new Ajv({ strict: false, validateFormats: false });
     const validate = ajv.compile(datasetSchema.fields);
 
     expect(
@@ -153,5 +153,36 @@ describe("Apify dataset schema", () => {
       }),
     ).toBe(true);
     expect(validate.errors).toBeNull();
+
+    expect(
+      validate({
+        body: ["first", "second"],
+        responseBody: null,
+      }),
+    ).toBe(true);
+    expect(validate.errors).toBeNull();
+
+    expect(
+      validate({
+        body: 123,
+        responseBody: true,
+      }),
+    ).toBe(true);
+    expect(validate.errors).toBeNull();
+
+    expect(
+      validate({
+        body: false,
+        responseBody: ["one", "two", "three"],
+      }),
+    ).toBe(true);
+    expect(validate.errors).toBeNull();
+
+    expect(
+      validate({
+        body: () => "not-json",
+      }),
+    ).toBe(false);
+    expect(validate.errors).not.toBeNull();
   });
 });
