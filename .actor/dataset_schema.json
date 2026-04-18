@@ -58,10 +58,31 @@
         }
       },
       "body": {
-        "type": "string",
+        "oneOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "object"
+          },
+          {
+            "type": "array"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
         "title": "Body",
-        "description": "The raw or parsed request body",
-        "example": "{\"status\": \"success\"}"
+        "description": "The raw request body as text, or a parsed/offloaded JSON payload",
+        "example": {
+          "status": "success"
+        }
       },
       "contentType": {
         "type": "string",
@@ -106,16 +127,39 @@
         "example": 200
       },
       "responseBody": {
-        "type": "string",
+        "oneOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "object"
+          },
+          {
+            "type": "array"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
         "title": "Response Body",
-        "description": "Body returned to the webhook sender",
-        "example": "{\"received\": true}"
+        "description": "Response body returned to the webhook sender as text or JSON",
+        "example": {
+          "received": true
+        }
       },
       "responseHeaders": {
         "type": "object",
         "title": "Response Headers",
         "description": "Headers returned to the webhook sender",
-        "example": { "content-type": "application/json" }
+        "example": {
+          "content-type": "application/json"
+        }
       },
       "signatureProvider": {
         "type": "string",
@@ -153,17 +197,41 @@
       "display": {
         "component": "table",
         "properties": {
-          "timestamp": { "label": "Time", "format": "date" },
-          "requestId": { "label": "Req ID" },
-          "signatureValid": { "label": "Sig", "format": "boolean" },
-          "webhookId": { "label": "Webhook ID" },
-          "method": { "label": "Method" },
-          "statusCode": { "label": "Status" },
-          "contentType": { "label": "Content-Type" },
-          "size": { "label": "Size (Bytes)" },
-          "processingTime": { "label": "Latency (ms)" },
-          "remoteIp": { "label": "Source IP" },
-          "signatureProvider": { "label": "Provider" }
+          "timestamp": {
+            "label": "Time",
+            "format": "date"
+          },
+          "requestId": {
+            "label": "Req ID"
+          },
+          "signatureValid": {
+            "label": "Sig",
+            "format": "boolean"
+          },
+          "webhookId": {
+            "label": "Webhook ID"
+          },
+          "method": {
+            "label": "Method"
+          },
+          "statusCode": {
+            "label": "Status"
+          },
+          "contentType": {
+            "label": "Content-Type"
+          },
+          "size": {
+            "label": "Size (Bytes)"
+          },
+          "processingTime": {
+            "label": "Latency (ms)"
+          },
+          "remoteIp": {
+            "label": "Source IP"
+          },
+          "signatureProvider": {
+            "label": "Provider"
+          }
         }
       }
     },
@@ -189,18 +257,49 @@
       "display": {
         "component": "table",
         "properties": {
-          "timestamp": { "label": "Time", "format": "date" },
-          "requestId": { "label": "Req ID" },
-          "signatureValid": { "label": "Sig", "format": "boolean" },
-          "method": { "label": "Method" },
-          "statusCode": { "label": "Status" },
-          "query": { "label": "Query", "format": "object" },
-          "headers": { "label": "Headers", "format": "object" },
-          "body": { "label": "Body", "format": "text" },
-          "responseBody": { "label": "Res Body", "format": "text" },
-          "responseHeaders": { "label": "Res Headers", "format": "object" },
-          "signatureProvider": { "label": "Sig Provider" },
-          "signatureError": { "label": "Sig Error" }
+          "timestamp": {
+            "label": "Time",
+            "format": "date"
+          },
+          "requestId": {
+            "label": "Req ID"
+          },
+          "signatureValid": {
+            "label": "Sig",
+            "format": "boolean"
+          },
+          "method": {
+            "label": "Method"
+          },
+          "statusCode": {
+            "label": "Status"
+          },
+          "query": {
+            "label": "Query",
+            "format": "object"
+          },
+          "headers": {
+            "label": "Headers",
+            "format": "object"
+          },
+          "body": {
+            "label": "Body",
+            "format": "text"
+          },
+          "responseBody": {
+            "label": "Res Body",
+            "format": "text"
+          },
+          "responseHeaders": {
+            "label": "Res Headers",
+            "format": "object"
+          },
+          "signatureProvider": {
+            "label": "Sig Provider"
+          },
+          "signatureError": {
+            "label": "Sig Error"
+          }
         }
       }
     }

@@ -8,7 +8,9 @@ import { getInputSchemaSecretFieldKeys } from "@apify/input_secrets";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
+const Ajv = require("ajv").default;
 const inputSchema = require("../../../.actor/input_schema.json");
+const datasetSchema = require("../../../.actor/dataset_schema.json");
 
 /**
  * @param {unknown} value
@@ -128,5 +130,59 @@ describe("Apify input schema", () => {
     const missingDescriptions = findMissingDescriptions(inputSchema, "schema");
 
     expect(missingDescriptions).toEqual([]);
+  });
+});
+
+describe("Apify dataset schema", () => {
+  it("allows webhook body fields to be stored in the runtime-supported JSON shapes", () => {
+    const ajv = new Ajv({ strict: false, validateFormats: false });
+    const validate = ajv.compile(datasetSchema.fields);
+
+    expect(
+      validate({
+        body: { status: "success" },
+        responseBody: { received: true },
+      }),
+    ).toBe(true);
+    expect(validate.errors).toBeNull();
+
+    expect(
+      validate({
+        body: '{"status":"success"}',
+        responseBody: '{"received":true}',
+      }),
+    ).toBe(true);
+    expect(validate.errors).toBeNull();
+
+    expect(
+      validate({
+        body: ["first", "second"],
+        responseBody: null,
+      }),
+    ).toBe(true);
+    expect(validate.errors).toBeNull();
+
+    expect(
+      validate({
+        body: 123,
+        responseBody: true,
+      }),
+    ).toBe(true);
+    expect(validate.errors).toBeNull();
+
+    expect(
+      validate({
+        body: false,
+        responseBody: ["one", "two", "three"],
+      }),
+    ).toBe(true);
+    expect(validate.errors).toBeNull();
+
+    expect(
+      validate({
+        body: () => "not-json",
+      }),
+    ).toBe(false);
+    expect(validate.errors).not.toBeNull();
   });
 });
