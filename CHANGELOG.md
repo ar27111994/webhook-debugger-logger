@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.5] - 2026-04-21
+
+### Fixed (3.0.5)
+
+- **Latency Metrics**: Make `processingTime` consistently represent server-side processing time only, excluding any configured `responseDelayMs` simulation from persisted log data.
+- **Performance**: Cache compiled JSON Schema validators so repeated requests and stable hot-reload configurations do not trigger unnecessary recompilation on the webhook path.
+- **Lifecycle**: Reset webhook-manager singleton state during test teardown and recreate the sync-service limiter after shutdown so repeated initialize/stop/start flows remain stable.
+- **Contracts & Docs**: Align dataset, output, OpenAPI, README, architecture, and API reference documentation with the finalized `processingTime` semantics and response-delay behavior.
+- **Tests**: Add regression coverage for latency semantics, validator-cache reuse, malformed JSON sanitation persistence, and restart-safe integration harness cleanup.
+
 ## [3.0.4] - 2026-04-18
 
 ### Fixed (3.0.4)

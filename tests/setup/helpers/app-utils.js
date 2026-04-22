@@ -7,8 +7,14 @@
  * @module tests/setup/helpers/app-utils
  */
 
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { Actor } from "apify";
 import request from "supertest";
 import { ENV_VARS, SHUTDOWN_SIGNALS } from "../../../src/consts/app.js";
+import { ENV_VALUES } from "../../../src/consts/env.js";
+import { assertType } from "./test-utils.js";
 
 /**
  * @typedef {import("express").Express} App
@@ -34,19 +40,79 @@ import { ENV_VARS, SHUTDOWN_SIGNALS } from "../../../src/consts/app.js";
  * }>}
  */
 export const setupTestApp = async (options = {}, enableHotReload = false) => {
+  const previousLocalStorageDir = process.env[ENV_VARS.APIFY_LOCAL_STORAGE_DIR];
+  const previousNodeEnv = process.env[ENV_VARS.NODE_ENV];
+  const apifyLocalStorageDir = await mkdtemp(
+    path.join(tmpdir(), "wdl-integration-"),
+  );
+  const initialSigtermListeners = new Set(
+    process.listeners(SHUTDOWN_SIGNALS.SIGTERM),
+  );
+  const initialSigintListeners = new Set(
+    process.listeners(SHUTDOWN_SIGNALS.SIGINT),
+  );
+  /** @type {{ event: string, handler: (...args: any[]) => any }[]} */
+  const actorListeners = [];
+  const originalActorOn = Actor.on.bind(Actor);
+
   if (enableHotReload) {
     process.env[ENV_VARS.DISABLE_HOT_RELOAD] = "false";
   } else {
     process.env[ENV_VARS.DISABLE_HOT_RELOAD] = "true";
   }
-  const { app, initialize } = await import("../../../src/main.js");
-  await initialize(options);
+  process.env[ENV_VARS.NODE_ENV] = ENV_VALUES.TEST;
+  process.env[ENV_VARS.APIFY_LOCAL_STORAGE_DIR] = apifyLocalStorageDir;
+
+  const mainModuleUrl = new URL("../../../src/main.js", import.meta.url);
+  mainModuleUrl.searchParams.set("testInstance", apifyLocalStorageDir);
+  Actor.on = (event, handler) => {
+    actorListeners.push({ event, handler });
+    return originalActorOn(event, handler);
+  };
+
+  const mainModule = await import(mainModuleUrl.href);
+
+  try {
+    await mainModule.initialize(options);
+  } finally {
+    Actor.on = originalActorOn;
+  }
+
   return {
-    app,
-    appClient: request(app),
+    app: mainModule.app,
+    appClient: request(mainModule.app),
     teardownApp: async () => {
-      const { shutdown } = await import("../../../src/main.js");
-      await shutdown(SHUTDOWN_SIGNALS.TEST_COMPLETE);
+      await mainModule.shutdown(SHUTDOWN_SIGNALS.TEST_COMPLETE);
+
+      mainModule.resetShutdownForTest();
+
+      for (const listener of process.listeners(SHUTDOWN_SIGNALS.SIGTERM)) {
+        if (!initialSigtermListeners.has(listener)) {
+          process.off(SHUTDOWN_SIGNALS.SIGTERM, listener);
+        }
+      }
+      for (const listener of process.listeners(SHUTDOWN_SIGNALS.SIGINT)) {
+        if (!initialSigintListeners.has(listener)) {
+          process.off(SHUTDOWN_SIGNALS.SIGINT, listener);
+        }
+      }
+      for (const { event, handler } of actorListeners) {
+        Actor.off(assertType(event), handler);
+      }
+
+      if (previousLocalStorageDir === undefined) {
+        delete process.env[ENV_VARS.APIFY_LOCAL_STORAGE_DIR];
+      } else {
+        process.env[ENV_VARS.APIFY_LOCAL_STORAGE_DIR] = previousLocalStorageDir;
+      }
+
+      if (previousNodeEnv === undefined) {
+        delete process.env[ENV_VARS.NODE_ENV];
+      } else {
+        process.env[ENV_VARS.NODE_ENV] = previousNodeEnv;
+      }
+
+      await rm(apifyLocalStorageDir, { force: true, recursive: true });
     },
   };
 };

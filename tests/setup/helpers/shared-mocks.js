@@ -481,6 +481,9 @@ export function createMockWebhookManager(overrides = {}) {
     cleanup: /** @type {jest.Mock<any>} */ (jest.fn()).mockResolvedValue(
       undefined,
     ),
+    resetStateForTest: /** @type {jest.Mock<any>} */ (
+      jest.fn()
+    ).mockReturnValue(undefined),
 
     // Webhook management
     generateWebhooks: /** @type {jest.Mock<any>} */ (
@@ -539,7 +542,7 @@ export const expressMock = Object.assign(
  * Shared DuckDB Mock.
  */
 /**
- * @type {jest.Mocked<{getDbInstance: jest.Mock<() => Promise<DuckDBInstance>>, executeQuery: jest.Mock<(query: string, params?: Record<string, any>) => Promise<(Record<string, DuckDBValue>)[]>>, executeWrite: jest.Mock<(query: string, params?: Record<string, any>) => Promise<void>>, executeTransaction: jest.Mock<(cb: (conn: {run: jest.Mock<any>}) => void) => void>, vacuumDb: jest.Mock<() => Promise<void>>}>}
+ * @type {jest.Mocked<{getDbInstance: jest.Mock<() => Promise<DuckDBInstance>>, executeQuery: jest.Mock<(query: string, params?: Record<string, any>) => Promise<(Record<string, DuckDBValue>)[]>>, executeWrite: jest.Mock<(query: string, params?: Record<string, any>) => Promise<void>>, executeTransaction: jest.Mock<(cb: (conn: {run: jest.Mock<any>}) => void) => void>, closeDb: jest.Mock<() => Promise<void>>, vacuumDb: jest.Mock<() => Promise<void>>}>}
  */
 export const duckDbMock = {
   getDbInstance: assertType(jest.fn()).mockResolvedValue({}),
@@ -553,6 +556,7 @@ export const duckDbMock = {
       (cb) => cb({ run: jest.fn() }),
     ),
   ),
+  closeDb: assertType(jest.fn()).mockResolvedValue(undefined),
   vacuumDb: assertType(jest.fn()).mockResolvedValue(undefined),
 };
 

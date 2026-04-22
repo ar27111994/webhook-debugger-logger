@@ -318,6 +318,43 @@ describe("Main Entry Point", () => {
       );
     });
 
+    it("should disable Crawlee system-info polling during test initialization", async () => {
+      /** @type {(intervalCallback?: () => void) => Promise<void>} */
+      const emitSystemInfoEventImpl = async () => {
+        throw new Error("system-info polling should be replaced in tests");
+      };
+      const originalEmitSystemInfoEvent = assertType(
+        jest.fn(emitSystemInfoEventImpl),
+      );
+      const eventManager = {
+        emitSystemInfoEvent: originalEmitSystemInfoEvent,
+      };
+      apifyMock.config = {
+        getEventManager: jest.fn(() => eventManager),
+      };
+
+      try {
+        await mainModule.initialize();
+
+        expect(apifyMock.config.getEventManager).toHaveBeenCalled();
+        expect(eventManager.emitSystemInfoEvent).not.toBe(
+          originalEmitSystemInfoEvent,
+        );
+
+        const intervalCallback = jest.fn();
+        await expect(
+          eventManager.emitSystemInfoEvent(intervalCallback),
+        ).resolves.toBeUndefined();
+        expect(intervalCallback).toHaveBeenCalledTimes(1);
+        await expect(
+          eventManager.emitSystemInfoEvent(),
+        ).resolves.toBeUndefined();
+        expect(originalEmitSystemInfoEvent).not.toHaveBeenCalled();
+      } finally {
+        delete apifyMock.config;
+      }
+    });
+
     it("should proceed with degraded read model and continue when DB initialization fails", async () => {
       duckDbMock.getDbInstance.mockRejectedValueOnce(new Error("DB locked"));
       const app = await mainModule.initialize();
@@ -571,6 +608,14 @@ describe("Main Entry Point", () => {
       );
     });
 
+    it("should clear singleton webhook state when resetShutdownForTest is called", async () => {
+      await mainModule.initialize();
+
+      mainModule.resetShutdownForTest();
+
+      expect(webhookManagerMock.resetStateForTest).toHaveBeenCalled();
+    });
+
     it("should not crash or attempt to clear intervals if they are falsy during re-entrancy", async () => {
       const origSetInterval = global.setInterval;
       try {
@@ -675,6 +720,7 @@ describe("Main Entry Point", () => {
       jest.clearAllMocks();
       await mainModule.shutdown(SHUTDOWN_SIGNALS.TEST_COMPLETE);
       expect(hotReloadMock.stop).toHaveBeenCalled();
+      expect(duckDbMock.closeDb).toHaveBeenCalled();
       expect(syncServiceMock.stop).toHaveBeenCalled();
       expect(webhookManagerMock.persist).toHaveBeenCalled();
     });
@@ -700,6 +746,7 @@ describe("Main Entry Point", () => {
       await expect(
         mainModule.shutdown(SHUTDOWN_SIGNALS.TEST_COMPLETE),
       ).resolves.not.toThrow();
+      expect(duckDbMock.closeDb).toHaveBeenCalled();
       expect(syncServiceMock.stop).toHaveBeenCalled();
     });
 
@@ -775,6 +822,22 @@ describe("Main Entry Point", () => {
       expect(webhookManagerMock.persist).toHaveBeenCalled();
     });
 
+    it("should warn and continue when closeDb() fails during shutdown", async () => {
+      await mainModule.initialize();
+      duckDbMock.closeDb.mockRejectedValueOnce(
+        assertType(new Error("closeDb failed")),
+      );
+
+      await mainModule.shutdown(SHUTDOWN_SIGNALS.TEST_COMPLETE);
+
+      expect(loggerMock.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ err: expect.any(Object) }),
+        LOG_MESSAGES.SHUTDOWN_DB_CLOSE_FAILED,
+      );
+      expect(syncServiceMock.stop).toHaveBeenCalled();
+      expect(webhookManagerMock.persist).toHaveBeenCalled();
+    });
+
     it("should log a warning and not propagate when webhookManager.persist() throws in finalCleanup", async () => {
       jest
         .mocked(webhookManagerMock.persist)
@@ -825,6 +888,15 @@ describe("Main Entry Point", () => {
       } finally {
         global.setTimeout = origSetTimeout;
       }
+    });
+
+    it("should close the Apify runtime without exiting the process during test shutdown", async () => {
+      await mainModule.initialize();
+
+      await mainModule.shutdown(SHUTDOWN_SIGNALS.TEST_COMPLETE);
+
+      expect(apifyMock.exit).toHaveBeenCalledWith({ exit: false });
+      expect(systemMock.exit).not.toHaveBeenCalledWith(EXIT_CODES.SUCCESS);
     });
 
     it("should handle falsy forceExitTimer when signal is not TEST_COMPLETE", async () => {

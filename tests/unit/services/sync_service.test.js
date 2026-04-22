@@ -109,20 +109,75 @@ describe("SyncService", () => {
     });
 
     it("should stop service and cleanup", async () => {
+      const disconnectSpy = jest.spyOn(Bottleneck.prototype, "disconnect");
       jest
         .mocked(datasetMock.getInfo)
         .mockResolvedValueOnce(assertType({ itemCount: 0 }));
+      try {
+        await syncService.start();
+        await syncService.stop();
+
+        expect(syncService.getMetrics().isRunning).toBe(false);
+        expect(eventsMock.appEvents.off).toHaveBeenCalledWith(
+          eventsMock.EVENT_NAMES.LOG_RECEIVED,
+          expect.any(Function),
+        );
+        expect(disconnectSpy).toHaveBeenCalledTimes(1);
+
+        // Double stop should be safe (idempotent)
+        await expect(syncService.stop()).resolves.not.toThrow();
+      } finally {
+        disconnectSpy.mockRestore();
+      }
+    });
+
+    it("should restart cleanly after stop", async () => {
+      const expectedRegistrations = 2;
+
+      duckDbMock.executeQuery.mockResolvedValue([{ maxOffset: 0 }]);
+      jest
+        .mocked(datasetMock.getInfo)
+        .mockResolvedValue(assertType({ itemCount: 0 }));
+
       await syncService.start();
       await syncService.stop();
+      await expect(syncService.start()).resolves.toBeUndefined();
 
-      expect(syncService.getMetrics().isRunning).toBe(false);
-      expect(eventsMock.appEvents.off).toHaveBeenCalledWith(
-        eventsMock.EVENT_NAMES.LOG_RECEIVED,
-        expect.any(Function),
+      expect(syncService.getMetrics().isRunning).toBe(true);
+      expect(eventsMock.appEvents.on).toHaveBeenCalledTimes(
+        expectedRegistrations,
       );
+    });
 
-      // Double stop should be safe (idempotent)
-      await expect(syncService.stop()).resolves.not.toThrow();
+    it("should stop cleanly when limiter.disconnect is unavailable", async () => {
+      const originalDisconnect = Bottleneck.prototype.disconnect;
+
+      Object.defineProperty(Bottleneck.prototype, "disconnect", {
+        value: undefined,
+        configurable: true,
+        writable: true,
+      });
+
+      try {
+        jest
+          .mocked(datasetMock.getInfo)
+          .mockResolvedValueOnce(assertType({ itemCount: 0 }));
+
+        await syncService.start();
+
+        await expect(syncService.stop()).resolves.toBeUndefined();
+        expect(syncService.getMetrics().isRunning).toBe(false);
+        expect(eventsMock.appEvents.off).toHaveBeenCalledWith(
+          eventsMock.EVENT_NAMES.LOG_RECEIVED,
+          expect.any(Function),
+        );
+      } finally {
+        Object.defineProperty(Bottleneck.prototype, "disconnect", {
+          value: originalDisconnect,
+          configurable: true,
+          writable: true,
+        });
+      }
     });
   });
 
@@ -356,6 +411,183 @@ describe("SyncService", () => {
   });
 
   describe("Edge Cases & Coverage", () => {
+    it("should abandon sync after offset lookup resolves if the service stopped", async () => {
+      /** @type {(value: Array<{ maxOffset: number }>) => void} */
+      let resolveOffsetQuery = () => {};
+      duckDbMock.executeQuery.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveOffsetQuery = assertType(resolve);
+          }),
+      );
+
+      await syncService.start();
+      await waitForCondition(
+        () => duckDbMock.executeQuery.mock.calls.length === 1,
+        WAIT_MS,
+      );
+
+      const stopPromise = syncService.stop();
+      resolveOffsetQuery([{ maxOffset: 0 }]);
+      await stopPromise;
+      await sleep(WAIT_MS);
+
+      expect(apifyMock.Actor?.openDataset).not.toHaveBeenCalled();
+      expect(logRepositoryMock.batchInsertLogs).not.toHaveBeenCalled();
+    });
+
+    it("should no-op a queued sync callback once the service has stopped before sync begins", async () => {
+      /** @type {undefined | (() => Promise<void>)} */
+      let scheduledSyncTask;
+      const scheduleSpy = jest
+        .spyOn(Bottleneck.prototype, "schedule")
+        .mockImplementation((task) => {
+          scheduledSyncTask = assertType(task);
+          return Promise.resolve(undefined);
+        });
+
+      try {
+        await syncService.start();
+        expect(scheduledSyncTask).toBeDefined();
+
+        await syncService.stop();
+        await scheduledSyncTask?.();
+
+        expect(apifyMock.Actor?.openDataset).not.toHaveBeenCalled();
+        expect(logRepositoryMock.batchInsertLogs).not.toHaveBeenCalled();
+      } finally {
+        scheduleSpy.mockRestore();
+      }
+    });
+
+    it("should abandon sync after openDataset resolves if the service stopped", async () => {
+      /** @type {(value: typeof datasetMock) => void} */
+      let resolveOpenDataset = () => {};
+      duckDbMock.executeQuery.mockResolvedValue([{ maxOffset: 0 }]);
+      apifyMock.Actor?.openDataset.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveOpenDataset = assertType(resolve);
+          }),
+      );
+
+      await syncService.start();
+      await waitForCondition(
+        () => apifyMock.Actor?.openDataset.mock.calls.length === 1,
+        WAIT_MS,
+      );
+
+      const stopPromise = syncService.stop();
+      resolveOpenDataset(assertType(datasetMock));
+      await stopPromise;
+      await sleep(WAIT_MS);
+
+      expect(datasetMock.getInfo).not.toHaveBeenCalled();
+      expect(datasetMock.getData).not.toHaveBeenCalled();
+      expect(logRepositoryMock.batchInsertLogs).not.toHaveBeenCalled();
+    });
+
+    it("should abandon sync after dataset info resolves if the service stopped", async () => {
+      /** @type {(value: { itemCount: number }) => void} */
+      let resolveDatasetInfo = () => {};
+      duckDbMock.executeQuery.mockResolvedValue([{ maxOffset: 0 }]);
+      jest.mocked(datasetMock.getInfo).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveDatasetInfo = assertType(resolve);
+          }),
+      );
+
+      await syncService.start();
+      await waitForCondition(
+        () => jest.mocked(datasetMock.getInfo).mock.calls.length === 1,
+        WAIT_MS,
+      );
+
+      const stopPromise = syncService.stop();
+      resolveDatasetInfo({ itemCount: 1 });
+      await stopPromise;
+      await sleep(WAIT_MS);
+
+      expect(datasetMock.getData).not.toHaveBeenCalled();
+      expect(logRepositoryMock.batchInsertLogs).not.toHaveBeenCalled();
+    });
+
+    it("should skip metric updates when the service stops during batch insert", async () => {
+      /** @type {() => void} */
+      let resolveBatchInsert = () => {};
+      duckDbMock.executeQuery.mockResolvedValue([{ maxOffset: null }]);
+      jest
+        .mocked(datasetMock.getInfo)
+        .mockResolvedValue(assertType({ itemCount: 1 }));
+      jest
+        .mocked(datasetMock.getData)
+        .mockResolvedValue(
+          assertType({ items: [{ id: "stopped-during-insert" }] }),
+        );
+      logRepositoryMock.batchInsertLogs.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveBatchInsert = resolve;
+          }),
+      );
+
+      await syncService.start();
+      await waitForCondition(
+        () => logRepositoryMock.batchInsertLogs.mock.calls.length === 1,
+        WAIT_MS,
+      );
+
+      const stopPromise = syncService.stop();
+      resolveBatchInsert();
+      await stopPromise;
+      await sleep(WAIT_MS);
+
+      const metrics = syncService.getMetrics();
+      expect(metrics.syncCount).toBe(0);
+      expect(metrics.itemsSynced).toBe(0);
+      expect(metrics.lastSyncTime).toBeUndefined();
+    });
+
+    it("should suppress sync error metrics when an in-flight insert fails after stop", async () => {
+      /** @type {(reason?: unknown) => void} */
+      let rejectBatchInsert = () => {};
+      duckDbMock.executeQuery.mockResolvedValue([{ maxOffset: null }]);
+      jest
+        .mocked(datasetMock.getInfo)
+        .mockResolvedValue(assertType({ itemCount: 1 }));
+      jest
+        .mocked(datasetMock.getData)
+        .mockResolvedValue(
+          assertType({ items: [{ id: "stopped-before-error" }] }),
+        );
+      logRepositoryMock.batchInsertLogs.mockImplementation(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectBatchInsert = assertType(reject);
+          }),
+      );
+
+      await syncService.start();
+      await waitForCondition(
+        () => logRepositoryMock.batchInsertLogs.mock.calls.length === 1,
+        WAIT_MS,
+      );
+
+      const stopPromise = syncService.stop();
+      rejectBatchInsert(new Error("insert failed after stop"));
+      await stopPromise;
+      await sleep(WAIT_MS);
+
+      const metrics = syncService.getMetrics();
+      expect(metrics.errorCount).toBe(0);
+      expect(metrics.lastErrorTime).toBeUndefined();
+      expect(loggerMock.error).not.toHaveBeenCalledWith(
+        expect.any(Object),
+        LOG_MESSAGES.SYNC_ERROR_GENERAL,
+      );
+    });
+
     it("should use cached max offset", async () => {
       const itemCount = 10;
       jest
@@ -505,6 +737,25 @@ describe("SyncService", () => {
       );
 
       scheduleSpy.mockRestore();
+    });
+
+    it("should log scheduler errors that are not BOTTLENECK_STOPPED", async () => {
+      const scheduleError = new Error("schedule failed");
+      const scheduleSpy = jest
+        .spyOn(Bottleneck.prototype, "schedule")
+        .mockImplementation(() => Promise.reject(scheduleError));
+
+      try {
+        await syncService.start();
+        await sleep(WAIT_MS);
+
+        expect(loggerMock.error).toHaveBeenCalledWith(
+          expect.any(Object),
+          LOG_MESSAGES.SYNC_SCHEDULE_ERROR,
+        );
+      } finally {
+        scheduleSpy.mockRestore();
+      }
     });
 
     it("should skip recursive schedule when service stops during full-batch sync", async () => {

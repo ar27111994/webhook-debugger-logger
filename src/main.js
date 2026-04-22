@@ -9,7 +9,7 @@ import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { Actor } from "apify";
-import { getDbInstance } from "./db/duckdb.js";
+import { closeDb, getDbInstance } from "./db/duckdb.js";
 import { SyncService } from "./services/SyncService.js";
 import express from "express";
 import compression from "compression";
@@ -136,6 +136,38 @@ const app = express();
 const broadcast = createBroadcaster(clients);
 let isShuttingDown = false;
 let signalsRegistered = false;
+let isTestSystemInfoPollingDisabled = false;
+
+/**
+ * @typedef {{
+ *   emitSystemInfoEvent?: (intervalCallback?: () => void) => Promise<void> | void,
+ * }} TestSystemInfoEventManager
+ */
+
+/**
+ * In test mode, Crawlee's local event manager spawns OS subprocesses to sample
+ * system info. Those children can outlive short-lived app boots long enough for
+ * Jest open-handle detection to flag them, so disable only the sampling callback
+ * while keeping the rest of the runtime lifecycle intact.
+ * @returns {void}
+ */
+const disableActorSystemInfoPollingForTests = () => {
+  if (isTestSystemInfoPollingDisabled || !IS_TEST()) {
+    return;
+  }
+
+  const eventManager = /** @type {TestSystemInfoEventManager | undefined} */ (
+    Actor.config?.getEventManager?.()
+  );
+  if (!eventManager || typeof eventManager.emitSystemInfoEvent !== "function") {
+    return;
+  }
+
+  eventManager.emitSystemInfoEvent = async (intervalCallback = () => {}) => {
+    intervalCallback();
+  };
+  isTestSystemInfoPollingDisabled = true;
+};
 
 /**
  * Gracefully shuts down the server and persists state.
@@ -195,6 +227,15 @@ const shutdown = async (signal) => {
   // which is what we want.
   await syncService.stop();
 
+  try {
+    await closeDb();
+  } catch (err) {
+    log.warn(
+      { err: serializeError(err) },
+      LOG_MESSAGES.SHUTDOWN_DB_CLOSE_FAILED,
+    );
+  }
+
   if (IS_TEST() && signal !== SHUTDOWN_SIGNALS.TEST_COMPLETE) {
     if (forceExitTimer) clearTimeout(forceExitTimer);
     return;
@@ -203,10 +244,10 @@ const shutdown = async (signal) => {
   const finalCleanup = async () => {
     try {
       await webhookManager.persist();
-      // Actor.exit() calls process.exit() internally, making the systemExit
-      // below dead code on the happy path. It is an explicit last-resort fallback for
-      // the case where the Apify SDK throws instead of exiting (e.g. a future SDK bug).
-      if (!IS_TEST()) await Actor.exit();
+      // Actor.init() opens SDK resources that must always be closed. In tests we
+      // still need the cleanup, but must prevent the SDK from terminating the
+      // Jest process, so use exit:false there.
+      await Actor.exit(IS_TEST() ? { exit: false } : undefined);
     } catch (err) {
       log.warn(
         { err: serializeError(err) },
@@ -283,6 +324,7 @@ const resetShutdownForTest = () => {
   appState = undefined;
   sseHeartbeat = undefined;
   cleanupInterval = undefined;
+  webhookManager.resetStateForTest();
 };
 
 /**
@@ -330,6 +372,8 @@ async function initialize(testOptions = {}) {
   inputPollIntervalMs = IS_TEST()
     ? APP_CONSTS.INPUT_POLL_INTERVAL_TEST_MS
     : APP_CONSTS.INPUT_POLL_INTERVAL_PROD_MS;
+
+  disableActorSystemInfoPollingForTests();
 
   await Actor.init();
   setupGracefulShutdown();

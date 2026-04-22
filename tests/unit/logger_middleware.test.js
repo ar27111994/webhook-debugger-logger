@@ -31,6 +31,22 @@ await setupCommonMocks({
   config: true,
 });
 
+const ACTUAL_CUSTOM_SCRIPT_EXECUTOR_URL = new URL(
+  "../../src/utils/custom_script_executor.js?actual",
+  import.meta.url,
+).href;
+const actualCustomScriptExecutor = await import(
+  ACTUAL_CUSTOM_SCRIPT_EXECUTOR_URL
+);
+const executeCustomScriptMock = jest.fn(
+  actualCustomScriptExecutor.executeCustomScript,
+);
+
+jest.unstable_mockModule("../../src/utils/custom_script_executor.js", () => ({
+  ...actualCustomScriptExecutor,
+  executeCustomScript: executeCustomScriptMock,
+}));
+
 const {
   HTTP_HEADERS,
   HTTP_STATUS,
@@ -54,6 +70,8 @@ const { LOG_CONSTS, LOG_TAGS } = await import("../../src/consts/logging.js");
 const { AUTH_CONSTS } = await import("../../src/consts/auth.js");
 const { createGitHubSignature } =
   await import("../setup/helpers/signature-utils.js");
+const { createWebhookPayload } =
+  await import("../setup/helpers/fixtures/payload-fixtures.js");
 const { createMiddlewareTestContext } =
   await import("../setup/helpers/middleware-test-utils.js");
 const { createMockRequest, createMockResponse, createMockNextFunction } =
@@ -86,6 +104,8 @@ const {
 const { appEvents, EVENT_NAMES } = await import("../../src/utils/events.js");
 const { webhookRateLimiter } =
   await import("../../src/utils/webhook_rate_limiter.js");
+const customScriptExecutor =
+  await import("../../src/utils/custom_script_executor.js");
 
 describe("LoggerMiddleware", () => {
   useMockCleanup();
@@ -94,8 +114,41 @@ describe("LoggerMiddleware", () => {
   /** @type {jest.Mock} */
   let onEventMock;
   const SLOW_SCRIPT_TEST_TIMEOUT_MS = 15000;
+  const PERCENTILE_DENOMINATOR = 100;
+  const EXACT_LATENCY_SAMPLE_COUNT = 20;
+  const EXACT_LATENCY_START_MS = 12;
+  const EXACT_LATENCY_STEP_MS = 2;
+  const EXACT_LATENCY_PERCENTILES = Object.freeze({
+    p50: 50,
+    p95: 95,
+    p99: 99,
+  });
+  const EXACT_LATENCY_EXPECTED_MS = Object.freeze({
+    p50: 30,
+    p95: 48,
+    p99: 50,
+  });
+  const EXACT_LATENCY_SAMPLES_MS = Object.freeze(
+    Array.from({ length: EXACT_LATENCY_SAMPLE_COUNT }, (_, index) => {
+      return EXACT_LATENCY_START_MS + index * EXACT_LATENCY_STEP_MS;
+    }),
+  );
   const ONE_MB = APP_CONSTS.BYTES_PER_KB * APP_CONSTS.BYTES_PER_KB;
   const TEST_URL = "https://test";
+
+  /**
+   * @param {number[]} samples
+   * @param {number} percentile
+   * @returns {number}
+   */
+  function getPercentile(samples, percentile) {
+    const sorted = [...samples].sort((left, right) => left - right);
+    const index = Math.max(
+      0,
+      Math.ceil((percentile / PERCENTILE_DENOMINATOR) * sorted.length) - 1,
+    );
+    return sorted[index];
+  }
 
   beforeEach(() => {
     onEventMock = jest.fn();
@@ -308,6 +361,72 @@ describe("LoggerMiddleware", () => {
       // Update with same script — should keep existing compiled script
       middleware.updateOptions({ customScript: script });
       expect(middleware.hasCompiledScript()).toBe(true);
+    });
+
+    it("should cache webhook schema validators across repeated requests", async () => {
+      const schemaObj = {
+        type: "object",
+        properties: { id: { type: "number" } },
+        required: ["id"],
+      };
+      const { middleware, req, res, next, webhookManager } =
+        await createMiddlewareTestContext();
+      jest.mocked(webhookManager.getWebhookData).mockReturnValue({
+        jsonSchema: schemaObj,
+        expiresAt: new Date(Date.now() + APP_CONSTS.MS_PER_HOUR).toISOString(),
+      });
+      req.params.id = "wh_schema_cache";
+      req.body = { id: 1 };
+
+      await middleware(req, res, next);
+      await middleware(req, res, next);
+
+      const schemaCompileLogCount = loggerMock.info.mock.calls.filter(
+        ([message]) => message === LOG_MESSAGES.SCHEMA_COMPILED,
+      ).length;
+
+      expect(schemaCompileLogCount).toBe(1);
+    });
+
+    it("should reuse the cached validator across concurrent requests for the same schema", async () => {
+      const schemaObj = {
+        type: "object",
+        properties: { id: { type: "number" } },
+        required: ["id"],
+      };
+      const { middleware, webhookManager } =
+        await createMiddlewareTestContext();
+      jest.mocked(webhookManager.getWebhookData).mockReturnValue({
+        jsonSchema: schemaObj,
+        expiresAt: new Date(Date.now() + APP_CONSTS.MS_PER_HOUR).toISOString(),
+      });
+
+      const reqA = createMockRequest({
+        params: { id: "wh_schema_cache_parallel" },
+        body: { id: 1 },
+      });
+      const resA = createMockResponse();
+      const nextA = createMockNextFunction();
+
+      const reqB = createMockRequest({
+        params: { id: "wh_schema_cache_parallel" },
+        body: { id: 2 },
+      });
+      const resB = createMockResponse();
+      const nextB = createMockNextFunction();
+
+      await Promise.all([
+        middleware(reqA, resA, nextA),
+        middleware(reqB, resB, nextB),
+      ]);
+
+      const schemaCompileLogCount = loggerMock.info.mock.calls.filter(
+        ([message]) => message === LOG_MESSAGES.SCHEMA_COMPILED,
+      ).length;
+
+      expect(schemaCompileLogCount).toBe(1);
+      expect(resA.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
+      expect(resB.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
     });
   });
 
@@ -611,44 +730,69 @@ describe("LoggerMiddleware", () => {
         );
       });
 
-      it("should run custom transformation scripts cleanly and execute console outputs", async () => {
-        const payload = "payload_modified";
-        const {
-          req,
-          res,
-          next,
-          middleware: scriptMw,
-        } = await createMiddlewareTestContext({
-          options: {
-            customScript: `console.log('l'); console.error('e'); console.warn('w'); console.info('i'); event.statusCode = ${HTTP_STATUS.ACCEPTED}; event.responseBody = { test_custom: req.body.test };`,
-          },
-        });
+      it(
+        "should run custom transformation scripts cleanly and execute console outputs",
+        async () => {
+          const payload = "payload_modified";
+          const {
+            req,
+            res,
+            next,
+            middleware: scriptMw,
+          } = await createMiddlewareTestContext({
+            options: {
+              customScript: `console.log('l'); console.error('e'); console.warn('w'); console.info('i'); event.statusCode = ${HTTP_STATUS.ACCEPTED}; event.responseBody = { test_custom: req.body.test };`,
+            },
+          });
 
-        req.body = { test: payload };
+          req.body = { test: payload };
 
-        await scriptMw(req, res, next);
+          await scriptMw(req, res, next);
 
-        expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.ACCEPTED);
-        expect(res.json).toHaveBeenCalledWith({ test_custom: payload });
-        expect(loggerMock.debug).toHaveBeenCalledWith(
-          expect.objectContaining({ source: "script" }),
-          "l",
-        );
-        expect(loggerMock.error).toHaveBeenCalledWith(
-          expect.objectContaining({ source: "script" }),
-          "e",
-        );
-        expect(loggerMock.warn).toHaveBeenCalledWith(
-          expect.objectContaining({ source: "script" }),
-          "w",
-        );
-        expect(loggerMock.info).toHaveBeenCalledWith(
-          expect.objectContaining({ source: "script" }),
-          "i",
-        );
-      });
+          expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.ACCEPTED);
+          expect(res.json).toHaveBeenCalledWith({ test_custom: payload });
+          expect(loggerMock.debug).toHaveBeenCalledWith(
+            expect.objectContaining({ source: "script" }),
+            "l",
+          );
+          expect(loggerMock.error).toHaveBeenCalledWith(
+            expect.objectContaining({ source: "script" }),
+            "e",
+          );
+          expect(loggerMock.warn).toHaveBeenCalledWith(
+            expect.objectContaining({ source: "script" }),
+            "w",
+          );
+          expect(loggerMock.info).toHaveBeenCalledWith(
+            expect.objectContaining({ source: "script" }),
+            "i",
+          );
+        },
+        SLOW_SCRIPT_TEST_TIMEOUT_MS,
+      );
 
       it("should serialize structured custom script console output safely", async () => {
+        jest
+          .mocked(customScriptExecutor.executeCustomScript)
+          .mockImplementationOnce(async ({ event }) => ({
+            ok: true,
+            event,
+            logs: [
+              {
+                level: "error",
+                args: [
+                  {
+                    name: "Error",
+                    message: "boom",
+                    stack: "Error: boom",
+                  },
+                  { nested: true },
+                  ["x"],
+                ],
+              },
+            ],
+          }));
+
         const {
           req,
           res,
@@ -1345,32 +1489,32 @@ describe("LoggerMiddleware", () => {
       );
 
       it("should handle script execution timeouts softly via message fallback", async () => {
-        jest.useRealTimers();
-        try {
-          // Provide a script that explicitly throws an error containing the matched string without the error.code
-          const { req, res, next, middleware } =
-            await createMiddlewareTestContext({
-              options: {
-                customScript: `throw new Error("${LOG_MESSAGES.SCRIPT_EXECUTION_TIMEOUT_ERROR}");`,
-              },
-            });
+        jest
+          .mocked(customScriptExecutor.executeCustomScript)
+          .mockImplementationOnce(async () => {
+            throw new Error(LOG_MESSAGES.SCRIPT_EXECUTION_TIMEOUT_ERROR);
+          });
 
-          await middleware(req, res, next);
+        const { req, res, next, middleware } =
+          await createMiddlewareTestContext({
+            options: {
+              customScript: `throw new Error("${LOG_MESSAGES.SCRIPT_EXECUTION_TIMEOUT_ERROR}");`,
+            },
+          });
 
-          expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
-          expect(loggerMock.error).toHaveBeenCalledWith(
-            expect.objectContaining({
-              isTimeout: true,
-              webhookId: expect.any(String),
-              err: expect.any(Object),
-            }),
-            LOG_MESSAGES.SCRIPT_EXECUTION_TIMED_OUT(
-              APP_CONSTS.SCRIPT_EXECUTION_TIMEOUT_MS,
-            ),
-          );
-        } finally {
-          jest.useFakeTimers();
-        }
+        await middleware(req, res, next);
+
+        expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
+        expect(loggerMock.error).toHaveBeenCalledWith(
+          expect.objectContaining({
+            isTimeout: true,
+            webhookId: expect.any(String),
+            err: expect.any(Object),
+          }),
+          LOG_MESSAGES.SCRIPT_EXECUTION_TIMED_OUT(
+            APP_CONSTS.SCRIPT_EXECUTION_TIMEOUT_MS,
+          ),
+        );
       });
 
       it("should handle webhook storage key timeout", async () => {
@@ -1741,6 +1885,18 @@ describe("LoggerMiddleware", () => {
       });
 
       it("should handle custom script runtime error gracefully", async () => {
+        jest
+          .mocked(customScriptExecutor.executeCustomScript)
+          .mockImplementationOnce(async () => ({
+            ok: false,
+            logs: [],
+            error: {
+              name: "Error",
+              message: "runtime error",
+              stack: "Error: runtime error",
+            },
+          }));
+
         const { req, res, next, middleware } =
           await createMiddlewareTestContext({
             options: { customScript: 'throw new Error("runtime error");' },
@@ -2474,13 +2630,18 @@ describe("LoggerMiddleware", () => {
         expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.UNAUTHORIZED);
       });
 
-      it("should return false during per-request schema validation if compilation fails", async () => {
+      it("should retry uncached per-request schema compilation after a failure", async () => {
         const webhookId = "wh_atomic";
-        const { middleware, req, res, next } =
-          await createMiddlewareTestContext({
-            options: { jsonSchema: { type: "object" } },
-          });
+        const schema = { type: "object" };
+        const { middleware, req, res, next, webhookManager } =
+          await createMiddlewareTestContext();
         req.params.id = webhookId;
+        jest.mocked(webhookManager.getWebhookData).mockReturnValue({
+          jsonSchema: schema,
+          expiresAt: new Date(
+            Date.now() + APP_CONSTS.MS_PER_HOUR,
+          ).toISOString(),
+        });
 
         const AjvClass = (await import("ajv")).default;
         const ajvSpy = jest
@@ -2495,6 +2656,14 @@ describe("LoggerMiddleware", () => {
         expect(res.json).toHaveBeenCalledWith(
           expect.objectContaining({ error: "No errors", id: webhookId }),
         );
+
+        jest.mocked(res.status).mockClear();
+        jest.mocked(res.json).mockClear();
+        jest.mocked(res.send).mockClear();
+
+        await middleware(req, res, next);
+
+        expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
         ajvSpy.mockRestore();
       });
 
@@ -3001,9 +3170,90 @@ describe("LoggerMiddleware", () => {
         );
         /** @type {WebhookEvent} */
         const emittedEvent = assertType(jest.mocked(onEvent).mock.calls[0][0]);
-        expect(emittedEvent.processingTime).toBeGreaterThanOrEqual(
-          responseDelayMs,
+        expect(emittedEvent.processingTime).toBeGreaterThanOrEqual(0);
+        expect(emittedEvent.processingTime).toBeLessThan(responseDelayMs);
+      });
+
+      it("should preserve exact percentile verification for emitted warm-path processingTime samples", async () => {
+        const schemaObj = {
+          type: "object",
+          properties: {
+            id: { type: "string" },
+            source: { type: "string" },
+            data: {
+              type: "object",
+              properties: {
+                sequence: { type: "number" },
+              },
+              required: ["sequence"],
+            },
+          },
+          required: ["id", "source", "data"],
+        };
+        const staticExpiry = "2030-01-01T00:00:00.000Z";
+        const { middleware, webhookManager, onEvent } =
+          await createMiddlewareTestContext({
+            options: {
+              jsonSchema: schemaObj,
+              responseDelayMs: 0,
+              defaultResponseCode: HTTP_STATUS.OK,
+            },
+          });
+
+        jest.mocked(webhookManager.getWebhookData).mockReturnValue({
+          jsonSchema: schemaObj,
+          responseDelayMs: 0,
+          defaultResponseCode: HTTP_STATUS.OK,
+          expiresAt: staticExpiry,
+        });
+
+        const mockedNowValues = EXACT_LATENCY_SAMPLES_MS.flatMap(
+          (processingTimeMs, index) => {
+            const requestStartMs = (index + 1) * APP_CONSTS.MS_PER_SECOND;
+            return [requestStartMs, requestStartMs + processingTimeMs];
+          },
         );
+
+        const fallbackNowValue =
+          mockedNowValues[mockedNowValues.length - 1] ??
+          APP_CONSTS.MS_PER_SECOND;
+        jest.spyOn(Date, "now").mockImplementation(() => {
+          const nextValue = mockedNowValues.shift();
+          return nextValue ?? fallbackNowValue;
+        });
+
+        for (let index = 0; index < EXACT_LATENCY_SAMPLE_COUNT; index += 1) {
+          const req = createMockRequest({
+            method: HTTP_METHODS.POST,
+            params: { id: "wh_exact_latency_percentiles" },
+            body: createWebhookPayload({
+              id: `evt_exact_latency_${index}`,
+              source: "unit-latency-exact",
+              data: { sequence: index },
+            }),
+          });
+          const res = createMockResponse();
+          const next = createMockNextFunction();
+
+          await middleware(req, res, next);
+
+          expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
+        }
+
+        const emittedSamples = onEvent.mock.calls.map(
+          ([event]) => assertType(event).processingTime,
+        );
+
+        expect(emittedSamples).toEqual(EXACT_LATENCY_SAMPLES_MS);
+        expect(
+          getPercentile(emittedSamples, EXACT_LATENCY_PERCENTILES.p50),
+        ).toBe(EXACT_LATENCY_EXPECTED_MS.p50);
+        expect(
+          getPercentile(emittedSamples, EXACT_LATENCY_PERCENTILES.p95),
+        ).toBe(EXACT_LATENCY_EXPECTED_MS.p95);
+        expect(
+          getPercentile(emittedSamples, EXACT_LATENCY_PERCENTILES.p99),
+        ).toBe(EXACT_LATENCY_EXPECTED_MS.p99);
       });
 
       it("should trigger stream verifier warning when init fails", async () => {
@@ -3090,28 +3340,44 @@ describe("LoggerMiddleware", () => {
         }
       });
 
-      it("should cover null responseHeaders and skip background tasks via custom script", async () => {
-        const { middleware, req, res, next } =
-          await createMiddlewareTestContext({
-            options: {
-              customScript:
-                "event.responseHeaders = null; event.webhookId = '';",
-              forwardUrl: TEST_URL,
-            },
-          });
-        req.params.id = "wh_script_null";
-        req.method = HTTP_METHODS.POST;
-        req.body = { foo: "bar" };
+      it(
+        "should cover null responseHeaders and skip background tasks via custom script",
+        async () => {
+          const { middleware, req, res, next } =
+            await createMiddlewareTestContext({
+              options: {
+                customScript:
+                  "event.responseHeaders = null; event.webhookId = '';",
+                forwardUrl: TEST_URL,
+              },
+            });
+          req.params.id = "wh_script_null";
+          req.method = HTTP_METHODS.POST;
+          req.body = { foo: "bar" };
 
-        await middleware(req, res, next);
-        await flushPromises(1); // background tasks
+          await middleware(req, res, next);
+          await flushPromises(1); // background tasks
 
-        expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
-        expect(apifyMock.pushData).not.toHaveBeenCalled();
-        expect(forwardingServiceMock.forwardWebhook).not.toHaveBeenCalled();
-      });
+          expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
+          expect(apifyMock.pushData).not.toHaveBeenCalled();
+          expect(forwardingServiceMock.forwardWebhook).not.toHaveBeenCalled();
+        },
+        SLOW_SCRIPT_TEST_TIMEOUT_MS,
+      );
 
       it("should skip pushData when customScript unsets responseHeaders to null and webhookId to empty string", async () => {
+        jest
+          .mocked(customScriptExecutor.executeCustomScript)
+          .mockImplementationOnce(async ({ event }) => ({
+            ok: true,
+            event: {
+              ...event,
+              responseHeaders: null,
+              webhookId: "",
+            },
+            logs: [],
+          }));
+
         const { middleware, req, res, next } =
           await createMiddlewareTestContext({
             options: {
@@ -3131,14 +3397,22 @@ describe("LoggerMiddleware", () => {
 
         await middleware(req, res, next);
 
-        // Allow execution of any remaining microtasks
-        await jest.runAllTimersAsync();
-
         // No Actor.pushData should be called because we erased webhookId inside the customscript
         expect(apifyMock.pushData).not.toHaveBeenCalled();
       });
 
       it("should hit implicit-else branch by providing customScript that unsets webhookId but retains headers", async () => {
+        jest
+          .mocked(customScriptExecutor.executeCustomScript)
+          .mockImplementationOnce(async ({ event }) => ({
+            ok: true,
+            event: {
+              ...event,
+              webhookId: null,
+            },
+            logs: [],
+          }));
+
         const { middleware, req, res, next } =
           await createMiddlewareTestContext({
             options: {
@@ -3153,9 +3427,9 @@ describe("LoggerMiddleware", () => {
         // already achieved via useMockCleanup()'s beforeEach
         // which already calls jest.clearAllMocks()
         await middleware(req, res, next);
-        await jest.runAllTimersAsync();
 
         expect(apifyMock.pushData).not.toHaveBeenCalled();
+        expect(forwardingServiceMock.forwardWebhook).not.toHaveBeenCalled();
       });
 
       it("should handle signal abortion in background task catch block", async () => {
@@ -3194,6 +3468,31 @@ describe("LoggerMiddleware", () => {
           expect.anything(),
           LOG_MESSAGES.BACKGROUND_TASKS_FAILED,
         );
+      });
+
+      it("should skip clearing the pushData timer when setTimeout returns no handle", async () => {
+        const setTimeoutSpy = jest
+          .spyOn(global, "setTimeout")
+          .mockImplementation(
+            () =>
+              /** @type {ReturnType<typeof setTimeout>} */ (
+                assertType(undefined)
+              ),
+          );
+
+        try {
+          const { middleware, req, res, next } =
+            await createMiddlewareTestContext();
+          req.params.id = "wh_no_timer_handle";
+          req.method = HTTP_METHODS.POST;
+
+          await middleware(req, res, next);
+
+          expect(apifyMock.pushData).toHaveBeenCalled();
+          expect(next).toHaveBeenCalled();
+        } finally {
+          setTimeoutSpy.mockRestore();
+        }
       });
 
       it("should hit the outer background catch block branch via alerts", async () => {

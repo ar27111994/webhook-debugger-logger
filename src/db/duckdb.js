@@ -60,6 +60,22 @@ function createWriteQueue() {
 let writeQueue = createWriteQueue();
 
 /**
+ * Stops and disconnects the current write queue, then replaces it with a fresh instance.
+ * This is primarily needed for test and process shutdown so Bottleneck does not keep
+ * scheduler resources alive across repeated app lifecycles.
+ * @returns {Promise<void>}
+ */
+async function resetWriteQueue() {
+  const queueToDispose = writeQueue;
+  writeQueue = createWriteQueue();
+
+  await queueToDispose.stop({ dropWaitingJobs: true });
+  if (typeof queueToDispose.disconnect === "function") {
+    await queueToDispose.disconnect();
+  }
+}
+
+/**
  * Closes a connection while suppressing close-time errors from stale handles.
  * @param {DuckDBConnection | undefined} conn
  * @returns {void}
@@ -70,6 +86,20 @@ function closeConnectionQuietly(conn) {
     conn.closeSync();
   } catch {
     // Ignore close errors for stale/invalid handles.
+  }
+}
+
+/**
+ * Closes the DuckDB instance while suppressing close-time errors from stale handles.
+ * @param {DuckDBInstance | null | undefined} instance
+ * @returns {void}
+ */
+function closeInstanceQuietly(instance) {
+  if (!instance) return;
+  try {
+    instance.closeSync();
+  } catch {
+    // Ignore close errors while tearing down the cached instance.
   }
 }
 
@@ -137,13 +167,15 @@ export async function getDbInstance() {
  * @returns {Promise<void>}
  */
 export async function resetDbInstance() {
+  const instanceToClose = dbInstance;
   dbInstance = null;
   initPromise = null;
   connectionPool.length = 0;
   inUseConnections.length = 0;
 
-  await writeQueue.stop({ dropWaitingJobs: true });
-  writeQueue = createWriteQueue();
+  closeInstanceQuietly(instanceToClose);
+
+  await resetWriteQueue();
 }
 
 /**
@@ -351,8 +383,13 @@ export async function closeDb() {
   while (inUseConnections.length > 0) {
     closeConnectionQuietly(inUseConnections.pop());
   }
+  const instanceToClose = dbInstance;
   dbInstance = null;
   initPromise = null;
+
+  closeInstanceQuietly(instanceToClose);
+
+  await resetWriteQueue();
 }
 
 /**

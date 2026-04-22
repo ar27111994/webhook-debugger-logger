@@ -121,6 +121,24 @@ describe("WebhookManager", () => {
       expect(manager.webhookCount).toBe(1);
       expect(manager.isValid("wh_stale")).toBe(true);
     });
+
+    it("should clear in-memory and persistence handles when resetStateForTest is called", async () => {
+      await manager.generateWebhooks(1, TEST_RETENTION);
+
+      manager.resetStateForTest();
+
+      expect(manager.webhookCount).toBe(0);
+      await manager.init();
+      expect(apifyMock.openKeyValueStore).toHaveBeenCalled();
+    });
+
+    it("should reject resetStateForTest outside the test environment", () => {
+      process.env[ENV_VARS.NODE_ENV] = ENV_VALUES.PRODUCTION;
+
+      expect(() => manager.resetStateForTest()).toThrow(
+        ERROR_MESSAGES.WEBHOOK_STATE_RESET_UNAVAILABLE,
+      );
+    });
   });
 
   describe("generateWebhooks", () => {

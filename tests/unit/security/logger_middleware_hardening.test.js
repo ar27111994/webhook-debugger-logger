@@ -53,12 +53,15 @@ describe("LoggerMiddleware Hardening", () => {
   useFakeTimers();
   useMockCleanup();
 
+  const HARDENING_TEST_TIMEOUT_MS = 30000;
   const WEBHOOK_ID = "wh_test_123";
   const SHORT_TIMEOUT_MS = 10;
   const MED_TIMEOUT_MS = 50;
   const TIMEOUT_OFFSET_MS = 10;
   const OVERFLOW_BYTES = 100;
   const BUFFER_BYTES = 1000;
+
+  jest.setTimeout(HARDENING_TEST_TIMEOUT_MS);
 
   describe("Sandbox Security (Prototype Pollution & Globals)", () => {
     it("should isolate custom scripts from process and global prototypes", async () => {

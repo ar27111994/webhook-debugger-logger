@@ -10,6 +10,7 @@ import {
   fsPromisesMock,
 } from "../../setup/helpers/shared-mocks.js";
 import { DuckDBInstance } from "@duckdb/node-api";
+import Bottleneck from "bottleneck";
 import { ENV_VARS } from "../../../src/consts/app.js";
 import { NODE_ERROR_CODES } from "../../../src/consts/errors.js";
 import { assertType } from "../../setup/helpers/test-utils.js";
@@ -374,6 +375,26 @@ describe("DuckDB Singleton", () => {
   });
 
   describe("closeDb", () => {
+    it("should stop and disconnect the existing write queue during shutdown cleanup", async () => {
+      const stopSpy = jest.spyOn(Bottleneck.prototype, "stop");
+      const disconnectSpy = jest.spyOn(Bottleneck.prototype, "disconnect");
+
+      await getDbInstance();
+      await closeDb();
+
+      expect(stopSpy).toHaveBeenCalledWith({ dropWaitingJobs: true });
+      expect(disconnectSpy).toHaveBeenCalled();
+    });
+
+    it("should close the underlying DuckDB instance during shutdown cleanup", async () => {
+      const instance = await getDbInstance();
+      const closeSyncSpy = jest.spyOn(instance, "closeSync");
+
+      await closeDb();
+
+      expect(closeSyncSpy).toHaveBeenCalled();
+    });
+
     it("should drain connection pool including in-use ones", async () => {
       const instance = await getDbInstance();
       /** @type {DuckDBConnection[]} */
@@ -397,6 +418,10 @@ describe("DuckDB Singleton", () => {
         started = true;
         await txPromise;
       });
+      const txOutcome = txHandler.then(
+        () => null,
+        /** @param {Error} error */ (error) => error,
+      );
 
       for (let i = 0; i < MAX_POLLS && !started; i++) {
         await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
@@ -404,16 +429,19 @@ describe("DuckDB Singleton", () => {
 
       expect(started).toBe(true);
 
-      // One connection is inUse (tx), one might be in pool if we did previous tests
-      await closeDb();
+      // closeDb() now waits for the active write queue to drain, so release the
+      // in-flight transaction before awaiting shutdown completion.
+      const closeDbPromise = closeDb();
+      txResolver();
+      await closeDbPromise;
 
       // Verify all connections encountered so far are closed
       for (const conn of connections) {
         expect(conn.closeSync).toHaveBeenCalled();
       }
 
-      txResolver();
-      await txHandler.catch(() => {});
+      const txError = await txOutcome;
+      expect(txError?.message).toMatch(/connection disconnected/i);
     });
 
     it("should tolerate close errors from stale connections", async () => {
@@ -451,6 +479,49 @@ describe("DuckDB Singleton", () => {
 
       await expect(closeDb()).resolves.not.toThrow();
       popSpy.mockRestore();
+    });
+  });
+
+  describe("resetDbInstance", () => {
+    it("should stop and disconnect the current write queue before replacing it", async () => {
+      const stopSpy = jest.spyOn(Bottleneck.prototype, "stop");
+      const disconnectSpy = jest.spyOn(Bottleneck.prototype, "disconnect");
+
+      await resetDbInstance();
+
+      expect(stopSpy).toHaveBeenCalledWith({ dropWaitingJobs: true });
+      expect(disconnectSpy).toHaveBeenCalled();
+    });
+
+    it("should replace the write queue even when disconnect is unavailable", async () => {
+      const originalDisconnect = Bottleneck.prototype.disconnect;
+      const stopSpy = jest.spyOn(Bottleneck.prototype, "stop");
+
+      Object.defineProperty(Bottleneck.prototype, "disconnect", {
+        value: undefined,
+        configurable: true,
+        writable: true,
+      });
+
+      try {
+        await expect(resetDbInstance()).resolves.toBeUndefined();
+        expect(stopSpy).toHaveBeenCalledWith({ dropWaitingJobs: true });
+      } finally {
+        Object.defineProperty(Bottleneck.prototype, "disconnect", {
+          value: originalDisconnect,
+          configurable: true,
+          writable: true,
+        });
+      }
+    });
+
+    it("should close the underlying DuckDB instance when resetting an initialized singleton", async () => {
+      const instance = await getDbInstance();
+      const closeSyncSpy = jest.spyOn(instance, "closeSync");
+
+      await resetDbInstance();
+
+      expect(closeSyncSpy).toHaveBeenCalled();
     });
   });
 

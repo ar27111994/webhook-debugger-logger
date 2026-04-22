@@ -6,9 +6,17 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 
 describe("Custom Script Executor", () => {
-  const CONCURRENT_EXECUTION_TEST_TIMEOUT_MS = 15000;
+  const COVERAGE_SAFE_EXECUTOR_TEST_TIMEOUT_MS = 60000;
+  const CONCURRENT_EXECUTION_TEST_TIMEOUT_MS =
+    COVERAGE_SAFE_EXECUTOR_TEST_TIMEOUT_MS;
   const CONCURRENT_WORKER_SCRIPT_TIMEOUT_MS = 250;
-  const CODE_GENERATION_BLOCKING_TEST_TIMEOUT_MS = 15000;
+  const CODE_GENERATION_BLOCKING_TEST_TIMEOUT_MS =
+    COVERAGE_SAFE_EXECUTOR_TEST_TIMEOUT_MS;
+  const BUSY_LOOP_TIMEOUT_TEST_TIMEOUT_MS =
+    COVERAGE_SAFE_EXECUTOR_TEST_TIMEOUT_MS;
+  const STRUCTURED_CONSOLE_LOG_TEST_TIMEOUT_MS =
+    COVERAGE_SAFE_EXECUTOR_TEST_TIMEOUT_MS;
+  const SUCCESS_PATH_WORKER_SCRIPT_TIMEOUT_MS = 250;
 
   beforeEach(() => {
     jest.resetModules();
@@ -35,62 +43,70 @@ describe("Custom Script Executor", () => {
   });
 
   describe("executeCustomScript", () => {
-    it("should execute scripts in an isolated worker without mutating caller-owned objects", async () => {
-      const { executeCustomScript } =
-        await import("../../../src/utils/custom_script_executor.js");
+    it(
+      "should execute scripts in an isolated worker without mutating caller-owned objects",
+      async () => {
+        const { executeCustomScript } =
+          await import("../../../src/utils/custom_script_executor.js");
 
-      const event = { nested: { value: 1 } };
-      const req = { headers: { "x-test": "safe" }, requestId: "req-1" };
+        const event = { nested: { value: 1 } };
+        const req = { headers: { "x-test": "safe" }, requestId: "req-1" };
 
-      const result = await executeCustomScript({
-        source:
-          "event.nested.value = 2; event.requestSeen = req.requestId; req.headers['x-test'] = 'changed';",
-        event,
-        req,
-        timeoutMs: 50,
-      });
+        const result = await executeCustomScript({
+          source:
+            "event.nested.value = 2; event.requestSeen = req.requestId; req.headers['x-test'] = 'changed';",
+          event,
+          req,
+          timeoutMs: SUCCESS_PATH_WORKER_SCRIPT_TIMEOUT_MS,
+        });
 
-      expect(result.ok).toBe(true);
-      expect(result.event).toEqual(
-        expect.objectContaining({
-          nested: { value: 2 },
-          requestSeen: "req-1",
-        }),
-      );
-      expect(event).toEqual({ nested: { value: 1 } });
-      expect(req).toEqual({
-        headers: { "x-test": "safe" },
-        requestId: "req-1",
-      });
-    });
+        expect(result.ok).toBe(true);
+        expect(result.event).toEqual(
+          expect.objectContaining({
+            nested: { value: 2 },
+            requestSeen: "req-1",
+          }),
+        );
+        expect(event).toEqual({ nested: { value: 1 } });
+        expect(req).toEqual({
+          headers: { "x-test": "safe" },
+          requestId: "req-1",
+        });
+      },
+      COVERAGE_SAFE_EXECUTOR_TEST_TIMEOUT_MS,
+    );
 
-    it("should serialize structured console output safely", async () => {
-      const { executeCustomScript } =
-        await import("../../../src/utils/custom_script_executor.js");
+    it(
+      "should serialize structured console output safely",
+      async () => {
+        const { executeCustomScript } =
+          await import("../../../src/utils/custom_script_executor.js");
 
-      const result = await executeCustomScript({
-        source: "console.info('hello', { nested: true }, new Error('boom'));",
-        event: {},
-        req: {},
-        timeoutMs: 250,
-      });
+        const result = await executeCustomScript({
+          source: "console.info('hello', { nested: true }, new Error('boom'));",
+          event: {},
+          req: {},
+          timeoutMs: 250,
+        });
 
-      expect(result.ok).toBe(true);
-      expect(result.logs).toEqual([
-        {
-          level: "info",
-          args: [
-            "hello",
-            { nested: true },
-            expect.objectContaining({
-              name: "Error",
-              message: "boom",
-              stack: expect.any(String),
-            }),
-          ],
-        },
-      ]);
-    });
+        expect(result.ok).toBe(true);
+        expect(result.logs).toEqual([
+          {
+            level: "info",
+            args: [
+              "hello",
+              { nested: true },
+              expect.objectContaining({
+                name: "Error",
+                message: "boom",
+                stack: expect.any(String),
+              }),
+            ],
+          },
+        ]);
+      },
+      STRUCTURED_CONSOLE_LOG_TEST_TIMEOUT_MS,
+    );
 
     it(
       "should block eval and Function constructor code generation inside the worker isolate",
@@ -125,45 +141,53 @@ describe("Custom Script Executor", () => {
       CODE_GENERATION_BLOCKING_TEST_TIMEOUT_MS,
     );
 
-    it("should surface runtime failures from the worker isolate", async () => {
-      const { executeCustomScript } =
-        await import("../../../src/utils/custom_script_executor.js");
+    it(
+      "should surface runtime failures from the worker isolate",
+      async () => {
+        const { executeCustomScript } =
+          await import("../../../src/utils/custom_script_executor.js");
 
-      const result = await executeCustomScript({
-        source: "throw new Error('runtime failure');",
-        event: {},
-        req: {},
-        timeoutMs: 50,
-      });
+        const result = await executeCustomScript({
+          source: "throw new Error('runtime failure');",
+          event: {},
+          req: {},
+          timeoutMs: SUCCESS_PATH_WORKER_SCRIPT_TIMEOUT_MS,
+        });
 
-      expect(result.ok).toBe(false);
-      expect(result.error).toEqual(
-        expect.objectContaining({
-          name: "Error",
-          message: "Error: runtime failure",
-        }),
-      );
-    });
+        expect(result.ok).toBe(false);
+        expect(result.error).toEqual(
+          expect.objectContaining({
+            name: "Error",
+            message: "Error: runtime failure",
+          }),
+        );
+      },
+      COVERAGE_SAFE_EXECUTOR_TEST_TIMEOUT_MS,
+    );
 
-    it("should report busy-loop timeouts without hanging the caller", async () => {
-      const { executeCustomScript } =
-        await import("../../../src/utils/custom_script_executor.js");
+    it(
+      "should report busy-loop timeouts without hanging the caller",
+      async () => {
+        const { executeCustomScript } =
+          await import("../../../src/utils/custom_script_executor.js");
 
-      const result = await executeCustomScript({
-        source: "while (true) {}",
-        event: {},
-        req: {},
-        timeoutMs: 25,
-      });
+        const result = await executeCustomScript({
+          source: "while (true) {}",
+          event: {},
+          req: {},
+          timeoutMs: 25,
+        });
 
-      expect(result.ok).toBe(false);
-      expect(result.error).toEqual(
-        expect.objectContaining({
-          name: "Error",
-          message: expect.stringContaining("timed out"),
-        }),
-      );
-    });
+        expect(result.ok).toBe(false);
+        expect(result.error).toEqual(
+          expect.objectContaining({
+            name: "Error",
+            message: expect.stringContaining("timed out"),
+          }),
+        );
+      },
+      BUSY_LOOP_TIMEOUT_TEST_TIMEOUT_MS,
+    );
 
     it(
       "should handle concurrent executions without cross-talk between events",

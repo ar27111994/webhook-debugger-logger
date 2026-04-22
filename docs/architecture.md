@@ -204,6 +204,7 @@ LoggerMiddleware.middleware
     ├── Prepare data (parse, redact, encode)
     ├── Signature verification (if configured)
     ├── Custom script execution (worker-isolated vm context)
+    ├── Measure processingTime before any simulated response delay
     ├── Send HTTP response to caller
     └── Background tasks (fire-and-forget with timeout):
         ├── Actor.pushData(event)  → Dataset (Write Model)
@@ -262,7 +263,11 @@ DuckDB connections are pooled (configurable size). All write operations go throu
 
 Config changes propagate through `AppState.applyConfigUpdate()` which updates body parser limits, rate limiters, auth keys, retention, replay settings, and more — all without restart.
 
+When JSON Schema validation is enabled, compiled validators are cached and reused while the effective schema stays unchanged. This keeps hot-reload flexibility without paying repeated compilation cost on the webhook request path.
+
 Retention updates are intentionally non-destructive for active webhooks. The current implementation extends existing expiry timestamps when retention increases instead of shortening live webhook lifetimes.
+
+`responseDelayMs` remains a simulation layer for downstream timeout testing. The runtime records `processingTime` before that delay is applied so the stored metric reflects server-side work rather than synthetic waiting time.
 
 ### 6. Streaming Large Payload Offload
 

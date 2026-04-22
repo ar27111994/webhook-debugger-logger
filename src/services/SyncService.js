@@ -42,7 +42,7 @@ const log = createChildLogger({ component: LOG_COMPONENTS.SYNC_SERVICE });
 // Export singleton (optional) or just the class.
 // Since main.js initializes it, exporting class is better.
 export class SyncService {
-  /** @type {Bottleneck} */
+  /** @type {Bottleneck | null} */
   #limiter;
   /** @type {number | null} */
   #cachedMaxOffset;
@@ -63,12 +63,20 @@ export class SyncService {
   /** @type {Date | null} */
   #lastErrorTime = null;
 
-  constructor() {
-    // Rate limit sync operations
-    this.#limiter = new Bottleneck({
+  /**
+   * @returns {Bottleneck}
+   */
+  #createLimiter() {
+    return new Bottleneck({
       maxConcurrent: SYNC_MAX_CONCURRENT,
       minTime: SYNC_MIN_TIME_MS,
     });
+  }
+
+  constructor() {
+    // Create the limiter lazily on start so a stopped service does not leave
+    // an unused scheduler instance holding the process open.
+    this.#limiter = null;
 
     this.#cachedMaxOffset = null;
     this.#isRunning = false;
@@ -120,6 +128,7 @@ export class SyncService {
   async start() {
     if (this.#isRunning) return;
     this.#isRunning = true;
+    this.#limiter = this.#createLimiter();
 
     log.info(LOG_MESSAGES.SYNC_START);
 
@@ -139,17 +148,23 @@ export class SyncService {
     log.info(LOG_MESSAGES.SYNC_STOP);
     this.#isRunning = false;
     appEvents.off(EVENT_NAMES.LOG_RECEIVED, this.#boundOnLogReceived);
-    await this.#limiter.stop({ dropWaitingJobs: true });
+
+    const limiter = /** @type {Bottleneck} */ (this.#limiter);
+    this.#limiter = null;
+    await limiter.stop({ dropWaitingJobs: true });
+    if (typeof limiter.disconnect === "function") {
+      await limiter.disconnect();
+    }
   }
 
   /**
    * Trigger synchronization with concurrency control via Bottleneck
    */
   #triggerSync() {
-    if (!this.#isRunning) return;
+    const limiter = /** @type {Bottleneck} */ (this.#limiter);
 
     // schedule returns a promise but we don't await it here to avoid blocking event loop
-    this.#limiter
+    limiter
       .schedule(() => this.#syncLogs())
       .catch((err) => {
         // Suppress expected error when service is stopping
@@ -193,12 +208,27 @@ export class SyncService {
    */
   async #syncLogs() {
     try {
+      if (!this.#isRunning) {
+        return;
+      }
+
       // 1. Determine start offset
       const nextOffset = await this.#getNextOffset();
+      if (!this.#isRunning) {
+        return;
+      }
 
       // 2. Check Dataset Info
       const dataset = await Actor.openDataset();
+      if (!this.#isRunning) {
+        return;
+      }
+
       const info = await dataset.getInfo();
+      if (!this.#isRunning) {
+        return;
+      }
+
       const itemCount = Number(info?.itemCount);
 
       if (!Number.isFinite(itemCount) || itemCount <= nextOffset) {
@@ -212,6 +242,9 @@ export class SyncService {
         offset: nextOffset,
         limit: limit,
       });
+      if (!this.#isRunning) {
+        return;
+      }
 
       if (!Array.isArray(items) || items.length === 0) return;
 
@@ -237,6 +270,9 @@ export class SyncService {
 
       // 5. Batch Insert into DuckDB
       await logRepository.batchInsertLogs(logsToInsert);
+      if (!this.#isRunning) {
+        return;
+      }
 
       // 6. Update Cache & Metrics
       this.#cachedMaxOffset = nextOffset + items.length - 1;
@@ -249,6 +285,10 @@ export class SyncService {
         this.#triggerSync();
       }
     } catch (err) {
+      if (!this.#isRunning) {
+        return;
+      }
+
       log.error({ err: serializeError(err) }, LOG_MESSAGES.SYNC_ERROR_GENERAL);
       // Invalidate cache on error
       this.#cachedMaxOffset = null;

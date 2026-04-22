@@ -57,6 +57,36 @@ const REPO_ROOT = path.resolve(
  */
 
 /**
+ * @param {ChildProcess} child
+ * @returns {Promise<void>}
+ */
+async function waitForChildClose(child) {
+  if (child.exitCode !== null) {
+    await once(child, STREAM_EVENTS.CLOSE);
+    return;
+  }
+
+  await once(child, STREAM_EVENTS.CLOSE);
+}
+
+/**
+ * @param {ChildProcess} child
+ * @returns {void}
+ */
+function cleanupChildStreams(child) {
+  child.stdout?.removeAllListeners();
+  child.stderr?.removeAllListeners();
+
+  if (!child.stdout?.destroyed) {
+    child.stdout?.destroy();
+  }
+
+  if (!child.stderr?.destroyed) {
+    child.stderr?.destroy();
+  }
+}
+
+/**
  * Finds a free local TCP port.
  *
  * @returns {Promise<number>}
@@ -218,11 +248,15 @@ export async function spawnAppProcess(options) {
       const timeout = setTimeout(() => {
         child.kill(SHUTDOWN_SIGNALS.SIGKILL);
       }, PROCESS_SHUTDOWN_TIMEOUT_MS);
+      if (timeout.unref) {
+        timeout.unref();
+      }
 
       try {
-        await once(child, "exit");
+        await waitForChildClose(child);
       } finally {
         clearTimeout(timeout);
+        cleanupChildStreams(child);
       }
     }
 
@@ -257,11 +291,15 @@ export async function spawnAppProcess(options) {
     const timeout = setTimeout(() => {
       child.kill(SHUTDOWN_SIGNALS.SIGKILL);
     }, PROCESS_SHUTDOWN_TIMEOUT_MS);
+    if (timeout.unref) {
+      timeout.unref();
+    }
 
     try {
-      await once(child, "exit");
+      await waitForChildClose(child);
     } finally {
       clearTimeout(timeout);
+      cleanupChildStreams(child);
       await rm(storageDir, { recursive: true, force: true });
     }
   };

@@ -96,6 +96,7 @@ export const LOG_MESSAGES = Object.freeze({
   SHUTDOWN_START: "Shutting down",
   SHUTDOWN_HOT_RELOAD_FAILED: "HotReloadManager.stop() failed during shutdown",
   SHUTDOWN_APP_STATE_FAILED: "AppState.destroy() failed during shutdown",
+  SHUTDOWN_DB_CLOSE_FAILED: "closeDb() failed during shutdown",
   SHUTDOWN_FINAL_CLEANUP_FAILED: "Final cleanup failed during shutdown",
   INPUT_ENV_VAR_PARSED: "Using override from INPUT environment variable",
   INPUT_ENV_VAR_INVALID: "INPUT env var must be a non-array JSON object",

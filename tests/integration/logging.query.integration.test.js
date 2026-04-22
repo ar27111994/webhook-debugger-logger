@@ -20,13 +20,18 @@ import { AUTH_CONSTS } from "../../src/consts/auth.js";
  */
 
 const AUTH_KEY = "integration-log-secret";
-const LOG_SYNC_WAIT_TIMEOUT_MS = 5000;
+const LOG_SYNC_WAIT_TIMEOUT_MS = 10000;
 const LOG_SYNC_WAIT_INTERVAL_MS = 100;
 const LOGS_QUERY_LIMIT = 50;
 const LOGGING_QUERY_TEST_TIMEOUT_MS = 15000;
+const RESPONSE_DELAY_MS = 300;
+const WARM_PATH_SAMPLE_COUNT = 6;
+const WARM_PATH_SAMPLE_BUFFER = 3;
+const PROCESSING_TIME_SANITY_MAX_MS = 1000;
+const TEST_RATE_LIMIT_PER_MINUTE = 1000;
 
 /**
- * @typedef {{ id: string, webhookId: string, method: string, detailUrl: string }} LogListItem
+ * @typedef {import("../../src/typedefs.js").LogEntry & { detailUrl?: string }} LogListItem
  */
 
 /**
@@ -74,7 +79,10 @@ describe("Integration: Logging and query contracts", () => {
         authKey: AUTH_KEY,
         urlCount: 1,
         retentionHours: 1,
+        rateLimitPerMinute: TEST_RATE_LIMIT_PER_MINUTE,
         enableJSONParsing: true,
+        customScript: undefined,
+        jsonSchema: undefined,
         defaultResponseBody: "ingested",
         defaultResponseCode: HTTP_STATUS.CREATED,
       });
@@ -158,6 +166,240 @@ describe("Integration: Logging and query contracts", () => {
       if (detailResponse.status === HTTP_STATUS.OK) {
         expect(String(detailResponse.body.webhookId)).toBe(webhookId);
       }
+    },
+    LOGGING_QUERY_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "should persist multiple warm-path processingTime samples for downstream percentile verification",
+    async () => {
+      context = await startIntegrationApp({
+        authKey: AUTH_KEY,
+        urlCount: 1,
+        retentionHours: 1,
+        rateLimitPerMinute: TEST_RATE_LIMIT_PER_MINUTE,
+        enableJSONParsing: true,
+        customScript: undefined,
+        jsonSchema: {
+          type: "object",
+          properties: {
+            id: { type: "string" },
+            source: { type: "string" },
+            data: {
+              type: "object",
+              properties: {
+                sequence: { type: "number" },
+              },
+              required: ["sequence"],
+            },
+          },
+          required: ["id", "source", "data"],
+        },
+        responseDelayMs: 0,
+        defaultResponseCode: HTTP_STATUS.OK,
+      });
+      const activeContext = requireContext(context);
+
+      const webhookId = await resolveActiveWebhookId(activeContext.appClient);
+
+      const warmupPayload = createWebhookPayload({
+        id: "evt_integration_latency_warmup",
+        source: "integration-latency-warmup",
+        data: { sequence: -1 },
+      });
+
+      const warmupResponse = await activeContext.appClient
+        .post(APP_ROUTES.WEBHOOK.replace(":id", webhookId))
+        .set(
+          HTTP_HEADERS.AUTHORIZATION,
+          `${AUTH_CONSTS.BEARER_PREFIX}${AUTH_KEY}`,
+        )
+        .set(HTTP_HEADERS.CONTENT_TYPE, MIME_TYPES.JSON)
+        .send(warmupPayload);
+
+      expect([
+        HTTP_STATUS.OK,
+        HTTP_STATUS.CREATED,
+        HTTP_STATUS.ACCEPTED,
+      ]).toContain(warmupResponse.status);
+
+      for (let index = 0; index < WARM_PATH_SAMPLE_COUNT; index += 1) {
+        const response = await activeContext.appClient
+          .post(APP_ROUTES.WEBHOOK.replace(":id", webhookId))
+          .set(
+            HTTP_HEADERS.AUTHORIZATION,
+            `${AUTH_CONSTS.BEARER_PREFIX}${AUTH_KEY}`,
+          )
+          .set(HTTP_HEADERS.CONTENT_TYPE, MIME_TYPES.JSON)
+          .send(
+            createWebhookPayload({
+              id: `evt_integration_latency_${index}`,
+              source: "integration-latency-slo",
+              data: { sequence: index },
+            }),
+          );
+
+        expect([
+          HTTP_STATUS.OK,
+          HTTP_STATUS.CREATED,
+          HTTP_STATUS.ACCEPTED,
+        ]).toContain(response.status);
+      }
+
+      await waitForCondition(
+        async () => {
+          const logsResponse = await activeContext.appClient
+            .get(APP_ROUTES.LOGS)
+            .set(
+              HTTP_HEADERS.AUTHORIZATION,
+              `${AUTH_CONSTS.BEARER_PREFIX}${AUTH_KEY}`,
+            )
+            .query({
+              webhookId,
+              limit: WARM_PATH_SAMPLE_COUNT + WARM_PATH_SAMPLE_BUFFER,
+            });
+
+          if (logsResponse.status !== HTTP_STATUS.OK) {
+            return false;
+          }
+
+          /** @type {LogListItem[]} */
+          const items = Array.isArray(logsResponse.body?.items)
+            ? logsResponse.body.items
+            : [];
+
+          const warmPathSamples = items.filter(
+            (item) =>
+              item.webhookId === webhookId &&
+              typeof item.processingTime === "number",
+          );
+
+          return warmPathSamples.length >= WARM_PATH_SAMPLE_COUNT;
+        },
+        LOG_SYNC_WAIT_TIMEOUT_MS,
+        LOG_SYNC_WAIT_INTERVAL_MS,
+      );
+
+      const finalLogsResponse = await activeContext.appClient
+        .get(APP_ROUTES.LOGS)
+        .set(
+          HTTP_HEADERS.AUTHORIZATION,
+          `${AUTH_CONSTS.BEARER_PREFIX}${AUTH_KEY}`,
+        )
+        .query({
+          webhookId,
+          limit: WARM_PATH_SAMPLE_COUNT + WARM_PATH_SAMPLE_BUFFER,
+        });
+
+      expect(finalLogsResponse.status).toBe(HTTP_STATUS.OK);
+      /** @type {LogListItem[]} */
+      const items = Array.isArray(finalLogsResponse.body?.items)
+        ? finalLogsResponse.body.items
+        : [];
+      const warmPathSamples = items
+        .filter(
+          (item) =>
+            item.webhookId === webhookId &&
+            typeof item.processingTime === "number",
+        )
+        .slice(0, WARM_PATH_SAMPLE_COUNT)
+        .map((item) => Number(item.processingTime));
+
+      expect(warmPathSamples).toHaveLength(WARM_PATH_SAMPLE_COUNT);
+
+      expect(warmPathSamples.every((sample) => sample >= 0)).toBe(true);
+      expect(Math.max(...warmPathSamples)).toBeLessThan(
+        PROCESSING_TIME_SANITY_MAX_MS,
+      );
+    },
+    LOGGING_QUERY_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "should delay the response without persisting simulated delay inside processingTime",
+    async () => {
+      context = await startIntegrationApp({
+        authKey: AUTH_KEY,
+        urlCount: 1,
+        retentionHours: 1,
+        rateLimitPerMinute: TEST_RATE_LIMIT_PER_MINUTE,
+        enableJSONParsing: true,
+        customScript: undefined,
+        jsonSchema: undefined,
+        responseDelayMs: RESPONSE_DELAY_MS,
+        defaultResponseCode: HTTP_STATUS.ACCEPTED,
+      });
+      const activeContext = requireContext(context);
+
+      const webhookId = await resolveActiveWebhookId(activeContext.appClient);
+      const payload = createWebhookPayload({
+        id: "evt_integration_delay_1",
+        source: "integration-delay-contract",
+      });
+
+      const ingestResponse = await activeContext.appClient
+        .post(APP_ROUTES.WEBHOOK.replace(":id", webhookId))
+        .set(
+          HTTP_HEADERS.AUTHORIZATION,
+          `${AUTH_CONSTS.BEARER_PREFIX}${AUTH_KEY}`,
+        )
+        .set(HTTP_HEADERS.CONTENT_TYPE, MIME_TYPES.JSON)
+        .send(payload);
+
+      expect(ingestResponse.status).toBe(HTTP_STATUS.CREATED);
+
+      await waitForCondition(
+        async () => {
+          const logsResponse = await activeContext.appClient
+            .get(APP_ROUTES.LOGS)
+            .set(
+              HTTP_HEADERS.AUTHORIZATION,
+              `${AUTH_CONSTS.BEARER_PREFIX}${AUTH_KEY}`,
+            )
+            .query({
+              webhookId,
+              limit: LOGS_QUERY_LIMIT,
+              body: { id: payload.id },
+            });
+
+          if (logsResponse.status !== HTTP_STATUS.OK) {
+            return false;
+          }
+
+          /** @type {LogListItem[]} */
+          const items = Array.isArray(logsResponse.body?.items)
+            ? logsResponse.body.items
+            : [];
+
+          return items.some((item) => item.webhookId === webhookId);
+        },
+        LOG_SYNC_WAIT_TIMEOUT_MS,
+        LOG_SYNC_WAIT_INTERVAL_MS,
+      );
+
+      const finalLogsResponse = await activeContext.appClient
+        .get(APP_ROUTES.LOGS)
+        .set(
+          HTTP_HEADERS.AUTHORIZATION,
+          `${AUTH_CONSTS.BEARER_PREFIX}${AUTH_KEY}`,
+        )
+        .query({
+          webhookId,
+          limit: LOGS_QUERY_LIMIT,
+          body: { id: payload.id },
+        });
+
+      expect(finalLogsResponse.status).toBe(HTTP_STATUS.OK);
+      /** @type {LogListItem[]} */
+      const items = finalLogsResponse.body.items;
+      const createdItem = items.find(
+        (item) =>
+          item.webhookId === webhookId &&
+          typeof item.processingTime === "number",
+      );
+
+      expect(createdItem).toBeDefined();
+      expect(createdItem?.processingTime).toBeLessThan(RESPONSE_DELAY_MS);
     },
     LOGGING_QUERY_TEST_TIMEOUT_MS,
   );

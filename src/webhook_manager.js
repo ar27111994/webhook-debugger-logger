@@ -75,6 +75,21 @@ export class WebhookManager {
   }
 
   /**
+   * Resets in-memory state for test-only singleton lifecycle control.
+   * @internal
+   */
+  resetStateForTest() {
+    if (!IS_TEST()) {
+      throw new Error(ERROR_MESSAGES.WEBHOOK_STATE_RESET_UNAVAILABLE);
+    }
+
+    this.#webhooks = new Map();
+    this.#kvStore = null;
+    this.#persistPromise = Promise.resolve();
+    this.#lastVacuumTime = 0;
+  }
+
+  /**
    * Initializes the manager by restoring state from KeyValueStore.
    * This ensures webhooks persist across Actor restarts or migrations.
    */

@@ -57,7 +57,7 @@
  * @property {number} statusCode
  * @property {string|Object} [responseBody]
  * @property {Object.<string, string> | null} [responseHeaders]
- * @property {number} processingTime
+ * @property {number} processingTime - Server-side processing time in milliseconds before any configured responseDelayMs delay is applied
  * @property {string} [remoteIp]
  * @property {string} [userAgent]
  * @property {boolean} [signatureValid]

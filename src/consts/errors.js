@@ -200,6 +200,8 @@ export const ERROR_MESSAGES = Object.freeze({
      * @returns {string}
      */
     (code) => `Custom script worker exited unexpectedly with code ${code}`,
+  WEBHOOK_STATE_RESET_UNAVAILABLE:
+    "resetStateForTest() is only available in test mode",
 });
 
 /**
