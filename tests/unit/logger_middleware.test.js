@@ -264,22 +264,44 @@ describe("LoggerMiddleware", () => {
       );
     });
 
-    it("should hit oldSchemaStr truthy branch in refreshCompilations directly", () => {
+    it("should reuse a cached validator when updateOptions receives an equivalent schema object", () => {
+      const schemaObj = {
+        type: "object",
+        properties: { id: { type: "number" } },
+        required: ["id"],
+      };
+      const mw = createLoggerMiddleware(
+        webhookManagerMock,
+        { jsonSchema: schemaObj },
+        () => {},
+      );
+
+      loggerMock.info.mockClear();
+
+      mw.updateOptions({
+        jsonSchema: JSON.parse(JSON.stringify(schemaObj)),
+      });
+
+      const schemaCompileLogCount = loggerMock.info.mock.calls.filter(
+        ([message]) => message === LOG_MESSAGES.SCHEMA_COMPILED,
+      ).length;
+
+      expect(mw.hasValidator()).toBe(true);
+      expect(schemaCompileLogCount).toBe(0);
+    });
+
+    it("should clear the validator when updateOptions removes jsonSchema", () => {
       const mw = createLoggerMiddleware(
         webhookManagerMock,
         { jsonSchema: { type: "string" } },
         () => {},
       );
 
-      // Update with DIFFERENT schema to hit the 'newSchemaStr !== oldSchemaStr' branch
-      // where oldSchemaStr IS truthy
-      mw.updateOptions({ jsonSchema: { type: "number" } });
+      expect(mw.hasValidator()).toBe(true);
 
-      // Just assert it ran smoothly (coverage proves branches taken)
-      expect(loggerMock.error).not.toHaveBeenCalledWith(
-        expect.objectContaining({ errorPrefix: LOG_TAGS.SCHEMA_ERROR }),
-        LOG_MESSAGES.RESOURCE_INVALID,
-      );
+      mw.updateOptions({ jsonSchema: undefined });
+
+      expect(mw.hasValidator()).toBe(false);
     });
 
     it("should hit webhookData nullish fallback in resolveOptions", async () => {

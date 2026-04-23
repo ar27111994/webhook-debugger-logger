@@ -461,17 +461,7 @@ export class LoggerMiddleware {
     }
 
     // 2. Smart schema re-compilation
-    const oldSchemaStr =
-      currentOptions && currentOptions.jsonSchema
-        ? JSON.stringify(currentOptions.jsonSchema)
-        : undefined;
-    const newSchemaStr = newOptions.jsonSchema
-      ? JSON.stringify(newOptions.jsonSchema)
-      : undefined;
-
-    if (!currentOptions || newSchemaStr !== oldSchemaStr) {
-      this.#validate = this.#getValidator(newOptions.jsonSchema);
-    }
+    this.#validate = this.#getValidator(newOptions.jsonSchema);
   }
 
   /**

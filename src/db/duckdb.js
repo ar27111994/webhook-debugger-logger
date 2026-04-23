@@ -64,8 +64,8 @@ let activeConnectionOperations = 0;
 const pendingConnectionOperationWaiters = [];
 /** @type {Promise<void> | null} */
 let resetInProgress = null;
-/** @type {() => void} */
-let resolveResetInProgress = () => {};
+/** @type {(() => void) | null} */
+let resolveResetInProgress = null;
 
 /**
  * Stops and disconnects the current write queue.
@@ -92,9 +92,7 @@ function beginConnectionOperation() {
  * @returns {void}
  */
 function endConnectionOperation() {
-  if (activeConnectionOperations > 0) {
-    activeConnectionOperations -= 1;
-  }
+  activeConnectionOperations = Math.max(0, activeConnectionOperations - 1);
 
   if (activeConnectionOperations === 0) {
     while (pendingConnectionOperationWaiters.length > 0) {
@@ -260,9 +258,9 @@ export async function resetDbInstance() {
     writeQueue = createWriteQueue();
   } finally {
     const finishReset = resolveResetInProgress;
-    resolveResetInProgress = () => {};
+    resolveResetInProgress = null;
     resetInProgress = null;
-    finishReset();
+    finishReset?.();
   }
 }
 
