@@ -103,7 +103,11 @@ jobs:
 
             try {
               const { origin, pathname } = new URL(value);
-              return `${origin}${pathname}`;
+              const normalizedPathname =
+                pathname !== '/' && pathname.endsWith('/')
+                  ? pathname.slice(0, -1)
+                  : pathname;
+              return `${origin}${normalizedPathname}`;
             } catch {
               return null;
             }
@@ -114,6 +118,9 @@ jobs:
             'https://www.npmjs.com/package/webhook-debugger-logger',
             'https://www.npmjs.com/package/isolated-vm?activeTab=readme',
             'https://img.shields.io/coderabbit/prs/github/ar27111994/webhook-debugger-logger?utm_source=oss&utm_medium=github&utm_campaign=ar27111994%2Fwebhook-debugger-logger&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews',
+            'https://www.patreon.com/cw/ar27111994',
+            'https://liberapay.com/ar27111994',
+            'https://thanks.dev/d/gh/ar27111994',
           ];
           const softHandledUrlKeys = new Set(
             softHandledUrls.map((value) => normalizeUrlKey(value)).filter(Boolean),
