@@ -369,8 +369,9 @@ describe("Custom Script Executor worker failure paths", () => {
 
     /** @type {() => void} */
     let resolveTerminate = () => {};
+    /** @type {Promise<void>} */
     const terminateDeferred = new Promise((resolve) => {
-      resolveTerminate = resolve;
+      resolveTerminate = () => resolve(undefined);
     });
     terminateMock.mockImplementation(async () => {
       await terminateDeferred;

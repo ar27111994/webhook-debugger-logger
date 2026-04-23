@@ -74,16 +74,6 @@ async function stopWriteQueue() {
 }
 
 /**
- * Replaces the current write queue with a fresh instance after shutting the prior
- * queue down.
- * @returns {Promise<void>}
- */
-async function resetWriteQueue() {
-  await stopWriteQueue();
-  writeQueue = createWriteQueue();
-}
-
-/**
  * Closes a connection while suppressing close-time errors from stale handles.
  * @param {DuckDBConnection | undefined} conn
  * @returns {void}

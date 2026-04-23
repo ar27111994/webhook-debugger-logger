@@ -58,6 +58,7 @@ const REPO_ROOT = path.resolve(
 
 /**
  * @param {ChildProcess} child
+ * @param {Promise<void>} closePromise
  * @returns {Promise<void>}
  */
 async function waitForChildClose(child, closePromise) {
