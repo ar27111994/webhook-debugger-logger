@@ -232,6 +232,7 @@ export async function spawnAppProcess(options) {
   });
   const childClosePromise = once(child, STREAM_EVENTS.CLOSE).then(
     () => undefined,
+    () => undefined,
   );
 
   /** @type {Buffer[]} */

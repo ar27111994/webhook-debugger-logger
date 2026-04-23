@@ -434,6 +434,91 @@ describe("LoggerMiddleware", () => {
       expect(resA.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
       expect(resB.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
     });
+
+    it("should evict the oldest cached validator when the schema cache exceeds its max size", async () => {
+      const { middleware } = await createMiddlewareTestContext();
+      loggerMock.info.mockClear();
+
+      const schemaVariants = Array.from({ length: 33 }, (_, index) => ({
+        type: "object",
+        properties: {
+          [`field${index}`]: { type: "number" },
+        },
+        required: [`field${index}`],
+      }));
+
+      for (const schema of schemaVariants) {
+        middleware.updateOptions({ jsonSchema: schema });
+      }
+
+      middleware.updateOptions({ jsonSchema: schemaVariants[0] });
+
+      const schemaCompileLogCount = loggerMock.info.mock.calls.filter(
+        ([message]) => message === LOG_MESSAGES.SCHEMA_COMPILED,
+      ).length;
+
+      expect(schemaCompileLogCount).toBe(schemaVariants.length + 1);
+    });
+
+    it("should tolerate an undefined oldest cache key during validator cache eviction", async () => {
+      const { middleware } = await createMiddlewareTestContext();
+      loggerMock.info.mockClear();
+      const validatorCacheMaxEntries = 32;
+
+      const schemaVariants = Array.from(
+        { length: validatorCacheMaxEntries + 1 },
+        (_, index) => ({
+          type: "object",
+          properties: {
+            [`field${index}`]: { type: "number" },
+          },
+          required: [`field${index}`],
+        }),
+      );
+
+      for (const schema of schemaVariants.slice(0, validatorCacheMaxEntries)) {
+        middleware.updateOptions({ jsonSchema: schema });
+      }
+
+      const originalKeys = Map.prototype.keys;
+      let injectedMissingKey = false;
+      /**
+       * @this {Map<unknown, unknown>}
+       * @returns {ReturnType<Map<unknown, unknown>["keys"]>}
+       */
+      function keysForValidatorCache() {
+        if (!injectedMissingKey && this.size === validatorCacheMaxEntries) {
+          injectedMissingKey = true;
+          return assertType({
+            next: () => ({ value: undefined, done: false }),
+            [Symbol.iterator]() {
+              return this;
+            },
+            [Symbol.dispose]() {},
+          });
+        }
+
+        return originalKeys.call(this);
+      }
+      const keysSpy = jest
+        .spyOn(Map.prototype, "keys")
+        .mockImplementation(keysForValidatorCache);
+
+      expect(() =>
+        middleware.updateOptions({
+          jsonSchema: schemaVariants[validatorCacheMaxEntries],
+        }),
+      ).not.toThrow();
+
+      keysSpy.mockRestore();
+      expect(injectedMissingKey).toBe(true);
+
+      const schemaCompileLogCount = loggerMock.info.mock.calls.filter(
+        ([message]) => message === LOG_MESSAGES.SCHEMA_COMPILED,
+      ).length;
+
+      expect(schemaCompileLogCount).toBe(schemaVariants.length);
+    });
   });
 
   describe("ingestMiddleware", () => {

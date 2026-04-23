@@ -102,6 +102,19 @@ function closeInstanceQuietly(instance) {
 }
 
 /**
+ * Drains both pooled and in-use connection lists, closing each handle quietly.
+ * @returns {void}
+ */
+function drainConnections() {
+  while (connectionPool.length > 0) {
+    closeConnectionQuietly(connectionPool.pop());
+  }
+  while (inUseConnections.length > 0) {
+    closeConnectionQuietly(inUseConnections.pop());
+  }
+}
+
+/**
  * Gets the current database path based on environment variables.
  * @returns {string}
  */
@@ -167,11 +180,11 @@ export async function getDbInstance() {
 export async function resetDbInstance() {
   await stopWriteQueue();
 
+  drainConnections();
+
   const instanceToClose = dbInstance;
   dbInstance = null;
   initPromise = null;
-  connectionPool.length = 0;
-  inUseConnections.length = 0;
 
   closeInstanceQuietly(instanceToClose);
 
@@ -376,22 +389,7 @@ async function initSchema(conn) {
  * @returns {Promise<void>}
  */
 export async function closeDb() {
-  await stopWriteQueue();
-
-  // Drain connection pool
-  while (connectionPool.length > 0) {
-    closeConnectionQuietly(connectionPool.pop());
-  }
-  while (inUseConnections.length > 0) {
-    closeConnectionQuietly(inUseConnections.pop());
-  }
-  const instanceToClose = dbInstance;
-  dbInstance = null;
-  initPromise = null;
-
-  closeInstanceQuietly(instanceToClose);
-
-  writeQueue = createWriteQueue();
+  await resetDbInstance();
 }
 
 /**

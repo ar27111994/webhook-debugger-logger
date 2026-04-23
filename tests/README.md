@@ -94,6 +94,12 @@ The following logs can appear during integration/e2e and coverage runs and are u
 - `Force exiting Jest...`
   - Expected in coverage scripts that pass `--forceExit` for long-running suites.
 
+## Harness Isolation Notes
+
+- `setupTestApp()` resets the Jest module registry before importing `src/main.js` so each integration test boot gets a fresh app instance instead of reusing previously registered routes or singleton runtime state.
+- The in-process integration harness still isolates `APIFY_LOCAL_STORAGE_DIR` per test app boot; the module reset complements that filesystem isolation and prevents route/config leakage across repeated initialize/shutdown cycles in the same Jest worker.
+- The spawned-process E2E harness treats child `close` events as best-effort teardown signals so tests do not fail on benign close-listener race conditions during shutdown.
+
 Treat these as failures only when they are accompanied by test assertion failures, non-zero coverage gate output, or unhandled exceptions.
 
 ## Running Tests

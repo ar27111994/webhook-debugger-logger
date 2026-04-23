@@ -14,6 +14,7 @@ This directory contains in-process integration tests that validate module intera
 - Prefer shared helpers under [tests/setup/helpers](../setup/helpers)
 - Use explicit assertions for every action
 - Keep setup and teardown isolated per test
+- Use `setupTestApp()` as the default app bootstrap helper because it resets the Jest module registry before loading `src/main.js`, preventing route and singleton leakage across repeated in-process app boots.
 
 ## Known Runtime Signals
 

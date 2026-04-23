@@ -11,6 +11,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Actor } from "apify";
+import { jest } from "@jest/globals";
 import request from "supertest";
 import { ENV_VARS, SHUTDOWN_SIGNALS } from "../../../src/consts/app.js";
 import { ENV_VALUES } from "../../../src/consts/env.js";
@@ -116,9 +117,14 @@ export const setupTestApp = async (options = {}, enableHotReload = false) => {
     return originalActorOn(event, handler);
   };
 
-  const mainModule = await import(mainModuleUrl.href);
-
+  /** @type {typeof import("../../../src/main.js") | undefined} */
+  let mainModule;
   try {
+    jest.resetModules();
+    mainModule = await import(mainModuleUrl.href);
+    if (!mainModule) {
+      throw new Error("Failed to load main module for test app setup");
+    }
     await mainModule.initialize(options);
   } catch (error) {
     await cleanup();

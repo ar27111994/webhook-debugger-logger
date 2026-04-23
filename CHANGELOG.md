@@ -10,8 +10,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **Latency Metrics**: Make `processingTime` consistently represent server-side processing time only, excluding any configured `responseDelayMs` simulation from persisted log data.
 - **Performance**: Cache compiled JSON Schema validators so repeated requests and stable hot-reload configurations do not trigger unnecessary recompilation on the webhook path.
 - **Lifecycle**: Reset webhook-manager singleton state during test teardown and recreate the sync-service limiter after shutdown so repeated initialize/stop/start flows remain stable.
+- **DuckDB Lifecycle**: Drain both pooled and in-use DuckDB connections before resetting the singleton so repeated DB teardown and rebuild flows do not leave stale handles behind.
 - **Contracts & Docs**: Align dataset, output, OpenAPI, README, architecture, and API reference documentation with the finalized `processingTime` semantics and response-delay behavior.
-- **Tests**: Add regression coverage for latency semantics, validator-cache reuse, malformed JSON sanitation persistence, and restart-safe integration harness cleanup.
+- **Tests**: Add regression coverage for latency semantics, validator-cache reuse and cache-eviction edges, malformed JSON sanitation persistence, restart-safe integration harness cleanup, and spawned-process close-path resilience.
 
 ## [3.0.4] - 2026-04-18
 

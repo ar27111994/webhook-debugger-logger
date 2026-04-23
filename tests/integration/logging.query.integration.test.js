@@ -346,7 +346,7 @@ describe("Integration: Logging and query contracts", () => {
         .set(HTTP_HEADERS.CONTENT_TYPE, MIME_TYPES.JSON)
         .send(payload);
 
-      expect(ingestResponse.status).toBe(HTTP_STATUS.CREATED);
+      expect(ingestResponse.status).toBe(HTTP_STATUS.ACCEPTED);
 
       await waitForCondition(
         async () => {

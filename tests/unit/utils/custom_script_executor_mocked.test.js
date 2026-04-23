@@ -8,6 +8,7 @@ import { EventEmitter } from "node:events";
 import { STREAM_EVENTS } from "../../../src/consts/app.js";
 import { ERROR_MESSAGES } from "../../../src/consts/errors.js";
 import { useMockCleanup } from "../../setup/helpers/test-lifecycle.js";
+import { assertType } from "../../setup/helpers/test-utils.js";
 
 /**
  * @typedef {import("node:worker_threads").WorkerOptions} WorkerOptions
@@ -371,7 +372,7 @@ describe("Custom Script Executor worker failure paths", () => {
     let resolveTerminate = () => {};
     /** @type {Promise<void>} */
     const terminateDeferred = new Promise((resolve) => {
-      resolveTerminate = () => resolve(undefined);
+      resolveTerminate = assertType(resolve);
     });
     terminateMock.mockImplementation(async () => {
       await terminateDeferred;

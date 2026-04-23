@@ -523,6 +523,66 @@ describe("DuckDB Singleton", () => {
 
       expect(closeSyncSpy).toHaveBeenCalled();
     });
+
+    it("should close pooled and in-use connections before clearing reset state", async () => {
+      /** @type {DuckDBConnection[]} */
+      const connections = [];
+      const originalConnect = DuckDBInstance.prototype.connect;
+      /** @type {() => void} */
+      let releaseBlockedRead = () => {};
+      /** @type {Promise<void>} */
+      const blockedReadGate = new Promise((resolve) => {
+        releaseBlockedRead = () => resolve(undefined);
+      });
+      /** @type {() => void} */
+      let markBlockedReadStarted = () => {};
+      /** @type {Promise<void>} */
+      const blockedReadStarted = new Promise((resolve) => {
+        markBlockedReadStarted = () => resolve(undefined);
+      });
+      let shouldBlockNextRead = true;
+
+      jest.spyOn(DuckDBInstance.prototype, "connect").mockImplementation(
+        /** @this {DuckDBInstance} */
+        async function () {
+          const conn = await originalConnect.call(this);
+          jest.spyOn(conn, "closeSync");
+          const originalRunAndReadAll = conn.runAndReadAll.bind(conn);
+          jest
+            .spyOn(conn, "runAndReadAll")
+            .mockImplementation(async (...args) => {
+              if (shouldBlockNextRead) {
+                shouldBlockNextRead = false;
+                markBlockedReadStarted();
+                await blockedReadGate;
+              }
+              return await originalRunAndReadAll(...args);
+            });
+          connections.push(conn);
+          return conn;
+        },
+      );
+
+      await getDbInstance();
+
+      const activeReadPromise = executeQuery(SELECT_ONE_SQL);
+      await blockedReadStarted;
+      await executeQuery(SELECT_ONE_SQL);
+
+      const activeConn = connections[1];
+      const pooledConn = connections[connections.length - 1];
+
+      await resetDbInstance();
+
+      expect(activeConn).toBeDefined();
+      expect(pooledConn).toBeDefined();
+      expect(pooledConn).not.toBe(activeConn);
+      expect(jest.mocked(assertType(activeConn).closeSync)).toHaveBeenCalled();
+      expect(jest.mocked(assertType(pooledConn).closeSync)).toHaveBeenCalled();
+
+      releaseBlockedRead();
+      await activeReadPromise.catch(() => undefined);
+    });
   });
 
   describe("initSchema idempotency", () => {
