@@ -22,6 +22,7 @@ import { jest } from "@jest/globals";
  * @property {jest.Mock<() => Promise<DatasetMock>>} openDataset
  * @property {jest.Mock<(data: any) => Promise<void>>} pushData
  * @property {jest.Mock<(event: string, handler: Function) => void>} on
+ * @property {jest.Mock<(event: string, handler: Function) => void>} off
  * @property {function(any): Promise<void>} emitInput
  * @property {jest.Mock<(code?: number) => Promise<void>>} exit
  * @property {jest.Mock<() => boolean>} isAtHome
@@ -92,6 +93,13 @@ export function createApifyMock(inputOverrides = {}) {
     on: /** @type {jest.Mock<(event: string, handler: Function) => void>} */ (
       jest.fn((event, handler) => {
         if (event === "input") inputHandler = /** @type {Function} */ (handler);
+      })
+    ),
+    off: /** @type {jest.Mock<(event: string, handler: Function) => void>} */ (
+      jest.fn((event, handler) => {
+        if (event === "input" && inputHandler === handler) {
+          inputHandler = undefined;
+        }
       })
     ),
     emitInput: /** @param {any} data */ async (data) => {

@@ -15,6 +15,7 @@ This directory contains in-process integration tests that validate module intera
 - Use explicit assertions for every action
 - Keep setup and teardown isolated per test
 - Use `setupTestApp()` as the default app bootstrap helper because it resets the Jest module registry before loading `src/main.js`, preventing route and singleton leakage across repeated in-process app boots.
+- Let `setupTestApp()` own teardown as well; it now removes process signal listeners and Actor listeners registered during initialization so lifecycle-heavy suites stay isolated.
 
 ## Known Runtime Signals
 

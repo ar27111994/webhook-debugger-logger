@@ -290,6 +290,10 @@ export class SyncService {
       }
     } catch (err) {
       if (!this.#isRunning) {
+        log.debug(
+          { err: serializeError(err), duringShutdown: true },
+          LOG_MESSAGES.SYNC_ERROR_GENERAL,
+        );
         return;
       }
 

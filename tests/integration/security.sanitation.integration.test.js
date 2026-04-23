@@ -4,20 +4,6 @@
  */
 
 import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
-import { APP_ROUTES } from "../../src/consts/app.js";
-import {
-  HTTP_HEADERS,
-  HTTP_METHODS,
-  HTTP_STATUS,
-  MIME_TYPES,
-} from "../../src/consts/http.js";
-import { startIntegrationApp } from "../setup/helpers/integration-harness.js";
-import {
-  createMalformedPayloadFixtures,
-  createWebhookPayload,
-} from "../setup/helpers/fixtures/payload-fixtures.js";
-import { waitForCondition } from "../setup/helpers/test-utils.js";
-import { AUTH_CONSTS } from "../../src/consts/auth.js";
 
 await setupCommonMocks({
   logger: true,
@@ -25,6 +11,16 @@ await setupCommonMocks({
   fs: true,
   db: false,
 });
+
+const { APP_ROUTES } = await import("../../src/consts/app.js");
+const { HTTP_HEADERS, HTTP_METHODS, HTTP_STATUS, MIME_TYPES } =
+  await import("../../src/consts/http.js");
+const { startIntegrationApp } =
+  await import("../setup/helpers/integration-harness.js");
+const { createMalformedPayloadFixtures, createWebhookPayload } =
+  await import("../setup/helpers/fixtures/payload-fixtures.js");
+const { waitForCondition } = await import("../setup/helpers/test-utils.js");
+const { AUTH_CONSTS } = await import("../../src/consts/auth.js");
 
 /**
  * @typedef {import('supertest').Agent} AppClient

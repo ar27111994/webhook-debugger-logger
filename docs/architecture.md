@@ -242,6 +242,8 @@ JSON response
 
 DuckDB is treated as ephemeral. On startup, `SyncService` catches up from the Apify Dataset. This means the system tolerates DuckDB failures without data loss.
 
+Read-model teardown is also restart-safe: reset logic waits for active DuckDB operations to drain before it closes pooled and in-use connections, so repeated initialize/shutdown cycles do not leave stale handles behind.
+
 ### 2. Event-Driven Sync
 
 `SyncService` listens to `appEvents` for real-time inserts and uses batch catch-up for gap recovery. This provides near-real-time query availability without coupling the write path to the read path.
@@ -249,6 +251,8 @@ DuckDB is treated as ephemeral. On startup, `SyncService` catches up from the Ap
 ### 3. Connection Pooling + Write Serialization
 
 DuckDB connections are pooled (configurable size). All write operations go through a Bottleneck queue (`maxConcurrent: 1`) to prevent "Database Locked" errors. Reads are parallel.
+
+When the singleton is reset, connection shutdown is coordinated with the active-operation tracker so teardown closes pooled handles only after in-flight reads complete. This keeps test restarts and hot lifecycle rebuilds from racing the pool.
 
 ### 4. Circuit Breaker for Forwarding
 
@@ -263,7 +267,7 @@ DuckDB connections are pooled (configurable size). All write operations go throu
 
 Config changes propagate through `AppState.applyConfigUpdate()` which updates body parser limits, rate limiters, auth keys, retention, replay settings, and more — all without restart.
 
-When JSON Schema validation is enabled, compiled validators are cached and reused while the effective schema stays unchanged. This keeps hot-reload flexibility without paying repeated compilation cost on the webhook request path.
+When JSON Schema validation is enabled, compiled validators are cached and reused while the effective schema stays unchanged. Stable object schemas also reuse memoized cache keys, which keeps hot-reload flexibility without paying repeated compilation cost on the webhook request path.
 
 Retention updates are intentionally non-destructive for active webhooks. The current implementation extends existing expiry timestamps when retention increases instead of shortening live webhook lifetimes.
 

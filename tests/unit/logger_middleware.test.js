@@ -435,6 +435,55 @@ describe("LoggerMiddleware", () => {
       expect(resB.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
     });
 
+    it("should memoize object-schema cache keys across repeated requests", async () => {
+      const schemaObj = {
+        type: "object",
+        properties: { id: { type: "number" } },
+        required: ["id"],
+      };
+      const { middleware, webhookManager } =
+        await createMiddlewareTestContext();
+      jest.mocked(webhookManager.getWebhookData).mockReturnValue({
+        jsonSchema: schemaObj,
+        expiresAt: new Date(Date.now() + APP_CONSTS.MS_PER_HOUR).toISOString(),
+      });
+
+      const originalStringify = JSON.stringify;
+      let schemaStringifyCount = 0;
+      const stringifySpy = jest
+        .spyOn(JSON, "stringify")
+        .mockImplementation((value, replacer, space) => {
+          if (value === schemaObj) {
+            schemaStringifyCount += 1;
+          }
+
+          return originalStringify(value, replacer, space);
+        });
+
+      try {
+        const reqA = createMockRequest({
+          params: { id: "wh_schema_cache_key" },
+          body: { id: 1 },
+        });
+        const resA = createMockResponse();
+        const nextA = createMockNextFunction();
+
+        const reqB = createMockRequest({
+          params: { id: "wh_schema_cache_key" },
+          body: { id: 2 },
+        });
+        const resB = createMockResponse();
+        const nextB = createMockNextFunction();
+
+        await middleware(reqA, resA, nextA);
+        await middleware(reqB, resB, nextB);
+
+        expect(schemaStringifyCount).toBe(1);
+      } finally {
+        stringifySpy.mockRestore();
+      }
+    });
+
     it("should evict the oldest cached validator when the schema cache exceeds its max size", async () => {
       const { middleware } = await createMiddlewareTestContext();
       loggerMock.info.mockClear();
@@ -504,13 +553,16 @@ describe("LoggerMiddleware", () => {
         .spyOn(Map.prototype, "keys")
         .mockImplementation(keysForValidatorCache);
 
-      expect(() =>
-        middleware.updateOptions({
-          jsonSchema: schemaVariants[validatorCacheMaxEntries],
-        }),
-      ).not.toThrow();
+      try {
+        expect(() =>
+          middleware.updateOptions({
+            jsonSchema: schemaVariants[validatorCacheMaxEntries],
+          }),
+        ).not.toThrow();
+      } finally {
+        keysSpy.mockRestore();
+      }
 
-      keysSpy.mockRestore();
       expect(injectedMissingKey).toBe(true);
 
       const schemaCompileLogCount = loggerMock.info.mock.calls.filter(
@@ -3311,43 +3363,47 @@ describe("LoggerMiddleware", () => {
         const fallbackNowValue =
           mockedNowValues[mockedNowValues.length - 1] ??
           APP_CONSTS.MS_PER_SECOND;
-        jest.spyOn(Date, "now").mockImplementation(() => {
+        const dateNowSpy = jest.spyOn(Date, "now").mockImplementation(() => {
           const nextValue = mockedNowValues.shift();
           return nextValue ?? fallbackNowValue;
         });
 
-        for (let index = 0; index < EXACT_LATENCY_SAMPLE_COUNT; index += 1) {
-          const req = createMockRequest({
-            method: HTTP_METHODS.POST,
-            params: { id: "wh_exact_latency_percentiles" },
-            body: createWebhookPayload({
-              id: `evt_exact_latency_${index}`,
-              source: "unit-latency-exact",
-              data: { sequence: index },
-            }),
-          });
-          const res = createMockResponse();
-          const next = createMockNextFunction();
+        try {
+          for (let index = 0; index < EXACT_LATENCY_SAMPLE_COUNT; index += 1) {
+            const req = createMockRequest({
+              method: HTTP_METHODS.POST,
+              params: { id: "wh_exact_latency_percentiles" },
+              body: createWebhookPayload({
+                id: `evt_exact_latency_${index}`,
+                source: "unit-latency-exact",
+                data: { sequence: index },
+              }),
+            });
+            const res = createMockResponse();
+            const next = createMockNextFunction();
 
-          await middleware(req, res, next);
+            await middleware(req, res, next);
 
-          expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
+            expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
+          }
+
+          const emittedSamples = onEvent.mock.calls.map(
+            ([event]) => assertType(event).processingTime,
+          );
+
+          expect(emittedSamples).toEqual(EXACT_LATENCY_SAMPLES_MS);
+          expect(
+            getPercentile(emittedSamples, EXACT_LATENCY_PERCENTILES.p50),
+          ).toBe(EXACT_LATENCY_EXPECTED_MS.p50);
+          expect(
+            getPercentile(emittedSamples, EXACT_LATENCY_PERCENTILES.p95),
+          ).toBe(EXACT_LATENCY_EXPECTED_MS.p95);
+          expect(
+            getPercentile(emittedSamples, EXACT_LATENCY_PERCENTILES.p99),
+          ).toBe(EXACT_LATENCY_EXPECTED_MS.p99);
+        } finally {
+          dateNowSpy.mockRestore();
         }
-
-        const emittedSamples = onEvent.mock.calls.map(
-          ([event]) => assertType(event).processingTime,
-        );
-
-        expect(emittedSamples).toEqual(EXACT_LATENCY_SAMPLES_MS);
-        expect(
-          getPercentile(emittedSamples, EXACT_LATENCY_PERCENTILES.p50),
-        ).toBe(EXACT_LATENCY_EXPECTED_MS.p50);
-        expect(
-          getPercentile(emittedSamples, EXACT_LATENCY_PERCENTILES.p95),
-        ).toBe(EXACT_LATENCY_EXPECTED_MS.p95);
-        expect(
-          getPercentile(emittedSamples, EXACT_LATENCY_PERCENTILES.p99),
-        ).toBe(EXACT_LATENCY_EXPECTED_MS.p99);
       });
 
       it("should trigger stream verifier warning when init fails", async () => {

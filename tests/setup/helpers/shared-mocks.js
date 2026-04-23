@@ -1018,6 +1018,7 @@ export const fsPromisesMock = assertType({
   writeFile: jest.fn(),
   rename: jest.fn(),
   mkdir: jest.fn(),
+  mkdtemp: jest.fn(),
   rm: jest.fn(),
   unlink: jest.fn(),
   watch: jest.fn(),

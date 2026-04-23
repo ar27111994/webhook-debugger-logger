@@ -13,7 +13,7 @@ import { DuckDBInstance } from "@duckdb/node-api";
 import Bottleneck from "bottleneck";
 import { ENV_VARS } from "../../../src/consts/app.js";
 import { NODE_ERROR_CODES } from "../../../src/consts/errors.js";
-import { assertType } from "../../setup/helpers/test-utils.js";
+import { assertType, flushPromises } from "../../setup/helpers/test-utils.js";
 
 // Import LOG_MESSAGES for assertions
 const { LOG_MESSAGES } = await import("../../../src/consts/messages.js");
@@ -524,7 +524,7 @@ describe("DuckDB Singleton", () => {
       expect(closeSyncSpy).toHaveBeenCalled();
     });
 
-    it("should close pooled and in-use connections before clearing reset state", async () => {
+    it("should wait for active reads before closing pooled and in-use connections during reset", async () => {
       /** @type {DuckDBConnection[]} */
       const connections = [];
       const originalConnect = DuckDBInstance.prototype.connect;
@@ -572,16 +572,32 @@ describe("DuckDB Singleton", () => {
       const activeConn = connections[1];
       const pooledConn = connections[connections.length - 1];
 
-      await resetDbInstance();
+      const resetPromise = resetDbInstance();
+      let resetCompleted = false;
+      const resetCompletionObserver = resetPromise.then(() => {
+        resetCompleted = true;
+      });
+
+      await flushPromises(1);
+
+      expect(resetCompleted).toBe(false);
+      expect(
+        jest.mocked(assertType(activeConn).closeSync),
+      ).not.toHaveBeenCalled();
+      expect(
+        jest.mocked(assertType(pooledConn).closeSync),
+      ).not.toHaveBeenCalled();
+
+      releaseBlockedRead();
+      await expect(activeReadPromise).resolves.toEqual([{ val: 1 }]);
+      await resetPromise;
+      await resetCompletionObserver;
 
       expect(activeConn).toBeDefined();
       expect(pooledConn).toBeDefined();
       expect(pooledConn).not.toBe(activeConn);
       expect(jest.mocked(assertType(activeConn).closeSync)).toHaveBeenCalled();
       expect(jest.mocked(assertType(pooledConn).closeSync)).toHaveBeenCalled();
-
-      releaseBlockedRead();
-      await activeReadPromise.catch(() => undefined);
     });
   });
 

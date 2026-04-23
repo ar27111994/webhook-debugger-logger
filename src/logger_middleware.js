@@ -261,6 +261,8 @@ export class LoggerMiddleware {
   #validate = null;
   /** @type {Map<string, Exclude<ValidateFunction, null>>} */
   #validatorCache = new Map();
+  /** @type {WeakMap<object, string>} */
+  #schemaCacheKeys = new WeakMap();
   /** @type {Logger} */
   #log;
   /** @type {typeof serializeErrorUtil} */
@@ -387,7 +389,18 @@ export class LoggerMiddleware {
       return undefined;
     }
 
-    return typeof source === "string" ? source : JSON.stringify(source);
+    if (typeof source === "string") {
+      return source;
+    }
+
+    const cachedKey = this.#schemaCacheKeys.get(source);
+    if (cachedKey) {
+      return cachedKey;
+    }
+
+    const computedKey = JSON.stringify(source);
+    this.#schemaCacheKeys.set(source, computedKey);
+    return computedKey;
   }
 
   /**

@@ -59,6 +59,14 @@ function createWriteQueue() {
 /** @type {Bottleneck} */
 let writeQueue = createWriteQueue();
 
+let activeConnectionOperations = 0;
+/** @type {Array<() => void>} */
+const pendingConnectionOperationWaiters = [];
+/** @type {Promise<void> | null} */
+let resetInProgress = null;
+/** @type {() => void} */
+let resolveResetInProgress = () => {};
+
 /**
  * Stops and disconnects the current write queue.
  * Callers can recreate the queue after related teardown work completes.
@@ -71,6 +79,54 @@ async function stopWriteQueue() {
   if (typeof queueToDispose.disconnect === "function") {
     await queueToDispose.disconnect();
   }
+}
+
+/**
+ * @returns {void}
+ */
+function beginConnectionOperation() {
+  activeConnectionOperations += 1;
+}
+
+/**
+ * @returns {void}
+ */
+function endConnectionOperation() {
+  if (activeConnectionOperations > 0) {
+    activeConnectionOperations -= 1;
+  }
+
+  if (activeConnectionOperations === 0) {
+    while (pendingConnectionOperationWaiters.length > 0) {
+      pendingConnectionOperationWaiters.pop()?.();
+    }
+  }
+}
+
+/**
+ * @returns {Promise<void>}
+ */
+async function waitForConnectionOperationsToDrain() {
+  if (activeConnectionOperations === 0) {
+    return;
+  }
+
+  await /** @type {Promise<void>} */ (
+    new Promise((resolve) => {
+      pendingConnectionOperationWaiters.push(() => resolve(undefined));
+    })
+  );
+}
+
+/**
+ * @returns {Promise<void>}
+ */
+async function waitForResetCompletion() {
+  if (!resetInProgress) {
+    return;
+  }
+
+  await resetInProgress;
 }
 
 /**
@@ -131,6 +187,8 @@ function getDbPath() {
  * @returns {Promise<DuckDBInstance>}
  */
 export async function getDbInstance() {
+  await waitForResetCompletion();
+
   if (dbInstance) return dbInstance;
 
   if (!initPromise) {
@@ -178,17 +236,34 @@ export async function getDbInstance() {
  * @returns {Promise<void>}
  */
 export async function resetDbInstance() {
-  await stopWriteQueue();
+  if (resetInProgress) {
+    await resetInProgress;
+    return;
+  }
 
-  drainConnections();
+  resetInProgress = new Promise((resolve) => {
+    resolveResetInProgress = resolve;
+  });
 
-  const instanceToClose = dbInstance;
-  dbInstance = null;
-  initPromise = null;
+  try {
+    await stopWriteQueue();
+    await waitForConnectionOperationsToDrain();
 
-  closeInstanceQuietly(instanceToClose);
+    drainConnections();
 
-  writeQueue = createWriteQueue();
+    const instanceToClose = dbInstance;
+    dbInstance = null;
+    initPromise = null;
+
+    closeInstanceQuietly(instanceToClose);
+
+    writeQueue = createWriteQueue();
+  } finally {
+    const finishReset = resolveResetInProgress;
+    resolveResetInProgress = () => {};
+    resetInProgress = null;
+    finishReset();
+  }
 }
 
 /**
@@ -219,6 +294,8 @@ async function isConnectionUsable(conn) {
  * @returns {Promise<DuckDBConnection>}
  */
 async function acquireConnection() {
+  await waitForResetCompletion();
+
   const instance = await getDbInstance();
 
   while (connectionPool.length > 0) {
@@ -268,6 +345,7 @@ function releaseConnection(conn) {
  */
 export async function executeQuery(sql, params) {
   const conn = await acquireConnection();
+  beginConnectionOperation();
   try {
     let reader;
     if (params) {
@@ -279,6 +357,7 @@ export async function executeQuery(sql, params) {
     return reader.getRowObjects();
   } finally {
     releaseConnection(conn);
+    endConnectionOperation();
   }
 }
 
@@ -306,6 +385,7 @@ export async function executeWrite(sql, params) {
 export async function executeTransaction(task) {
   return writeQueue.schedule(async () => {
     const conn = await acquireConnection();
+    beginConnectionOperation();
     try {
       await conn.run(SQL_CONSTS.TRANSACTION_COMMANDS.BEGIN);
       const result = await task(conn);
@@ -323,6 +403,7 @@ export async function executeTransaction(task) {
       throw err;
     } finally {
       releaseConnection(conn);
+      endConnectionOperation();
     }
   });
 }

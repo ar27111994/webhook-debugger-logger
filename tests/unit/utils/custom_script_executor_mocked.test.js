@@ -183,8 +183,79 @@ describe("Custom Script Executor worker failure paths", () => {
     }
   });
 
-  it("should unref supported workers, clear listeners after resolve, and ignore late events", async () => {
-    const { workerInstances, terminateMock, unrefMock, MockWorker } =
+  it("should unref supported workers once", async () => {
+    const { workerInstances, unrefMock, MockWorker } =
+      createMockWorkerHarness();
+
+    jest.unstable_mockModule(WORKER_THREADS_MODULE, () => ({
+      Worker: MockWorker,
+    }));
+
+    const { executeCustomScript } =
+      await import("../../../src/utils/custom_script_executor.js");
+
+    const pendingResult = executeCustomScript({
+      source: SUCCESS_SCRIPT_SOURCE,
+      event: {},
+      req: {},
+      timeoutMs: 50,
+    });
+
+    expect(unrefMock).toHaveBeenCalledTimes(1);
+
+    workerInstances[0].emit(STREAM_EVENTS.MESSAGE, {
+      ok: true,
+      event: { ok: true },
+      logs: [],
+    });
+
+    await expect(pendingResult).resolves.toEqual({
+      ok: true,
+      event: { ok: true },
+      logs: [],
+    });
+  });
+
+  it("should clear listeners after resolution", async () => {
+    const { workerInstances, MockWorker } = createMockWorkerHarness();
+
+    jest.unstable_mockModule(WORKER_THREADS_MODULE, () => ({
+      Worker: MockWorker,
+    }));
+
+    const { executeCustomScript } =
+      await import("../../../src/utils/custom_script_executor.js");
+
+    const pendingResult = executeCustomScript({
+      source: SUCCESS_SCRIPT_SOURCE,
+      event: {},
+      req: {},
+      timeoutMs: 50,
+    });
+
+    expect(workerInstances[0].listenerCount(STREAM_EVENTS.MESSAGE)).toBe(1);
+    expect(workerInstances[0].listenerCount(STREAM_EVENTS.ERROR)).toBe(1);
+    expect(workerInstances[0].listenerCount(STREAM_EVENTS.EXIT)).toBe(1);
+
+    workerInstances[0].emit(STREAM_EVENTS.MESSAGE, {
+      ok: true,
+      event: { ok: true },
+      logs: [],
+    });
+
+    await expect(pendingResult).resolves.toEqual({
+      ok: true,
+      event: { ok: true },
+      logs: [],
+    });
+
+    expect(workerInstances[0].listenerCount(STREAM_EVENTS.MESSAGE)).toBe(0);
+    expect(workerInstances[0].listenerCount(STREAM_EVENTS.ERROR)).toBe(0);
+    expect(workerInstances[0].listenerCount(STREAM_EVENTS.EXIT)).toBe(0);
+  });
+
+  it("should ignore late captured listeners after resolution", async () => {
+    const { workerInstances, terminateMock, MockWorker } =
       createMockWorkerHarness();
 
     jest.unstable_mockModule(WORKER_THREADS_MODULE, () => ({
@@ -207,11 +278,6 @@ describe("Custom Script Executor worker failure paths", () => {
       workerInstances[0].rawListeners(STREAM_EVENTS.ERROR)[0]
     ).listener;
 
-    expect(unrefMock).toHaveBeenCalledTimes(1);
-    expect(workerInstances[0].listenerCount(STREAM_EVENTS.MESSAGE)).toBe(1);
-    expect(workerInstances[0].listenerCount(STREAM_EVENTS.ERROR)).toBe(1);
-    expect(workerInstances[0].listenerCount(STREAM_EVENTS.EXIT)).toBe(1);
-
     workerInstances[0].emit(STREAM_EVENTS.MESSAGE, {
       ok: true,
       event: { ok: true },
@@ -223,12 +289,9 @@ describe("Custom Script Executor worker failure paths", () => {
       event: { ok: true },
       logs: [],
     });
-    expect(lateMessageListener).toBeDefined();
-    expect(lateErrorListener).toBeDefined();
 
-    expect(workerInstances[0].listenerCount(STREAM_EVENTS.MESSAGE)).toBe(0);
-    expect(workerInstances[0].listenerCount(STREAM_EVENTS.ERROR)).toBe(0);
-    expect(workerInstances[0].listenerCount(STREAM_EVENTS.EXIT)).toBe(0);
+    expect(lateMessageListener).toBeInstanceOf(Function);
+    expect(lateErrorListener).toBeInstanceOf(Function);
 
     await lateMessageListener?.call(workerInstances[0], {
       ok: false,

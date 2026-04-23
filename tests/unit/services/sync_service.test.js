@@ -582,6 +582,12 @@ describe("SyncService", () => {
       const metrics = syncService.getMetrics();
       expect(metrics.errorCount).toBe(0);
       expect(metrics.lastErrorTime).toBeUndefined();
+      expect(loggerMock.debug).toHaveBeenCalledWith(
+        expect.objectContaining({
+          duringShutdown: true,
+        }),
+        LOG_MESSAGES.SYNC_ERROR_GENERAL,
+      );
       expect(loggerMock.error).not.toHaveBeenCalledWith(
         expect.any(Object),
         LOG_MESSAGES.SYNC_ERROR_GENERAL,
