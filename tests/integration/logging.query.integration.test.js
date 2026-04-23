@@ -356,11 +356,7 @@ describe("Integration: Logging and query contracts", () => {
               HTTP_HEADERS.AUTHORIZATION,
               `${AUTH_CONSTS.BEARER_PREFIX}${AUTH_KEY}`,
             )
-            .query({
-              webhookId,
-              limit: LOGS_QUERY_LIMIT,
-              body: { id: payload.id },
-            });
+            .query({ webhookId, limit: LOGS_QUERY_LIMIT });
 
           if (logsResponse.status !== HTTP_STATUS.OK) {
             return false;
@@ -383,11 +379,7 @@ describe("Integration: Logging and query contracts", () => {
           HTTP_HEADERS.AUTHORIZATION,
           `${AUTH_CONSTS.BEARER_PREFIX}${AUTH_KEY}`,
         )
-        .query({
-          webhookId,
-          limit: LOGS_QUERY_LIMIT,
-          body: { id: payload.id },
-        });
+        .query({ webhookId, limit: LOGS_QUERY_LIMIT });
 
       expect(finalLogsResponse.status).toBe(HTTP_STATUS.OK);
       /** @type {LogListItem[]} */

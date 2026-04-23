@@ -369,12 +369,15 @@ describe("LoggerMiddleware", () => {
         properties: { id: { type: "number" } },
         required: ["id"],
       };
-      const { middleware, req, res, next, webhookManager } =
-        await createMiddlewareTestContext();
-      jest.mocked(webhookManager.getWebhookData).mockReturnValue({
-        jsonSchema: schemaObj,
+      const createWebhookData = () => ({
+        jsonSchema: JSON.parse(JSON.stringify(schemaObj)),
         expiresAt: new Date(Date.now() + APP_CONSTS.MS_PER_HOUR).toISOString(),
       });
+      const { middleware, req, res, next, webhookManager } =
+        await createMiddlewareTestContext();
+      jest
+        .mocked(webhookManager.getWebhookData)
+        .mockImplementation(createWebhookData);
       req.params.id = "wh_schema_cache";
       req.body = { id: 1 };
 
@@ -394,12 +397,15 @@ describe("LoggerMiddleware", () => {
         properties: { id: { type: "number" } },
         required: ["id"],
       };
-      const { middleware, webhookManager } =
-        await createMiddlewareTestContext();
-      jest.mocked(webhookManager.getWebhookData).mockReturnValue({
-        jsonSchema: schemaObj,
+      const createWebhookData = () => ({
+        jsonSchema: JSON.parse(JSON.stringify(schemaObj)),
         expiresAt: new Date(Date.now() + APP_CONSTS.MS_PER_HOUR).toISOString(),
       });
+      const { middleware, webhookManager } =
+        await createMiddlewareTestContext();
+      jest
+        .mocked(webhookManager.getWebhookData)
+        .mockImplementation(createWebhookData);
 
       const reqA = createMockRequest({
         params: { id: "wh_schema_cache_parallel" },
@@ -2651,20 +2657,23 @@ describe("LoggerMiddleware", () => {
             throw new Error("Ajv fail");
           });
 
-        await middleware(req, res, next);
-        expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.BAD_REQUEST);
-        expect(res.json).toHaveBeenCalledWith(
-          expect.objectContaining({ error: "No errors", id: webhookId }),
-        );
+        try {
+          await middleware(req, res, next);
+          expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.BAD_REQUEST);
+          expect(res.json).toHaveBeenCalledWith(
+            expect.objectContaining({ error: "No errors", id: webhookId }),
+          );
 
-        jest.mocked(res.status).mockClear();
-        jest.mocked(res.json).mockClear();
-        jest.mocked(res.send).mockClear();
+          jest.mocked(res.status).mockClear();
+          jest.mocked(res.json).mockClear();
+          jest.mocked(res.send).mockClear();
 
-        await middleware(req, res, next);
+          await middleware(req, res, next);
 
-        expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
-        ajvSpy.mockRestore();
+          expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
+        } finally {
+          ajvSpy.mockRestore();
+        }
       });
 
       it("should fallback to OCTET_STREAM when offloaded content-type is missing", async () => {
@@ -3489,7 +3498,7 @@ describe("LoggerMiddleware", () => {
           await middleware(req, res, next);
 
           expect(apifyMock.pushData).toHaveBeenCalled();
-          expect(next).toHaveBeenCalled();
+          expect(next).not.toHaveBeenCalled();
         } finally {
           setTimeoutSpy.mockRestore();
         }

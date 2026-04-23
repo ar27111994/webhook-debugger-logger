@@ -352,7 +352,7 @@ REQUIREMENTS:
      * body (full request body)
      * contentType (parsed)
      * size (bytes)
-   * processingTime (ms, server-side processing time only)
+       * processingTime (ms, server-side processing time only)
      * remoteIp (request source)
      * userAgent
 

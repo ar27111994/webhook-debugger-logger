@@ -317,6 +317,7 @@ const handleShutdownSignal = (signal) => {
 const resetShutdownForTest = () => {
   isShuttingDown = false;
   signalsRegistered = false;
+  isTestSystemInfoPollingDisabled = false;
   // Also reset the init guard so tests can call initialize() across
   // a shutdown→reset→initialize cycle without triggering the re-entrancy warning.
   isInitialized = false;

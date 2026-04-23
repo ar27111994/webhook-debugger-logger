@@ -3,6 +3,7 @@
  * @description Integration security and sanitation matrix for auth and malformed payload handling.
  */
 
+import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 import { APP_ROUTES } from "../../src/consts/app.js";
 import {
   HTTP_HEADERS,
@@ -17,6 +18,13 @@ import {
 } from "../setup/helpers/fixtures/payload-fixtures.js";
 import { waitForCondition } from "../setup/helpers/test-utils.js";
 import { AUTH_CONSTS } from "../../src/consts/auth.js";
+
+await setupCommonMocks({
+  logger: true,
+  apify: true,
+  fs: true,
+  db: false,
+});
 
 /**
  * @typedef {import('supertest').Agent} AppClient

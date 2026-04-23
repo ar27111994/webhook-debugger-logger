@@ -161,6 +161,10 @@ export class SyncService {
    * Trigger synchronization with concurrency control via Bottleneck
    */
   #triggerSync() {
+    if (!this.#isRunning || !this.#limiter) {
+      return;
+    }
+
     const limiter = /** @type {Bottleneck} */ (this.#limiter);
 
     // schedule returns a promise but we don't await it here to avoid blocking event loop
@@ -281,7 +285,7 @@ export class SyncService {
       this.#lastSyncTime = new Date();
 
       // If we fetched a full batch, schedule another run immediately
-      if (items.length === limit) {
+      if (this.#isRunning && items.length === limit) {
         this.#triggerSync();
       }
     } catch (err) {
@@ -294,7 +298,7 @@ export class SyncService {
       this.#cachedMaxOffset = null;
       this.#errorCount++;
       this.#lastErrorTime = new Date();
-      // Re-throw to propagate to #triggerSync()'s catch handler (line 156)
+      // Re-throw to propagate to #triggerSync()'s catch handler.
       throw err;
     }
   }

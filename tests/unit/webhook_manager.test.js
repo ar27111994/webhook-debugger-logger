@@ -124,12 +124,13 @@ describe("WebhookManager", () => {
 
     it("should clear in-memory and persistence handles when resetStateForTest is called", async () => {
       await manager.generateWebhooks(1, TEST_RETENTION);
+      apifyMock.openKeyValueStore.mockClear();
 
       manager.resetStateForTest();
 
       expect(manager.webhookCount).toBe(0);
       await manager.init();
-      expect(apifyMock.openKeyValueStore).toHaveBeenCalled();
+      expect(apifyMock.openKeyValueStore).toHaveBeenCalledTimes(1);
     });
 
     it("should reject resetStateForTest outside the test environment", () => {

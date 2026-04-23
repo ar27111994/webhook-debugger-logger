@@ -441,7 +441,7 @@ describe("DuckDB Singleton", () => {
       }
 
       const txError = await txOutcome;
-      expect(txError?.message).toMatch(/connection disconnected/i);
+      expect(txError).toBeNull();
     });
 
     it("should tolerate close errors from stale connections", async () => {

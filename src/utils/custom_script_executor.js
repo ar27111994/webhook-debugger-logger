@@ -1,6 +1,7 @@
 /**
  * @file src/utils/custom_script_executor.js
  * @description Validates and executes custom webhook scripts inside disposable worker isolates.
+ * @module utils/custom_script_executor
  */
 
 import vm from "node:vm";

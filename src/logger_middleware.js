@@ -61,6 +61,8 @@ import { deepRedact, validateStatusCode } from "./utils/common.js";
 import { DEFAULT_ALERT_ON } from "./consts/alerting.js";
 import { IS_TEST } from "./utils/env.js";
 
+const VALIDATOR_CACHE_MAX_ENTRIES = 32;
+
 /**
  * @typedef {import("express").RequestHandler} RequestHandler
  * @typedef {import("ajv").default} AjvType
@@ -414,6 +416,12 @@ export class LoggerMiddleware {
     );
 
     if (compiledValidator) {
+      if (this.#validatorCache.size >= VALIDATOR_CACHE_MAX_ENTRIES) {
+        const oldestCacheKey = this.#validatorCache.keys().next().value;
+        if (oldestCacheKey) {
+          this.#validatorCache.delete(oldestCacheKey);
+        }
+      }
       this.#validatorCache.set(cacheKey, compiledValidator);
     }
 
@@ -930,7 +938,7 @@ export class LoggerMiddleware {
               );
               resolve();
             }, timeoutMs);
-            if (timeoutHandle.unref) timeoutHandle.unref();
+            if (timeoutHandle?.unref) timeoutHandle.unref();
           })
         ),
       ]);

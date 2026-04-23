@@ -3,10 +3,11 @@
  * @description Mocked unit tests for executor edge paths that require worker failures.
  */
 
-import { beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { describe, expect, it, jest } from "@jest/globals";
 import { EventEmitter } from "node:events";
 import { STREAM_EVENTS } from "../../../src/consts/app.js";
 import { ERROR_MESSAGES } from "../../../src/consts/errors.js";
+import { useMockCleanup } from "../../setup/helpers/test-lifecycle.js";
 
 /**
  * @typedef {import("node:worker_threads").WorkerOptions} WorkerOptions
@@ -72,7 +73,7 @@ function createMockWorkerHarness(options = {}) {
 }
 
 describe("Custom Script Executor worker failure paths", () => {
-  beforeEach(() => {
+  useMockCleanup(() => {
     jest.resetModules();
   });
 
@@ -366,9 +367,13 @@ describe("Custom Script Executor worker failure paths", () => {
     const { workerInstances, terminateMock, MockWorker } =
       createMockWorkerHarness();
 
-    let terminateResolved = false;
+    /** @type {() => void} */
+    let resolveTerminate = () => {};
+    const terminateDeferred = new Promise((resolve) => {
+      resolveTerminate = resolve;
+    });
     terminateMock.mockImplementation(async () => {
-      terminateResolved = true;
+      await terminateDeferred;
     });
 
     jest.unstable_mockModule(WORKER_THREADS_MODULE, () => ({
@@ -393,9 +398,15 @@ describe("Custom Script Executor worker failure paths", () => {
     };
     workerInstances[0].emit(STREAM_EVENTS.MESSAGE, failedResult);
 
+    const pendingMarker = Symbol("pending");
+    await expect(
+      Promise.race([pendingResult, Promise.resolve(pendingMarker)]),
+    ).resolves.toBe(pendingMarker);
+
+    resolveTerminate();
+
     await expect(pendingResult).resolves.toEqual(failedResult);
     expect(terminateMock).toHaveBeenCalledTimes(1);
-    expect(terminateResolved).toBe(true);
     expect(workerInstances[0].listenerCount(STREAM_EVENTS.MESSAGE)).toBe(0);
     expect(workerInstances[0].listenerCount(STREAM_EVENTS.ERROR)).toBe(0);
     expect(workerInstances[0].listenerCount(STREAM_EVENTS.EXIT)).toBe(0);

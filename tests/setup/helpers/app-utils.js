@@ -40,6 +40,7 @@ import { assertType } from "./test-utils.js";
  * }>}
  */
 export const setupTestApp = async (options = {}, enableHotReload = false) => {
+  const previousDisableHotReload = process.env[ENV_VARS.DISABLE_HOT_RELOAD];
   const previousLocalStorageDir = process.env[ENV_VARS.APIFY_LOCAL_STORAGE_DIR];
   const previousNodeEnv = process.env[ENV_VARS.NODE_ENV];
   const apifyLocalStorageDir = await mkdtemp(
@@ -54,6 +55,51 @@ export const setupTestApp = async (options = {}, enableHotReload = false) => {
   /** @type {{ event: string, handler: (...args: any[]) => any }[]} */
   const actorListeners = [];
   const originalActorOn = Actor.on.bind(Actor);
+  let didCleanup = false;
+
+  const cleanup = async () => {
+    if (didCleanup) {
+      return;
+    }
+
+    didCleanup = true;
+    Actor.on = originalActorOn;
+
+    for (const listener of process.listeners(SHUTDOWN_SIGNALS.SIGTERM)) {
+      if (!initialSigtermListeners.has(listener)) {
+        process.off(SHUTDOWN_SIGNALS.SIGTERM, listener);
+      }
+    }
+    for (const listener of process.listeners(SHUTDOWN_SIGNALS.SIGINT)) {
+      if (!initialSigintListeners.has(listener)) {
+        process.off(SHUTDOWN_SIGNALS.SIGINT, listener);
+      }
+    }
+    for (const { event, handler } of actorListeners) {
+      Actor.off(assertType(event), handler);
+    }
+    actorListeners.length = 0;
+
+    if (previousDisableHotReload === undefined) {
+      delete process.env[ENV_VARS.DISABLE_HOT_RELOAD];
+    } else {
+      process.env[ENV_VARS.DISABLE_HOT_RELOAD] = previousDisableHotReload;
+    }
+
+    if (previousLocalStorageDir === undefined) {
+      delete process.env[ENV_VARS.APIFY_LOCAL_STORAGE_DIR];
+    } else {
+      process.env[ENV_VARS.APIFY_LOCAL_STORAGE_DIR] = previousLocalStorageDir;
+    }
+
+    if (previousNodeEnv === undefined) {
+      delete process.env[ENV_VARS.NODE_ENV];
+    } else {
+      process.env[ENV_VARS.NODE_ENV] = previousNodeEnv;
+    }
+
+    await rm(apifyLocalStorageDir, { force: true, recursive: true });
+  };
 
   if (enableHotReload) {
     process.env[ENV_VARS.DISABLE_HOT_RELOAD] = "false";
@@ -74,6 +120,9 @@ export const setupTestApp = async (options = {}, enableHotReload = false) => {
 
   try {
     await mainModule.initialize(options);
+  } catch (error) {
+    await cleanup();
+    throw error;
   } finally {
     Actor.on = originalActorOn;
   }
@@ -82,37 +131,15 @@ export const setupTestApp = async (options = {}, enableHotReload = false) => {
     app: mainModule.app,
     appClient: request(mainModule.app),
     teardownApp: async () => {
-      await mainModule.shutdown(SHUTDOWN_SIGNALS.TEST_COMPLETE);
-
-      mainModule.resetShutdownForTest();
-
-      for (const listener of process.listeners(SHUTDOWN_SIGNALS.SIGTERM)) {
-        if (!initialSigtermListeners.has(listener)) {
-          process.off(SHUTDOWN_SIGNALS.SIGTERM, listener);
+      try {
+        await mainModule.shutdown(SHUTDOWN_SIGNALS.TEST_COMPLETE);
+      } finally {
+        try {
+          mainModule.resetShutdownForTest();
+        } finally {
+          await cleanup();
         }
       }
-      for (const listener of process.listeners(SHUTDOWN_SIGNALS.SIGINT)) {
-        if (!initialSigintListeners.has(listener)) {
-          process.off(SHUTDOWN_SIGNALS.SIGINT, listener);
-        }
-      }
-      for (const { event, handler } of actorListeners) {
-        Actor.off(assertType(event), handler);
-      }
-
-      if (previousLocalStorageDir === undefined) {
-        delete process.env[ENV_VARS.APIFY_LOCAL_STORAGE_DIR];
-      } else {
-        process.env[ENV_VARS.APIFY_LOCAL_STORAGE_DIR] = previousLocalStorageDir;
-      }
-
-      if (previousNodeEnv === undefined) {
-        delete process.env[ENV_VARS.NODE_ENV];
-      } else {
-        process.env[ENV_VARS.NODE_ENV] = previousNodeEnv;
-      }
-
-      await rm(apifyLocalStorageDir, { force: true, recursive: true });
     },
   };
 };

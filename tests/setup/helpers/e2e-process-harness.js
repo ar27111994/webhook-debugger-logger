@@ -60,13 +60,17 @@ const REPO_ROOT = path.resolve(
  * @param {ChildProcess} child
  * @returns {Promise<void>}
  */
-async function waitForChildClose(child) {
-  if (child.exitCode !== null) {
-    await once(child, STREAM_EVENTS.CLOSE);
+async function waitForChildClose(child, closePromise) {
+  const stdoutDone =
+    !child.stdout || child.stdout.readableEnded || child.stdout.destroyed;
+  const stderrDone =
+    !child.stderr || child.stderr.readableEnded || child.stderr.destroyed;
+
+  if (child.exitCode !== null && stdoutDone && stderrDone) {
     return;
   }
 
-  await once(child, STREAM_EVENTS.CLOSE);
+  await closePromise;
 }
 
 /**
@@ -225,6 +229,9 @@ export async function spawnAppProcess(options) {
     env,
     stdio: ["ignore", "pipe", "pipe"],
   });
+  const childClosePromise = once(child, STREAM_EVENTS.CLOSE).then(
+    () => undefined,
+  );
 
   /** @type {Buffer[]} */
   const stdoutChunks = [];
@@ -253,7 +260,7 @@ export async function spawnAppProcess(options) {
       }
 
       try {
-        await waitForChildClose(child);
+        await waitForChildClose(child, childClosePromise);
       } finally {
         clearTimeout(timeout);
         cleanupChildStreams(child);
@@ -296,7 +303,7 @@ export async function spawnAppProcess(options) {
     }
 
     try {
-      await waitForChildClose(child);
+      await waitForChildClose(child, childClosePromise);
     } finally {
       clearTimeout(timeout);
       cleanupChildStreams(child);

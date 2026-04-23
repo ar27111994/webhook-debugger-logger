@@ -60,19 +60,27 @@ function createWriteQueue() {
 let writeQueue = createWriteQueue();
 
 /**
- * Stops and disconnects the current write queue, then replaces it with a fresh instance.
- * This is primarily needed for test and process shutdown so Bottleneck does not keep
- * scheduler resources alive across repeated app lifecycles.
+ * Stops and disconnects the current write queue.
+ * Callers can recreate the queue after related teardown work completes.
  * @returns {Promise<void>}
  */
-async function resetWriteQueue() {
+async function stopWriteQueue() {
   const queueToDispose = writeQueue;
-  writeQueue = createWriteQueue();
 
   await queueToDispose.stop({ dropWaitingJobs: true });
   if (typeof queueToDispose.disconnect === "function") {
     await queueToDispose.disconnect();
   }
+}
+
+/**
+ * Replaces the current write queue with a fresh instance after shutting the prior
+ * queue down.
+ * @returns {Promise<void>}
+ */
+async function resetWriteQueue() {
+  await stopWriteQueue();
+  writeQueue = createWriteQueue();
 }
 
 /**
@@ -167,6 +175,8 @@ export async function getDbInstance() {
  * @returns {Promise<void>}
  */
 export async function resetDbInstance() {
+  await stopWriteQueue();
+
   const instanceToClose = dbInstance;
   dbInstance = null;
   initPromise = null;
@@ -175,7 +185,7 @@ export async function resetDbInstance() {
 
   closeInstanceQuietly(instanceToClose);
 
-  await resetWriteQueue();
+  writeQueue = createWriteQueue();
 }
 
 /**
@@ -376,6 +386,8 @@ async function initSchema(conn) {
  * @returns {Promise<void>}
  */
 export async function closeDb() {
+  await stopWriteQueue();
+
   // Drain connection pool
   while (connectionPool.length > 0) {
     closeConnectionQuietly(connectionPool.pop());
@@ -389,7 +401,7 @@ export async function closeDb() {
 
   closeInstanceQuietly(instanceToClose);
 
-  await resetWriteQueue();
+  writeQueue = createWriteQueue();
 }
 
 /**
