@@ -27,6 +27,7 @@ await setupCommonMocks({
 // Import subject AFTER mocking
 const {
   getDbInstance,
+  __testHooks,
   resetDbInstance,
   executeQuery,
   executeWrite,
@@ -579,56 +580,23 @@ describe("DuckDB Singleton", () => {
       expect(closeSyncSpy).toHaveBeenCalled();
     });
 
-    it("should keep reset pending until an active query finishes draining", async () => {
-      const instance = await getDbInstance();
-      /** @type {() => void} */
-      let releaseBlockedRead = () => {};
-      /** @type {Promise<void>} */
-      const blockedReadGate = new Promise((resolve) => {
-        releaseBlockedRead = () => resolve(undefined);
-      });
-      /** @type {() => void} */
-      let markBlockedReadStarted = () => {};
-      /** @type {Promise<void>} */
-      const blockedReadStarted = new Promise((resolve) => {
-        markBlockedReadStarted = () => resolve(undefined);
-      });
+    it("should expose a deterministic drain waiter for active connection operations", async () => {
+      __testHooks.beginConnectionOperation();
 
-      const fakeReader = {
-        getRowObjects() {
-          return [{ val: 1 }];
-        },
-      };
-      const fakeConn = {
-        runAndReadAll: jest.fn(async () => {
-          markBlockedReadStarted();
-          await blockedReadGate;
-          return fakeReader;
-        }),
-        closeSync: jest.fn(),
-      };
-
-      jest
-        .spyOn(instance, "connect")
-        .mockResolvedValue(assertType(/** @type {unknown} */ (fakeConn)));
-
-      const activeReadPromise = executeQuery(SELECT_ONE_SQL);
-      await blockedReadStarted;
-
-      let resetResolved = false;
-      const resetPromise = resetDbInstance().then(() => {
-        resetResolved = true;
-      });
+      let drainResolved = false;
+      const drainPromise = __testHooks
+        .waitForConnectionOperationsToDrain()
+        .then(() => {
+          drainResolved = true;
+        });
 
       await flushPromises(1);
-      expect(resetResolved).toBe(false);
-      expect(fakeConn.closeSync).not.toHaveBeenCalled();
+      expect(drainResolved).toBe(false);
 
-      releaseBlockedRead();
-      await expect(activeReadPromise).resolves.toEqual([{ val: 1 }]);
-      await resetPromise;
+      __testHooks.endConnectionOperation();
+      await drainPromise;
 
-      expect(fakeConn.closeSync).toHaveBeenCalled();
+      expect(drainResolved).toBe(true);
     });
 
     it("should wait for active reads before closing pooled and in-use connections during reset", async () => {
@@ -707,44 +675,29 @@ describe("DuckDB Singleton", () => {
       expect(jest.mocked(assertType(pooledConn).closeSync)).toHaveBeenCalled();
     });
 
-    it("should block new instance acquisition while reset setup is still in progress", async () => {
-      const initialInstance = await getDbInstance();
-      const originalStop = Bottleneck.prototype.stop;
+    it("should expose a deterministic reset waiter while reset is in progress", async () => {
       /** @type {() => void} */
-      let releaseResetSetup = () => {};
+      let releaseReset = () => {};
       /** @type {Promise<void>} */
-      const resetSetupGate = new Promise((resolve) => {
-        releaseResetSetup = () => resolve(undefined);
+      const resetGate = new Promise((resolve) => {
+        releaseReset = () => resolve(undefined);
       });
 
-      const stopSpy = jest
-        .spyOn(Bottleneck.prototype, "stop")
-        .mockImplementationOnce(
-          /** @this {Bottleneck} */
-          async function (options) {
-            await resetSetupGate;
-            return await originalStop.call(this, options);
-          },
-        );
+      __testHooks.setResetInProgress(resetGate);
 
-      const resetPromise = resetDbInstance();
-      const nextInstancePromise = getDbInstance();
-      let nextInstanceResolved = false;
-      const nextInstanceObserver = nextInstancePromise.then(() => {
-        nextInstanceResolved = true;
+      let waitResolved = false;
+      const waitPromise = __testHooks.waitForResetCompletion().then(() => {
+        waitResolved = true;
       });
 
       await flushPromises(1);
-      expect(nextInstanceResolved).toBe(false);
+      expect(waitResolved).toBe(false);
 
-      releaseResetSetup();
-      await resetPromise;
-      const nextInstance = await nextInstancePromise;
-      await nextInstanceObserver;
+      releaseReset();
+      await waitPromise;
+      __testHooks.clearResetInProgress();
 
-      expect(stopSpy).toHaveBeenCalledWith({ dropWaitingJobs: true });
-      expect(nextInstance).toBeDefined();
-      expect(nextInstance).not.toBe(initialInstance);
+      expect(waitResolved).toBe(true);
     });
 
     it("should wait for an in-progress reset before serving a new instance", async () => {

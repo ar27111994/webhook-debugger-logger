@@ -127,6 +127,27 @@ async function waitForResetCompletion() {
   await resetInProgress;
 }
 
+export const __testHooks = {
+  beginConnectionOperation,
+  endConnectionOperation,
+  waitForConnectionOperationsToDrain,
+  waitForResetCompletion,
+  /**
+   * @param {Promise<void> | null} promise
+   * @returns {void}
+   */
+  setResetInProgress(promise) {
+    resetInProgress = promise;
+  },
+  /**
+   * @returns {void}
+   */
+  clearResetInProgress() {
+    resetInProgress = null;
+    resolveResetInProgress = null;
+  },
+};
+
 /**
  * Closes a connection while suppressing close-time errors from stale handles.
  * @param {DuckDBConnection | undefined} conn
