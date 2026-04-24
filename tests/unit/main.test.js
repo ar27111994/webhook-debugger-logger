@@ -1674,6 +1674,26 @@ describe("Main Entry Point", () => {
       expect(freshMain?.server?.close).toHaveBeenCalled();
     });
 
+    it("should drain the HTTP server before stopping sync service and closing DuckDB during production shutdown", async () => {
+      freshMain = await setupProductionLifecycle();
+      await drainAutoInit();
+
+      await freshMain?.shutdown(constsMock.SHUTDOWN_SIGNALS.TEST_COMPLETE);
+
+      const closeAllConnectionsOrder = assertType(
+        freshMain?.server?.closeAllConnections,
+      ).mock.invocationCallOrder[0];
+      const closeServerOrder = assertType(freshMain?.server?.close).mock
+        .invocationCallOrder[0];
+      const stopSyncOrder = syncServiceMock.stop.mock.invocationCallOrder[0];
+      const closeDbOrder = duckDbMock.closeDb.mock.invocationCallOrder[0];
+
+      expect(closeAllConnectionsOrder).toBeLessThan(stopSyncOrder);
+      expect(closeServerOrder).toBeLessThan(stopSyncOrder);
+      expect(closeAllConnectionsOrder).toBeLessThan(closeDbOrder);
+      expect(closeServerOrder).toBeLessThan(closeDbOrder);
+    });
+
     it("should call systemExit(FAILURE) when the testAndExit shutdown itself throws persistently", async () => {
       try {
         process.env[ENV_VARS.INPUT] = JSON.stringify({ testAndExit: true });

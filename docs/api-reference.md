@@ -572,6 +572,7 @@ Liveness probe for container and uptime monitoring.
 #### `GET /ready`
 
 Readiness probe for load balancers and orchestrators.
+During intentional shutdown, the HTTP listener is drained before `SyncService` and DuckDB teardown begin, so new probe traffic does not reach a partially torn-down read model.
 
 **Authentication:** Not required
 

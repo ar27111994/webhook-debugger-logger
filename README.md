@@ -322,6 +322,7 @@ It can normalize, enrich, or redact payload data before the event is stored, but
 The actor exposes a small but practical HTTP surface.
 
 `/health` and `/ready` are intentionally rate-limited but not protected by `authKey`, so orchestrators and load balancers can probe them even when management routes require authentication.
+During intentional shutdown, the HTTP listener is drained before `SyncService` and DuckDB teardown begin, so new probe traffic does not race a partially shutting-down read model.
 
 | Endpoint                          | Purpose                                           |
 | --------------------------------- | ------------------------------------------------- |

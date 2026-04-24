@@ -243,6 +243,7 @@ JSON response
 DuckDB is treated as ephemeral. On startup, `SyncService` catches up from the Apify Dataset. This means the system tolerates DuckDB failures without data loss.
 
 Read-model teardown is also restart-safe: reset logic waits for active DuckDB operations to drain before it closes pooled and in-use connections, so repeated initialize/shutdown cycles do not leave stale handles behind.
+Production shutdown follows the same ordering: the HTTP listener is drained before `SyncService` and DuckDB teardown begin, which prevents in-flight handlers and readiness probes from racing read-model disposal.
 
 ### 2. Event-Driven Sync
 

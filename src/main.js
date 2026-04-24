@@ -222,6 +222,17 @@ const shutdown = async (signal) => {
     }
   }
 
+  if (server && server.listening) {
+    // Stop accepting new requests before services and DuckDB begin shutting
+    // down, so in-flight handlers cannot race a DB reset during teardown.
+    if (typeof server.closeAllConnections === "function") {
+      server.closeAllConnections();
+    }
+    await new Promise((resolve) => {
+      server?.close(() => resolve(undefined));
+    });
+  }
+
   // Stop Database sync service
   // Don't wrap it → a stop() failure retries the whole shutdown sequence,
   // which is what we want.
@@ -260,19 +271,7 @@ const shutdown = async (signal) => {
     }
   };
 
-  if (server && server.listening) {
-    // Drain existing keep-alive connections so server.close() fires promptly
-    // rather than waiting for each client to disconnect on its own.
-    if (typeof server.closeAllConnections === "function") {
-      server.closeAllConnections();
-    }
-    await new Promise((resolve) => {
-      server?.close(() => resolve(undefined));
-    });
-    await finalCleanup();
-  } else {
-    await finalCleanup();
-  }
+  await finalCleanup();
 };
 
 /**
