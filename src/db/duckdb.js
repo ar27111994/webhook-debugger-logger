@@ -325,7 +325,7 @@ async function isConnectionUsable(conn) {
  * @param {DbOperationOptions} [options]
  * @returns {Promise<DuckDBConnection>}
  */
-async function acquireConnection(options = {}) {
+async function acquireConnection(options) {
   const instance = await getDbInstanceInternal(options);
 
   while (connectionPool.length > 0) {
