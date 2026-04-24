@@ -8,7 +8,7 @@ import { setupCommonMocks } from "../setup/helpers/mock-setup.js";
 await setupCommonMocks({
   logger: true,
   apify: true,
-  fs: true,
+  fs: false,
   db: false,
 });
 

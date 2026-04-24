@@ -79,7 +79,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 ### Other Helpers
 
 - `middleware-test-utils.js`: `createMiddlewareTestContext()`, `runMiddlewareWithTimers()`
-- `app-utils.js`: `setupTestApp()` - Initialize app + supertest for integration tests; teardown also removes transient Actor listeners and process signal handlers registered during boot
+- `app-utils.js`: `setupTestApp()` - Initialize app + supertest for integration tests; teardown also removes transient Actor listeners and process signal handlers registered during boot. Suites that use it must keep `mkdtemp()` real or provide a real mock implementation.
 - `db-hooks.js`: `resetDb()` - Clear DuckDB logs table
 - `signature-utils.js`: `createStripeSignature()`, `createShopifySignature()`, `createGitHubSignature()`, `createSlackSignature()`
 
@@ -243,6 +243,8 @@ test("GET /health", async () => {
 ```
 
 Use the harness teardown instead of manually removing process or Actor listeners inside individual integration suites.
+
+Do not enable `setupCommonMocks({ fs: true })` in suites that call `setupTestApp()` or `startIntegrationApp()` unless you explicitly wire `fsPromisesMock.mkdtemp` to a real temp-directory implementation. The harness relies on a unique `APIFY_LOCAL_STORAGE_DIR` per boot and now throws if `mkdtemp()` returns an empty or invalid path.
 
 ### Dataset Mocking
 

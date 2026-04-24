@@ -15,6 +15,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **DuckDB Reset Coordination**: Keep the reset gate for new DuckDB callers while allowing already-queued writes and transactions to drain first, preventing reset deadlocks in the serialized write path.
 - **Contracts & Docs**: Align dataset, output, OpenAPI, README, architecture, and API reference documentation with the finalized `processingTime` semantics and response-delay behavior.
 - **Tests**: Add regression coverage for latency semantics, validator-cache reuse and memoized schema cache keys, DuckDB reset coordination with active reads plus queued write/transaction drain paths, malformed JSON sanitation persistence, restart-safe integration harness cleanup, shutdown-only sync error suppression, and spawned-process close-path resilience.
+- **Tests**: Make `setupTestApp()` fail fast when `node:fs/promises.mkdtemp()` is mocked incorrectly, and keep in-process integration suites on a real temp-directory implementation so `APIFY_LOCAL_STORAGE_DIR` isolation stays intact.
+- **Tooling**: Remove the unused `cross-env` dependency and keep `npm run test:stress` on a direct Node + Jest invocation with `--expose-gc`, which works after a native Windows dependency install regenerates the local toolchain.
 
 ## [3.0.4] - 2026-04-18
 

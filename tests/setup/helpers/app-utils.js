@@ -47,6 +47,14 @@ export const setupTestApp = async (options = {}, enableHotReload = false) => {
   const apifyLocalStorageDir = await mkdtemp(
     path.join(tmpdir(), "wdl-integration-"),
   );
+  if (
+    typeof apifyLocalStorageDir !== "string" ||
+    apifyLocalStorageDir.length === 0
+  ) {
+    throw new TypeError(
+      "setupTestApp requires node:fs/promises mkdtemp() to return a non-empty string. Disable fs mocking for integration tests or provide a real mkdtemp implementation.",
+    );
+  }
   const initialSigtermListeners = new Set(
     process.listeners(SHUTDOWN_SIGNALS.SIGTERM),
   );

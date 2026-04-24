@@ -20,7 +20,7 @@ import { HTTP_STATUS } from "../../src/consts/http.js";
 await setupCommonMocks({
   logger: true,
   apify: true,
-  fs: true,
+  fs: false,
   db: false,
 });
 

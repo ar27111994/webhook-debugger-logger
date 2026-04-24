@@ -64,7 +64,7 @@ await setupCommonMocks({
 
 ### Specialized Helpers
 
-- `setupTestApp()` (`app-utils.js`) - Initialize app and supertest client
+- `setupTestApp()` (`app-utils.js`) - Initialize app and supertest client; requires a real `node:fs/promises.mkdtemp()` implementation because it allocates a unique `APIFY_LOCAL_STORAGE_DIR` per boot
 - `resetDb()` (`db-hooks.js`) - Clear DuckDB logs table
 - `createStripeSignature()`, etc. (`signature-utils.js`) - Webhook signature generators
 - `createMiddlewareTestContext()` (`middleware-test-utils.js`) - Middleware test setup
@@ -98,6 +98,7 @@ The following logs can appear during integration/e2e and coverage runs and are u
 
 - `setupTestApp()` resets the Jest module registry before importing `src/main.js` so each integration test boot gets a fresh app instance instead of reusing previously registered routes or singleton runtime state.
 - The in-process integration harness still isolates `APIFY_LOCAL_STORAGE_DIR` per test app boot; the module reset complements that filesystem isolation and prevents route/config leakage across repeated initialize/shutdown cycles in the same Jest worker.
+- In-process integration suites that call `setupTestApp()` or `startIntegrationApp()` should not enable `setupCommonMocks({ fs: true })` unless they also provide a real `mkdtemp()` implementation. The harness now throws a clear error instead of silently accepting an invalid storage path.
 - Integration teardown also removes Actor event listeners and process signal handlers registered during app boot, so repeated lifecycle tests do not accumulate global listeners inside the same Jest worker.
 - The spawned-process E2E harness treats child `close` events as best-effort teardown signals so tests do not fail on benign close-listener race conditions during shutdown.
 
