@@ -549,6 +549,38 @@ describe("DuckDB Singleton", () => {
       expect(disconnectSpy).toHaveBeenCalled();
     });
 
+    it("should let already-queued writes bypass the reset gate while reset drains the queue", async () => {
+      await getDbInstance();
+
+      const stopSpy = jest
+        .spyOn(Bottleneck.prototype, "stop")
+        .mockImplementationOnce(async function () {
+          await executeWrite(SELECT_ONE_SQL);
+          return undefined;
+        });
+
+      await expect(resetDbInstance()).resolves.toBeUndefined();
+
+      expect(stopSpy).toHaveBeenCalledWith({ dropWaitingJobs: true });
+    });
+
+    it("should let already-queued transactions bypass the reset gate while reset drains the queue", async () => {
+      await getDbInstance();
+
+      const stopSpy = jest
+        .spyOn(Bottleneck.prototype, "stop")
+        .mockImplementationOnce(async function () {
+          await executeTransaction(async (conn) => {
+            await conn.run(SELECT_ONE_SQL);
+          });
+          return undefined;
+        });
+
+      await expect(resetDbInstance()).resolves.toBeUndefined();
+
+      expect(stopSpy).toHaveBeenCalledWith({ dropWaitingJobs: true });
+    });
+
     it("should replace the write queue even when disconnect is unavailable", async () => {
       const originalDisconnect = Bottleneck.prototype.disconnect;
       const stopSpy = jest.spyOn(Bottleneck.prototype, "stop");

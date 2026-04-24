@@ -452,6 +452,8 @@ The runtime uses a CQRS-style split:
 
 That design lets the actor keep ingesting even if DuckDB needs to rebuild from the Dataset.
 
+DuckDB reset coordination is restart-safe as well: new DB callers wait behind a reset gate, while already-queued serialized writes and transactions are allowed to drain before the singleton is torn down. That avoids deadlocks during test restarts and lifecycle rebuilds without weakening write serialization.
+
 For deeper implementation detail, see [docs/architecture.md](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/architecture.md).
 
 ## Self-hosting

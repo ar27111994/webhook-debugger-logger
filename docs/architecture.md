@@ -253,7 +253,7 @@ Production shutdown follows the same ordering: the HTTP listener is drained befo
 
 DuckDB connections are pooled (configurable size). All write operations go through a Bottleneck queue (`maxConcurrent: 1`) to prevent "Database Locked" errors. Reads are parallel.
 
-When the singleton is reset, connection shutdown is coordinated with the active-operation tracker so teardown closes pooled handles only after in-flight reads complete. This keeps test restarts and hot lifecycle rebuilds from racing the pool.
+When the singleton is reset, new DB callers are held behind a reset gate, but already-queued writes and transactions are allowed to finish on the serialized queue before teardown proceeds. Connection shutdown is then coordinated with the active-operation tracker so teardown closes pooled handles only after in-flight reads complete. This keeps test restarts and hot lifecycle rebuilds from racing the pool or deadlocking the write path.
 
 ### 4. Circuit Breaker for Forwarding
 

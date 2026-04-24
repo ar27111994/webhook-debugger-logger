@@ -30,6 +30,7 @@ const log = createChildLogger({ component: LOG_COMPONENTS.DUCKDB });
  * @typedef {import("@duckdb/node-api").DuckDBValue} DuckDBValue
  * @typedef {import("@duckdb/node-api").DuckDBConnection} DuckDBConnection
  * @typedef {import("../typedefs.js").CommonError} CommonError
+ * @typedef {{ skipResetWait?: boolean }} DbOperationOptions
  */
 
 /** @type {DuckDBInstance | null} */
@@ -203,10 +204,13 @@ function getDbPath() {
 
 /**
  * Validates and gets the DuckDB instance.
+ * @param {DbOperationOptions} [options]
  * @returns {Promise<DuckDBInstance>}
  */
-export async function getDbInstance() {
-  await waitForResetCompletion();
+async function getDbInstanceInternal(options = {}) {
+  if (!options.skipResetWait) {
+    await waitForResetCompletion();
+  }
 
   if (dbInstance) return dbInstance;
 
@@ -248,6 +252,14 @@ export async function getDbInstance() {
   }
 
   return initPromise;
+}
+
+/**
+ * Validates and gets the DuckDB instance.
+ * @returns {Promise<DuckDBInstance>}
+ */
+export async function getDbInstance() {
+  return getDbInstanceInternal();
 }
 
 /**
@@ -310,12 +322,11 @@ async function isConnectionUsable(conn) {
 
 /**
  * Acquires a connection from the pool or creates a new one.
+ * @param {DbOperationOptions} [options]
  * @returns {Promise<DuckDBConnection>}
  */
-async function acquireConnection() {
-  await waitForResetCompletion();
-
-  const instance = await getDbInstance();
+async function acquireConnection(options = {}) {
+  const instance = await getDbInstanceInternal(options);
 
   while (connectionPool.length > 0) {
     const pooledConn = connectionPool.pop();
@@ -360,10 +371,11 @@ function releaseConnection(conn) {
  * Uses connection pooling for efficiency.
  * @param {string} sql - SQL query with named parameters (e.g. $id)
  * @param {Record<string, DuckDBValue>} [params] - Key-value pairs for parameters
+ * @param {DbOperationOptions} [options]
  * @returns {Promise<(Record<string, DuckDBValue>)[]>}
  */
-export async function executeQuery(sql, params) {
-  const conn = await acquireConnection();
+async function executeQueryInternal(sql, params, options = {}) {
+  const conn = await acquireConnection(options);
   beginConnectionOperation();
   try {
     let reader;
@@ -381,6 +393,17 @@ export async function executeQuery(sql, params) {
 }
 
 /**
+ * Executes a query and returns all rows as objects.
+ * Uses connection pooling for efficiency.
+ * @param {string} sql - SQL query with named parameters (e.g. $id)
+ * @param {Record<string, DuckDBValue>} [params] - Key-value pairs for parameters
+ * @returns {Promise<(Record<string, DuckDBValue>)[]>}
+ */
+export async function executeQuery(sql, params) {
+  return executeQueryInternal(sql, params);
+}
+
+/**
  * Executes a write query (INSERT, UPDATE, DELETE) through the sequential write queue.
  * @param {string} sql
  * @param {Record<string, DuckDBValue>} [params]
@@ -388,9 +411,7 @@ export async function executeQuery(sql, params) {
  */
 export async function executeWrite(sql, params) {
   return writeQueue.schedule(async () => {
-    // We can reuse executeQuery since it handles the connection lifecycle.
-    // The value addition here is the queue scheduling.
-    await executeQuery(sql, params);
+    await executeQueryInternal(sql, params, { skipResetWait: true });
   });
 }
 
@@ -403,7 +424,7 @@ export async function executeWrite(sql, params) {
  */
 export async function executeTransaction(task) {
   return writeQueue.schedule(async () => {
-    const conn = await acquireConnection();
+    const conn = await acquireConnection({ skipResetWait: true });
     beginConnectionOperation();
     try {
       await conn.run(SQL_CONSTS.TRANSACTION_COMMANDS.BEGIN);

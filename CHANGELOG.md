@@ -12,8 +12,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **Lifecycle**: Reset webhook-manager singleton state during test teardown and recreate the sync-service limiter after shutdown so repeated initialize/stop/start flows remain stable.
 - **Shutdown Ordering**: Drain the HTTP listener before stopping `SyncService` and closing DuckDB so in-flight requests and readiness probes do not race read-model teardown.
 - **DuckDB Lifecycle**: Drain both pooled and in-use DuckDB connections before resetting the singleton so repeated DB teardown and rebuild flows do not leave stale handles behind.
+- **DuckDB Reset Coordination**: Keep the reset gate for new DuckDB callers while allowing already-queued writes and transactions to drain first, preventing reset deadlocks in the serialized write path.
 - **Contracts & Docs**: Align dataset, output, OpenAPI, README, architecture, and API reference documentation with the finalized `processingTime` semantics and response-delay behavior.
-- **Tests**: Add regression coverage for latency semantics, validator-cache reuse and memoized schema cache keys, DuckDB reset coordination with active reads, malformed JSON sanitation persistence, restart-safe integration harness cleanup, shutdown-only sync error suppression, and spawned-process close-path resilience.
+- **Tests**: Add regression coverage for latency semantics, validator-cache reuse and memoized schema cache keys, DuckDB reset coordination with active reads plus queued write/transaction drain paths, malformed JSON sanitation persistence, restart-safe integration harness cleanup, shutdown-only sync error suppression, and spawned-process close-path resilience.
 
 ## [3.0.4] - 2026-04-18
 
