@@ -250,6 +250,8 @@ Production shutdown follows the same ordering: the HTTP listener is drained befo
 
 `SyncService` listens to `appEvents` for real-time inserts and uses batch catch-up for gap recovery. This provides near-real-time query availability without coupling the write path to the read path.
 
+`SyncService` shutdown is retry-safe. If limiter shutdown succeeds but disconnect cleanup fails, the service retains the stale limiter long enough to finish cleanup on a later `stop()` or `start()` call instead of issuing a second incompatible limiter stop.
+
 ### 3. Connection Pooling + Write Serialization
 
 DuckDB connections are pooled (configurable size). All write operations go through a Bottleneck queue (`maxConcurrent: 1`) to prevent "Database Locked" errors. Reads are parallel.

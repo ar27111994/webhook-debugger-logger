@@ -82,6 +82,13 @@ describe("SyncService", () => {
   });
 
   describe("start/stop", () => {
+    it("should safely stop before the service has ever started", async () => {
+      await expect(syncService.stop()).resolves.toBeUndefined();
+
+      expect(syncService.getMetrics().isRunning).toBe(false);
+      expect(eventsMock.appEvents.off).not.toHaveBeenCalled();
+    });
+
     it("should start service and listen for events", async () => {
       const maxOffset = 5;
       duckDbMock.executeQuery.mockResolvedValue([{ maxOffset }]);
@@ -177,6 +184,95 @@ describe("SyncService", () => {
           configurable: true,
           writable: true,
         });
+      }
+    });
+
+    it("should retain the limiter so stop cleanup can be retried after disconnect failure", async () => {
+      const disconnectError = new Error("disconnect failed once");
+      const EXPECTED_DISCONNECT_ATTEMPTS = 2;
+      const EXPECTED_STOP_ATTEMPTS = 1;
+      const stopSpy = jest.spyOn(Bottleneck.prototype, "stop");
+      const disconnectSpy = jest
+        .spyOn(Bottleneck.prototype, "disconnect")
+        .mockRejectedValueOnce(disconnectError)
+        .mockResolvedValue(undefined);
+
+      try {
+        jest
+          .mocked(datasetMock.getInfo)
+          .mockResolvedValueOnce(assertType({ itemCount: 0 }));
+
+        await syncService.start();
+
+        await expect(syncService.stop()).rejects.toThrow(disconnectError);
+        await expect(syncService.stop()).resolves.toBeUndefined();
+
+        expect(syncService.getMetrics().isRunning).toBe(false);
+        expect(disconnectSpy).toHaveBeenCalledTimes(
+          EXPECTED_DISCONNECT_ATTEMPTS,
+        );
+        expect(stopSpy).toHaveBeenCalledTimes(EXPECTED_STOP_ATTEMPTS);
+      } finally {
+        stopSpy.mockRestore();
+        disconnectSpy.mockRestore();
+      }
+    });
+
+    it("should finish stale limiter cleanup before restarting after a failed stop", async () => {
+      const disconnectError = new Error("disconnect failed once");
+      const EXPECTED_DISCONNECT_ATTEMPTS = 2;
+      const EXPECTED_STOP_ATTEMPTS = 1;
+      const stopSpy = jest.spyOn(Bottleneck.prototype, "stop");
+      const disconnectSpy = jest
+        .spyOn(Bottleneck.prototype, "disconnect")
+        .mockRejectedValueOnce(disconnectError)
+        .mockResolvedValue(undefined);
+
+      try {
+        jest
+          .mocked(datasetMock.getInfo)
+          .mockResolvedValue(assertType({ itemCount: 0 }));
+
+        await syncService.start();
+        await expect(syncService.stop()).rejects.toThrow(disconnectError);
+        await expect(syncService.start()).resolves.toBeUndefined();
+
+        expect(syncService.getMetrics().isRunning).toBe(true);
+        expect(disconnectSpy).toHaveBeenCalledTimes(
+          EXPECTED_DISCONNECT_ATTEMPTS,
+        );
+        expect(stopSpy).toHaveBeenCalledTimes(EXPECTED_STOP_ATTEMPTS);
+      } finally {
+        stopSpy.mockRestore();
+        disconnectSpy.mockRestore();
+      }
+    });
+
+    it("should clear cached limiter stop state after a stop failure so retries can reissue stop", async () => {
+      const stopError = new Error("stop failed once");
+      const EXPECTED_STOP_ATTEMPTS = 2;
+      const stopSpy = jest
+        .spyOn(Bottleneck.prototype, "stop")
+        .mockRejectedValueOnce(stopError)
+        .mockResolvedValue(undefined);
+      const disconnectSpy = jest.spyOn(Bottleneck.prototype, "disconnect");
+
+      try {
+        jest
+          .mocked(datasetMock.getInfo)
+          .mockResolvedValueOnce(assertType({ itemCount: 0 }));
+
+        await syncService.start();
+
+        await expect(syncService.stop()).rejects.toThrow(stopError);
+        await expect(syncService.stop()).resolves.toBeUndefined();
+
+        expect(stopSpy).toHaveBeenCalledTimes(EXPECTED_STOP_ATTEMPTS);
+        expect(disconnectSpy).toHaveBeenCalledTimes(1);
+        expect(syncService.getMetrics().isRunning).toBe(false);
+      } finally {
+        stopSpy.mockRestore();
+        disconnectSpy.mockRestore();
       }
     });
   });

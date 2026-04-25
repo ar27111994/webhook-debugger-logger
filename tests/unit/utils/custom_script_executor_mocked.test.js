@@ -78,6 +78,15 @@ describe("Custom Script Executor worker failure paths", () => {
     jest.resetModules();
   });
 
+  it("should return the validated script source when compilation succeeds", async () => {
+    const { validateCustomScriptSource } =
+      await import("../../../src/utils/custom_script_executor.js");
+
+    expect(validateCustomScriptSource(SUCCESS_SCRIPT_SOURCE)).toBe(
+      SUCCESS_SCRIPT_SOURCE,
+    );
+  });
+
   it("should reject SCRIPT_COMPILATION_FAILED when vm compilation does not yield a vm.Script instance", async () => {
     const ScriptMock = jest.fn(function MockVmScript() {
       return {};
@@ -511,5 +520,38 @@ describe("Custom Script Executor worker failure paths", () => {
       logs: [],
     });
     expect(terminateMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("should reject deterministically when cleanup throws during message handling", async () => {
+    const { workerInstances, MockWorker } = createMockWorkerHarness();
+    const cleanupErrorMessage = "cleanup failed";
+
+    jest.unstable_mockModule(WORKER_THREADS_MODULE, () => ({
+      Worker: MockWorker,
+    }));
+
+    const { executeCustomScript } =
+      await import("../../../src/utils/custom_script_executor.js");
+
+    const pendingResult = executeCustomScript({
+      source: SUCCESS_SCRIPT_SOURCE,
+      event: {},
+      req: {},
+      timeoutMs: 50,
+    });
+
+    jest
+      .spyOn(workerInstances[0], "removeAllListeners")
+      .mockImplementationOnce(() => {
+        throw new Error(cleanupErrorMessage);
+      });
+
+    workerInstances[0].emit(STREAM_EVENTS.MESSAGE, {
+      ok: true,
+      event: { ok: true },
+      logs: [],
+    });
+
+    await expect(pendingResult).rejects.toThrow(cleanupErrorMessage);
   });
 });

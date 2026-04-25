@@ -137,7 +137,16 @@ export async function executeCustomScript(request) {
   };
 
   return await new Promise((resolve, reject) => {
-    worker.once(STREAM_EVENTS.MESSAGE, async (result) => {
+    /**
+     * @param {{ awaitTermination?: boolean }} [options]
+     * @param {() => void} [settle]
+     * @returns {void}
+     */
+    const settleAfterCleanup = (options, settle) => {
+      cleanupWorker(options).then(settle, reject);
+    };
+
+    worker.once(STREAM_EVENTS.MESSAGE, (result) => {
       if (settled) {
         return;
       }
@@ -149,24 +158,28 @@ export async function executeCustomScript(request) {
         "ok" in result &&
         result.ok === false;
       if (shouldAwaitTermination) {
-        await cleanupWorker({ awaitTermination: true });
+        settleAfterCleanup({ awaitTermination: true }, () => {
+          resolve(result);
+        });
       } else {
-        await cleanupWorker();
+        settleAfterCleanup(undefined, () => {
+          resolve(result);
+        });
       }
-      resolve(result);
     });
 
-    worker.once(STREAM_EVENTS.ERROR, async (error) => {
+    worker.once(STREAM_EVENTS.ERROR, (error) => {
       if (settled) {
         return;
       }
 
       settled = true;
-      await cleanupWorker({ awaitTermination: true });
-      reject(error);
+      settleAfterCleanup({ awaitTermination: true }, () => {
+        reject(error);
+      });
     });
 
-    worker.once(STREAM_EVENTS.EXIT, async (code) => {
+    worker.once(STREAM_EVENTS.EXIT, (code) => {
       exited = true;
 
       if (settled || code === 0) {
@@ -174,8 +187,9 @@ export async function executeCustomScript(request) {
       }
 
       settled = true;
-      await cleanupWorker({ awaitTermination: true });
-      reject(new Error(ERROR_MESSAGES.SCRIPT_EXECUTION_FAILED(code)));
+      settleAfterCleanup({ awaitTermination: true }, () => {
+        reject(new Error(ERROR_MESSAGES.SCRIPT_EXECUTION_FAILED(code)));
+      });
     });
   });
 }

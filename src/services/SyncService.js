@@ -44,6 +44,8 @@ const log = createChildLogger({ component: LOG_COMPONENTS.SYNC_SERVICE });
 export class SyncService {
   /** @type {Bottleneck | null} */
   #limiter;
+  /** @type {Promise<void> | null} */
+  #limiterStopPromise;
   /** @type {number | null} */
   #cachedMaxOffset;
   /** @type {boolean} */
@@ -73,10 +75,34 @@ export class SyncService {
     });
   }
 
+  /**
+   * Ensures a limiter is stopped at most once while still allowing
+   * disconnect cleanup retries after partial stop failures.
+   * @param {Bottleneck} limiter
+   * @returns {Promise<void>}
+   */
+  #stopLimiter(limiter) {
+    if (this.#limiterStopPromise) {
+      return this.#limiterStopPromise;
+    }
+
+    const stopPromise = limiter
+      .stop({ dropWaitingJobs: true })
+      .catch((error) => {
+        this.#limiterStopPromise = null;
+        throw error;
+      });
+
+    this.#limiterStopPromise = stopPromise;
+
+    return stopPromise;
+  }
+
   constructor() {
     // Create the limiter lazily on start so a stopped service does not leave
     // an unused scheduler instance holding the process open.
     this.#limiter = null;
+    this.#limiterStopPromise = null;
 
     this.#cachedMaxOffset = null;
     this.#isRunning = false;
@@ -127,8 +153,14 @@ export class SyncService {
    */
   async start() {
     if (this.#isRunning) return;
+
+    if (this.#limiter) {
+      await this.stop();
+    }
+
     this.#isRunning = true;
     this.#limiter = this.#createLimiter();
+    this.#limiterStopPromise = null;
 
     log.info(LOG_MESSAGES.SYNC_START);
 
@@ -144,40 +176,39 @@ export class SyncService {
    * @returns {Promise<void>}
    */
   async stop() {
-    if (!this.#isRunning) return;
-    log.info(LOG_MESSAGES.SYNC_STOP);
-    this.#isRunning = false;
-    appEvents.off(EVENT_NAMES.LOG_RECEIVED, this.#boundOnLogReceived);
+    const limiter = this.#limiter;
 
-    const limiter = /** @type {Bottleneck} */ (this.#limiter);
-    this.#limiter = null;
-    await limiter.stop({ dropWaitingJobs: true });
+    if (this.#isRunning) {
+      log.info(LOG_MESSAGES.SYNC_STOP);
+      this.#isRunning = false;
+      appEvents.off(EVENT_NAMES.LOG_RECEIVED, this.#boundOnLogReceived);
+    }
+
+    if (!limiter) {
+      return;
+    }
+
+    await this.#stopLimiter(limiter);
     if (typeof limiter.disconnect === "function") {
       await limiter.disconnect();
     }
+
+    this.#limiter = null;
+    this.#limiterStopPromise = null;
   }
 
   /**
    * Trigger synchronization with concurrency control via Bottleneck
    */
   #triggerSync() {
-    if (!this.#isRunning || !this.#limiter) {
-      return;
-    }
-
-    const limiter = /** @type {Bottleneck} */ (this.#limiter);
+    const scheduledSync = this.#limiter?.schedule(() => this.#syncLogs());
 
     // schedule returns a promise but we don't await it here to avoid blocking event loop
-    limiter
-      .schedule(() => this.#syncLogs())
-      .catch((err) => {
-        // Suppress expected error when service is stopping
-        if (err?.message?.includes(ERROR_MESSAGES.BOTTLENECK_STOPPED)) return;
-        log.error(
-          { err: serializeError(err) },
-          LOG_MESSAGES.SYNC_SCHEDULE_ERROR,
-        );
-      });
+    scheduledSync?.catch((err) => {
+      // Suppress expected error when service is stopping
+      if (err?.message?.includes(ERROR_MESSAGES.BOTTLENECK_STOPPED)) return;
+      log.error({ err: serializeError(err) }, LOG_MESSAGES.SYNC_SCHEDULE_ERROR);
+    });
   }
 
   /**

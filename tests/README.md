@@ -78,6 +78,7 @@ await setupCommonMocks({
 4. **Avoid `@type {any}`** - use `assertType<T>()` or proper types
 5. **Keep tests isolated** - use `useMockCleanup()`
 6. **Place new tests** in the appropriate subdirectory (`unit`, `integration`, or `e2e`)
+7. **For lifecycle and worker-cleanup changes**, add focused unit coverage for retry and failure paths first, then rerun `npm run test:stress` to validate broader concurrency and shutdown behavior.
 
 ## Known Test Runtime Signals
 

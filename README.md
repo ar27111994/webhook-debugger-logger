@@ -130,6 +130,7 @@ This actor combines those workflows in one place.
 - It supports inline custom scripting for payload cleanup and transformation.
 - It includes health, readiness, and metrics endpoints for operational setups.
 - It can run on Apify or as a self-hosted Node/Docker service.
+- It resumes background Dataset-to-DuckDB sync cleanly across stop, retry, and restart paths, which keeps self-hosted and test harness restarts predictable.
 
 ## What can this actor do?
 
