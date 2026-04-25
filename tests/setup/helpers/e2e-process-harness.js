@@ -57,6 +57,41 @@ const REPO_ROOT = path.resolve(
  */
 
 /**
+ * @param {ChildProcess} child
+ * @param {Promise<void>} closePromise
+ * @returns {Promise<void>}
+ */
+async function waitForChildClose(child, closePromise) {
+  const stdoutDone =
+    !child.stdout || child.stdout.readableEnded || child.stdout.destroyed;
+  const stderrDone =
+    !child.stderr || child.stderr.readableEnded || child.stderr.destroyed;
+
+  if (child.exitCode !== null && stdoutDone && stderrDone) {
+    return;
+  }
+
+  await closePromise;
+}
+
+/**
+ * @param {ChildProcess} child
+ * @returns {void}
+ */
+function cleanupChildStreams(child) {
+  child.stdout?.removeAllListeners();
+  child.stderr?.removeAllListeners();
+
+  if (!child.stdout?.destroyed) {
+    child.stdout?.destroy();
+  }
+
+  if (!child.stderr?.destroyed) {
+    child.stderr?.destroy();
+  }
+}
+
+/**
  * Finds a free local TCP port.
  *
  * @returns {Promise<number>}
@@ -195,6 +230,10 @@ export async function spawnAppProcess(options) {
     env,
     stdio: ["ignore", "pipe", "pipe"],
   });
+  const childClosePromise = once(child, STREAM_EVENTS.CLOSE).then(
+    () => undefined,
+    () => undefined,
+  );
 
   /** @type {Buffer[]} */
   const stdoutChunks = [];
@@ -218,11 +257,15 @@ export async function spawnAppProcess(options) {
       const timeout = setTimeout(() => {
         child.kill(SHUTDOWN_SIGNALS.SIGKILL);
       }, PROCESS_SHUTDOWN_TIMEOUT_MS);
+      if (timeout.unref) {
+        timeout.unref();
+      }
 
       try {
-        await once(child, "exit");
+        await waitForChildClose(child, childClosePromise);
       } finally {
         clearTimeout(timeout);
+        cleanupChildStreams(child);
       }
     }
 
@@ -257,11 +300,15 @@ export async function spawnAppProcess(options) {
     const timeout = setTimeout(() => {
       child.kill(SHUTDOWN_SIGNALS.SIGKILL);
     }, PROCESS_SHUTDOWN_TIMEOUT_MS);
+    if (timeout.unref) {
+      timeout.unref();
+    }
 
     try {
-      await once(child, "exit");
+      await waitForChildClose(child, childClosePromise);
     } finally {
       clearTimeout(timeout);
+      cleanupChildStreams(child);
       await rm(storageDir, { recursive: true, force: true });
     }
   };

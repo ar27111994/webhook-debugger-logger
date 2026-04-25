@@ -3,6 +3,25 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.5] - 2026-04-21
+
+### Fixed (3.0.5)
+
+- **Latency Metrics**: Make `processingTime` consistently represent server-side processing time only, excluding any configured `responseDelayMs` simulation from persisted log data.
+- **Performance**: Cache compiled JSON Schema validators so repeated requests and stable hot-reload configurations do not trigger unnecessary recompilation on the webhook path.
+- **Lifecycle**: Reset webhook-manager singleton state during test teardown and recreate the sync-service limiter after shutdown so repeated initialize/stop/start flows remain stable.
+- **Lifecycle**: Cache the active `SyncService` limiter stop promise so disconnect cleanup can be retried safely after a partial stop failure, and so a later `start()` drains stale limiter cleanup before creating a replacement scheduler.
+- **Shutdown Ordering**: Drain the HTTP listener before stopping `SyncService` and closing DuckDB so in-flight requests and readiness probes do not race read-model teardown.
+- **DuckDB Lifecycle**: Drain both pooled and in-use DuckDB connections before resetting the singleton so repeated DB teardown and rebuild flows do not leave stale handles behind.
+- **DuckDB Reset Coordination**: Keep the reset gate for new DuckDB callers while allowing already-queued writes and transactions to drain first, preventing reset deadlocks in the serialized write path.
+- **DuckDB Init Invalidation**: Prevent an in-flight DuckDB initializer from republishing a stale singleton after `resetDbInstance()` clears teardown state, and allow clean reinitialization even when that late initializer ultimately fails.
+- **Contracts & Docs**: Align dataset, output, OpenAPI, README, architecture, and API reference documentation with the finalized `processingTime` semantics and response-delay behavior.
+- **Worker Cleanup**: Remove the custom script executor's `void` cleanup chaining and keep message/error/exit settlement deterministic even when worker listener cleanup throws.
+- **Tests**: Add regression coverage for latency semantics, validator-cache reuse and memoized schema cache keys, DuckDB reset coordination with active reads plus queued write/transaction drain paths, malformed JSON sanitation persistence, restart-safe integration harness cleanup, shutdown-only sync error suppression, and spawned-process close-path resilience.
+- **Tests**: Add focused regression coverage for `SyncService` stop/start retry paths and custom-script worker cleanup failure handling, and drive the touched files to 100% focused unit coverage before rerunning the stress suite.
+- **Tests**: Make `setupTestApp()` fail fast when `node:fs/promises.mkdtemp()` is mocked incorrectly, and keep in-process integration suites on a real temp-directory implementation so `APIFY_LOCAL_STORAGE_DIR` isolation stays intact.
+- **Tooling**: Remove the unused `cross-env` dependency and keep `npm run test:stress` on a direct Node + Jest invocation with `--expose-gc`, which works after a native Windows dependency install regenerates the local toolchain.
+
 ## [3.0.4] - 2026-04-18
 
 ### Fixed (3.0.4)

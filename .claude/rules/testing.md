@@ -54,11 +54,13 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 ### shared-mocks.js
 
 - `apifyMock`, `axiosMock`, `dnsPromisesMock`, `ssrfMock` - Pre-configured mocks
+- `apifyMock` includes both `Actor.on(...)` and `Actor.off(...)` support for lifecycle-oriented harness teardown
 - `createDatasetMock(items, { autoRegister })` - Dataset with getData/pushData/getInfo
 - `createKeyValueStoreMock(overrides)` - KV store mock
 - `createMockWebhookManager(overrides)` - WebhookManager mock
 - `setupBasicApifyMock(mockInstance, options)` - Configure apifyMock
 - `resetNetworkMocks()` - Reset SSRF, DNS, Axios to defaults
+- `fsPromisesMock` - Shared `node:fs/promises` mock surface, including `mkdtemp()` for temp-dir based harness setup
 - `loggerMock` - Shared logger mock for assertions
 
 ### test-utils.js
@@ -77,7 +79,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 ### Other Helpers
 
 - `middleware-test-utils.js`: `createMiddlewareTestContext()`, `runMiddlewareWithTimers()`
-- `app-utils.js`: `setupTestApp()` - Initialize app + supertest for integration tests
+- `app-utils.js`: `setupTestApp()` - Initialize app + supertest for integration tests; teardown also removes transient Actor listeners and process signal handlers registered during boot. Suites that use it must keep `mkdtemp()` real or provide a real mock implementation.
 - `db-hooks.js`: `resetDb()` - Clear DuckDB logs table
 - `signature-utils.js`: `createStripeSignature()`, `createShopifySignature()`, `createGitHubSignature()`, `createSlackSignature()`
 
@@ -231,12 +233,18 @@ let appClient, teardownApp;
 beforeAll(async () => {
   ({ appClient, teardownApp } = await setupTestApp());
 });
-afterAll(() => teardownApp());
+afterAll(async () => {
+  await teardownApp();
+});
 
 test("GET /health", async () => {
   expect((await appClient.get("/health")).status).toBe(200);
 });
 ```
+
+Use the harness teardown instead of manually removing process or Actor listeners inside individual integration suites.
+
+Do not enable `setupCommonMocks({ fs: true })` in suites that call `setupTestApp()` or `startIntegrationApp()` unless you explicitly wire `fsPromisesMock.mkdtemp` to a real temp-directory implementation. The harness relies on a unique `APIFY_LOCAL_STORAGE_DIR` per boot and now throws if `mkdtemp()` returns an empty or invalid path.
 
 ### Dataset Mocking
 

@@ -403,7 +403,7 @@ export class LogRepository {
         log.signatureValidation?.error || log.signatureError || null,
 
       requestId: log.requestId || null,
-      processingTime: log.processingTime || null,
+      processingTime: log.processingTime ?? null,
       contentType: log.contentType || null,
       bodyEncoding: log.bodyEncoding || null,
 

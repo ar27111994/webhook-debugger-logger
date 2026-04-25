@@ -14,6 +14,7 @@ Generate temporary webhook URLs, inspect every incoming request, replay failures
 [![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
 [![GHCR](https://img.shields.io/badge/GHCR-Container%20Image-2496ED?logo=docker&logoColor=white)](https://github.com/ar27111994/webhook-debugger-logger/pkgs/container/webhook-debugger-logger)
 ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/ar27111994/webhook-debugger-logger?utm_source=oss&utm_medium=github&utm_campaign=ar27111994%2Fwebhook-debugger-logger&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
+
 [![Webhook Debugger, Logger & API Mocker - Debug webhooks 90% faster without localhost tunneling | Product Hunt](https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1057655&theme=light&t=1767529788592)](https://www.producthunt.com/products/webhook-debugger-logger-api-mocker?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-webhook-debugger-logger-api-mocker)
 
 ## Run & Docs
@@ -23,6 +24,14 @@ Generate temporary webhook URLs, inspect every incoming request, replay failures
 [![Read the API reference](https://img.shields.io/badge/API-Reference-0F766E?logo=swagger&logoColor=white)](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/api-reference.md)
 [![Self-host with Docker](https://img.shields.io/badge/Self--host-Docker-2496ED?logo=docker&logoColor=white)](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/local_docker_testing.md)
 
+## Sponsor
+
+[![Patreon](https://img.shields.io/badge/Support-Patreon-FF424D?logo=patreon&logoColor=white)](https://www.patreon.com/cw/ar27111994)
+[![Ko-fi](https://img.shields.io/badge/Support-Ko--fi-29ABE0?logo=kofi&logoColor=white)](https://ko-fi.com/ar27111994)
+[![Liberapay](https://img.shields.io/badge/Support-Liberapay-F6C915?logo=liberapay&logoColor=black)](https://liberapay.com/ar27111994)
+[![Buy Me a Coffee](https://img.shields.io/badge/Support-Buy%20Me%20a%20Coffee-FFDD00?logo=buymeacoffee&logoColor=000000)](https://buymeacoffee.com/ar27111994)
+[![thanks.dev](https://img.shields.io/badge/Support-thanks.dev-181717?logo=github&logoColor=white)](https://thanks.dev/d/gh/ar27111994)
+
 ## Contribute
 
 [![Report a bug](https://img.shields.io/badge/Report-Bug-d73a4a?logo=github&logoColor=white)](https://github.com/ar27111994/webhook-debugger-logger/issues/new?template=bug_report.md)
@@ -30,6 +39,7 @@ Generate temporary webhook URLs, inspect every incoming request, replay failures
 [![View changelog](https://img.shields.io/badge/View-Changelog-6f42c1?logo=readthedocs&logoColor=white)](https://github.com/ar27111994/webhook-debugger-logger/blob/main/CHANGELOG.md)
 [![Security policy](https://img.shields.io/badge/Security-Policy-ffb000?logo=shield&logoColor=white)](https://github.com/ar27111994/webhook-debugger-logger/blob/main/SECURITY.md)
 [![Contributing](https://img.shields.io/badge/Contributing-Guide-0969da?logo=github&logoColor=white)](https://github.com/ar27111994/webhook-debugger-logger/blob/main/CONTRIBUTING.md)
+[![Code of Conduct](https://img.shields.io/badge/Code%20of-Conduct-ff69b4?logo=github&logoColor=white)](https://github.com/ar27111994/webhook-debugger-logger/blob/main/CODE_OF_CONDUCT.md)
 
 Webhook Debugger, Logger & API Mocking Suite is an [Apify Actor](https://apify.com/ar27111994/webhook-debugger-logger) for testing webhook integrations end to end. It generates temporary endpoints, captures the full request envelope, exposes live and queryable logs, and lets you replay or forward captured traffic to another destination.
 
@@ -37,8 +47,13 @@ It is designed for developers working with providers such as Stripe, GitHub, Sho
 
 > [!NOTE]
 > This actor is optimized for testing, debugging, replay, and callback simulation. If you need permanent public ingress or long-term retention, place it behind your own infrastructure or run the self-hosted container with persistent storage.
+
+---
+
 > [!WARNING]
 > Generated webhook URLs are public unless you enable `authKey`, `allowedIps`, or signature verification. Do not point sensitive production traffic to unsecured endpoints.
+
+---
 
 ## Screenshots
 
@@ -53,21 +68,21 @@ It is designed for developers working with providers such as Stripe, GitHub, Sho
 
 The current repo schema is defined in [.actor/input_schema.json](https://github.com/ar27111994/webhook-debugger-logger/blob/main/.actor/input_schema.json). These are the settings most users touch first.
 
-| Input                   | Purpose                                                                                                           | Default    |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------- | ---------- |
-| `urlCount`              | Number of temporary webhook endpoints to generate                                                                 | `3`        |
-| `retentionHours`        | How long generated webhook URLs remain active                                                                     | `24`       |
-| `maxPayloadSize`        | Maximum accepted request body size in bytes; values above 100 MB are clamped                                      | `10485760` |
-| `enableJSONParsing`     | Parse JSON payloads into structured objects for search                                                            | `true`     |
-| `maskSensitiveData`     | Redact sensitive headers such as `Authorization`, `Cookie`, `Set-Cookie`, and API key headers from logs           | `true`     |
-| `authKey`               | Protect management routes and optionally webhook ingest with a shared key                                         | unset      |
-| `allowedIps`            | Restrict traffic to specific IPs or CIDR blocks                                                                   | empty      |
-| `signatureVerification` | Verify Stripe, Shopify, GitHub, Slack, or custom signatures                                                       | unset      |
-| `forwardUrl`            | Forward every captured request to another destination                                                             | unset      |
-| `defaultResponseCode`   | Return a custom HTTP status to the sender                                                                         | `200`      |
-| `responseDelayMs`       | Simulate network latency or slow callback processing; accepted range is 0-10,000 ms and higher values are clamped | `0`        |
-| `jsonSchema`            | Reject payloads that do not match a JSON Schema                                                                   | unset      |
-| `customScript`          | Transform or enrich the captured event before storage                                                             | unset      |
+| Input                   | Purpose                                                                                                                  | Default    |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------ | ---------- |
+| `urlCount`              | Number of temporary webhook endpoints to generate                                                                        | `3`        |
+| `retentionHours`        | How long generated webhook URLs remain active                                                                            | `24`       |
+| `maxPayloadSize`        | Maximum accepted request body size in bytes; values above 100 MB are clamped                                             | `10485760` |
+| `enableJSONParsing`     | Parse JSON payloads into structured objects for search                                                                   | `true`     |
+| `maskSensitiveData`     | Redact sensitive headers such as `Authorization`, `Cookie`, `Set-Cookie`, and API key headers from logs                  | `true`     |
+| `authKey`               | Protect management routes and optionally webhook ingest with a shared key                                                | unset      |
+| `allowedIps`            | Restrict traffic to specific IPs or CIDR blocks                                                                          | empty      |
+| `signatureVerification` | Verify Stripe, Shopify, GitHub, Slack, or custom signatures                                                              | unset      |
+| `forwardUrl`            | Forward every captured request to another destination                                                                    | unset      |
+| `defaultResponseCode`   | Return a custom HTTP status to the sender                                                                                | `200`      |
+| `responseDelayMs`       | Add an artificial response delay after processing completes; accepted range is 0-10,000 ms and higher values are clamped | `0`        |
+| `jsonSchema`            | Reject payloads that do not match a JSON Schema                                                                          | unset      |
+| `customScript`          | Transform or enrich the captured event before storage                                                                    | unset      |
 
 ![Input schema preview from the Apify Actor input tab](https://raw.githubusercontent.com/ar27111994/webhook-debugger-logger/main/assets/input_schema_preview.png)
 
@@ -115,6 +130,7 @@ This actor combines those workflows in one place.
 - It supports inline custom scripting for payload cleanup and transformation.
 - It includes health, readiness, and metrics endpoints for operational setups.
 - It can run on Apify or as a self-hosted Node/Docker service.
+- It resumes background Dataset-to-DuckDB sync cleanly across stop, retry, and restart paths, which keeps self-hosted and test harness restarts predictable.
 
 ## What can this actor do?
 
@@ -153,7 +169,7 @@ After the actor starts, open the web server URL and call `/info`.
 
 ```json
 {
-  "version": "3.0.0",
+  "version": "3.0.5",
   "status": "Enterprise Suite Online",
   "system": {
     "authActive": false,
@@ -226,6 +242,8 @@ curl -X POST "https://<run-id>.runs.apify.net/webhook/wh_demo123" \
   ]
 }
 ```
+
+`processingTime` is the server-side processing cost only. It does **not** include any configured `responseDelayMs` latency simulation.
 
 ![Dataset view showing captured webhook events with metadata and payload fields](https://raw.githubusercontent.com/ar27111994/webhook-debugger-logger/main/assets/dataset_view.png)
 
@@ -305,6 +323,7 @@ It can normalize, enrich, or redact payload data before the event is stored, but
 The actor exposes a small but practical HTTP surface.
 
 `/health` and `/ready` are intentionally rate-limited but not protected by `authKey`, so orchestrators and load balancers can probe them even when management routes require authentication.
+During intentional shutdown, the HTTP listener is drained before `SyncService` and DuckDB teardown begin, so new probe traffic does not race a partially shutting-down read model.
 
 | Endpoint                          | Purpose                                           |
 | --------------------------------- | ------------------------------------------------- |
@@ -378,12 +397,12 @@ Use tighter limits for public debugging endpoints and looser limits for high-thr
 
 Retry and timeout behavior exists in several places and serves different goals.
 
-| Setting             | What it controls                                | Default behavior                                                                |
-| ------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------- |
-| `maxForwardRetries` | Retries for outbound forwarding to `forwardUrl` | Retries transient delivery failures with backoff and circuit breaker protection |
-| `replayMaxRetries`  | Retries for replay requests                     | Retries replay delivery attempts before marking them failed                     |
-| `replayTimeoutMs`   | Per-attempt replay timeout                      | Bounds replay requests so a dead downstream does not hang the actor             |
-| `responseDelayMs`   | Artificial response latency to the sender       | Simulates slow callbacks for client timeout testing                             |
+| Setting             | What it controls                                | Default behavior                                                                       |
+| ------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `maxForwardRetries` | Retries for outbound forwarding to `forwardUrl` | Retries transient delivery failures with backoff and circuit breaker protection        |
+| `replayMaxRetries`  | Retries for replay requests                     | Retries replay delivery attempts before marking them failed                            |
+| `replayTimeoutMs`   | Per-attempt replay timeout                      | Bounds replay requests so a dead downstream does not hang the actor                    |
+| `responseDelayMs`   | Artificial response delay after processing      | Simulates slow callbacks for client timeout testing without inflating `processingTime` |
 
 In addition to input-level settings, the runtime has internal bounded timeouts for alert delivery, background tasks, custom script execution, shutdown, DNS resolution, and outbound forwarding.
 
@@ -433,6 +452,8 @@ The runtime uses a CQRS-style split:
 - **State store**: Apify Key-Value Store keeps active webhook state, large payload offloads, and other runtime state.
 
 That design lets the actor keep ingesting even if DuckDB needs to rebuild from the Dataset.
+
+DuckDB reset coordination is restart-safe as well: new DB callers wait behind a reset gate, while already-queued serialized writes and transactions are allowed to drain before the singleton is torn down. That avoids deadlocks during test restarts and lifecycle rebuilds without weakening write serialization.
 
 For deeper implementation detail, see [docs/architecture.md](https://github.com/ar27111994/webhook-debugger-logger/blob/main/docs/architecture.md).
 
@@ -513,6 +534,41 @@ Examples:
 
 > [!NOTE]
 > Always check the live [Apify Store listing](https://apify.com/ar27111994/webhook-debugger-logger) for the current price before running large test campaigns.
+
+## Support the project
+
+If Webhook Debugger, Logger & API Mocking Suite saves you time, helps you debug a painful integration, or gives your team a better self-hosted workflow, you can help support its development.
+
+### Sponsor / support
+
+[![Patreon](https://img.shields.io/badge/Support-Patreon-FF424D?logo=patreon&logoColor=white)](https://www.patreon.com/cw/ar27111994)
+[![Ko-fi](https://img.shields.io/badge/Support-Ko--fi-29ABE0?logo=kofi&logoColor=white)](https://ko-fi.com/ar27111994)
+[![Liberapay](https://img.shields.io/badge/Support-Liberapay-F6C915?logo=liberapay&logoColor=black)](https://liberapay.com/ar27111994)
+[![Buy Me a Coffee](https://img.shields.io/badge/Support-Buy%20Me%20a%20Coffee-FFDD00?logo=buymeacoffee&logoColor=000000)](https://buymeacoffee.com/ar27111994)
+[![thanks.dev](https://img.shields.io/badge/Support-thanks.dev-181717?logo=github&logoColor=white)](https://thanks.dev/d/gh/ar27111994)
+
+### Need hands-on help?
+
+If you want help debugging or stabilizing a webhook integration, I also offer direct implementation support for setups such as:
+
+- Stripe webhooks
+- GitHub webhooks
+- Shopify webhooks
+- Slack events and callback flows
+- self-hosted Docker deployments
+- signature verification and replay workflows
+
+If that would help, open an issue or reach out through one of the support links above and mention your use case.
+
+### Why support it?
+
+Support helps fund:
+
+- maintenance and bug fixes
+- new provider integrations
+- better deployment and self-hosting guides
+- premium webhook recipes and debugging playbooks
+- faster iteration based on real user feedback
 
 ## Typical use cases
 

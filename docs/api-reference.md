@@ -121,7 +121,7 @@ Returns the built-in dashboard page. If the request `Accept` header includes `te
 **Plain-text Example:**
 
 ```text
-Webhook Debugger & Logger (v3.0.0)
+Webhook Debugger & Logger (v3.0.5)
 Active Webhooks: 1
 Signature Verification: STRIPE
 ```
@@ -193,6 +193,7 @@ curl "https://example-run-id.runs.apify.net/webhook/wh_abc123?__status=503"
 - Applies optional JSON parsing, JSON Schema validation, signature verification, custom script execution, forwarding, and alerting.
 - Executes `customScript` in a disposable worker isolate with access only to `event`, a safe copy of `req`, `console`, and `HTTP_STATUS`.
 - Blocks self-referential forwarding loops and returns `422 Unprocessable Entity` when recursion is detected.
+- If `responseDelayMs` is configured, the route waits artificially **after** request processing is measured. Stored `processingTime` values exclude that simulated delay.
 
 ---
 
@@ -208,7 +209,7 @@ Returns runtime metadata, active webhook state, discoverable endpoints, and the 
 
 ```json
 {
-  "version": "3.0.0",
+  "version": "3.0.5",
   "status": "Enterprise Suite Online",
   "system": {
     "authActive": true,
@@ -248,7 +249,7 @@ Returns runtime metadata, active webhook state, discoverable endpoints, and the 
 
 **Notes:**
 
-- `version` is sourced from runtime package metadata. In the current branch source it resolves to `3.0.0` unless `npm_package_version` overrides it at runtime.
+- `version` is sourced from runtime package metadata. In the current branch source it resolves to `3.0.5` unless `npm_package_version` overrides it at runtime.
 - `activeWebhooks` contains the webhook manager's persisted active state, which currently includes `id` and `expiresAt`.
 - The discovery URL for `logs` intentionally includes `?limit=100` as a reasonable starter page size even though `/logs` itself defaults to a larger limit when `limit` is omitted.
 
@@ -264,34 +265,34 @@ Queries captured webhook events from the DuckDB read model using offset- or curs
 
 **Query Parameters:**
 
-| Parameter           | Type                   | Default          | Description                                                                    |
-| ------------------- | ---------------------- | ---------------- | ------------------------------------------------------------------------------ |
-| `id`                | string                 | -                | Exact log ID                                                                   |
-| `webhookId`         | string                 | -                | Exact webhook ID                                                               |
-| `requestUrl`        | string                 | -                | Partial match against the stored request URL                                   |
-| `method`            | string                 | -                | Exact HTTP method, normalized to uppercase                                     |
-| `statusCode`        | number or range object | -                | Exact code or range syntax such as `statusCode[gte]=400`                       |
-| `contentType`       | string                 | -                | Partial match against stored content type                                      |
-| `requestId`         | string                 | -                | Exact request ID                                                               |
-| `remoteIp`          | string                 | -                | Exact IP or CIDR block                                                         |
-| `userAgent`         | string                 | -                | Partial match against user agent                                               |
-| `signatureValid`    | boolean                | -                | Signature verification result                                                  |
-| `signatureProvider` | string                 | -                | Exact signature provider                                                       |
-| `signatureError`    | string                 | -                | Exact signature error string                                                   |
-| `processingTime`    | number or range object | -                | Exact or ranged processing time filter                                         |
-| `size`              | number or range object | -                | Exact or ranged payload size filter                                            |
-| `timestamp`         | string or range object | -                | Exact or ranged timestamp filter                                               |
-| `startTime`         | ISO string             | -                | Convenience lower bound for timestamp filtering                                |
-| `endTime`           | ISO string             | -                | Convenience upper bound for timestamp filtering                                |
-| `headers`           | string or object       | -                | Substring search over serialized headers or keyed JSON filtering               |
-| `query`             | string or object       | -                | Substring search over query JSON or keyed JSON filtering                       |
-| `body`              | string or object       | -                | Substring search over body JSON or keyed JSON filtering                        |
-| `responseHeaders`   | string or object       | -                | Substring search over response header JSON or keyed JSON filtering             |
-| `responseBody`      | string or object       | -                | Substring search over response body JSON or keyed JSON filtering               |
-| `limit`             | number                 | `10000`          | Result limit. Invalid values are clamped to a minimum of `1`.                  |
-| `offset`            | number                 | `0`              | Offset for traditional pagination                                              |
-| `cursor`            | string                 | -                | Cursor for keyset pagination. When present, it takes precedence over `offset`. |
-| `sort`              | string                 | `timestamp:DESC` | Comma-separated sort rules such as `timestamp:desc,method:asc`                 |
+| Parameter           | Type                   | Default          | Description                                                                                    |
+| ------------------- | ---------------------- | ---------------- | ---------------------------------------------------------------------------------------------- |
+| `id`                | string                 | -                | Exact log ID                                                                                   |
+| `webhookId`         | string                 | -                | Exact webhook ID                                                                               |
+| `requestUrl`        | string                 | -                | Partial match against the stored request URL                                                   |
+| `method`            | string                 | -                | Exact HTTP method, normalized to uppercase                                                     |
+| `statusCode`        | number or range object | -                | Exact code or range syntax such as `statusCode[gte]=400`                                       |
+| `contentType`       | string                 | -                | Partial match against stored content type                                                      |
+| `requestId`         | string                 | -                | Exact request ID                                                                               |
+| `remoteIp`          | string                 | -                | Exact IP or CIDR block                                                                         |
+| `userAgent`         | string                 | -                | Partial match against user agent                                                               |
+| `signatureValid`    | boolean                | -                | Signature verification result                                                                  |
+| `signatureProvider` | string                 | -                | Exact signature provider                                                                       |
+| `signatureError`    | string                 | -                | Exact signature error string                                                                   |
+| `processingTime`    | number or range object | -                | Exact or ranged server-side processing time filter, excluding any configured `responseDelayMs` |
+| `size`              | number or range object | -                | Exact or ranged payload size filter                                                            |
+| `timestamp`         | string or range object | -                | Exact or ranged timestamp filter                                                               |
+| `startTime`         | ISO string             | -                | Convenience lower bound for timestamp filtering                                                |
+| `endTime`           | ISO string             | -                | Convenience upper bound for timestamp filtering                                                |
+| `headers`           | string or object       | -                | Substring search over serialized headers or keyed JSON filtering                               |
+| `query`             | string or object       | -                | Substring search over query JSON or keyed JSON filtering                                       |
+| `body`              | string or object       | -                | Substring search over body JSON or keyed JSON filtering                                        |
+| `responseHeaders`   | string or object       | -                | Substring search over response header JSON or keyed JSON filtering                             |
+| `responseBody`      | string or object       | -                | Substring search over response body JSON or keyed JSON filtering                               |
+| `limit`             | number                 | `10000`          | Result limit. Invalid values are clamped to a minimum of `1`.                                  |
+| `offset`            | number                 | `0`              | Offset for traditional pagination                                                              |
+| `cursor`            | string                 | -                | Cursor for keyset pagination. When present, it takes precedence over `offset`.                 |
+| `sort`              | string                 | `timestamp:DESC` | Comma-separated sort rules such as `timestamp:desc,method:asc`                                 |
 
 **Supported Sort Fields:**
 
@@ -303,6 +304,7 @@ Queries captured webhook events from the DuckDB read model using offset- or curs
 - `startTime` and `endTime` are merged into the timestamp filter internally.
 - Object filters support either a free-text match or keyed filtering such as `headers[x-request-id]=abc` or `body[event]=payment.success`.
 - Nested object filters use dot notation in keyed JSON filters, for example `body[data.id]=evt_123`.
+- `processingTime` represents measured server processing time only. Artificial delay configured via `responseDelayMs` is intentionally excluded.
 
 **Offset Pagination Response Example:**
 
@@ -570,6 +572,7 @@ Liveness probe for container and uptime monitoring.
 #### `GET /ready`
 
 Readiness probe for load balancers and orchestrators.
+During intentional shutdown, the HTTP listener is drained before `SyncService` and DuckDB teardown begin, so new probe traffic does not reach a partially torn-down read model.
 
 **Authentication:** Not required
 

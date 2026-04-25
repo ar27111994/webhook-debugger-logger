@@ -12,3 +12,4 @@ coverage/
 !.github/coverage/
 !.github/coverage/*.json
 .tsbuildinfo
+*.tmp*

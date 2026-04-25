@@ -26,5 +26,6 @@
 ^(?:http://)169\.254\.169\.254/latest(?:/|$)
 ^(?:http://)(?:empty\.domain|nonexistent\.domain)(?:/|$)
 ^(?:http://)(?:weird-dns|string-throw)\.com(?:/|$)
+^(?:http://)metadata\.cloud(?:/|$)
 ^(?:https://)xn--unicode-domain\.com(?:/|$)
 ^(?:https://)google\.com/foo(?:/|$)

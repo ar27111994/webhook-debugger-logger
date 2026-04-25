@@ -204,6 +204,7 @@ LoggerMiddleware.middleware
     ├── Prepare data (parse, redact, encode)
     ├── Signature verification (if configured)
     ├── Custom script execution (worker-isolated vm context)
+    ├── Measure processingTime before any simulated response delay
     ├── Send HTTP response to caller
     └── Background tasks (fire-and-forget with timeout):
         ├── Actor.pushData(event)  → Dataset (Write Model)
@@ -241,13 +242,21 @@ JSON response
 
 DuckDB is treated as ephemeral. On startup, `SyncService` catches up from the Apify Dataset. This means the system tolerates DuckDB failures without data loss.
 
+Read-model teardown is also restart-safe: reset logic waits for active DuckDB operations to drain before it closes pooled and in-use connections, so repeated initialize/shutdown cycles do not leave stale handles behind.
+The reset path also invalidates any in-flight singleton initializer before it can republish a late DuckDB instance after teardown, which keeps repeated reset/reinitialize cycles from reviving stale cached handles.
+Production shutdown follows the same ordering: the HTTP listener is drained before `SyncService` and DuckDB teardown begin, which prevents in-flight handlers and readiness probes from racing read-model disposal.
+
 ### 2. Event-Driven Sync
 
 `SyncService` listens to `appEvents` for real-time inserts and uses batch catch-up for gap recovery. This provides near-real-time query availability without coupling the write path to the read path.
 
+`SyncService` shutdown is retry-safe. If limiter shutdown succeeds but disconnect cleanup fails, the service retains the stale limiter long enough to finish cleanup on a later `stop()` or `start()` call instead of issuing a second incompatible limiter stop.
+
 ### 3. Connection Pooling + Write Serialization
 
 DuckDB connections are pooled (configurable size). All write operations go through a Bottleneck queue (`maxConcurrent: 1`) to prevent "Database Locked" errors. Reads are parallel.
+
+When the singleton is reset, new DB callers are held behind a reset gate. Active DuckDB operations are allowed to complete before pooled and in-use connections are closed, but waiting jobs on the serialized write queue are not guaranteed to drain during teardown and may be dropped as part of reset. Connection shutdown is coordinated with the active-operation tracker so teardown closes pooled handles only after in-flight reads and currently executing DB work complete. This keeps test restarts and hot lifecycle rebuilds from racing the pool while accurately reflecting the current write-queue reset behavior.
 
 ### 4. Circuit Breaker for Forwarding
 
@@ -262,7 +271,11 @@ DuckDB connections are pooled (configurable size). All write operations go throu
 
 Config changes propagate through `AppState.applyConfigUpdate()` which updates body parser limits, rate limiters, auth keys, retention, replay settings, and more — all without restart.
 
+When JSON Schema validation is enabled, compiled validators are cached and reused while the effective schema stays unchanged. Stable object schemas also reuse memoized cache keys, which keeps hot-reload flexibility without paying repeated compilation cost on the webhook request path.
+
 Retention updates are intentionally non-destructive for active webhooks. The current implementation extends existing expiry timestamps when retention increases instead of shortening live webhook lifetimes.
+
+`responseDelayMs` remains a simulation layer for downstream timeout testing. The runtime records `processingTime` before that delay is applied so the stored metric reflects server-side work rather than synthetic waiting time.
 
 ### 6. Streaming Large Payload Offload
 

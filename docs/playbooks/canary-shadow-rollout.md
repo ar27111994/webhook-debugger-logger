@@ -49,11 +49,13 @@ GET /logs?webhookId=<primary-webhook-id>
 GET /logs?webhookId=<primary-webhook-id>&method=SYSTEM
 ```
 
-- Latency-sensitive events for manual replay sampling:
+- High server-processing events for manual replay sampling:
 
 ```text
 GET /logs?webhookId=<primary-webhook-id>&processingTime[gte]=1000
 ```
+
+`processingTime` reflects server-side processing only, so any simulated `responseDelayMs` is excluded from this filter.
 
 ## Recommended Workflow
 
@@ -71,8 +73,8 @@ curl -X POST \
 
 ## Common Failure Patterns
 
-| Signal | What it usually means | What to do |
-| :----- | :-------------------- | :--------- |
-| Replay succeeds but live cutover fails | The canary only saw sampled traffic, not the full production variety | Increase the replay sample set before switching `forwardUrl`. |
-| `method=SYSTEM` errors after cutover | The new receiver is failing after the sender already got a 2xx from the actor | Roll back `forwardUrl`, fix the receiver, and replay the missed events. |
-| Unexpected method differences | You compared replay to ordinary forwarding without noting the delivery mode | Remember that replay preserves the original method, while live forwarding posts to `forwardUrl`. |
+| Signal                                 | What it usually means                                                         | What to do                                                                                       |
+| :------------------------------------- | :---------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------- |
+| Replay succeeds but live cutover fails | The canary only saw sampled traffic, not the full production variety          | Increase the replay sample set before switching `forwardUrl`.                                    |
+| `method=SYSTEM` errors after cutover   | The new receiver is failing after the sender already got a 2xx from the actor | Roll back `forwardUrl`, fix the receiver, and replay the missed events.                          |
+| Unexpected method differences          | You compared replay to ordinary forwarding without noting the delivery mode   | Remember that replay preserves the original method, while live forwarding posts to `forwardUrl`. |

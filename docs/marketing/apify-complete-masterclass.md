@@ -278,7 +278,7 @@ Developers waste 5+ hours debugging webhook integrations. Problems:
 
 - Generate 1-10 unique webhook URLs per run
 - Configurable TTL (1-72 hours, default 24)
-- Capture request metadata: timestamp, size, latency
+- Capture request metadata: timestamp, size, and server processing time
 - Support different content types (JSON, form, XML)
 - Payload size limits (10MB max, configurable)
 - Automatic cleanup after TTL expires
@@ -352,7 +352,7 @@ REQUIREMENTS:
      * body (full request body)
      * contentType (parsed)
      * size (bytes)
-     * processingTime (ms)
+       * processingTime (ms, server-side processing time only)
      * remoteIp (request source)
      * userAgent
 

@@ -30,6 +30,7 @@ const log = createChildLogger({ component: LOG_COMPONENTS.DUCKDB });
  * @typedef {import("@duckdb/node-api").DuckDBValue} DuckDBValue
  * @typedef {import("@duckdb/node-api").DuckDBConnection} DuckDBConnection
  * @typedef {import("../typedefs.js").CommonError} CommonError
+ * @typedef {{ skipResetWait?: boolean }} DbOperationOptions
  */
 
 /** @type {DuckDBInstance | null} */
@@ -59,6 +60,96 @@ function createWriteQueue() {
 /** @type {Bottleneck} */
 let writeQueue = createWriteQueue();
 
+let activeConnectionOperations = 0;
+/** @type {Array<() => void>} */
+const pendingConnectionOperationWaiters = [];
+/** @type {Promise<void> | null} */
+let resetInProgress = null;
+/** @type {(() => void) | null} */
+let resolveResetInProgress = null;
+
+/**
+ * Stops and disconnects the current write queue
+ * to allow pending writes to finish and prevent new ones from starting during a reset.
+ * Callers can recreate the queue after related teardown work completes.
+ * @returns {Promise<void>}
+ */
+async function stopWriteQueue() {
+  const queueToDispose = writeQueue;
+
+  await queueToDispose.stop({ dropWaitingJobs: true });
+  if (typeof queueToDispose.disconnect === "function") {
+    await queueToDispose.disconnect();
+  }
+}
+
+/**
+ * @returns {void}
+ */
+function beginConnectionOperation() {
+  activeConnectionOperations += 1;
+}
+
+/**
+ * @returns {void}
+ */
+function endConnectionOperation() {
+  activeConnectionOperations = Math.max(0, activeConnectionOperations - 1);
+
+  if (activeConnectionOperations === 0) {
+    while (pendingConnectionOperationWaiters.length > 0) {
+      pendingConnectionOperationWaiters.pop()?.();
+    }
+  }
+}
+
+/**
+ * @returns {Promise<void>}
+ */
+async function waitForConnectionOperationsToDrain() {
+  if (activeConnectionOperations === 0) {
+    return;
+  }
+
+  await /** @type {Promise<void>} */ (
+    new Promise((resolve) => {
+      pendingConnectionOperationWaiters.push(() => resolve(undefined));
+    })
+  );
+}
+
+/**
+ * @returns {Promise<void>}
+ */
+async function waitForResetCompletion() {
+  if (!resetInProgress) {
+    return;
+  }
+
+  await resetInProgress;
+}
+
+export const __testHooks = {
+  beginConnectionOperation,
+  endConnectionOperation,
+  waitForConnectionOperationsToDrain,
+  waitForResetCompletion,
+  /**
+   * @param {Promise<void> | null} promise
+   * @returns {void}
+   */
+  setResetInProgress(promise) {
+    resetInProgress = promise;
+  },
+  /**
+   * @returns {void}
+   */
+  clearResetInProgress() {
+    resetInProgress = null;
+    resolveResetInProgress = null;
+  },
+};
+
 /**
  * Closes a connection while suppressing close-time errors from stale handles.
  * @param {DuckDBConnection | undefined} conn
@@ -70,6 +161,33 @@ function closeConnectionQuietly(conn) {
     conn.closeSync();
   } catch {
     // Ignore close errors for stale/invalid handles.
+  }
+}
+
+/**
+ * Closes the DuckDB instance while suppressing close-time errors from stale handles.
+ * @param {DuckDBInstance | null | undefined} instance
+ * @returns {void}
+ */
+function closeInstanceQuietly(instance) {
+  if (!instance) return;
+  try {
+    instance.closeSync();
+  } catch {
+    // Ignore close errors while tearing down the cached instance.
+  }
+}
+
+/**
+ * Drains both pooled and in-use connection lists, closing each handle quietly.
+ * @returns {void}
+ */
+function drainConnections() {
+  while (connectionPool.length > 0) {
+    closeConnectionQuietly(connectionPool.pop());
+  }
+  while (inUseConnections.length > 0) {
+    closeConnectionQuietly(inUseConnections.pop());
   }
 }
 
@@ -87,9 +205,14 @@ function getDbPath() {
 
 /**
  * Validates and gets the DuckDB instance.
+ * @param {DbOperationOptions} [options]
  * @returns {Promise<DuckDBInstance>}
  */
-export async function getDbInstance() {
+async function getDbInstanceInternal(options = {}) {
+  if (!options.skipResetWait) {
+    await waitForResetCompletion();
+  }
+
   if (dbInstance) return dbInstance;
 
   if (!initPromise) {
@@ -133,17 +256,57 @@ export async function getDbInstance() {
 }
 
 /**
+ * Validates and gets the DuckDB instance.
+ * @returns {Promise<DuckDBInstance>}
+ */
+export async function getDbInstance() {
+  return getDbInstanceInternal();
+}
+
+/**
  * Resets the DuckDB singleton instance (primarily for tests).
  * @returns {Promise<void>}
  */
 export async function resetDbInstance() {
-  dbInstance = null;
-  initPromise = null;
-  connectionPool.length = 0;
-  inUseConnections.length = 0;
+  if (resetInProgress) {
+    await resetInProgress;
+    return;
+  }
 
-  await writeQueue.stop({ dropWaitingJobs: true });
-  writeQueue = createWriteQueue();
+  resetInProgress = new Promise((resolve) => {
+    resolveResetInProgress = resolve;
+  });
+
+  try {
+    await stopWriteQueue();
+    await waitForConnectionOperationsToDrain();
+
+    drainConnections();
+
+    const instanceToClose = dbInstance;
+    const pendingInit = initPromise;
+    dbInstance = null;
+    initPromise = null;
+
+    closeInstanceQuietly(instanceToClose);
+
+    if (pendingInit) {
+      await pendingInit.catch(() => {});
+
+      const lateInstance = dbInstance;
+      if (lateInstance && lateInstance !== instanceToClose) {
+        dbInstance = null;
+        closeInstanceQuietly(lateInstance);
+      }
+    }
+
+    writeQueue = createWriteQueue();
+  } finally {
+    const finishReset = resolveResetInProgress;
+    resolveResetInProgress = null;
+    resetInProgress = null;
+    finishReset?.();
+  }
 }
 
 /**
@@ -171,10 +334,11 @@ async function isConnectionUsable(conn) {
 
 /**
  * Acquires a connection from the pool or creates a new one.
+ * @param {DbOperationOptions} [options]
  * @returns {Promise<DuckDBConnection>}
  */
-async function acquireConnection() {
-  const instance = await getDbInstance();
+async function acquireConnection(options) {
+  const instance = await getDbInstanceInternal(options);
 
   while (connectionPool.length > 0) {
     const pooledConn = connectionPool.pop();
@@ -219,10 +383,12 @@ function releaseConnection(conn) {
  * Uses connection pooling for efficiency.
  * @param {string} sql - SQL query with named parameters (e.g. $id)
  * @param {Record<string, DuckDBValue>} [params] - Key-value pairs for parameters
+ * @param {DbOperationOptions} [options]
  * @returns {Promise<(Record<string, DuckDBValue>)[]>}
  */
-export async function executeQuery(sql, params) {
-  const conn = await acquireConnection();
+async function executeQueryInternal(sql, params, options = {}) {
+  const conn = await acquireConnection(options);
+  beginConnectionOperation();
   try {
     let reader;
     if (params) {
@@ -234,7 +400,19 @@ export async function executeQuery(sql, params) {
     return reader.getRowObjects();
   } finally {
     releaseConnection(conn);
+    endConnectionOperation();
   }
+}
+
+/**
+ * Executes a query and returns all rows as objects.
+ * Uses connection pooling for efficiency.
+ * @param {string} sql - SQL query with named parameters (e.g. $id)
+ * @param {Record<string, DuckDBValue>} [params] - Key-value pairs for parameters
+ * @returns {Promise<(Record<string, DuckDBValue>)[]>}
+ */
+export async function executeQuery(sql, params) {
+  return executeQueryInternal(sql, params);
 }
 
 /**
@@ -245,9 +423,7 @@ export async function executeQuery(sql, params) {
  */
 export async function executeWrite(sql, params) {
   return writeQueue.schedule(async () => {
-    // We can reuse executeQuery since it handles the connection lifecycle.
-    // The value addition here is the queue scheduling.
-    await executeQuery(sql, params);
+    await executeQueryInternal(sql, params, { skipResetWait: true });
   });
 }
 
@@ -260,7 +436,8 @@ export async function executeWrite(sql, params) {
  */
 export async function executeTransaction(task) {
   return writeQueue.schedule(async () => {
-    const conn = await acquireConnection();
+    const conn = await acquireConnection({ skipResetWait: true });
+    beginConnectionOperation();
     try {
       await conn.run(SQL_CONSTS.TRANSACTION_COMMANDS.BEGIN);
       const result = await task(conn);
@@ -278,6 +455,7 @@ export async function executeTransaction(task) {
       throw err;
     } finally {
       releaseConnection(conn);
+      endConnectionOperation();
     }
   });
 }
@@ -344,15 +522,7 @@ async function initSchema(conn) {
  * @returns {Promise<void>}
  */
 export async function closeDb() {
-  // Drain connection pool
-  while (connectionPool.length > 0) {
-    closeConnectionQuietly(connectionPool.pop());
-  }
-  while (inUseConnections.length > 0) {
-    closeConnectionQuietly(inUseConnections.pop());
-  }
-  dbInstance = null;
-  initPromise = null;
+  await resetDbInstance();
 }
 
 /**

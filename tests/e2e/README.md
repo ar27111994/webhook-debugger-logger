@@ -13,6 +13,7 @@ This directory contains black-box tests that execute the application as a spawne
 - Use [tests/setup/helpers/e2e-process-harness.js](../setup/helpers/e2e-process-harness.js)
 - Prefer deterministic retries and bounded timeouts
 - Always cleanup spawned processes and temporary storage
+- Treat child-process `close` as a best-effort teardown signal; the shared harness already absorbs benign close-promise races so shutdown assertions stay focused on real failures.
 
 ## Known Runtime Signals
 

@@ -104,8 +104,8 @@
       },
       "processingTime": {
         "type": "integer",
-        "title": "Latency (ms)",
-        "description": "Time taken to process the request",
+        "title": "Processing Time (ms)",
+        "description": "Time taken to process the request before any simulated response delay is applied",
         "example": 5
       },
       "remoteIp": {
@@ -224,7 +224,7 @@
             "label": "Size (Bytes)"
           },
           "processingTime": {
-            "label": "Latency (ms)"
+            "label": "Processing Time (ms)"
           },
           "remoteIp": {
             "label": "Source IP"

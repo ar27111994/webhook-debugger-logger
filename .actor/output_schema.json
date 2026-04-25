@@ -38,7 +38,13 @@
         "desc": true
       },
       "display": {
-        "component": "table"
+        "component": "table",
+        "properties": {
+          "processingTime": {
+            "label": "Processing Time (ms)",
+            "format": "number"
+          }
+        }
       }
     },
     "details": {

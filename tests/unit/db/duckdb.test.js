@@ -10,9 +10,10 @@ import {
   fsPromisesMock,
 } from "../../setup/helpers/shared-mocks.js";
 import { DuckDBInstance } from "@duckdb/node-api";
+import Bottleneck from "bottleneck";
 import { ENV_VARS } from "../../../src/consts/app.js";
 import { NODE_ERROR_CODES } from "../../../src/consts/errors.js";
-import { assertType } from "../../setup/helpers/test-utils.js";
+import { assertType, flushPromises } from "../../setup/helpers/test-utils.js";
 
 // Import LOG_MESSAGES for assertions
 const { LOG_MESSAGES } = await import("../../../src/consts/messages.js");
@@ -26,6 +27,7 @@ await setupCommonMocks({
 // Import subject AFTER mocking
 const {
   getDbInstance,
+  __testHooks,
   resetDbInstance,
   executeQuery,
   executeWrite,
@@ -46,6 +48,7 @@ describe("DuckDB Singleton", () => {
   const ITERATIONS_FOR_POOL = 10;
   const POLL_INTERVAL_MS = 10;
   const MAX_POLLS = 100;
+  const INIT_CALL_COUNT_AFTER_RESET = 2;
   const SELECT_ONE_SQL = "SELECT 1 as val";
   const SELECT_TWO_SQL = "SELECT 2 as val";
 
@@ -374,6 +377,26 @@ describe("DuckDB Singleton", () => {
   });
 
   describe("closeDb", () => {
+    it("should stop and disconnect the existing write queue during shutdown cleanup", async () => {
+      const stopSpy = jest.spyOn(Bottleneck.prototype, "stop");
+      const disconnectSpy = jest.spyOn(Bottleneck.prototype, "disconnect");
+
+      await getDbInstance();
+      await closeDb();
+
+      expect(stopSpy).toHaveBeenCalledWith({ dropWaitingJobs: true });
+      expect(disconnectSpy).toHaveBeenCalled();
+    });
+
+    it("should close the underlying DuckDB instance during shutdown cleanup", async () => {
+      const instance = await getDbInstance();
+      const closeSyncSpy = jest.spyOn(instance, "closeSync");
+
+      await closeDb();
+
+      expect(closeSyncSpy).toHaveBeenCalled();
+    });
+
     it("should drain connection pool including in-use ones", async () => {
       const instance = await getDbInstance();
       /** @type {DuckDBConnection[]} */
@@ -397,6 +420,10 @@ describe("DuckDB Singleton", () => {
         started = true;
         await txPromise;
       });
+      const txOutcome = txHandler.then(
+        () => null,
+        /** @param {Error} error */ (error) => error,
+      );
 
       for (let i = 0; i < MAX_POLLS && !started; i++) {
         await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
@@ -404,16 +431,19 @@ describe("DuckDB Singleton", () => {
 
       expect(started).toBe(true);
 
-      // One connection is inUse (tx), one might be in pool if we did previous tests
-      await closeDb();
+      // closeDb() now waits for the active write queue to drain, so release the
+      // in-flight transaction before awaiting shutdown completion.
+      const closeDbPromise = closeDb();
+      txResolver();
+      await closeDbPromise;
 
       // Verify all connections encountered so far are closed
       for (const conn of connections) {
         expect(conn.closeSync).toHaveBeenCalled();
       }
 
-      txResolver();
-      await txHandler.catch(() => {});
+      const txError = await txOutcome;
+      expect(txError).toBeNull();
     });
 
     it("should tolerate close errors from stale connections", async () => {
@@ -451,6 +481,447 @@ describe("DuckDB Singleton", () => {
 
       await expect(closeDb()).resolves.not.toThrow();
       popSpy.mockRestore();
+    });
+
+    it("should drain leaked in-use connections during shutdown reset", async () => {
+      /** @type {DuckDBConnection[]} */
+      const connections = [];
+      /** @type {DuckDBConnection | undefined} */
+      let leakedConn;
+      const LEAKED_CONNECTION_INDEX = 2;
+      const originalConnect = DuckDBInstance.prototype.connect;
+
+      jest.spyOn(DuckDBInstance.prototype, "connect").mockImplementation(
+        /** @this {DuckDBInstance} */
+        async function () {
+          const conn = await originalConnect.call(this);
+          jest.spyOn(conn, "closeSync");
+          connections.push(conn);
+          if (connections.length === LEAKED_CONNECTION_INDEX) {
+            leakedConn = conn;
+          }
+          return conn;
+        },
+      );
+
+      await getDbInstance();
+      const originalIndexOf = Array.prototype.indexOf;
+      const indexOfSpy = jest
+        .spyOn(Array.prototype, "indexOf")
+        .mockImplementation(
+          /** @this {unknown[]} */
+          function (...args) {
+            if (
+              leakedConn &&
+              Array.isArray(this) &&
+              this.length === 1 &&
+              this[0] === leakedConn
+            ) {
+              return -1;
+            }
+            return originalIndexOf.apply(this, args);
+          },
+        );
+
+      try {
+        await executeQuery(SELECT_ONE_SQL);
+        await closeDb();
+
+        const EXPECTED_LEAKED_CONNECTION_CLOSES = 2;
+        expect(leakedConn).toBeDefined();
+
+        expect(
+          jest.mocked(assertType(leakedConn).closeSync),
+        ).toHaveBeenCalledTimes(EXPECTED_LEAKED_CONNECTION_CLOSES);
+      } finally {
+        indexOfSpy.mockRestore();
+      }
+    });
+  });
+
+  describe("resetDbInstance", () => {
+    it("should stop and disconnect the current write queue before replacing it", async () => {
+      const stopSpy = jest.spyOn(Bottleneck.prototype, "stop");
+      const disconnectSpy = jest.spyOn(Bottleneck.prototype, "disconnect");
+
+      await resetDbInstance();
+
+      expect(stopSpy).toHaveBeenCalledWith({ dropWaitingJobs: true });
+      expect(disconnectSpy).toHaveBeenCalled();
+    });
+
+    it("should let already-queued writes bypass the reset gate while reset drains the queue", async () => {
+      await getDbInstance();
+
+      const stopSpy = jest
+        .spyOn(Bottleneck.prototype, "stop")
+        .mockImplementationOnce(async function () {
+          await executeWrite(SELECT_ONE_SQL);
+          return undefined;
+        });
+
+      await expect(resetDbInstance()).resolves.toBeUndefined();
+
+      expect(stopSpy).toHaveBeenCalledWith({ dropWaitingJobs: true });
+    });
+
+    it("should let already-queued transactions bypass the reset gate while reset drains the queue", async () => {
+      await getDbInstance();
+
+      const stopSpy = jest
+        .spyOn(Bottleneck.prototype, "stop")
+        .mockImplementationOnce(async function () {
+          await executeTransaction(async (conn) => {
+            await conn.run(SELECT_ONE_SQL);
+          });
+          return undefined;
+        });
+
+      await expect(resetDbInstance()).resolves.toBeUndefined();
+
+      expect(stopSpy).toHaveBeenCalledWith({ dropWaitingJobs: true });
+    });
+
+    it("should replace the write queue even when disconnect is unavailable", async () => {
+      const originalDisconnect = Bottleneck.prototype.disconnect;
+      const stopSpy = jest.spyOn(Bottleneck.prototype, "stop");
+
+      Object.defineProperty(Bottleneck.prototype, "disconnect", {
+        value: undefined,
+        configurable: true,
+        writable: true,
+      });
+
+      try {
+        await expect(resetDbInstance()).resolves.toBeUndefined();
+        expect(stopSpy).toHaveBeenCalledWith({ dropWaitingJobs: true });
+      } finally {
+        Object.defineProperty(Bottleneck.prototype, "disconnect", {
+          value: originalDisconnect,
+          configurable: true,
+          writable: true,
+        });
+      }
+    });
+
+    it("should close the underlying DuckDB instance when resetting an initialized singleton", async () => {
+      const instance = await getDbInstance();
+      const closeSyncSpy = jest.spyOn(instance, "closeSync");
+
+      await resetDbInstance();
+
+      expect(closeSyncSpy).toHaveBeenCalled();
+    });
+
+    it("should discard a late-finishing initializer instance before publishing a fresh singleton", async () => {
+      const lateInstance = await DuckDBInstance.create(DUCKDB_CONSTS.MEMORY_DB);
+      const replacementInstance = await DuckDBInstance.create(
+        DUCKDB_CONSTS.MEMORY_DB,
+      );
+      const closeSyncSpy = jest.spyOn(lateInstance, "closeSync");
+      /** @type {() => void} */
+      let releaseInitializer = () => {};
+      /** @type {Promise<void>} */
+      const initializerGate = new Promise((resolve) => {
+        releaseInitializer = () => resolve(undefined);
+      });
+      let callCount = 0;
+
+      jest.spyOn(DuckDBInstance, "fromCache").mockImplementation(async () => {
+        callCount += 1;
+        if (callCount === 1) {
+          await initializerGate;
+          return lateInstance;
+        }
+        return replacementInstance;
+      });
+
+      const pendingInit = getDbInstance();
+      await flushPromises(1);
+
+      const resetPromise = resetDbInstance();
+      releaseInitializer();
+      await resetPromise;
+      await pendingInit;
+
+      const currentInstance = await getDbInstance();
+
+      expect(closeSyncSpy).toHaveBeenCalled();
+      expect(currentInstance).toBe(replacementInstance);
+      expect(currentInstance).not.toBe(lateInstance);
+      expect(callCount).toBe(INIT_CALL_COUNT_AFTER_RESET);
+    });
+
+    it("should ignore a rejected in-flight initializer and allow a clean reinitialize after reset", async () => {
+      const replacementInstance = await DuckDBInstance.create(
+        DUCKDB_CONSTS.MEMORY_DB,
+      );
+      const initError = new Error("late init failure");
+      /** @type {() => void} */
+      let releaseInitializer = () => {};
+      /** @type {Promise<void>} */
+      const initializerGate = new Promise((resolve) => {
+        releaseInitializer = () => resolve(undefined);
+      });
+      let callCount = 0;
+
+      jest.spyOn(DuckDBInstance, "fromCache").mockImplementation(async () => {
+        callCount += 1;
+        if (callCount === 1) {
+          await initializerGate;
+          throw initError;
+        }
+        return replacementInstance;
+      });
+
+      const pendingInit = getDbInstance();
+      await flushPromises(1);
+
+      const resetPromise = resetDbInstance();
+      releaseInitializer();
+
+      await expect(pendingInit).rejects.toThrow(initError.message);
+      await expect(resetPromise).resolves.toBeUndefined();
+
+      const currentInstance = await getDbInstance();
+
+      expect(currentInstance).toBe(replacementInstance);
+      expect(callCount).toBe(INIT_CALL_COUNT_AFTER_RESET);
+    });
+
+    it("should expose a deterministic drain waiter for active connection operations", async () => {
+      __testHooks.beginConnectionOperation();
+
+      let drainResolved = false;
+      const drainPromise = __testHooks
+        .waitForConnectionOperationsToDrain()
+        .then(() => {
+          drainResolved = true;
+        });
+
+      await flushPromises(1);
+      expect(drainResolved).toBe(false);
+
+      __testHooks.endConnectionOperation();
+      await drainPromise;
+
+      expect(drainResolved).toBe(true);
+    });
+
+    it("should wait for active reads before closing pooled and in-use connections during reset", async () => {
+      /** @type {DuckDBConnection[]} */
+      const connections = [];
+      const originalConnect = DuckDBInstance.prototype.connect;
+      /** @type {() => void} */
+      let releaseBlockedRead = () => {};
+      /** @type {Promise<void>} */
+      const blockedReadGate = new Promise((resolve) => {
+        releaseBlockedRead = () => resolve(undefined);
+      });
+      /** @type {() => void} */
+      let markBlockedReadStarted = () => {};
+      /** @type {Promise<void>} */
+      const blockedReadStarted = new Promise((resolve) => {
+        markBlockedReadStarted = () => resolve(undefined);
+      });
+      let shouldBlockNextRead = true;
+
+      jest.spyOn(DuckDBInstance.prototype, "connect").mockImplementation(
+        /** @this {DuckDBInstance} */
+        async function () {
+          const conn = await originalConnect.call(this);
+          jest.spyOn(conn, "closeSync");
+          const originalRunAndReadAll = conn.runAndReadAll.bind(conn);
+          jest
+            .spyOn(conn, "runAndReadAll")
+            .mockImplementation(async (...args) => {
+              if (shouldBlockNextRead) {
+                shouldBlockNextRead = false;
+                markBlockedReadStarted();
+                await blockedReadGate;
+              }
+              return await originalRunAndReadAll(...args);
+            });
+          connections.push(conn);
+          return conn;
+        },
+      );
+
+      await getDbInstance();
+
+      const activeReadPromise = executeQuery(SELECT_ONE_SQL);
+      await blockedReadStarted;
+      await executeQuery(SELECT_ONE_SQL);
+
+      const activeConn = connections[1];
+      const pooledConn = connections[connections.length - 1];
+
+      const resetPromise = resetDbInstance();
+      let resetCompleted = false;
+      const resetCompletionObserver = resetPromise.then(() => {
+        resetCompleted = true;
+      });
+
+      await flushPromises(1);
+
+      expect(resetCompleted).toBe(false);
+      expect(
+        jest.mocked(assertType(activeConn).closeSync),
+      ).not.toHaveBeenCalled();
+      expect(
+        jest.mocked(assertType(pooledConn).closeSync),
+      ).not.toHaveBeenCalled();
+
+      releaseBlockedRead();
+      await expect(activeReadPromise).resolves.toEqual([{ val: 1 }]);
+      await resetPromise;
+      await resetCompletionObserver;
+
+      expect(activeConn).toBeDefined();
+      expect(pooledConn).toBeDefined();
+      expect(pooledConn).not.toBe(activeConn);
+      expect(jest.mocked(assertType(activeConn).closeSync)).toHaveBeenCalled();
+      expect(jest.mocked(assertType(pooledConn).closeSync)).toHaveBeenCalled();
+    });
+
+    it("should expose a deterministic reset waiter while reset is in progress", async () => {
+      /** @type {() => void} */
+      let releaseReset = () => {};
+      /** @type {Promise<void>} */
+      const resetGate = new Promise((resolve) => {
+        releaseReset = () => resolve(undefined);
+      });
+
+      __testHooks.setResetInProgress(resetGate);
+
+      let waitResolved = false;
+      const waitPromise = __testHooks.waitForResetCompletion().then(() => {
+        waitResolved = true;
+      });
+
+      await flushPromises(1);
+      expect(waitResolved).toBe(false);
+
+      releaseReset();
+      await waitPromise;
+      __testHooks.clearResetInProgress();
+
+      expect(waitResolved).toBe(true);
+    });
+
+    it("should wait for an in-progress reset before serving a new instance", async () => {
+      const initialInstance = await getDbInstance();
+      const originalConnect = DuckDBInstance.prototype.connect;
+      /** @type {() => void} */
+      let releaseBlockedRead = () => {};
+      /** @type {Promise<void>} */
+      const blockedReadGate = new Promise((resolve) => {
+        releaseBlockedRead = () => resolve(undefined);
+      });
+      /** @type {() => void} */
+      let markBlockedReadStarted = () => {};
+      /** @type {Promise<void>} */
+      const blockedReadStarted = new Promise((resolve) => {
+        markBlockedReadStarted = () => resolve(undefined);
+      });
+      let shouldBlockNextRead = true;
+
+      jest.spyOn(DuckDBInstance.prototype, "connect").mockImplementation(
+        /** @this {DuckDBInstance} */
+        async function () {
+          const conn = await originalConnect.call(this);
+          const originalRunAndReadAll = conn.runAndReadAll.bind(conn);
+          jest
+            .spyOn(conn, "runAndReadAll")
+            .mockImplementation(async (...args) => {
+              if (shouldBlockNextRead) {
+                shouldBlockNextRead = false;
+                markBlockedReadStarted();
+                await blockedReadGate;
+              }
+              return await originalRunAndReadAll(...args);
+            });
+          return conn;
+        },
+      );
+
+      const activeReadPromise = executeQuery(SELECT_ONE_SQL);
+      await blockedReadStarted;
+
+      const resetPromise = resetDbInstance();
+      const nextInstancePromise = getDbInstance();
+      let nextInstanceResolved = false;
+      const nextInstanceObserver = nextInstancePromise.then(() => {
+        nextInstanceResolved = true;
+      });
+
+      await flushPromises(1);
+      expect(nextInstanceResolved).toBe(false);
+
+      releaseBlockedRead();
+      await expect(activeReadPromise).resolves.toEqual([{ val: 1 }]);
+      await resetPromise;
+      const nextInstance = await nextInstancePromise;
+      await nextInstanceObserver;
+
+      expect(nextInstance).toBeDefined();
+      expect(nextInstance).not.toBe(initialInstance);
+    });
+
+    it("should let concurrent reset requests await the active reset", async () => {
+      const originalConnect = DuckDBInstance.prototype.connect;
+      /** @type {() => void} */
+      let releaseBlockedRead = () => {};
+      /** @type {Promise<void>} */
+      const blockedReadGate = new Promise((resolve) => {
+        releaseBlockedRead = () => resolve(undefined);
+      });
+      /** @type {() => void} */
+      let markBlockedReadStarted = () => {};
+      /** @type {Promise<void>} */
+      const blockedReadStarted = new Promise((resolve) => {
+        markBlockedReadStarted = () => resolve(undefined);
+      });
+      let shouldBlockNextRead = true;
+
+      jest.spyOn(DuckDBInstance.prototype, "connect").mockImplementation(
+        /** @this {DuckDBInstance} */
+        async function () {
+          const conn = await originalConnect.call(this);
+          const originalRunAndReadAll = conn.runAndReadAll.bind(conn);
+          jest
+            .spyOn(conn, "runAndReadAll")
+            .mockImplementation(async (...args) => {
+              if (shouldBlockNextRead) {
+                shouldBlockNextRead = false;
+                markBlockedReadStarted();
+                await blockedReadGate;
+              }
+              return await originalRunAndReadAll(...args);
+            });
+          return conn;
+        },
+      );
+
+      await getDbInstance();
+
+      const activeReadPromise = executeQuery(SELECT_ONE_SQL);
+      await blockedReadStarted;
+
+      const firstResetPromise = resetDbInstance();
+      let secondResetResolved = false;
+      const secondResetPromise = resetDbInstance().then(() => {
+        secondResetResolved = true;
+      });
+
+      await flushPromises(1);
+      expect(secondResetResolved).toBe(false);
+
+      releaseBlockedRead();
+      await expect(activeReadPromise).resolves.toEqual([{ val: 1 }]);
+      await Promise.all([firstResetPromise, secondResetPromise]);
+
+      expect(secondResetResolved).toBe(true);
     });
   });
 

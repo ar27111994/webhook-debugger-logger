@@ -11,6 +11,10 @@ const require = createRequire(import.meta.url);
 const Ajv = require("ajv").default;
 const inputSchema = require("../../../.actor/input_schema.json");
 const datasetSchema = require("../../../.actor/dataset_schema.json");
+const outputSchema = require("../../../.actor/output_schema.json");
+const webServerSchema = require("../../../.actor/web_server_schema.json");
+
+const PROCESSING_TIME_LABEL = "Processing Time (ms)";
 
 /**
  * @param {unknown} value
@@ -134,6 +138,25 @@ describe("Apify input schema", () => {
 });
 
 describe("Apify dataset schema", () => {
+  it("documents processingTime consistently as server-side processing time", () => {
+    expect(datasetSchema.fields.properties.processingTime.title).toBe(
+      PROCESSING_TIME_LABEL,
+    );
+    expect(
+      datasetSchema.fields.properties.processingTime.description,
+    ).toContain("before any simulated response delay is applied");
+    expect(
+      datasetSchema.views.overview.display.properties.processingTime.label,
+    ).toBe(PROCESSING_TIME_LABEL);
+    expect(
+      outputSchema.views.overview.display.properties.processingTime.label,
+    ).toBe(PROCESSING_TIME_LABEL);
+    expect(
+      webServerSchema.components.schemas.LogListItem.properties.processingTime
+        .description,
+    ).toContain("before any configured responseDelayMs simulation is applied");
+  });
+
   it("allows webhook body fields to be stored in the runtime-supported JSON shapes", () => {
     const ajv = new Ajv({ strict: false, validateFormats: false });
     const validate = ajv.compile(datasetSchema.fields);

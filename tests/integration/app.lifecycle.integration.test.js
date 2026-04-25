@@ -20,13 +20,15 @@ import { HTTP_STATUS } from "../../src/consts/http.js";
 await setupCommonMocks({
   logger: true,
   apify: true,
-  fs: true,
+  fs: false,
   db: false,
 });
 
 describe("Integration: App lifecycle and auth boundaries", () => {
   useMockCleanup();
   const AUTH_KEY = "integration-secret";
+  const APP_LIFECYCLE_TEST_TIMEOUT_MS = 15000;
+  const APP_LIFECYCLE_CYCLE_COUNT = 3;
 
   /** @type {{ teardown: () => Promise<void>, appClient: AppClient } | null} */
   let context = null;
@@ -38,34 +40,75 @@ describe("Integration: App lifecycle and auth boundaries", () => {
     }
   });
 
-  it("should expose health endpoint without authentication", async () => {
-    context = await startIntegrationApp({ authKey: AUTH_KEY });
+  it(
+    "should expose health endpoint without authentication",
+    async () => {
+      context = await startIntegrationApp({ authKey: AUTH_KEY });
 
-    const response = await context.appClient.get(APP_ROUTES.HEALTH);
+      const response = await context.appClient.get(APP_ROUTES.HEALTH);
 
-    expect(response.status).toBe(HTTP_STATUS.OK);
-    expect(response.text.length).toBeGreaterThan(0);
-  });
+      expect(response.status).toBe(HTTP_STATUS.OK);
+      expect(response.text.length).toBeGreaterThan(0);
+    },
+    APP_LIFECYCLE_TEST_TIMEOUT_MS,
+  );
 
-  it("should require bearer token for protected info endpoint", async () => {
-    context = await startIntegrationApp({ authKey: AUTH_KEY });
+  it(
+    "should require bearer token for protected info endpoint",
+    async () => {
+      context = await startIntegrationApp({ authKey: AUTH_KEY });
 
-    const unauthorizedResponse = await context.appClient.get(APP_ROUTES.INFO);
-    const authorizedResponse = await context.appClient
-      .get(APP_ROUTES.INFO)
-      .set(createBearerAuthHeader(AUTH_KEY));
+      const unauthorizedResponse = await context.appClient.get(APP_ROUTES.INFO);
+      const authorizedResponse = await context.appClient
+        .get(APP_ROUTES.INFO)
+        .set(createBearerAuthHeader(AUTH_KEY));
 
-    expect(unauthorizedResponse.status).toBe(HTTP_STATUS.UNAUTHORIZED);
-    expect(authorizedResponse.status).toBe(HTTP_STATUS.OK);
-  });
+      expect(unauthorizedResponse.status).toBe(HTTP_STATUS.UNAUTHORIZED);
+      expect(authorizedResponse.status).toBe(HTTP_STATUS.OK);
+    },
+    APP_LIFECYCLE_TEST_TIMEOUT_MS,
+  );
 
-  it("should not bypass auth for protected endpoints when the readiness header is present", async () => {
-    context = await startIntegrationApp({ authKey: AUTH_KEY });
+  it(
+    "should not bypass auth for protected endpoints when the readiness header is present",
+    async () => {
+      context = await startIntegrationApp({ authKey: AUTH_KEY });
 
-    const readinessResponse = await context.appClient
-      .get(APP_ROUTES.INFO)
-      .set(createReadinessProbeHeader());
+      const readinessResponse = await context.appClient
+        .get(APP_ROUTES.INFO)
+        .set(createReadinessProbeHeader());
 
-    expect(readinessResponse.status).toBe(HTTP_STATUS.UNAUTHORIZED);
-  });
+      expect(readinessResponse.status).toBe(HTTP_STATUS.UNAUTHORIZED);
+    },
+    APP_LIFECYCLE_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "should survive repeated start and teardown cycles without leaking route or auth state",
+    async () => {
+      for (
+        let cycleIndex = 0;
+        cycleIndex < APP_LIFECYCLE_CYCLE_COUNT;
+        cycleIndex++
+      ) {
+        context = await startIntegrationApp({ authKey: AUTH_KEY });
+
+        const healthResponse = await context.appClient.get(APP_ROUTES.HEALTH);
+        const unauthorizedInfoResponse = await context.appClient.get(
+          APP_ROUTES.INFO,
+        );
+        const authorizedInfoResponse = await context.appClient
+          .get(APP_ROUTES.INFO)
+          .set(createBearerAuthHeader(AUTH_KEY));
+
+        expect(healthResponse.status).toBe(HTTP_STATUS.OK);
+        expect(unauthorizedInfoResponse.status).toBe(HTTP_STATUS.UNAUTHORIZED);
+        expect(authorizedInfoResponse.status).toBe(HTTP_STATUS.OK);
+
+        await context.teardown();
+        context = null;
+      }
+    },
+    APP_LIFECYCLE_TEST_TIMEOUT_MS,
+  );
 });

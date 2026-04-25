@@ -61,6 +61,8 @@ import { deepRedact, validateStatusCode } from "./utils/common.js";
 import { DEFAULT_ALERT_ON } from "./consts/alerting.js";
 import { IS_TEST } from "./utils/env.js";
 
+const VALIDATOR_CACHE_MAX_ENTRIES = 32;
+
 /**
  * @typedef {import("express").RequestHandler} RequestHandler
  * @typedef {import("ajv").default} AjvType
@@ -257,6 +259,10 @@ export class LoggerMiddleware {
   #compiledScript = null;
   /** @type {ValidateFunction} */
   #validate = null;
+  /** @type {Map<string, Exclude<ValidateFunction, null>>} */
+  #validatorCache = new Map();
+  /** @type {WeakMap<object, string>} */
+  #schemaCacheKeys = new WeakMap();
   /** @type {Logger} */
   #log;
   /** @type {typeof serializeErrorUtil} */
@@ -375,6 +381,67 @@ export class LoggerMiddleware {
   }
 
   /**
+   * @param {string | object | undefined} source
+   * @returns {string | undefined}
+   */
+  #getSchemaCacheKey(source) {
+    if (!source) {
+      return undefined;
+    }
+
+    if (typeof source === "string") {
+      return source;
+    }
+
+    const cachedKey = this.#schemaCacheKeys.get(source);
+    if (cachedKey) {
+      return cachedKey;
+    }
+
+    const computedKey = JSON.stringify(source);
+    this.#schemaCacheKeys.set(source, computedKey);
+    return computedKey;
+  }
+
+  /**
+   * @param {string | object | undefined} source
+   * @returns {ValidateFunction}
+   */
+  #getValidator(source) {
+    const cacheKey = this.#getSchemaCacheKey(source);
+    if (!cacheKey) {
+      return null;
+    }
+
+    const cachedValidator = this.#validatorCache.get(cacheKey);
+    if (cachedValidator) {
+      return cachedValidator;
+    }
+
+    const compiledValidator = this.#compileResource(
+      source,
+      (src) => {
+        const schema = typeof src === "string" ? JSON.parse(src) : src;
+        return ajv.compile(schema);
+      },
+      LOG_MESSAGES.SCHEMA_COMPILED,
+      LOG_TAGS.SCHEMA_ERROR,
+    );
+
+    if (compiledValidator) {
+      if (this.#validatorCache.size >= VALIDATOR_CACHE_MAX_ENTRIES) {
+        const oldestCacheKey = this.#validatorCache.keys().next().value;
+        if (oldestCacheKey) {
+          this.#validatorCache.delete(oldestCacheKey);
+        }
+      }
+      this.#validatorCache.set(cacheKey, compiledValidator);
+    }
+
+    return compiledValidator;
+  }
+
+  /**
    * @param {LoggerOptions} newOptions
    */
   #refreshCompilations(newOptions) {
@@ -394,25 +461,7 @@ export class LoggerMiddleware {
     }
 
     // 2. Smart schema re-compilation
-    const oldSchemaStr =
-      currentOptions && currentOptions.jsonSchema
-        ? JSON.stringify(currentOptions.jsonSchema)
-        : undefined;
-    const newSchemaStr = newOptions.jsonSchema
-      ? JSON.stringify(newOptions.jsonSchema)
-      : undefined;
-
-    if (!currentOptions || newSchemaStr !== oldSchemaStr) {
-      this.#validate = this.#compileResource(
-        newOptions.jsonSchema,
-        (src) => {
-          const schema = typeof src === "string" ? JSON.parse(src) : src;
-          return ajv.compile(schema);
-        },
-        LOG_MESSAGES.SCHEMA_COMPILED,
-        LOG_TAGS.SCHEMA_ERROR,
-      );
-    }
+    this.#validate = this.#getValidator(newOptions.jsonSchema);
   }
 
   /**
@@ -690,15 +739,7 @@ export class LoggerMiddleware {
 
       // Schema Validation
       if (mergedOptions.jsonSchema) {
-        const validate = this.#compileResource(
-          mergedOptions.jsonSchema,
-          (src) => {
-            const schema = typeof src === "string" ? JSON.parse(src) : src;
-            return ajv.compile(schema);
-          },
-          LOG_MESSAGES.SCHEMA_COMPILED,
-          ERROR_MESSAGES.SCHEMA_COMPILATION_FAILED,
-        );
+        const validate = this.#getValidator(mergedOptions.jsonSchema);
         const valid =
           typeof validate === "function" ? validate(req.body) : false;
         if (!valid) {
@@ -821,6 +862,7 @@ export class LoggerMiddleware {
       }
 
       event = await this.#transformRequestData(event, req);
+      event.processingTime = Date.now() - startTime;
 
       // 4. Orchestration: Respond synchronous-ish, then race background tasks
       const delayMs = getSafeResponseDelay(mergedOptions.responseDelayMs);
@@ -829,7 +871,6 @@ export class LoggerMiddleware {
         await new Promise((resolve) => setTimeout(resolve, delayMs));
       }
 
-      event.processingTime = Date.now() - startTime;
       this.#sendResponse(res, event, mergedOptions);
 
       // Execute background tasks (storage, forwarding, alerting) after response
@@ -900,7 +941,7 @@ export class LoggerMiddleware {
               );
               resolve();
             }, timeoutMs);
-            if (timeoutHandle.unref) timeoutHandle.unref();
+            if (timeoutHandle?.unref) timeoutHandle.unref();
           })
         ),
       ]);
@@ -1270,19 +1311,29 @@ export class LoggerMiddleware {
         if (this.#onEvent) this.#onEvent(event);
 
         // Add timeout to pushData
-        await Promise.race([
-          Actor.pushData(event),
-          new Promise((_, reject) => {
-            const timer = setTimeout(
-              () =>
-                reject(
-                  new Error(ERROR_MESSAGES.ACTOR_PUSH_DATA_TIMEOUT(timeoutMs)),
-                ),
-              timeoutMs,
-            );
-            if (timer.unref) timer.unref();
-          }),
-        ]);
+        /** @type {ReturnType<typeof setTimeout> | undefined} */
+        let pushDataTimeout;
+        try {
+          await Promise.race([
+            Actor.pushData(event),
+            new Promise((_, reject) => {
+              pushDataTimeout = setTimeout(
+                () =>
+                  reject(
+                    new Error(
+                      ERROR_MESSAGES.ACTOR_PUSH_DATA_TIMEOUT(timeoutMs),
+                    ),
+                  ),
+                timeoutMs,
+              );
+              if (pushDataTimeout?.unref) pushDataTimeout.unref();
+            }),
+          ]);
+        } finally {
+          if (pushDataTimeout) {
+            clearTimeout(pushDataTimeout);
+          }
+        }
       }
 
       if (forwardUrl && (!signal || !signal?.aborted)) {

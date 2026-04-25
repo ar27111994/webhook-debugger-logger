@@ -1,6 +1,7 @@
 /**
  * @file src/utils/custom_script_executor.js
  * @description Validates and executes custom webhook scripts inside disposable worker isolates.
+ * @module utils/custom_script_executor
  */
 
 import vm from "node:vm";
@@ -98,29 +99,97 @@ export async function executeCustomScript(request) {
     resourceLimits: WORKER_RESOURCE_LIMITS,
   });
 
+  if (typeof worker.unref === "function") {
+    worker.unref();
+  }
+
   let settled = false;
+  let exited = false;
+  /** @type {Promise<number | void> | null} */
+  let terminationPromise = null;
 
-  try {
-    return await new Promise((resolve, reject) => {
-      worker.once(STREAM_EVENTS.MESSAGE, (result) => {
-        settled = true;
-        resolve(result);
-      });
+  /**
+   * @returns {Promise<number | void> | null}
+   */
+  const terminateWorker = () => {
+    if (!exited && !terminationPromise) {
+      terminationPromise = worker.terminate().catch(() => undefined);
+    }
 
-      worker.once(STREAM_EVENTS.ERROR, (error) => {
-        settled = true;
+    return terminationPromise;
+  };
+
+  /**
+   * @param {{ awaitTermination?: boolean }} [options]
+   * @returns {Promise<void>}
+   */
+  const cleanupWorker = async (options = {}) => {
+    const { awaitTermination = false } = options;
+    worker.removeAllListeners(STREAM_EVENTS.MESSAGE);
+    worker.removeAllListeners(STREAM_EVENTS.ERROR);
+    worker.removeAllListeners(STREAM_EVENTS.EXIT);
+
+    const maybeTermination = terminateWorker();
+
+    if (awaitTermination && maybeTermination) {
+      await maybeTermination;
+    }
+  };
+
+  return await new Promise((resolve, reject) => {
+    /**
+     * @param {{ awaitTermination?: boolean }} [options]
+     * @param {() => void} [settle]
+     * @returns {void}
+     */
+    const settleAfterCleanup = (options, settle) => {
+      cleanupWorker(options).then(settle, reject);
+    };
+
+    worker.once(STREAM_EVENTS.MESSAGE, (result) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      const shouldAwaitTermination =
+        !!result &&
+        typeof result === "object" &&
+        "ok" in result &&
+        result.ok === false;
+      if (shouldAwaitTermination) {
+        settleAfterCleanup({ awaitTermination: true }, () => {
+          resolve(result);
+        });
+      } else {
+        settleAfterCleanup(undefined, () => {
+          resolve(result);
+        });
+      }
+    });
+
+    worker.once(STREAM_EVENTS.ERROR, (error) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      settleAfterCleanup({ awaitTermination: true }, () => {
         reject(error);
       });
+    });
 
-      worker.once(STREAM_EVENTS.EXIT, (code) => {
-        if (settled || code === 0) {
-          return;
-        }
+    worker.once(STREAM_EVENTS.EXIT, (code) => {
+      exited = true;
 
+      if (settled || code === 0) {
+        return;
+      }
+
+      settled = true;
+      settleAfterCleanup({ awaitTermination: true }, () => {
         reject(new Error(ERROR_MESSAGES.SCRIPT_EXECUTION_FAILED(code)));
       });
     });
-  } finally {
-    await worker.terminate().catch(() => undefined);
-  }
+  });
 }
