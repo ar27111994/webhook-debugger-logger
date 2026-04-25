@@ -69,14 +69,15 @@ let resetInProgress = null;
 let resolveResetInProgress = null;
 
 /**
- * Stops and disconnects the current write queue.
+ * Stops and disconnects the current write queue after allowing any
+ * already-queued write jobs to drain.
  * Callers can recreate the queue after related teardown work completes.
  * @returns {Promise<void>}
  */
 async function stopWriteQueue() {
   const queueToDispose = writeQueue;
 
-  await queueToDispose.stop({ dropWaitingJobs: true });
+  await queueToDispose.stop({ dropWaitingJobs: false });
   if (typeof queueToDispose.disconnect === "function") {
     await queueToDispose.disconnect();
   }
