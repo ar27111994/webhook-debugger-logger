@@ -28,7 +28,7 @@ jobs:
         run: npm run validate:schemas
 
       - name: Verify Builds/Tests
-        run: npm run test:jest -- --detectOpenHandles --forceExit
+        run: npm test
 
       - name: Confirm publish is deferred outside release events
         if: github.event_name != 'release'
