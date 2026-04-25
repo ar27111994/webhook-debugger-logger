@@ -48,6 +48,7 @@ describe("DuckDB Singleton", () => {
   const ITERATIONS_FOR_POOL = 10;
   const POLL_INTERVAL_MS = 10;
   const MAX_POLLS = 100;
+  const INIT_CALL_COUNT_AFTER_RESET = 2;
   const SELECT_ONE_SQL = "SELECT 1 as val";
   const SELECT_TWO_SQL = "SELECT 2 as val";
 
@@ -610,6 +611,82 @@ describe("DuckDB Singleton", () => {
       await resetDbInstance();
 
       expect(closeSyncSpy).toHaveBeenCalled();
+    });
+
+    it("should discard a late-finishing initializer instance before publishing a fresh singleton", async () => {
+      const lateInstance = await DuckDBInstance.create(DUCKDB_CONSTS.MEMORY_DB);
+      const replacementInstance = await DuckDBInstance.create(
+        DUCKDB_CONSTS.MEMORY_DB,
+      );
+      const closeSyncSpy = jest.spyOn(lateInstance, "closeSync");
+      /** @type {() => void} */
+      let releaseInitializer = () => {};
+      /** @type {Promise<void>} */
+      const initializerGate = new Promise((resolve) => {
+        releaseInitializer = () => resolve(undefined);
+      });
+      let callCount = 0;
+
+      jest.spyOn(DuckDBInstance, "fromCache").mockImplementation(async () => {
+        callCount += 1;
+        if (callCount === 1) {
+          await initializerGate;
+          return lateInstance;
+        }
+        return replacementInstance;
+      });
+
+      const pendingInit = getDbInstance();
+      await flushPromises(1);
+
+      const resetPromise = resetDbInstance();
+      releaseInitializer();
+      await resetPromise;
+      await pendingInit;
+
+      const currentInstance = await getDbInstance();
+
+      expect(closeSyncSpy).toHaveBeenCalled();
+      expect(currentInstance).toBe(replacementInstance);
+      expect(currentInstance).not.toBe(lateInstance);
+      expect(callCount).toBe(INIT_CALL_COUNT_AFTER_RESET);
+    });
+
+    it("should ignore a rejected in-flight initializer and allow a clean reinitialize after reset", async () => {
+      const replacementInstance = await DuckDBInstance.create(
+        DUCKDB_CONSTS.MEMORY_DB,
+      );
+      const initError = new Error("late init failure");
+      /** @type {() => void} */
+      let releaseInitializer = () => {};
+      /** @type {Promise<void>} */
+      const initializerGate = new Promise((resolve) => {
+        releaseInitializer = () => resolve(undefined);
+      });
+      let callCount = 0;
+
+      jest.spyOn(DuckDBInstance, "fromCache").mockImplementation(async () => {
+        callCount += 1;
+        if (callCount === 1) {
+          await initializerGate;
+          throw initError;
+        }
+        return replacementInstance;
+      });
+
+      const pendingInit = getDbInstance();
+      await flushPromises(1);
+
+      const resetPromise = resetDbInstance();
+      releaseInitializer();
+
+      await expect(pendingInit).rejects.toThrow(initError.message);
+      await expect(resetPromise).resolves.toBeUndefined();
+
+      const currentInstance = await getDbInstance();
+
+      expect(currentInstance).toBe(replacementInstance);
+      expect(callCount).toBe(INIT_CALL_COUNT_AFTER_RESET);
     });
 
     it("should expose a deterministic drain waiter for active connection operations", async () => {

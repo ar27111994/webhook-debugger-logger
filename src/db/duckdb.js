@@ -284,10 +284,21 @@ export async function resetDbInstance() {
     drainConnections();
 
     const instanceToClose = dbInstance;
+    const pendingInit = initPromise;
     dbInstance = null;
     initPromise = null;
 
     closeInstanceQuietly(instanceToClose);
+
+    if (pendingInit) {
+      await pendingInit.catch(() => {});
+
+      const lateInstance = dbInstance;
+      if (lateInstance && lateInstance !== instanceToClose) {
+        dbInstance = null;
+        closeInstanceQuietly(lateInstance);
+      }
+    }
 
     writeQueue = createWriteQueue();
   } finally {
