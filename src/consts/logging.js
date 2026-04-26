@@ -44,6 +44,7 @@ export const LOG_CONSTS = Object.freeze({
     "timestamp",
     "remoteIp",
     "processingTime",
+    "processingTimeUs",
     "webhookId",
     "userAgent",
     "requestUrl",

@@ -59,6 +59,7 @@ export const createLogsHandler = (
           remoteIp,
           userAgent,
           processingTime,
+          processingTimeUs,
           size,
           headers,
           query,
@@ -158,6 +159,7 @@ export const createLogsHandler = (
           // StatusCode can be a range (e.g. gt:400) or exact value
           statusCode: parseRangeQuery(statusCode),
           processingTime: parseRangeQuery(processingTime),
+          processingTimeUs: parseRangeQuery(processingTimeUs),
           size: parseRangeQuery(size),
           timestamp:
             timestampConditions.length > 0 ? timestampConditions : undefined,

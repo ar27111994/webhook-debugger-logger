@@ -28,6 +28,9 @@ const RESPONSE_DELAY_MS = 300;
 const WARM_PATH_SAMPLE_COUNT = 6;
 const WARM_PATH_SAMPLE_BUFFER = 3;
 const PROCESSING_TIME_SANITY_MAX_MS = 1000;
+const MICROSECONDS_PER_MILLISECOND = 1000;
+const PROCESSING_TIME_SANITY_MAX_US =
+  PROCESSING_TIME_SANITY_MAX_MS * MICROSECONDS_PER_MILLISECOND;
 const TEST_RATE_LIMIT_PER_MINUTE = 1000;
 
 /**
@@ -150,6 +153,7 @@ describe("Integration: Logging and query contracts", () => {
       expect(createdItem).toBeDefined();
       expect(String(createdItem?.id).length).toBeGreaterThan(0);
       expect(String(createdItem?.method)).toBe(HTTP_METHODS.POST);
+      expect(typeof createdItem?.processingTimeUs).toBe("number");
       expect(String(createdItem?.detailUrl).startsWith("/")).toBe(true);
       expect(String(createdItem?.detailUrl)).toContain(String(createdItem?.id));
 
@@ -271,7 +275,8 @@ describe("Integration: Logging and query contracts", () => {
           const warmPathSamples = items.filter(
             (item) =>
               item.webhookId === webhookId &&
-              typeof item.processingTime === "number",
+              typeof item.processingTime === "number" &&
+              typeof item.processingTimeUs === "number",
           );
 
           return warmPathSamples.length >= WARM_PATH_SAMPLE_COUNT;
@@ -300,16 +305,35 @@ describe("Integration: Logging and query contracts", () => {
         .filter(
           (item) =>
             item.webhookId === webhookId &&
-            typeof item.processingTime === "number",
+            typeof item.processingTime === "number" &&
+            typeof item.processingTimeUs === "number",
         )
-        .slice(0, WARM_PATH_SAMPLE_COUNT)
-        .map((item) => Number(item.processingTime));
+        .slice(0, WARM_PATH_SAMPLE_COUNT);
 
-      expect(warmPathSamples).toHaveLength(WARM_PATH_SAMPLE_COUNT);
+      const warmPathSamplesMs = warmPathSamples.map((item) =>
+        Number(item.processingTime),
+      );
+      const warmPathSamplesUs = warmPathSamples.map((item) =>
+        Number(item.processingTimeUs),
+      );
 
-      expect(warmPathSamples.every((sample) => sample >= 0)).toBe(true);
-      expect(Math.max(...warmPathSamples)).toBeLessThan(
+      expect(warmPathSamplesMs).toHaveLength(WARM_PATH_SAMPLE_COUNT);
+      expect(warmPathSamplesUs).toHaveLength(WARM_PATH_SAMPLE_COUNT);
+
+      expect(warmPathSamplesMs.every((sample) => sample >= 0)).toBe(true);
+      expect(warmPathSamplesUs.every((sample) => sample >= 0)).toBe(true);
+      expect(
+        warmPathSamples.every(
+          (item) =>
+            Number(item.processingTimeUs) >=
+            Number(item.processingTime) * MICROSECONDS_PER_MILLISECOND,
+        ),
+      ).toBe(true);
+      expect(Math.max(...warmPathSamplesMs)).toBeLessThan(
         PROCESSING_TIME_SANITY_MAX_MS,
+      );
+      expect(Math.max(...warmPathSamplesUs)).toBeLessThan(
+        PROCESSING_TIME_SANITY_MAX_US,
       );
     },
     LOGGING_QUERY_TEST_TIMEOUT_MS,
@@ -387,11 +411,15 @@ describe("Integration: Logging and query contracts", () => {
       const createdItem = items.find(
         (item) =>
           item.webhookId === webhookId &&
-          typeof item.processingTime === "number",
+          typeof item.processingTime === "number" &&
+          typeof item.processingTimeUs === "number",
       );
 
       expect(createdItem).toBeDefined();
       expect(createdItem?.processingTime).toBeLessThan(RESPONSE_DELAY_MS);
+      expect(createdItem?.processingTimeUs).toBeLessThan(
+        RESPONSE_DELAY_MS * MICROSECONDS_PER_MILLISECOND,
+      );
     },
     LOGGING_QUERY_TEST_TIMEOUT_MS,
   );

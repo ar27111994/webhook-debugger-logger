@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.6] - 2026-04-26
+
+### Fixed (3.0.6)
+
+- **Latency Metrics**: Add `processingTimeUs` as a precise monotonic microsecond latency metric while keeping `processingTime` as the backward-compatible integer millisecond view derived from the same measurement.
+- **Latency Metrics**: Stop using wall-clock `Date.now()` for webhook timing so sub-millisecond requests no longer collapse into ambiguous `0 ms` measurements internally.
+- **Hot Reload**: Make `AppState.applyConfigUpdate()` skip logger middleware reconfiguration when only unrelated runtime settings change or when middleware-facing values normalize to the same effective config.
+- **DuckDB & API Contracts**: Persist, index, expose, and filter `processingTimeUs` across the DuckDB read model, `/logs` query route, dataset schema, output schema, and OpenAPI contract.
+- **Tests**: Add focused regression coverage for monotonic latency measurement, sub-millisecond precision preservation, selective hot-reload updates, and persisted `processingTimeUs` behavior in unit, integration, and E2E suites.
+- **Documentation**: Update README, architecture notes, API reference, and test guidance to describe the new precise latency field and selective hot-reload behavior.
+
 ## [3.0.5] - 2026-04-21
 
 ### Fixed (3.0.5)

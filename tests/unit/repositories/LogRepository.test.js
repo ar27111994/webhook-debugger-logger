@@ -86,6 +86,7 @@ describe("LogRepository", () => {
     signatureError: undefined,
     requestId: `${REQUEST_ID_PREFIX}1`,
     processingTime: 50,
+    processingTimeUs: 50000,
     contentType: MIME_TYPES.JSON,
     bodyEncoding: ENCODINGS.UTF,
     sourceOffset: 123,
@@ -496,6 +497,7 @@ describe("LogRepository", () => {
           body: { user: { name: "John" }, secret: "password123" },
           size: 5000,
           processingTime: 1500,
+          processingTimeUs: 1500000,
         }),
       );
     });
@@ -514,7 +516,7 @@ describe("LogRepository", () => {
       expect(result.total).toBe(1);
     });
 
-    it("should filter by range conditions (size, processingTime, timestamp)", async () => {
+    it("should filter by range conditions (size, processingTime, processingTimeUs, timestamp)", async () => {
       const resultSize = await logRepository.findLogs({
         size: [{ operator: "gt", value: 1000 }],
       });
@@ -524,6 +526,11 @@ describe("LogRepository", () => {
         processingTime: [{ operator: "lt", value: 2000 }],
       });
       expect(resultTime.total).toBe(1);
+
+      const resultTimeUs = await logRepository.findLogs({
+        processingTimeUs: [{ operator: "lt", value: 2000000 }],
+      });
+      expect(resultTimeUs.total).toBe(1);
 
       const resultTs = await logRepository.findLogs({
         timestamp: [{ operator: "lte", value: new Date().toISOString() }],

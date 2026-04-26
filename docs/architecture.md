@@ -271,11 +271,13 @@ When the singleton is reset, new DB callers are held behind a reset gate. Active
 
 Config changes propagate through `AppState.applyConfigUpdate()` which updates body parser limits, rate limiters, auth keys, retention, replay settings, and more — all without restart.
 
+The hot-reload path now compares the effective middleware-facing configuration before it calls back into `LoggerMiddleware.updateOptions()`. That keeps unrelated runtime-only updates, such as replay retries or fixed-memory settings, from paying unnecessary middleware refresh cost.
+
 When JSON Schema validation is enabled, compiled validators are cached and reused while the effective schema stays unchanged. Stable object schemas also reuse memoized cache keys, which keeps hot-reload flexibility without paying repeated compilation cost on the webhook request path.
 
 Retention updates are intentionally non-destructive for active webhooks. The current implementation extends existing expiry timestamps when retention increases instead of shortening live webhook lifetimes.
 
-`responseDelayMs` remains a simulation layer for downstream timeout testing. The runtime records `processingTime` before that delay is applied so the stored metric reflects server-side work rather than synthetic waiting time.
+`responseDelayMs` remains a simulation layer for downstream timeout testing. The runtime records `processingTime` and `processingTimeUs` before that delay is applied so the stored metrics reflect server-side work rather than synthetic waiting time.
 
 ### 6. Streaming Large Payload Offload
 

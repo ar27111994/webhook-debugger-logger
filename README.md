@@ -169,7 +169,7 @@ After the actor starts, open the web server URL and call `/info`.
 
 ```json
 {
-  "version": "3.0.5",
+  "version": "3.0.6",
   "status": "Enterprise Suite Online",
   "system": {
     "authActive": false,
@@ -230,6 +230,7 @@ curl -X POST "https://<run-id>.runs.apify.net/webhook/wh_demo123" \
       "statusCode": 200,
       "contentType": "application/json",
       "processingTime": 10,
+      "processingTimeUs": 10543,
       "size": 61,
       "remoteIp": "203.0.113.10",
       "requestUrl": "/webhook/wh_demo123",
@@ -243,7 +244,9 @@ curl -X POST "https://<run-id>.runs.apify.net/webhook/wh_demo123" \
 }
 ```
 
-`processingTime` is the server-side processing cost only. It does **not** include any configured `responseDelayMs` latency simulation.
+`processingTime` is the backward-compatible integer millisecond view of server-side processing cost only. It does **not** include any configured `responseDelayMs` latency simulation.
+
+`processingTimeUs` exposes the same server-side measurement in microseconds, which makes very fast warm-path requests distinguishable even when the legacy `processingTime` field floors to `0`.
 
 ![Dataset view showing captured webhook events with metadata and payload fields](https://raw.githubusercontent.com/ar27111994/webhook-debugger-logger/main/assets/dataset_view.png)
 
@@ -379,6 +382,7 @@ The runtime can apply input changes without a full restart.
 - On Apify, `HotReloadManager` polls the Key-Value Store for updated actor input.
 - In local development, it watches the generated `storage/key_value_stores/default/INPUT.json` file with `fs.watch`.
 - Reloadable settings flow through `AppState.applyConfigUpdate()`, which updates rate limiters, auth, retention, replay settings, forwarding settings, and parser limits in place.
+- Middleware-facing options are reapplied selectively, so unrelated runtime changes do not trigger unnecessary logger middleware recompilation or validator refresh work.
 - Set `DISABLE_HOT_RELOAD=true` if you want a fixed configuration for reproducible local runs.
 
 This is useful when you want to tune forwarding, replay, auth, or limits while the actor is already receiving traffic.
@@ -397,12 +401,12 @@ Use tighter limits for public debugging endpoints and looser limits for high-thr
 
 Retry and timeout behavior exists in several places and serves different goals.
 
-| Setting             | What it controls                                | Default behavior                                                                       |
-| ------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `maxForwardRetries` | Retries for outbound forwarding to `forwardUrl` | Retries transient delivery failures with backoff and circuit breaker protection        |
-| `replayMaxRetries`  | Retries for replay requests                     | Retries replay delivery attempts before marking them failed                            |
-| `replayTimeoutMs`   | Per-attempt replay timeout                      | Bounds replay requests so a dead downstream does not hang the actor                    |
-| `responseDelayMs`   | Artificial response delay after processing      | Simulates slow callbacks for client timeout testing without inflating `processingTime` |
+| Setting             | What it controls                                | Default behavior                                                                                             |
+| ------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `maxForwardRetries` | Retries for outbound forwarding to `forwardUrl` | Retries transient delivery failures with backoff and circuit breaker protection                              |
+| `replayMaxRetries`  | Retries for replay requests                     | Retries replay delivery attempts before marking them failed                                                  |
+| `replayTimeoutMs`   | Per-attempt replay timeout                      | Bounds replay requests so a dead downstream does not hang the actor                                          |
+| `responseDelayMs`   | Artificial response delay after processing      | Simulates slow callbacks for client timeout testing without inflating `processingTime` or `processingTimeUs` |
 
 In addition to input-level settings, the runtime has internal bounded timeouts for alert delivery, background tasks, custom script execution, shutdown, DNS resolution, and outbound forwarding.
 

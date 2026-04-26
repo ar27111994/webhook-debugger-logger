@@ -75,8 +75,8 @@ describe("Logs Routes", () => {
     it("should return paginated offset logs correctly and handle defaults", async () => {
       const mockStoredLogs = {
         items: [
-          { id: "1", webhookId: "wh1" },
-          { id: "2", webhookId: "wh1" },
+          { id: "1", webhookId: "wh1", processingTimeUs: 0 },
+          { id: "2", webhookId: "wh1", processingTimeUs: 0 },
         ],
         total: 5,
       };
@@ -102,10 +102,12 @@ describe("Logs Routes", () => {
           items: expect.arrayContaining([
             expect.objectContaining({
               id: "1",
+              processingTimeUs: 0,
               detailUrl: "/admin/api/logs/1",
             }),
             expect.objectContaining({
               id: "2",
+              processingTimeUs: 0,
               detailUrl: "/admin/api/logs/2",
             }),
           ]),
@@ -164,6 +166,7 @@ describe("Logs Routes", () => {
         sort: "method:asc,statusCode:desc",
         statusCode: assertType({ gte: HTTP_STATUS.BAD_REQUEST }),
         signatureValid: "true",
+        processingTimeUs: assertType({ gte: APP_ROUTES.LOGS.length }),
       };
       mockLogRepo.findLogs.mockResolvedValueOnce({ items: [], total: 0 });
 
@@ -175,6 +178,9 @@ describe("Logs Routes", () => {
       expect(mockLogRepo.findLogs).toHaveBeenCalledWith(
         expect.objectContaining({
           signatureValid: true,
+          processingTimeUs: [
+            { operator: "gte", value: APP_ROUTES.LOGS.length },
+          ],
           statusCode: [{ operator: "gte", value: HTTP_STATUS.BAD_REQUEST }],
           sort: [
             { field: "method", dir: SORT_DIRECTIONS.ASC },
@@ -233,7 +239,6 @@ describe("Logs Routes", () => {
 
       // Mock includes to return false specifically for TIMESTAMP in the VALID_SORT_FIELDS array safely
       const originalIncludes = Array.prototype.includes;
-      const EXPECTED_FIELDS_LEN = 15;
       /**
        * @param {string} searchElement
        * @param {number} fromIndex
@@ -242,8 +247,8 @@ describe("Logs Routes", () => {
         // Duck type the VALID_SORT_FIELDS array
         if (
           this &&
-          this.length === EXPECTED_FIELDS_LEN &&
           this[0] === "id" &&
+          this[this.length - 1] === "signatureError" &&
           searchElement === "timestamp"
         ) {
           return false;
@@ -310,6 +315,7 @@ describe("Logs Routes", () => {
             contentType: MIME_TYPES.JSON,
             statusCode: HTTP_STATUS.OK,
             processingTime: 0,
+            processingTimeUs: 0,
           }),
         ],
         total: 1,
@@ -353,6 +359,7 @@ describe("Logs Routes", () => {
             contentType: MIME_TYPES.JSON,
             statusCode: HTTP_STATUS.OK,
             processingTime: 0,
+            processingTimeUs: 0,
           }),
         ],
         total: 1,

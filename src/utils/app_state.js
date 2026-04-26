@@ -9,9 +9,50 @@ import { MIME_TYPES } from "../consts/http.js";
 import { LOG_COMPONENTS } from "../consts/logging.js";
 import { LOG_MESSAGES } from "../consts/messages.js";
 import { RateLimiter } from "./rate_limiter.js";
+import { parseWebhookOptions } from "./config.js";
 import { createChildLogger } from "./logger.js";
 
 const log = createChildLogger({ component: LOG_COMPONENTS.APP_STATE });
+const LOGGER_MIDDLEWARE_OPTION_KEYS = [
+  "allowedIps",
+  "authKey",
+  "defaultResponseCode",
+  "defaultResponseBody",
+  "defaultResponseHeaders",
+  "responseDelayMs",
+  "forwardUrl",
+  "forwardHeaders",
+  "jsonSchema",
+  "customScript",
+  "maskSensitiveData",
+  "redactBodyPaths",
+  "enableJSONParsing",
+  "signatureVerification",
+  "alerts",
+  "alertOn",
+  "maxPayloadSize",
+  "maxForwardRetries",
+];
+
+/**
+ * @param {WebhookConfig | ActorInput} options
+ * @returns {string}
+ */
+function createLoggerMiddlewareOptionsSignature(options) {
+  /** @type {Record<string, unknown>} */
+  const parsedOptions = parseWebhookOptions(options);
+  /** @type {Record<string, unknown>} */
+  const comparableOptions = {};
+
+  for (const key of LOGGER_MIDDLEWARE_OPTION_KEYS) {
+    const optionValue = parsedOptions[key];
+    if (optionValue !== undefined) {
+      comparableOptions[key] = optionValue;
+    }
+  }
+
+  return JSON.stringify(comparableOptions);
+}
 
 /**
  * @typedef {import('express').RequestHandler} RequestHandler
@@ -37,6 +78,9 @@ export class AppState {
     this.webhookManager = webhookManager;
     /** @type {LoggerMiddleware} */
     this.loggerMiddleware = loggerMiddleware;
+    /** @type {string} */
+    this.loggerMiddlewareOptionsSignature =
+      createLoggerMiddlewareOptionsSignature(config);
 
     // Core State
     /** @type {string} */
@@ -109,7 +153,17 @@ export class AppState {
   async applyConfigUpdate(normalizedInput, validated) {
     // 1. Update Middleware (response codes, delays, headers, forwarding)
     // Note: loggerMiddleware handles its own internal state updates via updateOptions
-    this.loggerMiddleware.updateOptions(normalizedInput);
+    const nextLoggerMiddlewareOptionsSignature =
+      createLoggerMiddlewareOptionsSignature(normalizedInput);
+
+    if (
+      nextLoggerMiddlewareOptionsSignature !==
+      this.loggerMiddlewareOptionsSignature
+    ) {
+      this.loggerMiddleware.updateOptions(normalizedInput);
+      this.loggerMiddlewareOptionsSignature =
+        nextLoggerMiddlewareOptionsSignature;
+    }
 
     // 2. Update Body Parser if limit changed
     if (validated.maxPayloadSize !== this.maxPayloadSize) {

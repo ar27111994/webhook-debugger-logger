@@ -32,6 +32,7 @@
           "contentType",
           "size",
           "processingTime",
+          "processingTimeUs",
           "remoteIp",
           "signatureProvider"
         ],
@@ -42,6 +43,10 @@
         "properties": {
           "processingTime": {
             "label": "Processing Time (ms)",
+            "format": "number"
+          },
+          "processingTimeUs": {
+            "label": "Processing Time (μs)",
             "format": "number"
           }
         }

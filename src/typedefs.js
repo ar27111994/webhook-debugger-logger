@@ -58,6 +58,7 @@
  * @property {string|Object} [responseBody]
  * @property {Object.<string, string> | null} [responseHeaders]
  * @property {number} processingTime - Server-side processing time in milliseconds before any configured responseDelayMs delay is applied
+ * @property {number} processingTimeUs - Server-side processing time in microseconds before any configured responseDelayMs delay is applied
  * @property {string} [remoteIp]
  * @property {string} [userAgent]
  * @property {boolean} [signatureValid]
@@ -205,6 +206,7 @@
  * @property {string} [signatureError]
  * @property {number|string|RangeCondition[]} [statusCode]
  * @property {RangeCondition[]} [processingTime]
+ * @property {RangeCondition[]} [processingTimeUs]
  * @property {RangeCondition[]} [size]
  * @property {RangeCondition[]} [timestamp]
  * @property {Object|string} [headers]

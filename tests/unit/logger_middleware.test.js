@@ -94,6 +94,7 @@ const {
 const {
   LoggerMiddleware,
   createLoggerMiddleware,
+  getElapsedProcessingTimes,
   restoreSandboxEvent,
   createCustomScriptSafeRequest,
   rehydrateSandboxError,
@@ -118,6 +119,11 @@ describe("LoggerMiddleware", () => {
   const EXACT_LATENCY_SAMPLE_COUNT = 20;
   const EXACT_LATENCY_START_MS = 12;
   const EXACT_LATENCY_STEP_MS = 2;
+  const MICROSECONDS_PER_MILLISECOND = APP_CONSTS.MS_PER_SECOND;
+  const NANOSECONDS_PER_MILLISECOND = 1000000n;
+  const NANOSECONDS_PER_SECOND = 1000000000n;
+  const SUB_MILLISECOND_SAMPLE_US = 750;
+  const SUB_MILLISECOND_SAMPLE_NS = 750000n;
   const EXACT_LATENCY_PERCENTILES = Object.freeze({
     p50: 50,
     p95: 95,
@@ -132,6 +138,11 @@ describe("LoggerMiddleware", () => {
     Array.from({ length: EXACT_LATENCY_SAMPLE_COUNT }, (_, index) => {
       return EXACT_LATENCY_START_MS + index * EXACT_LATENCY_STEP_MS;
     }),
+  );
+  const EXACT_LATENCY_SAMPLES_US = Object.freeze(
+    EXACT_LATENCY_SAMPLES_MS.map(
+      (processingTimeMs) => processingTimeMs * MICROSECONDS_PER_MILLISECOND,
+    ),
   );
   const ONE_MB = APP_CONSTS.BYTES_PER_KB * APP_CONSTS.BYTES_PER_KB;
   const TEST_URL = "https://test";
@@ -3333,6 +3344,7 @@ describe("LoggerMiddleware", () => {
         expect(onEvent).toHaveBeenCalledWith(
           expect.objectContaining({
             processingTime: expect.any(Number),
+            processingTimeUs: expect.any(Number),
             query: expect.objectContaining({ test: "123", page: "2" }),
           }),
         );
@@ -3340,6 +3352,10 @@ describe("LoggerMiddleware", () => {
         const emittedEvent = assertType(jest.mocked(onEvent).mock.calls[0][0]);
         expect(emittedEvent.processingTime).toBeGreaterThanOrEqual(0);
         expect(emittedEvent.processingTime).toBeLessThan(responseDelayMs);
+        expect(emittedEvent.processingTimeUs).toBeGreaterThanOrEqual(0);
+        expect(emittedEvent.processingTimeUs).toBeGreaterThanOrEqual(
+          emittedEvent.processingTime * MICROSECONDS_PER_MILLISECOND,
+        );
       });
 
       it("should preserve exact percentile verification for emitted warm-path processingTime samples", async () => {
@@ -3375,20 +3391,26 @@ describe("LoggerMiddleware", () => {
           expiresAt: staticExpiry,
         });
 
-        const mockedNowValues = EXACT_LATENCY_SAMPLES_MS.flatMap(
+        const mockedHrtimeValues = EXACT_LATENCY_SAMPLES_MS.flatMap(
           (processingTimeMs, index) => {
-            const requestStartMs = (index + 1) * APP_CONSTS.MS_PER_SECOND;
-            return [requestStartMs, requestStartMs + processingTimeMs];
+            const requestStartNs = BigInt(index + 1) * NANOSECONDS_PER_SECOND;
+            return [
+              requestStartNs,
+              requestStartNs +
+                BigInt(processingTimeMs) * NANOSECONDS_PER_MILLISECOND,
+            ];
           },
         );
 
-        const fallbackNowValue =
-          mockedNowValues[mockedNowValues.length - 1] ??
-          APP_CONSTS.MS_PER_SECOND;
-        const dateNowSpy = jest.spyOn(Date, "now").mockImplementation(() => {
-          const nextValue = mockedNowValues.shift();
-          return nextValue ?? fallbackNowValue;
-        });
+        const fallbackHrtimeValue =
+          mockedHrtimeValues[mockedHrtimeValues.length - 1] ??
+          NANOSECONDS_PER_SECOND;
+        const hrtimeBigintSpy = jest
+          .spyOn(process.hrtime, "bigint")
+          .mockImplementation(() => {
+            const nextValue = mockedHrtimeValues.shift();
+            return nextValue ?? fallbackHrtimeValue;
+          });
 
         try {
           for (let index = 0; index < EXACT_LATENCY_SAMPLE_COUNT; index += 1) {
@@ -3409,22 +3431,43 @@ describe("LoggerMiddleware", () => {
             expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
           }
 
-          const emittedSamples = onEvent.mock.calls.map(
+          const emittedSamplesMs = onEvent.mock.calls.map(
             ([event]) => assertType(event).processingTime,
           );
+          const emittedSamplesUs = onEvent.mock.calls.map(
+            ([event]) => assertType(event).processingTimeUs,
+          );
 
-          expect(emittedSamples).toEqual(EXACT_LATENCY_SAMPLES_MS);
+          expect(emittedSamplesMs).toEqual(EXACT_LATENCY_SAMPLES_MS);
+          expect(emittedSamplesUs).toEqual(EXACT_LATENCY_SAMPLES_US);
           expect(
-            getPercentile(emittedSamples, EXACT_LATENCY_PERCENTILES.p50),
+            getPercentile(emittedSamplesMs, EXACT_LATENCY_PERCENTILES.p50),
           ).toBe(EXACT_LATENCY_EXPECTED_MS.p50);
           expect(
-            getPercentile(emittedSamples, EXACT_LATENCY_PERCENTILES.p95),
+            getPercentile(emittedSamplesMs, EXACT_LATENCY_PERCENTILES.p95),
           ).toBe(EXACT_LATENCY_EXPECTED_MS.p95);
           expect(
-            getPercentile(emittedSamples, EXACT_LATENCY_PERCENTILES.p99),
+            getPercentile(emittedSamplesMs, EXACT_LATENCY_PERCENTILES.p99),
           ).toBe(EXACT_LATENCY_EXPECTED_MS.p99);
         } finally {
-          dateNowSpy.mockRestore();
+          hrtimeBigintSpy.mockRestore();
+        }
+      });
+
+      it("should preserve sub-millisecond latency in processingTimeUs while flooring processingTime", async () => {
+        const hrtimeBigintSpy = jest
+          .spyOn(process.hrtime, "bigint")
+          .mockImplementationOnce(
+            () => NANOSECONDS_PER_SECOND + SUB_MILLISECOND_SAMPLE_NS,
+          );
+
+        try {
+          expect(getElapsedProcessingTimes(NANOSECONDS_PER_SECOND)).toEqual({
+            processingTime: 0,
+            processingTimeUs: SUB_MILLISECOND_SAMPLE_US,
+          });
+        } finally {
+          hrtimeBigintSpy.mockRestore();
         }
       });
 

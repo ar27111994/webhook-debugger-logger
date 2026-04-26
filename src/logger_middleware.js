@@ -62,6 +62,22 @@ import { DEFAULT_ALERT_ON } from "./consts/alerting.js";
 import { IS_TEST } from "./utils/env.js";
 
 const VALIDATOR_CACHE_MAX_ENTRIES = 32;
+const NS_PER_MICROSECOND = 1000n;
+const US_PER_MILLISECOND = 1000;
+
+/**
+ * @param {bigint} startTimeNs
+ * @returns {{ processingTime: number, processingTimeUs: number }}
+ */
+export function getElapsedProcessingTimes(startTimeNs) {
+  const elapsedTimeNs = process.hrtime.bigint() - startTimeNs;
+  const processingTimeUs = Number(elapsedTimeNs / NS_PER_MICROSECOND);
+
+  return {
+    processingTimeUs,
+    processingTime: Math.floor(processingTimeUs / US_PER_MILLISECOND),
+  };
+}
 
 /**
  * @typedef {import("express").RequestHandler} RequestHandler
@@ -686,7 +702,7 @@ export class LoggerMiddleware {
    * @returns {Promise<Response | void>}
    */
   async middleware(req, res, next) {
-    const startTime = Date.now();
+    const startTimeNs = process.hrtime.bigint();
     let eventIdForError = "";
 
     // 1. Resolve Options
@@ -796,6 +812,7 @@ export class LoggerMiddleware {
         responseBody: undefined, // Custom scripts can set this
         responseHeaders: Object.create(null), // Custom scripts can add headers
         processingTime: 0,
+        processingTimeUs: 0,
         remoteIp: validation.remoteIp,
         userAgent: req.headers[HTTP_HEADERS.USER_AGENT]?.toString(),
         requestId: req.requestId,
@@ -862,7 +879,7 @@ export class LoggerMiddleware {
       }
 
       event = await this.#transformRequestData(event, req);
-      event.processingTime = Date.now() - startTime;
+      Object.assign(event, getElapsedProcessingTimes(startTimeNs));
 
       // 4. Orchestration: Respond synchronous-ish, then race background tasks
       const delayMs = getSafeResponseDelay(mergedOptions.responseDelayMs);

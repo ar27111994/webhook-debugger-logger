@@ -22,7 +22,7 @@ import { waitForCondition } from "../setup/helpers/test-utils.js";
 
 /**
  * @typedef {import('../setup/helpers/e2e-process-harness.js').SpawnedApp} SpawnedApp
- * @typedef {{ id: string, webhookId: string, processingTime?: number | null }} LogListItem
+ * @typedef {{ id: string, webhookId: string, processingTime?: number | null, processingTimeUs?: number | null }} LogListItem
  */
 
 const AUTH_KEY = "e2e-lifecycle-secret";
@@ -31,6 +31,7 @@ const WAIT_INTERVAL_MS = 200;
 const E2E_TEST_TIMEOUT_MS = 45000;
 const RESPONSE_DELAY_MS = 600;
 const RESPONSE_DELAY_TOLERANCE_MS = 100;
+const MICROSECONDS_PER_MILLISECOND = 1000;
 const WARM_PATH_SAMPLE_COUNT = 20;
 const ENABLE_CLIENT_VISIBLE_LATENCY_SLO_ASSERTIONS =
   process.env.PERF_RUN === "1";
@@ -326,11 +327,15 @@ describe("E2E: Webhook lifecycle", () => {
       const eventLog = logs.find(
         (item) =>
           item.webhookId === webhookId &&
-          typeof item.processingTime === "number",
+          typeof item.processingTime === "number" &&
+          typeof item.processingTimeUs === "number",
       );
 
       expect(eventLog).toBeDefined();
       expect(eventLog?.processingTime).toBeLessThan(RESPONSE_DELAY_MS);
+      expect(eventLog?.processingTimeUs).toBeLessThan(
+        RESPONSE_DELAY_MS * MICROSECONDS_PER_MILLISECOND,
+      );
     },
     E2E_TEST_TIMEOUT_MS,
   );

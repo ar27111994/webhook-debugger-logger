@@ -110,7 +110,7 @@ describe("Info Route", () => {
       getMaxPayloadSize: /** @type {() => number | undefined} */ (
         jest.fn().mockReturnValue(undefined)
       ),
-      version: "3.0.5",
+      version: "3.0.6",
     };
 
     const handler = createInfoHandler(deps);

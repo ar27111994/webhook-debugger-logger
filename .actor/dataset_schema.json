@@ -108,6 +108,12 @@
         "description": "Time taken to process the request before any simulated response delay is applied",
         "example": 5
       },
+      "processingTimeUs": {
+        "type": "integer",
+        "title": "Processing Time (μs)",
+        "description": "Time taken to process the request in microseconds before any simulated response delay is applied",
+        "example": 5400
+      },
       "remoteIp": {
         "type": "string",
         "title": "Source IP",
@@ -189,6 +195,7 @@
           "contentType",
           "size",
           "processingTime",
+          "processingTimeUs",
           "remoteIp",
           "signatureProvider"
         ],
@@ -225,6 +232,9 @@
           },
           "processingTime": {
             "label": "Processing Time (ms)"
+          },
+          "processingTimeUs": {
+            "label": "Processing Time (μs)"
           },
           "remoteIp": {
             "label": "Source IP"

@@ -15,6 +15,7 @@ const outputSchema = require("../../../.actor/output_schema.json");
 const webServerSchema = require("../../../.actor/web_server_schema.json");
 
 const PROCESSING_TIME_LABEL = "Processing Time (ms)";
+const PROCESSING_TIME_US_LABEL = "Processing Time (μs)";
 
 /**
  * @param {unknown} value
@@ -155,6 +156,23 @@ describe("Apify dataset schema", () => {
       webServerSchema.components.schemas.LogListItem.properties.processingTime
         .description,
     ).toContain("before any configured responseDelayMs simulation is applied");
+
+    expect(datasetSchema.fields.properties.processingTimeUs.title).toBe(
+      PROCESSING_TIME_US_LABEL,
+    );
+    expect(
+      datasetSchema.fields.properties.processingTimeUs.description,
+    ).toContain("microseconds");
+    expect(
+      datasetSchema.views.overview.display.properties.processingTimeUs.label,
+    ).toBe(PROCESSING_TIME_US_LABEL);
+    expect(
+      outputSchema.views.overview.display.properties.processingTimeUs.label,
+    ).toBe(PROCESSING_TIME_US_LABEL);
+    expect(
+      webServerSchema.components.schemas.LogListItem.properties.processingTimeUs
+        .description,
+    ).toContain("microseconds");
   });
 
   it("allows webhook body fields to be stored in the runtime-supported JSON shapes", () => {

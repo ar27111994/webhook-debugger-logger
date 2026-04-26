@@ -46,12 +46,12 @@ import { parseIfPresent } from "../utils/common.js";
 const INSERT_LOG_SQL = `
     INSERT INTO ${DUCKDB_TABLES.LOGS} (
         id, webhookId, requestId, method, statusCode, contentType,
-        processingTime, size, remoteIp, userAgent, requestUrl,
+    processingTime, processingTimeUs, size, remoteIp, userAgent, requestUrl,
         bodyEncoding, headers, query, body, responseHeaders, responseBody,
         timestamp, signatureValid, signatureProvider, signatureError, source_offset
     ) VALUES (
         $id, $webhookId, $requestId, $method, $statusCode, $contentType,
-        $processingTime, $size, $remoteIp, $userAgent, $requestUrl,
+    $processingTime, $processingTimeUs, $size, $remoteIp, $userAgent, $requestUrl,
         $bodyEncoding, $headers, $query, $body, $responseHeaders, $responseBody,
         $timestamp, $signatureValid, $signatureProvider, $signatureError, $sourceOffset
     )
@@ -250,6 +250,7 @@ export class LogRepository {
     merge(this.#addRange("size", conditions.size));
     merge(this.#addRange("timestamp", conditions.timestamp));
     merge(this.#addRange("processingTime", conditions.processingTime));
+    merge(this.#addRange("processingTimeUs", conditions.processingTimeUs));
 
     merge(this.#addJsonFilter("headers", conditions.headers));
     merge(this.#addJsonFilter("query", conditions.query));
@@ -404,6 +405,7 @@ export class LogRepository {
 
       requestId: log.requestId || null,
       processingTime: log.processingTime ?? null,
+      processingTimeUs: log.processingTimeUs ?? null,
       contentType: log.contentType || null,
       bodyEncoding: log.bodyEncoding || null,
 
