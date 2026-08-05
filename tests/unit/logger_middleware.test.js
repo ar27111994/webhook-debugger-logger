@@ -41,10 +41,14 @@ const actualCustomScriptExecutor = await import(
 const executeCustomScriptMock = jest.fn(
   actualCustomScriptExecutor.executeCustomScript,
 );
+const invalidateCustomScriptPoolMock = jest.fn(
+  actualCustomScriptExecutor.invalidateCustomScriptPool,
+);
 
 jest.unstable_mockModule("../../src/utils/custom_script_executor.js", () => ({
   ...actualCustomScriptExecutor,
   executeCustomScript: executeCustomScriptMock,
+  invalidateCustomScriptPool: invalidateCustomScriptPoolMock,
 }));
 
 const {
@@ -221,6 +225,7 @@ describe("LoggerMiddleware", () => {
       expect(typeof middlewareFn.ingestMiddleware).toBe("function");
       expect(typeof middlewareFn.hasCompiledScript).toBe("function");
       expect(typeof middlewareFn.hasValidator).toBe("function");
+      expect(typeof middlewareFn.waitForBackgroundTasks).toBe("function");
       expect(middlewareFn.hasCompiledScript()).toBe(false);
       expect(middlewareFn.hasValidator()).toBe(false);
       expect(middlewareFn.options).toEqual(
@@ -394,6 +399,29 @@ describe("LoggerMiddleware", () => {
       // Update with same script — should keep existing compiled script
       middleware.updateOptions({ customScript: script });
       expect(middleware.hasCompiledScript()).toBe(true);
+    });
+
+    it("should warn when old custom script pool invalidation fails", async () => {
+      const originalScript = "event.original = true;";
+      const nextScript = "event.next = true;";
+      const invalidationError = new Error("pool cleanup failed");
+      jest
+        .mocked(customScriptExecutor.invalidateCustomScriptPool)
+        .mockRejectedValueOnce(invalidationError);
+      const { middleware } = await createMiddlewareTestContext({
+        options: { customScript: originalScript },
+      });
+
+      middleware.updateOptions({ customScript: nextScript });
+      await flushPromises(1);
+
+      expect(
+        customScriptExecutor.invalidateCustomScriptPool,
+      ).toHaveBeenCalledWith(originalScript);
+      expect(loggerMock.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ err: expect.any(Object) }),
+        LOG_MESSAGES.SCRIPT_EXECUTION_FAILED,
+      );
     });
 
     it("should cache webhook schema validators across repeated requests", async () => {
@@ -946,6 +974,62 @@ describe("LoggerMiddleware", () => {
         },
         SLOW_SCRIPT_TEST_TIMEOUT_MS,
       );
+
+      it("should demote slow strict custom scripts to async for later requests", async () => {
+        jest
+          .mocked(customScriptExecutor.executeCustomScript)
+          .mockImplementation(async ({ event }) => ({
+            ok: true,
+            event: { ...event, statusCode: HTTP_STATUS.ACCEPTED },
+            logs: [],
+          }));
+
+        try {
+          const { req, res, next, middleware } =
+            await createMiddlewareTestContext({
+              options: {
+                customScript: "event.statusCode = HTTP_STATUS.ACCEPTED;",
+                responseMode: "strict",
+                customScriptSlowThresholdMs: 0,
+              },
+            });
+
+          await middleware(req, res, next);
+
+          expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.ACCEPTED);
+          expect(apifyMock.pushData).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+              asyncEnrichment: false,
+              scriptDemotedToAsync: true,
+            }),
+          );
+
+          const secondReq = createMockRequest({
+            params: { id: "wh_test" },
+            body: { test: true },
+          });
+          const secondRes = createMockResponse();
+          const secondNext = createMockNextFunction();
+
+          await middleware(secondReq, secondRes, secondNext);
+
+          expect(secondRes.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
+          expect(apifyMock.pushData).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+              asyncEnrichment: true,
+              scriptDemotedToAsync: true,
+            }),
+          );
+          expect(loggerMock.warn).toHaveBeenCalledWith(
+            expect.objectContaining({ thresholdMs: 0 }),
+            LOG_MESSAGES.SCRIPT_DEMOTED_TO_ASYNC,
+          );
+        } finally {
+          jest
+            .mocked(customScriptExecutor.executeCustomScript)
+            .mockImplementation(actualCustomScriptExecutor.executeCustomScript);
+        }
+      });
 
       it("should serialize structured custom script console output safely", async () => {
         jest
@@ -2196,7 +2280,9 @@ describe("LoggerMiddleware", () => {
           await createMiddlewareTestContext();
 
         await middleware(req, res, next);
-        expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
+        expect(res.status).toHaveBeenCalledWith(
+          HTTP_STATUS.SERVICE_UNAVAILABLE,
+        );
         jest.spyOn(global, "setTimeout").mockRestore();
       });
 
@@ -2944,15 +3030,18 @@ describe("LoggerMiddleware", () => {
 
       it("should not log error if signal is aborted during background task exception", async () => {
         const { middleware, req, res, next } =
-          await createMiddlewareTestContext();
+          await createMiddlewareTestContext({
+            options: { forwardUrl: TEST_URL },
+          });
         req.params.id = "wh_atomic";
 
-        // Mock pushData to throw after some time
-        let rejectPush = () => {};
-        const pushPromise = new Promise((_, reject) => {
-          rejectPush = () => reject(new Error("Background fail"));
+        let rejectForward = () => {};
+        const forwardPromise = new Promise((_, reject) => {
+          rejectForward = () => reject(new Error("Background fail"));
         });
-        jest.mocked(apifyMock.pushData).mockReturnValue(pushPromise);
+        jest
+          .mocked(forwardingServiceMock.forwardWebhook)
+          .mockReturnValueOnce(assertType(forwardPromise));
 
         const p = middleware(req, res, next);
         // Wait for response to be sent and background tasks to start
@@ -2964,8 +3053,8 @@ describe("LoggerMiddleware", () => {
         jest.advanceTimersByTime(timeoutRaw + timeout);
         await jest.runAllTimersAsync();
 
-        // Now reject the push - should be ignored because signal is aborted
-        rejectPush();
+        // Now reject the forward operation - should be ignored because signal is aborted
+        rejectForward();
         await p;
 
         expect(loggerMock.error).not.toHaveBeenCalled();
@@ -2998,17 +3087,20 @@ describe("LoggerMiddleware", () => {
             SUB_SECOND_TIMEOUT;
 
           const { middleware, req, res, next } =
-            await createMiddlewareTestContext();
+            await createMiddlewareTestContext({
+              options: { forwardUrl: TEST_URL },
+            });
           req.params.id = "wh_atomic";
 
-          // Hang pushData
-          const pushPromise = new Promise(() => {});
-          jest.mocked(apifyMock.pushData).mockReturnValue(pushPromise);
+          jest
+            .mocked(forwardingServiceMock.forwardWebhook)
+            .mockImplementationOnce(() => assertType(new Promise(() => {})));
 
           const p = middleware(req, res, next);
           await flushPromises(1); // Allow synchronous checks to pass
 
           jest.advanceTimersByTime(SUB_SECOND_TIMEOUT + TIMEOUT_OFFSET);
+          await jest.runAllTimersAsync();
           await p;
 
           expect(loggerMock.warn).toHaveBeenCalledWith(
@@ -3036,12 +3128,14 @@ describe("LoggerMiddleware", () => {
             PROD_TIMEOUT_MS;
 
           const { middleware, req, res, next } =
-            await createMiddlewareTestContext();
+            await createMiddlewareTestContext({
+              options: { forwardUrl: TEST_URL },
+            });
           req.params.id = "wh_prod";
 
-          // Hang pushData
-          const pushPromise = new Promise(() => {});
-          jest.mocked(apifyMock.pushData).mockReturnValue(pushPromise);
+          jest
+            .mocked(forwardingServiceMock.forwardWebhook)
+            .mockImplementationOnce(() => assertType(new Promise(() => {})));
 
           const promise = middleware(req, res, next);
           await flushPromises(1);
@@ -3093,8 +3187,13 @@ describe("LoggerMiddleware", () => {
 
       it("should handle background task errors with no message", async () => {
         const { middleware, req, res, next } =
-          await createMiddlewareTestContext();
-        jest.mocked(apifyMock.pushData).mockRejectedValueOnce(assertType({})); // No message property
+          await createMiddlewareTestContext({
+            options: { forwardUrl: TEST_URL },
+          });
+        jest
+          .mocked(forwardingServiceMock.forwardWebhook)
+          .mockRejectedValueOnce(assertType({})); // No message property
+        req.params.id = "wh_background_error";
         await middleware(req, res, next);
         await jest.runAllTimersAsync();
         expect(loggerMock.error).toHaveBeenCalledWith(
@@ -3525,9 +3624,9 @@ describe("LoggerMiddleware", () => {
           req.method = HTTP_METHODS.POST;
           req.body = { foo: "bar" };
 
-          // Hang pushData to ensure the timer isn't cleared early
-          const pushPromise = new Promise(() => {});
-          jest.mocked(apifyMock.pushData).mockReturnValue(pushPromise);
+          jest
+            .mocked(forwardingServiceMock.forwardWebhook)
+            .mockImplementationOnce(() => assertType(new Promise(() => {})));
 
           const mwPromise = middleware(req, res, next);
           await flushPromises(1); // hit background tasks
@@ -3548,7 +3647,11 @@ describe("LoggerMiddleware", () => {
 
           await mwPromise;
 
-          expect(forwardingServiceMock.forwardWebhook).not.toHaveBeenCalled();
+          expect(forwardingServiceMock.forwardWebhook).toHaveBeenCalled();
+          const capturedSignal = /** @type {AbortSignal} */ (
+            jest.mocked(forwardingServiceMock.forwardWebhook).mock.calls[0][4]
+          );
+          expect(capturedSignal.aborted).toBe(true);
         } finally {
           constsMock.APP_CONSTS.BACKGROUND_TASK_TIMEOUT_PROD_MS =
             ORIGINAL_TIMEOUT;
@@ -3574,8 +3677,10 @@ describe("LoggerMiddleware", () => {
           await flushPromises(1); // background tasks
 
           expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
-          expect(apifyMock.pushData).not.toHaveBeenCalled();
-          expect(forwardingServiceMock.forwardWebhook).not.toHaveBeenCalled();
+          expect(apifyMock.pushData).toHaveBeenCalledWith(
+            expect.objectContaining({ webhookId: "wh_script_null" }),
+          );
+          expect(forwardingServiceMock.forwardWebhook).toHaveBeenCalled();
         },
         SLOW_SCRIPT_TEST_TIMEOUT_MS,
       );
@@ -3612,8 +3717,10 @@ describe("LoggerMiddleware", () => {
 
         await middleware(req, res, next);
 
-        // No Actor.pushData should be called because we erased webhookId inside the customscript
-        expect(apifyMock.pushData).not.toHaveBeenCalled();
+        // Custom scripts can no longer erase the authoritative ingestion identity.
+        expect(apifyMock.pushData).toHaveBeenCalledWith(
+          expect.objectContaining({ webhookId: "wh_id_customscript" }),
+        );
       });
 
       it("should hit implicit-else branch by providing customScript that unsets webhookId but retains headers", async () => {
@@ -3643,7 +3750,9 @@ describe("LoggerMiddleware", () => {
         // which already calls jest.clearAllMocks()
         await middleware(req, res, next);
 
-        expect(apifyMock.pushData).not.toHaveBeenCalled();
+        expect(apifyMock.pushData).toHaveBeenCalledWith(
+          expect.objectContaining({ webhookId: "wh_implicit" }),
+        );
         expect(forwardingServiceMock.forwardWebhook).not.toHaveBeenCalled();
       });
 

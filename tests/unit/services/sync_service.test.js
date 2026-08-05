@@ -452,7 +452,7 @@ describe("SyncService", () => {
   });
 
   describe("Event Handlers", () => {
-    it("should handle LOG_RECEIVED event", async () => {
+    it("should schedule dataset catch-up when LOG_RECEIVED event arrives", async () => {
       jest
         .mocked(datasetMock.getInfo)
         .mockResolvedValue(assertType({ itemCount: 0 }));
@@ -466,7 +466,13 @@ describe("SyncService", () => {
       const payload = { id: "evt-1" };
       await handler?.(payload);
 
-      expect(logRepositoryMock.insertLog).toHaveBeenCalledWith(payload);
+      const expectedCalls = 2;
+      await waitForCondition(
+        () =>
+          jest.mocked(datasetMock.getInfo).mock.calls.length >= expectedCalls,
+        WAIT_MS,
+      );
+      expect(logRepositoryMock.insertLog).not.toHaveBeenCalledWith(payload);
     });
 
     it("should ignore malformed LOG_RECEIVED payload", async () => {
@@ -487,7 +493,7 @@ describe("SyncService", () => {
       expect(logRepositoryMock.insertLog).not.toHaveBeenCalled();
     });
 
-    it("should log error if real-time insert fails", async () => {
+    it("should not perform real-time inserts from LOG_RECEIVED events", async () => {
       jest
         .mocked(datasetMock.getInfo)
         .mockResolvedValue(assertType({ itemCount: 0 }));
@@ -497,12 +503,13 @@ describe("SyncService", () => {
       )?.[1];
       expect(handler).toBeDefined();
 
-      logRepositoryMock.insertLog.mockRejectedValueOnce(
-        new Error("Insert Failed"),
-      );
       await handler?.({ id: "fail" });
 
-      expect(loggerMock.error).toHaveBeenCalled();
+      expect(logRepositoryMock.insertLog).not.toHaveBeenCalled();
+      expect(loggerMock.error).not.toHaveBeenCalledWith(
+        expect.objectContaining({ err: expect.any(Object) }),
+        LOG_MESSAGES.REALTIME_INSERT_FAILED,
+      );
     });
   });
 

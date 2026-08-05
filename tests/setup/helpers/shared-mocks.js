@@ -590,6 +590,8 @@ export const loggerMiddlewareMock = assertType({
   middleware: jest.fn(),
   ingestMiddleware: jest.fn(),
   updateOptions: jest.fn(),
+  hasCompiledScript: jest.fn().mockReturnValue(false),
+  waitForBackgroundTasks: jest.fn().mockResolvedValue(assertType(undefined)),
   options: {},
 });
 
@@ -998,6 +1000,7 @@ export const vmMock = {
  */
 export const logRepositoryMock = assertType({
   insertLog: jest.fn(),
+  updateLogTelemetry: jest.fn(),
   batchInsertLogs: jest.fn(),
   getLogById: jest.fn(),
   findLogs: jest.fn(),

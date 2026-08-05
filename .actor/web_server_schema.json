@@ -1144,6 +1144,49 @@
             "type": "integer",
             "description": "Server-side processing time in microseconds before any configured responseDelayMs simulation is applied"
           },
+          "responseMode": {
+            "type": "string",
+            "enum": ["fast", "strict"],
+            "description": "Response-path mode used for this request"
+          },
+          "asyncEnrichment": {
+            "type": "boolean",
+            "description": "Whether enrichment work ran after acknowledgement"
+          },
+          "scriptDemotedToAsync": {
+            "type": "boolean",
+            "description": "Whether a slow strict custom script was demoted to async mode"
+          },
+          "authMs": {
+            "type": "integer"
+          },
+          "bodyPrepMs": {
+            "type": "integer"
+          },
+          "schemaMs": {
+            "type": "integer"
+          },
+          "signatureMs": {
+            "type": "integer"
+          },
+          "scriptMs": {
+            "type": "integer"
+          },
+          "ackMs": {
+            "type": "integer"
+          },
+          "pushDataMs": {
+            "type": "integer"
+          },
+          "duckdbMs": {
+            "type": "integer"
+          },
+          "forwardMs": {
+            "type": "integer"
+          },
+          "backgroundTotalMs": {
+            "type": "integer"
+          },
           "requestId": {
             "type": "string"
           },
@@ -1350,9 +1393,73 @@
           },
           "sync": {
             "$ref": "#/components/schemas/SyncMetrics"
+          },
+          "latency": {
+            "$ref": "#/components/schemas/LatencyMetrics"
+          },
+          "latencyBudgets": {
+            "$ref": "#/components/schemas/LatencyBudgets"
           }
         },
-        "required": ["timestamp", "sync"]
+        "required": ["timestamp", "sync", "latency", "latencyBudgets"]
+      },
+      "LatencyMetrics": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer"
+          },
+          "avgAckMs": {
+            "type": "number"
+          },
+          "maxAckMs": {
+            "type": "number"
+          },
+          "avgScriptMs": {
+            "type": "number"
+          },
+          "maxScriptMs": {
+            "type": "number"
+          },
+          "avgBackgroundTotalMs": {
+            "type": "number"
+          },
+          "maxBackgroundTotalMs": {
+            "type": "number"
+          },
+          "asyncEnrichmentCount": {
+            "type": "integer"
+          },
+          "scriptDemotionCount": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "avgAckMs",
+          "maxAckMs",
+          "avgScriptMs",
+          "maxScriptMs",
+          "avgBackgroundTotalMs",
+          "maxBackgroundTotalMs",
+          "asyncEnrichmentCount",
+          "scriptDemotionCount"
+        ]
+      },
+      "LatencyBudgets": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object",
+          "properties": {
+            "p50Ms": {
+              "type": "integer"
+            },
+            "p95Ms": {
+              "type": "integer"
+            }
+          },
+          "required": ["p50Ms", "p95Ms"]
+        }
       },
       "HealthResponse": {
         "type": "object",

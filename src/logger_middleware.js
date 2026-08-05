@@ -17,7 +17,12 @@ import {
   getKvsUrl,
   createReferenceBody,
 } from "./utils/storage_helper.js";
-import { APP_CONSTS, DEFAULT_ID_LENGTH, STREAM_EVENTS } from "./consts/app.js";
+import {
+  APP_CONSTS,
+  DEFAULT_ID_LENGTH,
+  RESPONSE_MODES,
+  STREAM_EVENTS,
+} from "./consts/app.js";
 import { STORAGE_CONSTS } from "./consts/storage.js";
 import {
   HTTP_HEADERS,
@@ -46,6 +51,7 @@ import {
 import { triggerAlertIfNeeded } from "./utils/alerting.js";
 import { appEvents, EVENT_NAMES } from "./utils/events.js";
 import { forwardingService as defaultForwardingService } from "./services/index.js";
+import { logRepository } from "./repositories/LogRepository.js";
 import { PassThrough } from "stream";
 import { webhookRateLimiter } from "./utils/webhook_rate_limiter.js";
 import {
@@ -54,6 +60,7 @@ import {
 } from "./utils/logger.js";
 import {
   executeCustomScript,
+  invalidateCustomScriptPool,
   validateCustomScriptSource,
 } from "./utils/custom_script_executor.js";
 import { LOG_MESSAGES } from "./consts/messages.js";
@@ -80,6 +87,14 @@ export function getElapsedProcessingTimes(startTimeNs) {
 }
 
 /**
+ * @param {number} startTimeMs
+ * @returns {number}
+ */
+function getElapsedPhaseMilliseconds(startTimeMs) {
+  return Math.max(0, Math.floor(performance.now() - startTimeMs));
+}
+
+/**
  * @typedef {import("express").RequestHandler} RequestHandler
  * @typedef {import("ajv").default} AjvType
  * @typedef {import("express").Request} Request
@@ -98,6 +113,7 @@ export function getElapsedProcessingTimes(startTimeNs) {
  * @typedef {import('./typedefs.js').WebhookConfig} WebhookConfig
  * @typedef {import("./services/index.js").ForwardingService} ForwardingService
  * @typedef {import("./typedefs.js").LoggerMiddlewareFunction} LoggerMiddlewareFunction
+ * @typedef {Pick<WebhookEvent, "id" | "timestamp" | "webhookId" | "method" | "requestId" | "requestUrl">} IngestionIdentity
  */
 
 /**
@@ -273,6 +289,8 @@ export class LoggerMiddleware {
   #forwardingService;
   /** @type {string | null} */
   #compiledScript = null;
+  /** @type {Set<string>} */
+  #demotedScriptSources = new Set();
   /** @type {ValidateFunction} */
   #validate = null;
   /** @type {Map<string, Exclude<ValidateFunction, null>>} */
@@ -283,6 +301,8 @@ export class LoggerMiddleware {
   #log;
   /** @type {typeof serializeErrorUtil} */
   #serializeError;
+  /** @type {Set<Promise<void>>} */
+  #activeBackgroundTasks = new Set();
 
   /**
    * Validates and coerces a forced status code.
@@ -327,6 +347,9 @@ export class LoggerMiddleware {
     ).hasCompiledScript = this.hasCompiledScript.bind(this);
     /** @type {LoggerMiddlewareFunction} */ (this.middleware).hasValidator =
       this.hasValidator.bind(this);
+    /** @type {LoggerMiddlewareFunction} */ (
+      this.middleware
+    ).waitForBackgroundTasks = this.waitForBackgroundTasks.bind(this);
 
     // Initial compilation (uses #log internally)
     const options = parseWebhookOptions(rawOptions);
@@ -360,6 +383,16 @@ export class LoggerMiddleware {
    */
   hasValidator() {
     return this.#validate !== null;
+  }
+
+  /**
+   * Drains post-ACK background work before application teardown closes shared resources.
+   * @returns {Promise<void>}
+   */
+  async waitForBackgroundTasks() {
+    while (this.#activeBackgroundTasks.size > 0) {
+      await Promise.allSettled([...this.#activeBackgroundTasks]);
+    }
   }
 
   /**
@@ -462,12 +495,24 @@ export class LoggerMiddleware {
    */
   #refreshCompilations(newOptions) {
     const currentOptions = this.#options;
+    const previousScript = currentOptions?.customScript;
 
     // 1. Smart script re-compilation
     if (
       !currentOptions ||
       newOptions.customScript !== currentOptions.customScript
     ) {
+      if (previousScript && previousScript !== newOptions.customScript) {
+        invalidateCustomScriptPool(previousScript).catch((err) => {
+          this.#log.warn(
+            { err: this.#serializeError(err) },
+            LOG_MESSAGES.SCRIPT_EXECUTION_FAILED,
+          );
+        });
+      }
+      if (previousScript !== newOptions.customScript) {
+        this.#demotedScriptSources.clear();
+      }
       this.#compiledScript = this.#compileResource(
         newOptions.customScript,
         validateCustomScriptSource,
@@ -495,6 +540,7 @@ export class LoggerMiddleware {
       "defaultResponseBody",
       "defaultResponseHeaders",
       "responseDelayMs",
+      "responseMode",
       "forwardUrl",
       "forwardHeaders",
       "maxForwardRetries",
@@ -503,6 +549,7 @@ export class LoggerMiddleware {
       "enableJSONParsing",
       "redactBodyPaths",
       "maskSensitiveData",
+      "customScriptSlowThresholdMs",
     ];
     const webhookOverrides = Object.fromEntries(
       Object.entries(webhookData).filter(([key]) =>
@@ -514,6 +561,101 @@ export class LoggerMiddleware {
       ...this.#options,
       ...webhookOverrides,
     };
+  }
+
+  /**
+   * @returns {boolean}
+   */
+  #isCurrentScriptDemoted() {
+    return (
+      !!this.#compiledScript &&
+      this.#demotedScriptSources.has(this.#compiledScript)
+    );
+  }
+
+  /**
+   * @param {WebhookEvent} event
+   * @param {number} durationMs
+   * @param {LoggerOptions} options
+   */
+  #demoteCurrentScriptIfSlow(event, durationMs, options) {
+    if (!this.#compiledScript) {
+      return;
+    }
+
+    const thresholdMs =
+      options.customScriptSlowThresholdMs ??
+      APP_CONSTS.DEFAULT_CUSTOM_SCRIPT_SLOW_THRESHOLD_MS;
+    if (durationMs < thresholdMs) {
+      return;
+    }
+
+    this.#demotedScriptSources.add(this.#compiledScript);
+    event.scriptDemotedToAsync = true;
+    this.#log.warn(
+      {
+        webhookId: event.webhookId,
+        durationMs,
+        thresholdMs,
+      },
+      LOG_MESSAGES.SCRIPT_DEMOTED_TO_ASYNC,
+    );
+  }
+
+  /**
+   * @param {WebhookEvent} event
+   * @returns {IngestionIdentity}
+   */
+  #captureIngestionIdentity(event) {
+    return {
+      id: event.id,
+      timestamp: event.timestamp,
+      webhookId: event.webhookId,
+      method: event.method,
+      requestId: event.requestId,
+      requestUrl: event.requestUrl,
+    };
+  }
+
+  /**
+   * @param {WebhookEvent} event
+   * @param {IngestionIdentity} identity
+   * @returns {WebhookEvent}
+   */
+  #restoreIngestionIdentity(event, identity) {
+    return Object.assign(event, identity);
+  }
+
+  /**
+   * @param {WebhookEvent} event
+   * @param {number} timeoutMs
+   * @returns {Promise<void>}
+   */
+  async #appendAcceptedEvent(event, timeoutMs) {
+    const pushDataStartMs = performance.now();
+    /** @type {ReturnType<typeof setTimeout> | undefined} */
+    let pushDataTimeout;
+
+    try {
+      await Promise.race([
+        Actor.pushData(event),
+        new Promise((_, reject) => {
+          pushDataTimeout = setTimeout(
+            () =>
+              reject(
+                new Error(ERROR_MESSAGES.ACTOR_PUSH_DATA_TIMEOUT(timeoutMs)),
+              ),
+            timeoutMs,
+          );
+          if (pushDataTimeout?.unref) pushDataTimeout.unref();
+        }),
+      ]);
+    } finally {
+      if (pushDataTimeout) {
+        clearTimeout(pushDataTimeout);
+      }
+      event.pushDataMs = getElapsedPhaseMilliseconds(pushDataStartMs);
+    }
   }
 
   /**
@@ -703,6 +845,8 @@ export class LoggerMiddleware {
    */
   async middleware(req, res, next) {
     const startTimeNs = process.hrtime.bigint();
+    const requestStartMs = performance.now();
+    let phaseStartMs = performance.now();
     let eventIdForError = "";
 
     // 1. Resolve Options
@@ -732,6 +876,8 @@ export class LoggerMiddleware {
           docs: APP_CONSTS.APIFY_HOMEPAGE_URL,
         });
       }
+      const authMs = getElapsedPhaseMilliseconds(phaseStartMs);
+      phaseStartMs = performance.now();
 
       // Automatic body parsing if enabled
       if (
@@ -750,19 +896,6 @@ export class LoggerMiddleware {
               LOG_MESSAGES.JSON_PARSE_FAILED_FALLBACK,
             ),
           );
-        }
-      }
-
-      // Schema Validation
-      if (mergedOptions.jsonSchema) {
-        const validate = this.#getValidator(mergedOptions.jsonSchema);
-        const valid =
-          typeof validate === "function" ? validate(req.body) : false;
-        if (!valid) {
-          return res.status(HTTP_STATUS.BAD_REQUEST).json({
-            error: ajv.errorsText(validate?.errors),
-            id: webhookId,
-          });
         }
       }
 
@@ -791,8 +924,13 @@ export class LoggerMiddleware {
 
       const { loggedBody, loggedHeaders, contentType, bodyEncoding } =
         preparedData;
+      const bodyPrepMs = getElapsedPhaseMilliseconds(phaseStartMs);
+      phaseStartMs = performance.now();
 
-      // 3. Transform
+      const isFastMode = mergedOptions.responseMode === RESPONSE_MODES.FAST;
+      const strictScriptDemoted = !isFastMode && this.#isCurrentScriptDemoted();
+
+      // 3. Build event
       /** @type {WebhookEvent} */
       let event = Object.assign(Object.create(null), {
         id: nanoid(DEFAULT_ID_LENGTH),
@@ -817,7 +955,32 @@ export class LoggerMiddleware {
         userAgent: req.headers[HTTP_HEADERS.USER_AGENT]?.toString(),
         requestId: req.requestId,
         requestUrl: req.originalUrl || req.url,
+        responseMode: mergedOptions.responseMode,
+        asyncEnrichment: isFastMode || strictScriptDemoted,
+        scriptDemotedToAsync: strictScriptDemoted,
+        authMs,
+        bodyPrepMs,
+        schemaMs: null,
+        signatureMs: null,
+        scriptMs: null,
+        ackMs: null,
+        pushDataMs: null,
+        duckdbMs: null,
+        forwardMs: null,
+        backgroundTotalMs: null,
       });
+
+      let schemaValid = true;
+      const ingestionIdentity = this.#captureIngestionIdentity(event);
+      if (mergedOptions.jsonSchema && !isFastMode) {
+        schemaValid = this.#applySchemaValidation(
+          event,
+          req.body,
+          mergedOptions,
+        );
+      }
+      event.schemaMs = getElapsedPhaseMilliseconds(phaseStartMs);
+      phaseStartMs = performance.now();
 
       // 3a. Signature Verification (if configured)
       if (
@@ -877,8 +1040,22 @@ export class LoggerMiddleware {
           }
         }
       }
+      event.signatureMs = getElapsedPhaseMilliseconds(phaseStartMs);
+      phaseStartMs = performance.now();
 
-      event = await this.#transformRequestData(event, req);
+      if (schemaValid && !isFastMode && this.#compiledScript) {
+        if (this.#isCurrentScriptDemoted()) {
+          event.asyncEnrichment = true;
+          event.scriptDemotedToAsync = true;
+        } else {
+          event = await this.#transformRequestData(event, req, mergedOptions);
+          event = this.#restoreIngestionIdentity(event, ingestionIdentity);
+        }
+      }
+      event.scriptMs = getElapsedPhaseMilliseconds(phaseStartMs);
+      if (schemaValid && !isFastMode && !event.asyncEnrichment) {
+        this.#demoteCurrentScriptIfSlow(event, event.scriptMs, mergedOptions);
+      }
       Object.assign(event, getElapsedProcessingTimes(startTimeNs));
 
       // 4. Orchestration: Respond synchronous-ish, then race background tasks
@@ -888,7 +1065,35 @@ export class LoggerMiddleware {
         await new Promise((resolve) => setTimeout(resolve, delayMs));
       }
 
-      this.#sendResponse(res, event, mergedOptions);
+      const backgroundTimeoutMs = IS_TEST()
+        ? APP_CONSTS.BACKGROUND_TASK_TIMEOUT_TEST_MS
+        : APP_CONSTS.BACKGROUND_TASK_TIMEOUT_PROD_MS;
+      try {
+        await this.#appendAcceptedEvent(event, backgroundTimeoutMs);
+      } catch (err) {
+        const msg = String(/** @type {Error} */ (err).message).toLowerCase();
+        const isPlatformError = APP_CONSTS.PLATFORM_ERROR_KEYWORDS.some(
+          (keyword) => msg.includes(keyword),
+        );
+        this.#log.error(
+          {
+            webhookId: event.webhookId,
+            isPlatformError,
+            err: this.#serializeError(err),
+          },
+          isPlatformError
+            ? LOG_MESSAGES.PLATFORM_LIMIT_ERROR
+            : LOG_MESSAGES.BACKGROUND_ERROR,
+        );
+        if (isPlatformError) {
+          this.#log.warn(LOG_MESSAGES.CHECK_PLATFORM_LIMITS);
+        }
+        return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json({
+          error: ERROR_LABELS.SERVICE_UNAVAILABLE,
+          message: ERROR_MESSAGES.DURABLE_ENQUEUE_FAILED,
+          webhookId: event.webhookId,
+        });
+      }
 
       // Execute background tasks (storage, forwarding, alerting) after response
       const controller = new AbortController();
@@ -930,38 +1135,52 @@ export class LoggerMiddleware {
       };
 
       // Wrap background work in Promise.race to ensure we don't hang the Actor if storage is slow
-      const timeoutMs = IS_TEST()
-        ? APP_CONSTS.BACKGROUND_TASK_TIMEOUT_TEST_MS
-        : APP_CONSTS.BACKGROUND_TASK_TIMEOUT_PROD_MS;
       /** @type {ReturnType<typeof setTimeout> | undefined} */
       let timeoutHandle;
-      await Promise.race([
-        backgroundPromise().finally(() => {
-          clearTimeout(timeoutHandle);
-        }),
-        /** @type {Promise<void>} */
-        (
-          new Promise((resolve) => {
-            timeoutHandle = setTimeout(() => {
-              controller.abort(); // Cancel any pending axios requests
-              const readableTimeout =
-                timeoutMs < APP_CONSTS.MS_PER_SECOND
-                  ? `${timeoutMs}ms`
-                  : `${timeoutMs / APP_CONSTS.MS_PER_SECOND}s`;
-              this.#log.warn(
-                {
-                  eventId: event.id,
-                  webhookId: event.webhookId,
-                  timeout: readableTimeout,
-                },
-                LOG_MESSAGES.BACKGROUND_TIMEOUT,
-              );
-              resolve();
-            }, timeoutMs);
-            if (timeoutHandle?.unref) timeoutHandle.unref();
-          })
-        ),
-      ]);
+      /** @type {() => void} */
+      let startBackgroundTask = () => undefined;
+      const trackedBackgroundTask = new Promise((resolve) => {
+        startBackgroundTask = () => resolve(undefined);
+      }).then(() =>
+        Promise.race([
+          backgroundPromise().finally(() => {
+            clearTimeout(timeoutHandle);
+          }),
+          /** @type {Promise<void>} */
+          (
+            new Promise((resolve) => {
+              timeoutHandle = setTimeout(() => {
+                controller.abort(); // Cancel any pending axios requests
+                const readableTimeout =
+                  backgroundTimeoutMs < APP_CONSTS.MS_PER_SECOND
+                    ? `${backgroundTimeoutMs}ms`
+                    : `${backgroundTimeoutMs / APP_CONSTS.MS_PER_SECOND}s`;
+                this.#log.warn(
+                  {
+                    eventId: event.id,
+                    webhookId: event.webhookId,
+                    timeout: readableTimeout,
+                  },
+                  LOG_MESSAGES.BACKGROUND_TIMEOUT,
+                );
+                resolve();
+              }, backgroundTimeoutMs);
+              if (timeoutHandle?.unref) timeoutHandle.unref();
+            })
+          ),
+        ]),
+      );
+      this.#activeBackgroundTasks.add(trackedBackgroundTask);
+
+      this.#sendResponse(res, event, mergedOptions);
+      event.ackMs = getElapsedPhaseMilliseconds(requestStartMs);
+      startBackgroundTask();
+
+      try {
+        await trackedBackgroundTask;
+      } finally {
+        this.#activeBackgroundTasks.delete(trackedBackgroundTask);
+      }
     } catch (err) {
       const middlewareError = /** @type {CommonError} */ (err);
       if (middlewareError.statusCode) {
@@ -1217,15 +1436,19 @@ export class LoggerMiddleware {
   /**
    * @param {WebhookEvent} event
    * @param {CustomRequest} req
+   * @param {LoggerOptions} options
    */
-  async #transformRequestData(event, req) {
+  async #transformRequestData(event, req, options) {
     if (this.#compiledScript) {
+      const scriptTimeoutMs =
+        options.customScriptSlowThresholdMs ??
+        APP_CONSTS.SCRIPT_EXECUTION_TIMEOUT_MS;
       try {
         const executionResult = await executeCustomScript({
           source: this.#compiledScript,
           event,
           req: createCustomScriptSafeRequest(req),
-          timeoutMs: APP_CONSTS.SCRIPT_EXECUTION_TIMEOUT_MS,
+          timeoutMs: scriptTimeoutMs,
         });
 
         emitCustomScriptLogs(this.#log, executionResult.logs);
@@ -1247,15 +1470,43 @@ export class LoggerMiddleware {
             err: this.#serializeError(error),
           },
           isTimeout
-            ? LOG_MESSAGES.SCRIPT_EXECUTION_TIMED_OUT(
-                APP_CONSTS.SCRIPT_EXECUTION_TIMEOUT_MS,
-              )
+            ? LOG_MESSAGES.SCRIPT_EXECUTION_TIMED_OUT(scriptTimeoutMs)
             : LOG_MESSAGES.SCRIPT_EXECUTION_FAILED,
         );
       }
     }
 
     return event;
+  }
+
+  /**
+   * @param {WebhookEvent} event
+   * @param {unknown} body
+   * @param {LoggerOptions} options
+   * @param {boolean} [mutateResponse=true]
+   * @returns {boolean}
+   */
+  #applySchemaValidation(event, body, options, mutateResponse = true) {
+    if (!options.jsonSchema) {
+      return true;
+    }
+
+    const validate = this.#getValidator(options.jsonSchema);
+    const valid = typeof validate === "function" ? validate(body) : false;
+    event.schemaValid = valid;
+
+    if (!valid) {
+      event.schemaError = ajv.errorsText(validate?.errors);
+      if (mutateResponse) {
+        event.statusCode = HTTP_STATUS.BAD_REQUEST;
+        event.responseBody = {
+          error: event.schemaError,
+          id: event.webhookId,
+        };
+      }
+    }
+
+    return valid;
   }
 
   /**
@@ -1306,54 +1557,52 @@ export class LoggerMiddleware {
    * @param {AbortSignal} [signal]
    */
   async #executeBackgroundTasks(event, req, options, signal) {
+    const backgroundStartMs = performance.now();
     if (signal?.aborted) {
       return;
     }
 
     const { forwardUrl } = options;
 
-    // If script cleared BOTH responseHeaders AND webhookId, skip everything
-    if (event && !event.responseHeaders && !event.webhookId) {
-      return;
-    }
-
-    const timeoutMs = IS_TEST()
-      ? APP_CONSTS.BACKGROUND_TASK_TIMEOUT_TEST_MS
-      : APP_CONSTS.BACKGROUND_TASK_TIMEOUT_PROD_MS;
-
     try {
-      if (event && event.webhookId) {
-        // Emit internal event and callback FIRST to ensure they run even if pushData hangs
-        appEvents.emit(EVENT_NAMES.LOG_RECEIVED, event);
-        if (this.#onEvent) this.#onEvent(event);
+      if (event.asyncEnrichment) {
+        const ingestionIdentity = this.#captureIngestionIdentity(event);
+        const acknowledgedStatusCode = event.statusCode;
+        const acknowledgedResponseBody = event.responseBody;
+        const acknowledgedResponseHeaders = event.responseHeaders;
+        const schemaStartMs = performance.now();
+        const schemaValid = this.#applySchemaValidation(
+          event,
+          /** @type {CustomRequest} */ (req).body,
+          options,
+          false,
+        );
+        event.schemaMs = getElapsedPhaseMilliseconds(schemaStartMs);
 
-        // Add timeout to pushData
-        /** @type {ReturnType<typeof setTimeout> | undefined} */
-        let pushDataTimeout;
-        try {
-          await Promise.race([
-            Actor.pushData(event),
-            new Promise((_, reject) => {
-              pushDataTimeout = setTimeout(
-                () =>
-                  reject(
-                    new Error(
-                      ERROR_MESSAGES.ACTOR_PUSH_DATA_TIMEOUT(timeoutMs),
-                    ),
-                  ),
-                timeoutMs,
-              );
-              if (pushDataTimeout?.unref) pushDataTimeout.unref();
-            }),
-          ]);
-        } finally {
-          if (pushDataTimeout) {
-            clearTimeout(pushDataTimeout);
-          }
+        if (schemaValid) {
+          const scriptStartMs = performance.now();
+          event = await this.#transformRequestData(
+            event,
+            /** @type {CustomRequest} */ (req),
+            options,
+          );
+          event = this.#restoreIngestionIdentity(event, ingestionIdentity);
+          event.scriptMs = getElapsedPhaseMilliseconds(scriptStartMs);
+          event.statusCode = acknowledgedStatusCode;
+          event.responseBody = acknowledgedResponseBody;
+          event.responseHeaders = acknowledgedResponseHeaders;
         }
       }
 
+      const duckdbStartMs = performance.now();
+      await logRepository.insertLog(event);
+      event.duckdbMs = getElapsedPhaseMilliseconds(duckdbStartMs);
+
+      appEvents.emit(EVENT_NAMES.LOG_RECEIVED, event);
+      if (this.#onEvent) this.#onEvent(event);
+
       if (forwardUrl && (!signal || !signal?.aborted)) {
+        const forwardStartMs = performance.now();
         await this.#forwardingService.forwardWebhook(
           event,
           req,
@@ -1361,6 +1610,7 @@ export class LoggerMiddleware {
           forwardUrl,
           signal,
         );
+        event.forwardMs = getElapsedPhaseMilliseconds(forwardStartMs);
       }
     } catch (error) {
       if (signal?.aborted) {
@@ -1387,6 +1637,16 @@ export class LoggerMiddleware {
       if (isPlatformError) {
         this.#log.warn(LOG_MESSAGES.CHECK_PLATFORM_LIMITS);
       }
+    } finally {
+      event.backgroundTotalMs = getElapsedPhaseMilliseconds(backgroundStartMs);
+      try {
+        await logRepository.updateLogTelemetry(event);
+      } catch (err) {
+        this.#log.warn(
+          { eventId: event.id, err: this.#serializeError(err) },
+          LOG_MESSAGES.REALTIME_INSERT_FAILED,
+        );
+      }
     }
   }
 }
@@ -1397,7 +1657,8 @@ export class LoggerMiddleware {
  *   ingestMiddleware: RequestHandler,
  *   options: LoggerOptions,
  *   hasCompiledScript: () => boolean,
- *   hasValidator: () => boolean
+ *   hasValidator: () => boolean,
+ *   waitForBackgroundTasks: () => Promise<void>
  * }} HotReloadableMiddleware
  */
 
@@ -1431,6 +1692,7 @@ export const createLoggerMiddleware = (
   runner.ingestMiddleware = mw.ingestMiddleware.bind(mw);
   runner.hasCompiledScript = mw.hasCompiledScript.bind(mw);
   runner.hasValidator = mw.hasValidator.bind(mw);
+  runner.waitForBackgroundTasks = mw.waitForBackgroundTasks.bind(mw);
   Object.defineProperty(runner, "options", {
     get: () => mw.options,
     enumerable: true,

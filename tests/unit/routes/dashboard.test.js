@@ -74,7 +74,7 @@ describe("Dashboard Route", () => {
   });
 
   describe("createDashboardHandler", () => {
-    /** @type {DashboardDependencies & { webhookManager: { getAllActive: jest.Mock } }} */
+    /** @type {DashboardDependencies & { webhookManager: { getAllActive: jest.Mock }, getScriptWarning: jest.Mock }} */
     let deps;
     /** @type {Request} */
     let mockReq;
@@ -103,6 +103,7 @@ describe("Dashboard Route", () => {
           },
         ),
         getSignatureStatus: assertType(jest.fn()).mockReturnValue("GitHub"),
+        getScriptWarning: assertType(jest.fn()).mockReturnValue(null),
       };
 
       mockReq = createMockRequest();
@@ -196,6 +197,41 @@ describe("Dashboard Route", () => {
       const htmlOutput = jest.mocked(mockRes.send).mock.calls[0][0];
       expect(htmlOutput).not.toContain("<script>");
       expect(htmlOutput).toContain(escapeHtml(deps.version));
+    });
+
+    it("should render and escape strict custom script warning", async () => {
+      templateCache = `${DASHBOARD_PLACEHOLDERS.SCRIPT_WARNING_CLASS}|${DASHBOARD_PLACEHOLDERS.SCRIPT_WARNING_LABEL}`;
+      const unsafeWarning = '<script>alert("warning")</script>';
+      jest.mocked(deps.getScriptWarning).mockReturnValueOnce(unsafeWarning);
+
+      const handler = createDashboardHandler(deps);
+      await handler(mockReq, mockRes, mockNext);
+
+      const htmlOutput = jest.mocked(mockRes.send).mock.calls[0][0];
+      expect(htmlOutput).toContain("script-warning|");
+      expect(htmlOutput).not.toContain("<script>");
+      expect(htmlOutput).toContain(escapeHtml(unsafeWarning));
+    });
+
+    it("should hide strict custom script warning when not applicable", async () => {
+      templateCache = `${DASHBOARD_PLACEHOLDERS.SCRIPT_WARNING_CLASS}|${DASHBOARD_PLACEHOLDERS.SCRIPT_WARNING_LABEL}`;
+
+      const handler = createDashboardHandler(deps);
+      await handler(mockReq, mockRes, mockNext);
+
+      const htmlOutput = jest.mocked(mockRes.send).mock.calls[0][0];
+      expect(htmlOutput).toBe("script-warning is-hidden|");
+    });
+
+    it("should handle missing script warning dependency gracefully", async () => {
+      templateCache = `${DASHBOARD_PLACEHOLDERS.SCRIPT_WARNING_CLASS}|${DASHBOARD_PLACEHOLDERS.SCRIPT_WARNING_LABEL}`;
+      deps.getScriptWarning = assertType(undefined);
+
+      const handler = createDashboardHandler(deps);
+      await handler(mockReq, mockRes, mockNext);
+
+      const htmlOutput = jest.mocked(mockRes.send).mock.calls[0][0];
+      expect(htmlOutput).toBe("script-warning is-hidden|");
     });
 
     it("should serve HTML if Accept header is missing", async () => {

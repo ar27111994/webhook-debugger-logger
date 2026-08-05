@@ -114,6 +114,85 @@
         "description": "Time taken to process the request in microseconds before any simulated response delay is applied",
         "example": 5400
       },
+      "responseMode": {
+        "type": "string",
+        "enum": ["fast", "strict"],
+        "title": "Response Mode",
+        "description": "Whether the request used fast acknowledgement or strict synchronous response mutation",
+        "example": "fast"
+      },
+      "asyncEnrichment": {
+        "type": "boolean",
+        "title": "Async Enrichment",
+        "description": "Whether enrichment work ran after the webhook acknowledgement",
+        "example": true
+      },
+      "scriptDemotedToAsync": {
+        "type": "boolean",
+        "title": "Script Demoted",
+        "description": "Whether a slow synchronous script was demoted to async processing for this request",
+        "example": false
+      },
+      "authMs": {
+        "type": "integer",
+        "title": "Auth (ms)",
+        "description": "Authentication and allowlist validation duration in milliseconds",
+        "example": 1
+      },
+      "bodyPrepMs": {
+        "type": "integer",
+        "title": "Body Prep (ms)",
+        "description": "Request body capture and preparation duration in milliseconds",
+        "example": 1
+      },
+      "schemaMs": {
+        "type": "integer",
+        "title": "Schema (ms)",
+        "description": "JSON Schema validation duration in milliseconds",
+        "example": 2
+      },
+      "signatureMs": {
+        "type": "integer",
+        "title": "Signature (ms)",
+        "description": "Signature verification duration in milliseconds",
+        "example": 1
+      },
+      "scriptMs": {
+        "type": "integer",
+        "title": "Script (ms)",
+        "description": "Custom script execution duration in milliseconds",
+        "example": 8
+      },
+      "ackMs": {
+        "type": "integer",
+        "title": "Ack (ms)",
+        "description": "Time from request start until the response path was ready to acknowledge",
+        "example": 12
+      },
+      "pushDataMs": {
+        "type": "integer",
+        "title": "Append Log (ms)",
+        "description": "Authoritative Apify Dataset append duration in milliseconds",
+        "example": 4
+      },
+      "duckdbMs": {
+        "type": "integer",
+        "title": "DuckDB (ms)",
+        "description": "Read-model projection duration in milliseconds",
+        "example": 3
+      },
+      "forwardMs": {
+        "type": "integer",
+        "title": "Forward (ms)",
+        "description": "Forwarding duration in milliseconds when forwarding is configured",
+        "example": 25
+      },
+      "backgroundTotalMs": {
+        "type": "integer",
+        "title": "Background Total (ms)",
+        "description": "Total async enrichment duration in milliseconds",
+        "example": 31
+      },
       "remoteIp": {
         "type": "string",
         "title": "Source IP",
@@ -196,6 +275,10 @@
           "size",
           "processingTime",
           "processingTimeUs",
+          "responseMode",
+          "ackMs",
+          "scriptMs",
+          "backgroundTotalMs",
           "remoteIp",
           "signatureProvider"
         ],
@@ -236,6 +319,18 @@
           "processingTimeUs": {
             "label": "Processing Time (μs)"
           },
+          "responseMode": {
+            "label": "Mode"
+          },
+          "ackMs": {
+            "label": "Ack (ms)"
+          },
+          "scriptMs": {
+            "label": "Script (ms)"
+          },
+          "backgroundTotalMs": {
+            "label": "Background (ms)"
+          },
           "remoteIp": {
             "label": "Source IP"
           },
@@ -260,7 +355,20 @@
           "responseBody",
           "responseHeaders",
           "signatureProvider",
-          "signatureError"
+          "signatureError",
+          "responseMode",
+          "asyncEnrichment",
+          "scriptDemotedToAsync",
+          "authMs",
+          "bodyPrepMs",
+          "schemaMs",
+          "signatureMs",
+          "scriptMs",
+          "ackMs",
+          "pushDataMs",
+          "duckdbMs",
+          "forwardMs",
+          "backgroundTotalMs"
         ],
         "desc": true
       },
@@ -309,6 +417,47 @@
           },
           "signatureError": {
             "label": "Sig Error"
+          },
+          "responseMode": {
+            "label": "Mode"
+          },
+          "asyncEnrichment": {
+            "label": "Async",
+            "format": "boolean"
+          },
+          "scriptDemotedToAsync": {
+            "label": "Script Demoted",
+            "format": "boolean"
+          },
+          "authMs": {
+            "label": "Auth (ms)"
+          },
+          "bodyPrepMs": {
+            "label": "Body Prep (ms)"
+          },
+          "schemaMs": {
+            "label": "Schema (ms)"
+          },
+          "signatureMs": {
+            "label": "Signature (ms)"
+          },
+          "scriptMs": {
+            "label": "Script (ms)"
+          },
+          "ackMs": {
+            "label": "Ack (ms)"
+          },
+          "pushDataMs": {
+            "label": "Append (ms)"
+          },
+          "duckdbMs": {
+            "label": "DuckDB (ms)"
+          },
+          "forwardMs": {
+            "label": "Forward (ms)"
+          },
+          "backgroundTotalMs": {
+            "label": "Background (ms)"
           }
         }
       }

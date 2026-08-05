@@ -5,6 +5,7 @@
  * @module utils/config
  */
 import { APP_CONSTS } from "../consts/app.js";
+import { RESPONSE_MODES } from "../consts/app.js";
 import { HTTP_CONSTS } from "../consts/http.js";
 import { LOG_COMPONENTS } from "../consts/logging.js";
 import { LOG_MESSAGES } from "../consts/messages.js";
@@ -47,6 +48,16 @@ export function parseWebhookOptions(options = {}) {
     alertOn: options.alertOn,
     ...coerceRuntimeOptions(options),
   };
+}
+
+/**
+ * @param {unknown} value
+ * @returns {"fast"|"strict"}
+ */
+export function normalizeResponseMode(value) {
+  return value === RESPONSE_MODES.STRICT
+    ? RESPONSE_MODES.STRICT
+    : RESPONSE_MODES.FAST;
 }
 
 /**
@@ -182,6 +193,20 @@ export function coerceRuntimeOptions(input) {
         )
       : APP_CONSTS.DEFAULT_FORWARD_RETRIES;
 
+  const customScriptSlowThresholdRaw = Number(
+    input.customScriptSlowThresholdMs,
+  );
+  const customScriptSlowThresholdMs =
+    Number.isFinite(customScriptSlowThresholdRaw) &&
+    customScriptSlowThresholdRaw >=
+      APP_CONSTS.MIN_CUSTOM_SCRIPT_SLOW_THRESHOLD_MS
+      ? clampWithWarning(
+          Math.floor(customScriptSlowThresholdRaw),
+          APP_CONSTS.MAX_SAFE_CUSTOM_SCRIPT_SLOW_THRESHOLD_MS,
+          "customScriptSlowThresholdMs",
+        )
+      : APP_CONSTS.DEFAULT_CUSTOM_SCRIPT_SLOW_THRESHOLD_MS;
+
   const useFixedMemory = Boolean(input.useFixedMemory);
   const fixedMemoryRaw = Number(input.fixedMemoryMbytes);
   const fixedMemoryMbytes =
@@ -201,9 +226,11 @@ export function coerceRuntimeOptions(input) {
     authKey,
     maxPayloadSize,
     responseDelayMs,
+    responseMode: normalizeResponseMode(input.responseMode),
     replayMaxRetries,
     replayTimeoutMs,
     maxForwardRetries,
+    customScriptSlowThresholdMs,
     useFixedMemory,
     fixedMemoryMbytes,
   };

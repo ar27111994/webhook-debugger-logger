@@ -158,6 +158,8 @@ export const ERROR_MESSAGES = Object.freeze({
      * @returns {string}
      */
     (ms) => `Actor.pushData timeout after ${ms}ms`,
+  DURABLE_ENQUEUE_FAILED:
+    "Webhook accepted path could not durably enqueue the event",
   ALERT_URL_BLOCKED_BY_SSRF_POLICY:
     /**
      * @param {string} error

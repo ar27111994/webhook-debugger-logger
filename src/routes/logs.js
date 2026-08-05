@@ -36,11 +36,15 @@ import { HTTP_HEADERS } from "../consts/http.js";
  * @param {WebhookManager} _webhookManager
  * @param {object} [deps]
  * @param {LogRepository} [deps.logRepo] - Optional repository injection for testing
+ * @param {string[]} [deps.validSortFields] - Optional sort field whitelist injection for testing
  * @returns {RequestHandler}
  */
 export const createLogsHandler = (
   _webhookManager,
-  { logRepo = logRepository } = {},
+  {
+    logRepo = logRepository,
+    validSortFields = LOG_CONSTS.VALID_SORT_FIELDS,
+  } = {},
 ) =>
   asyncHandler(
     /** @param {Request} req @param {Response} res */
@@ -60,6 +64,16 @@ export const createLogsHandler = (
           userAgent,
           processingTime,
           processingTimeUs,
+          authMs,
+          bodyPrepMs,
+          schemaMs,
+          signatureMs,
+          scriptMs,
+          ackMs,
+          pushDataMs,
+          duckdbMs,
+          forwardMs,
+          backgroundTotalMs,
           size,
           headers,
           query,
@@ -68,6 +82,11 @@ export const createLogsHandler = (
           responseHeaders,
           signatureProvider,
           signatureError,
+          responseMode,
+          asyncEnrichment,
+          scriptDemotedToAsync,
+          schemaValid,
+          schemaError,
           limit = PAGINATION_CONSTS.MAX_PAGE_LIMIT,
           offset = PAGINATION_CONSTS.DEFAULT_PAGE_OFFSET,
           cursor,
@@ -122,11 +141,9 @@ export const createLogsHandler = (
           }
         } else {
           sortRules.push({
-            field: LOG_CONSTS.VALID_SORT_FIELDS.includes(
-              SQL_CONSTS.COLUMNS.TIMESTAMP,
-            )
+            field: validSortFields.includes(SQL_CONSTS.COLUMNS.TIMESTAMP)
               ? SQL_CONSTS.COLUMNS.TIMESTAMP
-              : LOG_CONSTS.VALID_SORT_FIELDS[0],
+              : validSortFields[0],
             dir: SORT_DIRECTIONS.DESC,
           });
         }
@@ -156,10 +173,34 @@ export const createLogsHandler = (
             ? String(signatureProvider)
             : undefined,
           signatureError: signatureError ? String(signatureError) : undefined,
+          responseMode: responseMode ? String(responseMode) : undefined,
+          asyncEnrichment:
+            asyncEnrichment !== undefined
+              ? String(asyncEnrichment) === String(true)
+              : undefined,
+          scriptDemotedToAsync:
+            scriptDemotedToAsync !== undefined
+              ? String(scriptDemotedToAsync) === String(true)
+              : undefined,
+          schemaValid:
+            schemaValid !== undefined
+              ? String(schemaValid) === String(true)
+              : undefined,
+          schemaError: schemaError ? String(schemaError) : undefined,
           // StatusCode can be a range (e.g. gt:400) or exact value
           statusCode: parseRangeQuery(statusCode),
           processingTime: parseRangeQuery(processingTime),
           processingTimeUs: parseRangeQuery(processingTimeUs),
+          authMs: parseRangeQuery(authMs),
+          bodyPrepMs: parseRangeQuery(bodyPrepMs),
+          schemaMs: parseRangeQuery(schemaMs),
+          signatureMs: parseRangeQuery(signatureMs),
+          scriptMs: parseRangeQuery(scriptMs),
+          ackMs: parseRangeQuery(ackMs),
+          pushDataMs: parseRangeQuery(pushDataMs),
+          duckdbMs: parseRangeQuery(duckdbMs),
+          forwardMs: parseRangeQuery(forwardMs),
+          backgroundTotalMs: parseRangeQuery(backgroundTotalMs),
           size: parseRangeQuery(size),
           timestamp:
             timestampConditions.length > 0 ? timestampConditions : undefined,

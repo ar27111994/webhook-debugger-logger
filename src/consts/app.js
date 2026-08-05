@@ -27,6 +27,11 @@ export const EXPRESS_SETTINGS = Object.freeze({
   TRUST_PROXY: "trust proxy",
 });
 
+export const RESPONSE_MODES = Object.freeze({
+  FAST: "fast",
+  STRICT: "strict",
+});
+
 export const APP_CONSTS = Object.freeze({
   SERVICE_NAME: actorJson.name,
   STARTUP_ID_PREFIX: "startup-",
@@ -109,6 +114,12 @@ export const APP_CONSTS = Object.freeze({
   DEFAULT_MASK_SENSITIVE_DATA: inputSchema.properties.maskSensitiveData.default,
   DEFAULT_ENABLE_JSON_PARSING: inputSchema.properties.enableJSONParsing.default,
   DEFAULT_FORWARD_HEADERS: inputSchema.properties.forwardHeaders.default,
+  DEFAULT_RESPONSE_MODE:
+    inputSchema.properties.responseMode?.default ?? RESPONSE_MODES.FAST,
+  DEFAULT_CUSTOM_SCRIPT_SLOW_THRESHOLD_MS: getInt(
+    "DEFAULT_CUSTOM_SCRIPT_SLOW_THRESHOLD_MS",
+    inputSchema.properties.customScriptSlowThresholdMs?.default ?? 100,
+  ),
 
   // Validation Limits & Safe Bounds
   MAX_SAFE_URL_COUNT: getInt(
@@ -139,6 +150,14 @@ export const APP_CONSTS = Object.freeze({
     "MAX_SAFE_FORWARD_RETRIES",
     inputSchema.properties.maxForwardRetries.maximum,
   ),
+  MAX_SAFE_CUSTOM_SCRIPT_SLOW_THRESHOLD_MS: getInt(
+    "MAX_SAFE_CUSTOM_SCRIPT_SLOW_THRESHOLD_MS",
+    inputSchema.properties.customScriptSlowThresholdMs?.maximum ?? 5000,
+  ),
+  MIN_CUSTOM_SCRIPT_SLOW_THRESHOLD_MS: getInt(
+    "MIN_CUSTOM_SCRIPT_SLOW_THRESHOLD_MS",
+    inputSchema.properties.customScriptSlowThresholdMs?.minimum ?? 10,
+  ),
   MAX_SAFE_FIXED_MEMORY_MBYTES: getInt(
     "MAX_SAFE_FIXED_MEMORY_MBYTES",
     inputSchema.properties.fixedMemoryMbytes.maximum,
@@ -165,6 +184,12 @@ export const APP_CONSTS = Object.freeze({
     5 * 60 * 1000,
   ),
   PLATFORM_ERROR_KEYWORDS: ["dataset", "quota", "limit", "rate"],
+});
+
+export const LATENCY_BUDGETS = Object.freeze({
+  NO_CUSTOM_SCRIPT: Object.freeze({ p50Ms: 50, p95Ms: 150 }),
+  SCHEMA_ONLY: Object.freeze({ p50Ms: 75, p95Ms: 200 }),
+  STRICT_CUSTOM_SCRIPT: Object.freeze({ p50Ms: 150, p95Ms: 300 }),
 });
 
 export const REPLAY_STATUS_LABELS = Object.freeze({

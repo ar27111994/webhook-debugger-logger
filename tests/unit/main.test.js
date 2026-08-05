@@ -345,7 +345,7 @@ describe("Main Entry Point", () => {
         await expect(
           eventManager.emitSystemInfoEvent(intervalCallback),
         ).resolves.toBeUndefined();
-        expect(intervalCallback).toHaveBeenCalledTimes(1);
+        expect(intervalCallback).not.toHaveBeenCalled();
         await expect(
           eventManager.emitSystemInfoEvent(),
         ).resolves.toBeUndefined();
@@ -899,6 +899,22 @@ describe("Main Entry Point", () => {
       expect(systemMock.exit).not.toHaveBeenCalledWith(EXIT_CODES.SUCCESS);
     });
 
+    it("should close the Apify event manager during test final cleanup when available", async () => {
+      const close = jest.fn().mockResolvedValue(assertType(undefined));
+      apifyMock.config = {
+        getEventManager: jest.fn(() => ({ close })),
+      };
+
+      try {
+        await mainModule.shutdown(SHUTDOWN_SIGNALS.TEST_COMPLETE);
+
+        expect(apifyMock.config.getEventManager).toHaveBeenCalled();
+        expect(close).toHaveBeenCalled();
+      } finally {
+        delete apifyMock.config;
+      }
+    });
+
     it("should handle falsy forceExitTimer when signal is not TEST_COMPLETE", async () => {
       const origSetTimeout = global.setTimeout;
       try {
@@ -1387,6 +1403,40 @@ describe("Main Entry Point", () => {
         jest.mocked(routesMock.createDashboardHandler).mock.calls[0]?.[0],
       );
       expect(dashOpts.getSignatureStatus()).toBeNull();
+    });
+
+    it("should expose strict custom script warnings to the dashboard", async () => {
+      const { loggerMiddlewareMock } =
+        await import("../setup/helpers/shared-mocks.js");
+      Object.defineProperty(loggerMiddlewareMock, "options", {
+        value: { responseMode: "strict" },
+        configurable: true,
+      });
+      loggerMiddlewareMock.hasCompiledScript.mockReturnValueOnce(true);
+
+      /** @type {DashboardDependencies} */
+      const dashOpts = assertType(
+        jest.mocked(routesMock.createDashboardHandler).mock.calls[0]?.[0],
+      );
+      expect(dashOpts.getScriptWarning?.()).toContain(
+        "Synchronous custom scripts are enabled",
+      );
+    });
+
+    it("should suppress dashboard script warnings outside strict script mode", async () => {
+      const { loggerMiddlewareMock } =
+        await import("../setup/helpers/shared-mocks.js");
+      Object.defineProperty(loggerMiddlewareMock, "options", {
+        value: { responseMode: "fast" },
+        configurable: true,
+      });
+      loggerMiddlewareMock.hasCompiledScript.mockReturnValueOnce(true);
+
+      /** @type {DashboardDependencies} */
+      const dashOpts = assertType(
+        jest.mocked(routesMock.createDashboardHandler).mock.calls[0]?.[0],
+      );
+      expect(dashOpts.getScriptWarning?.()).toBeNull();
     });
 
     it("should expose the preloaded template via getTemplate() before any setTemplate call", () => {

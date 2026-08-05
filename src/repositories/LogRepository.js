@@ -48,18 +48,52 @@ const INSERT_LOG_SQL = `
         id, webhookId, requestId, method, statusCode, contentType,
     processingTime, processingTimeUs, size, remoteIp, userAgent, requestUrl,
         bodyEncoding, headers, query, body, responseHeaders, responseBody,
-        timestamp, signatureValid, signatureProvider, signatureError, source_offset
+      timestamp, signatureValid, signatureProvider, signatureError,
+      schemaValid, schemaError, responseMode, asyncEnrichment,
+      scriptDemotedToAsync, authMs, bodyPrepMs, schemaMs, signatureMs,
+      scriptMs, ackMs, pushDataMs, duckdbMs, forwardMs, backgroundTotalMs,
+      source_offset
     ) VALUES (
         $id, $webhookId, $requestId, $method, $statusCode, $contentType,
     $processingTime, $processingTimeUs, $size, $remoteIp, $userAgent, $requestUrl,
         $bodyEncoding, $headers, $query, $body, $responseHeaders, $responseBody,
-        $timestamp, $signatureValid, $signatureProvider, $signatureError, $sourceOffset
+      $timestamp, $signatureValid, $signatureProvider, $signatureError,
+      $schemaValid, $schemaError, $responseMode, $asyncEnrichment,
+      $scriptDemotedToAsync, $authMs, $bodyPrepMs, $schemaMs, $signatureMs,
+      $scriptMs, $ackMs, $pushDataMs, $duckdbMs, $forwardMs,
+      $backgroundTotalMs, $sourceOffset
     )
     ON CONFLICT (id) DO UPDATE SET
-        source_offset = COALESCE(EXCLUDED.source_offset, logs.source_offset)
+      source_offset = COALESCE(EXCLUDED.source_offset, logs.source_offset),
+      pushDataMs = COALESCE(EXCLUDED.pushDataMs, logs.pushDataMs),
+      duckdbMs = COALESCE(EXCLUDED.duckdbMs, logs.duckdbMs),
+      forwardMs = COALESCE(EXCLUDED.forwardMs, logs.forwardMs),
+      backgroundTotalMs = COALESCE(EXCLUDED.backgroundTotalMs, logs.backgroundTotalMs)
 `;
 
+const UPDATE_LOG_TELEMETRY_SQL = `
+      UPDATE ${DUCKDB_TABLES.LOGS}
+      SET duckdbMs = COALESCE($duckdbMs, duckdbMs),
+        forwardMs = COALESCE($forwardMs, forwardMs),
+        backgroundTotalMs = COALESCE($backgroundTotalMs, backgroundTotalMs)
+      WHERE id = $id
+    `;
+
 const VALID_LOG_COLUMNS = SQL_CONSTS.ALL_LOG_COLUMNS;
+
+const LATENCY_METRICS_SQL = `
+  SELECT
+    COUNT(*) AS total,
+    AVG(ackMs) AS avgAckMs,
+    MAX(ackMs) AS maxAckMs,
+    AVG(scriptMs) AS avgScriptMs,
+    MAX(scriptMs) AS maxScriptMs,
+    AVG(backgroundTotalMs) AS avgBackgroundTotalMs,
+    MAX(backgroundTotalMs) AS maxBackgroundTotalMs,
+    SUM(CASE WHEN asyncEnrichment THEN 1 ELSE 0 END) AS asyncEnrichmentCount,
+    SUM(CASE WHEN scriptDemotedToAsync THEN 1 ELSE 0 END) AS scriptDemotionCount
+  FROM ${DUCKDB_TABLES.LOGS}
+`;
 
 export class LogRepository {
   /**
@@ -247,10 +281,46 @@ export class LogRepository {
       params.signatureError = `%${conditions.signatureError}%`;
     }
 
+    if (conditions.responseMode) {
+      where.push("responseMode = $responseMode");
+      params.responseMode = conditions.responseMode;
+    }
+
+    if (conditions.asyncEnrichment !== undefined) {
+      where.push("asyncEnrichment = $asyncEnrichment");
+      params.asyncEnrichment = String(conditions.asyncEnrichment) === "true";
+    }
+
+    if (conditions.scriptDemotedToAsync !== undefined) {
+      where.push("scriptDemotedToAsync = $scriptDemotedToAsync");
+      params.scriptDemotedToAsync =
+        String(conditions.scriptDemotedToAsync) === "true";
+    }
+
+    if (conditions.schemaValid !== undefined) {
+      where.push("schemaValid = $schemaValid");
+      params.schemaValid = String(conditions.schemaValid) === "true";
+    }
+
+    if (conditions.schemaError) {
+      where.push("schemaError ILIKE $schemaError");
+      params.schemaError = `%${conditions.schemaError}%`;
+    }
+
     merge(this.#addRange("size", conditions.size));
     merge(this.#addRange("timestamp", conditions.timestamp));
     merge(this.#addRange("processingTime", conditions.processingTime));
     merge(this.#addRange("processingTimeUs", conditions.processingTimeUs));
+    merge(this.#addRange("authMs", conditions.authMs));
+    merge(this.#addRange("bodyPrepMs", conditions.bodyPrepMs));
+    merge(this.#addRange("schemaMs", conditions.schemaMs));
+    merge(this.#addRange("signatureMs", conditions.signatureMs));
+    merge(this.#addRange("scriptMs", conditions.scriptMs));
+    merge(this.#addRange("ackMs", conditions.ackMs));
+    merge(this.#addRange("pushDataMs", conditions.pushDataMs));
+    merge(this.#addRange("duckdbMs", conditions.duckdbMs));
+    merge(this.#addRange("forwardMs", conditions.forwardMs));
+    merge(this.#addRange("backgroundTotalMs", conditions.backgroundTotalMs));
 
     merge(this.#addJsonFilter("headers", conditions.headers));
     merge(this.#addJsonFilter("query", conditions.query));
@@ -402,10 +472,25 @@ export class LogRepository {
         log.signatureValidation?.provider || log.signatureProvider || null,
       signatureError:
         log.signatureValidation?.error || log.signatureError || null,
+      schemaValid: log.schemaValid ?? null,
+      schemaError: log.schemaError || null,
+      responseMode: log.responseMode || null,
+      asyncEnrichment: log.asyncEnrichment ?? null,
+      scriptDemotedToAsync: log.scriptDemotedToAsync ?? null,
 
       requestId: log.requestId || null,
       processingTime: log.processingTime ?? null,
       processingTimeUs: log.processingTimeUs ?? null,
+      authMs: log.authMs ?? null,
+      bodyPrepMs: log.bodyPrepMs ?? null,
+      schemaMs: log.schemaMs ?? null,
+      signatureMs: log.signatureMs ?? null,
+      scriptMs: log.scriptMs ?? null,
+      ackMs: log.ackMs ?? null,
+      pushDataMs: log.pushDataMs ?? null,
+      duckdbMs: log.duckdbMs ?? null,
+      forwardMs: log.forwardMs ?? null,
+      backgroundTotalMs: log.backgroundTotalMs ?? null,
       contentType: log.contentType || null,
       bodyEncoding: log.bodyEncoding || null,
 
@@ -421,6 +506,41 @@ export class LogRepository {
    */
   async insertLog(log) {
     await executeWrite(INSERT_LOG_SQL, this.#mapLogToParams(log));
+  }
+
+  /**
+   * Updates post-insert telemetry collected after the initial local projection.
+   * @param {Pick<LogEntry, "id" | "duckdbMs" | "forwardMs" | "backgroundTotalMs">} log
+   * @returns {Promise<void>}
+   */
+  async updateLogTelemetry(log) {
+    await executeWrite(UPDATE_LOG_TELEMETRY_SQL, {
+      id: log.id,
+      duckdbMs: log.duckdbMs ?? null,
+      forwardMs: log.forwardMs ?? null,
+      backgroundTotalMs: log.backgroundTotalMs ?? null,
+    });
+  }
+
+  /**
+   * Returns aggregate latency telemetry for health and monitoring endpoints.
+   * @returns {Promise<Record<string, number>>}
+   */
+  async getLatencyMetrics() {
+    const rows = await executeQuery(LATENCY_METRICS_SQL, {});
+    const row = this.#fixBigInts(rows[0]) || {};
+
+    return {
+      total: Number(row.total || 0),
+      avgAckMs: Number(row.avgAckMs || 0),
+      maxAckMs: Number(row.maxAckMs || 0),
+      avgScriptMs: Number(row.avgScriptMs || 0),
+      maxScriptMs: Number(row.maxScriptMs || 0),
+      avgBackgroundTotalMs: Number(row.avgBackgroundTotalMs || 0),
+      maxBackgroundTotalMs: Number(row.maxBackgroundTotalMs || 0),
+      asyncEnrichmentCount: Number(row.asyncEnrichmentCount || 0),
+      scriptDemotionCount: Number(row.scriptDemotionCount || 0),
+    };
   }
 
   /**
@@ -595,6 +715,19 @@ export class LogRepository {
       responseHeaders: parseIfPresent("responseHeaders", row),
       responseBody: parseIfPresent("responseBody", row),
       signatureValid: row.signatureValid === true || row.signatureValid === 1,
+      schemaValid:
+        row.schemaValid === undefined || row.schemaValid === null
+          ? undefined
+          : row.schemaValid === true || row.schemaValid === 1,
+      asyncEnrichment:
+        row.asyncEnrichment === undefined || row.asyncEnrichment === null
+          ? undefined
+          : row.asyncEnrichment === true || row.asyncEnrichment === 1,
+      scriptDemotedToAsync:
+        row.scriptDemotedToAsync === undefined ||
+        row.scriptDemotedToAsync === null
+          ? undefined
+          : row.scriptDemotedToAsync === true || row.scriptDemotedToAsync === 1,
       sourceOffset:
         row.source_offset !== undefined ? Number(row.source_offset) : undefined,
     });

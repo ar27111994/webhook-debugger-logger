@@ -19,6 +19,8 @@ export const DASHBOARD_PLACEHOLDERS = Object.freeze({
   ACTIVE_COUNT: "{{ACTIVE_COUNT}}",
   SIGNATURE_BADGE_CLASS: "{{SIGNATURE_BADGE_CLASS}}",
   SIGNATURE_BADGE_LABEL: "{{SIGNATURE_BADGE_LABEL}}",
+  SCRIPT_WARNING_CLASS: "{{SCRIPT_WARNING_CLASS}}",
+  SCRIPT_WARNING_LABEL: "{{SCRIPT_WARNING_LABEL}}",
   BRAND_HEADER: "{{BRAND_HEADER}}",
 });
 
@@ -33,6 +35,8 @@ export const DASHBOARD_CONSTS = Object.freeze({
     "Provider Signature Verification & Enterprise Security",
     "Large Payload Handling & Operational Health",
   ],
+  STRICT_SCRIPT_WARNING:
+    "Synchronous custom scripts are enabled. Responses can wait for script execution, and slow scripts may be demoted to async processing.",
   ENDPOINTS: Object.freeze({
     LOGS: `${APP_ROUTES.LOGS}?limit=${PAGINATION_CONSTS.DEFAULT_PAGE_LIMIT}`,
     LOG_DETAIL: APP_ROUTES.LOG_DETAIL,

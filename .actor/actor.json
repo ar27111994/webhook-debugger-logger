@@ -1,5 +1,8 @@
 {
   "actorSpecification": 1,
+  "meta": {
+    "generatedBy": "GitHub Copilot"
+  },
   "name": "webhook-debugger-logger",
   "title": "Webhook Debugger, Logger & API Mocking Suite",
   "description": "Enterprise-grade tool to test, debug, and mock webhooks. Features real-time SSE streaming, request replay, HTTP forwarding, and JSON schema validation. Perfect for Stripe, GitHub, and Shopify integrations.",

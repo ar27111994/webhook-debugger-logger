@@ -20,13 +20,16 @@ import {
   assertType,
 } from "../../setup/helpers/test-utils.js";
 import { createShopifySignature } from "../../setup/helpers/signature-utils.js";
-import { appEvents, EVENT_NAMES as EVENTS } from "../../../src/utils/events.js";
 import {
   createMockWebhookManager,
   constsMock,
 } from "../../setup/helpers/shared-mocks.js";
 import { Actor } from "apify";
-import { ENCODINGS, HTTP_HEADERS, MIME_TYPES } from "../../../src/consts/http.js";
+import {
+  ENCODINGS,
+  HTTP_HEADERS,
+  MIME_TYPES,
+} from "../../../src/consts/http.js";
 import { SIGNATURE_PROVIDERS } from "../../../src/consts/security.js";
 import { ERROR_LABELS, SIGNATURE_ERRORS } from "../../../src/consts/errors.js";
 import { APP_CONSTS } from "../../../src/consts/app.js";
@@ -55,7 +58,7 @@ describe("Shopify Signature Verification (Raw Body)", () => {
   beforeEach(() => {
     jest
       .mocked(webhookManagerMock.getWebhookData)
-      .mockReturnValue(/** @type {WebhookData} */({}));
+      .mockReturnValue(/** @type {WebhookData} */ ({}));
     jest.mocked(webhookManagerMock.isValid).mockReturnValue(true);
     req = createMockRequest({
       params: { id: "wh_test" },
@@ -67,6 +70,14 @@ describe("Shopify Signature Verification (Raw Body)", () => {
   afterEach(() => {
     jest.restoreAllMocks();
   });
+
+  /**
+   * @param {jest.SpiedFunction<typeof Actor.pushData>} pushDataSpy
+   * @returns {WebhookEvent}
+   */
+  function getPushedEvent(pushDataSpy) {
+    return assertType(pushDataSpy.mock.calls.at(-1)?.[0]);
+  }
 
   test("should verify valid Shopify signature using rawBody even after JSON parsing", async () => {
     const secret = "shared_secret";
@@ -97,12 +108,13 @@ describe("Shopify Signature Verification (Raw Body)", () => {
           secret: secret,
         },
       },
-      () => { },
+      () => {},
     );
 
     const mw = assertType(middleware);
-    const emitSpy = jest.spyOn(appEvents, "emit");
-    jest.spyOn(Actor, "pushData").mockResolvedValue(assertType(undefined));
+    const pushDataSpy = jest
+      .spyOn(Actor, "pushData")
+      .mockResolvedValue(assertType(undefined));
 
     mw._validateWebhookRequest = jest.fn().mockReturnValue({
       isValid: true,
@@ -113,15 +125,7 @@ describe("Shopify Signature Verification (Raw Body)", () => {
     await middleware.middleware(req, res, next);
 
     expect(res.status).toHaveBeenCalledWith(constsMock.HTTP_STATUS.OK);
-    expect(emitSpy).toHaveBeenCalledWith(
-      EVENTS.LOG_RECEIVED,
-      expect.any(Object),
-    );
-
-    /** @type {WebhookEvent} */
-    const event = assertType(
-      emitSpy.mock.calls.find((call) => call[0] === EVENTS.LOG_RECEIVED)?.[1],
-    );
+    const event = getPushedEvent(pushDataSpy);
     expect(event.signatureValid).toBe(true);
     expect(event.signatureProvider).toBe(SIGNATURE_PROVIDERS.SHOPIFY);
   });
@@ -149,12 +153,13 @@ describe("Shopify Signature Verification (Raw Body)", () => {
           secret: secret,
         },
       },
-      () => { },
+      () => {},
     );
 
     const mw = assertType(middleware);
-    const emitSpy = jest.spyOn(appEvents, "emit");
-    jest.spyOn(Actor, "pushData").mockResolvedValue(assertType(undefined));
+    const pushDataSpy = jest
+      .spyOn(Actor, "pushData")
+      .mockResolvedValue(assertType(undefined));
 
     mw._validateWebhookRequest = jest.fn().mockReturnValue({
       isValid: true,
@@ -164,10 +169,7 @@ describe("Shopify Signature Verification (Raw Body)", () => {
 
     await middleware.middleware(req, res, next);
 
-    /** @type {WebhookEvent} */
-    const event = assertType(
-      emitSpy.mock.calls.find((call) => call[0] === EVENTS.LOG_RECEIVED)?.[1],
-    );
+    const event = getPushedEvent(pushDataSpy);
     expect(event.signatureValid).toBe(false);
     expect(event.signatureError).toBe(SIGNATURE_ERRORS.MISMATCH);
     expect(res.status).toHaveBeenCalledWith(
@@ -206,12 +208,13 @@ describe("Shopify Signature Verification (Raw Body)", () => {
           secret: secret,
         },
       },
-      () => { },
+      () => {},
     );
 
     const mw = assertType(middleware);
-    const emitSpy = jest.spyOn(appEvents, "emit");
-    jest.spyOn(Actor, "pushData").mockResolvedValue(assertType(undefined));
+    const pushDataSpy = jest
+      .spyOn(Actor, "pushData")
+      .mockResolvedValue(assertType(undefined));
 
     mw._validateWebhookRequest = jest.fn().mockReturnValue({
       isValid: true,
@@ -221,10 +224,7 @@ describe("Shopify Signature Verification (Raw Body)", () => {
 
     await middleware.middleware(req, res, next);
 
-    /** @type {WebhookEvent} */
-    const event = assertType(
-      emitSpy.mock.calls.find((call) => call[0] === EVENTS.LOG_RECEIVED)?.[1],
-    );
+    const event = getPushedEvent(pushDataSpy);
     expect(event.signatureValid).toBe(false);
     expect(event.signatureError).toEqual(
       expect.stringContaining(SIGNATURE_ERRORS.TIMESTAMP_TOLERANCE),
@@ -262,12 +262,13 @@ describe("Shopify Signature Verification (Raw Body)", () => {
           secret: secret,
         },
       },
-      () => { },
+      () => {},
     );
 
     const mw = assertType(middleware);
-    const emitSpy = jest.spyOn(appEvents, "emit");
-    jest.spyOn(Actor, "pushData").mockResolvedValue(assertType(undefined));
+    const pushDataSpy = jest
+      .spyOn(Actor, "pushData")
+      .mockResolvedValue(assertType(undefined));
 
     mw._validateWebhookRequest = jest.fn().mockReturnValue({
       isValid: true,
@@ -277,11 +278,7 @@ describe("Shopify Signature Verification (Raw Body)", () => {
 
     await middleware.middleware(req, res, next);
 
-    /** @type {WebhookEvent} */
-    const event = emitSpy.mock.calls.find(
-      (call) => call[0] === EVENTS.LOG_RECEIVED,
-    )?.[1];
-    expect(event).toBeDefined();
+    const event = getPushedEvent(pushDataSpy);
     expect(event.signatureValid).toBe(true);
   });
 });

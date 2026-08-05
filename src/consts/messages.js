@@ -145,6 +145,8 @@ export const LOG_MESSAGES = Object.freeze({
      */
     (ms) => `Custom script execution timed out after ${ms}ms`,
   SCRIPT_EXECUTION_FAILED: "Failed to run custom script",
+  SCRIPT_DEMOTED_TO_ASYNC:
+    "Custom script exceeded the strict-mode sync budget and was demoted to async mode",
   WEBHOOK_RECEIVED_STATUS:
     /**
      * @param {number} statusCode

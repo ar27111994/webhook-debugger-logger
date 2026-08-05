@@ -223,6 +223,91 @@ describe("LogRepository", () => {
     });
   });
 
+  describe("getLatencyMetrics", () => {
+    it("should aggregate ack, script, background, and demotion telemetry", async () => {
+      await logRepository.batchInsertLogs([
+        mockLog({
+          id: "metrics_1",
+          ackMs: 10,
+          scriptMs: 4,
+          backgroundTotalMs: 20,
+          asyncEnrichment: true,
+          scriptDemotedToAsync: false,
+        }),
+        mockLog({
+          id: "metrics_2",
+          ackMs: 20,
+          scriptMs: 8,
+          backgroundTotalMs: 40,
+          asyncEnrichment: true,
+          scriptDemotedToAsync: true,
+        }),
+      ]);
+
+      const metrics = await logRepository.getLatencyMetrics();
+
+      expect(metrics).toEqual(
+        expect.objectContaining({
+          total: 2,
+          avgAckMs: 15,
+          maxAckMs: 20,
+          avgScriptMs: 6,
+          maxScriptMs: 8,
+          avgBackgroundTotalMs: 30,
+          maxBackgroundTotalMs: 40,
+          asyncEnrichmentCount: 2,
+          scriptDemotionCount: 1,
+        }),
+      );
+    });
+
+    it("should return zeroed metrics when no rows exist", async () => {
+      const metrics = await logRepository.getLatencyMetrics();
+
+      expect(metrics).toEqual({
+        total: 0,
+        avgAckMs: 0,
+        maxAckMs: 0,
+        avgScriptMs: 0,
+        maxScriptMs: 0,
+        avgBackgroundTotalMs: 0,
+        maxBackgroundTotalMs: 0,
+        asyncEnrichmentCount: 0,
+        scriptDemotionCount: 0,
+      });
+    });
+  });
+
+  describe("updateLogTelemetry", () => {
+    it("should update telemetry fields while preserving unspecified values", async () => {
+      await logRepository.insertLog(
+        mockLog({
+          id: "telemetry_update",
+          duckdbMs: 1,
+          forwardMs: 2,
+          backgroundTotalMs: 3,
+        }),
+      );
+
+      await logRepository.updateLogTelemetry({
+        id: "telemetry_update",
+        duckdbMs: 10,
+        forwardMs: 20,
+        backgroundTotalMs: 30,
+      });
+      await logRepository.updateLogTelemetry({ id: "telemetry_update" });
+
+      const updated = await logRepository.getLogById("telemetry_update");
+      expect(updated).toEqual(
+        expect.objectContaining({
+          duckdbMs: 10,
+          forwardMs: 20,
+          backgroundTotalMs: 30,
+        }),
+      );
+    });
+  });
+
   describe("findLogs - Complex Filtering", () => {
     beforeEach(async () => {
       await logRepository.batchInsertLogs([
@@ -239,6 +324,13 @@ describe("LogRepository", () => {
           signatureValid: true,
           signatureProvider: SIGNATURE_PROVIDERS.GITHUB,
           webhookId: `${WEBHOOK_ID_PREFIX}a`,
+          responseMode: "fast",
+          asyncEnrichment: true,
+          scriptDemotedToAsync: false,
+          schemaValid: true,
+          ackMs: 10,
+          scriptMs: 2,
+          backgroundTotalMs: 30,
         }),
         mockLog({
           id: "log_b",
@@ -254,6 +346,14 @@ describe("LogRepository", () => {
           signatureError: "invalid_sig",
           signatureProvider: SIGNATURE_PROVIDERS.SHOPIFY,
           webhookId: `${WEBHOOK_ID_PREFIX}b`,
+          responseMode: "strict",
+          asyncEnrichment: false,
+          scriptDemotedToAsync: true,
+          schemaValid: false,
+          schemaError: "required property missing",
+          ackMs: 40,
+          scriptMs: 12,
+          backgroundTotalMs: 70,
         }),
         mockLog({
           id: "log_c",
@@ -284,6 +384,29 @@ describe("LogRepository", () => {
       const result = await logRepository.findLogs({ requestUrl: "a.com" });
       expect(result.total).toBe(1);
       expect(result.items[0].id).toBe("log_a");
+    });
+
+    it("should filter by response mode, schema state, async state, and telemetry ranges", async () => {
+      const result = await logRepository.findLogs({
+        responseMode: "strict",
+        asyncEnrichment: false,
+        scriptDemotedToAsync: true,
+        schemaValid: false,
+        schemaError: "required property",
+        ackMs: [{ operator: "gte", value: 20 }],
+        scriptMs: [{ operator: "gte", value: 10 }],
+        backgroundTotalMs: [{ operator: "lte", value: 100 }],
+      });
+
+      expect(result.total).toBe(1);
+      expect(result.items[0]).toEqual(
+        expect.objectContaining({
+          id: "log_b",
+          asyncEnrichment: false,
+          scriptDemotedToAsync: true,
+          schemaValid: false,
+        }),
+      );
     });
 
     it("should filter by method", async () => {

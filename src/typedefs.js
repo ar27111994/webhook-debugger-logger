@@ -1,3 +1,4 @@
+/* istanbul ignore file */
 /**
  * @file src/typedefs.js
  * @description Centralized JSDoc type definitions for the application.
@@ -21,6 +22,7 @@
  * @property {string} [id]
  * @property {string} expiresAt
  * @property {number} [responseDelayMs]
+ * @property {"fast"|"strict"} [responseMode]
  * @property {number} [defaultResponseCode]
  * @property {string | Object} [defaultResponseBody]
  * @property {Object.<string, string>} [defaultResponseHeaders]
@@ -30,6 +32,7 @@
  * @property {boolean} [enableJSONParsing]
  * @property {boolean} [maskSensitiveData]
  * @property {string} [customScript]
+ * @property {number} [customScriptSlowThresholdMs]
  * @property {Object} [jsonSchema]
  * @property {string[]} [redactBodyPaths]
  * @property {SignatureConfig} [signatureVerification]
@@ -64,8 +67,23 @@
  * @property {boolean} [signatureValid]
  * @property {string} [signatureProvider]
  * @property {string} [signatureError]
+ * @property {boolean} [schemaValid]
+ * @property {string} [schemaError]
  * @property {string} [requestId]
  * @property {string} [requestUrl]
+ * @property {"fast"|"strict"} [responseMode]
+ * @property {boolean} [asyncEnrichment]
+ * @property {boolean} [scriptDemotedToAsync]
+ * @property {number | null} [authMs]
+ * @property {number | null} [bodyPrepMs]
+ * @property {number | null} [schemaMs]
+ * @property {number | null} [signatureMs]
+ * @property {number | null} [scriptMs]
+ * @property {number | null} [ackMs]
+ * @property {number | null} [pushDataMs]
+ * @property {number | null} [duckdbMs]
+ * @property {number | null} [forwardMs]
+ * @property {number | null} [backgroundTotalMs]
  */
 
 /**
@@ -207,6 +225,21 @@
  * @property {number|string|RangeCondition[]} [statusCode]
  * @property {RangeCondition[]} [processingTime]
  * @property {RangeCondition[]} [processingTimeUs]
+ * @property {string} [responseMode]
+ * @property {boolean|string} [asyncEnrichment]
+ * @property {boolean|string} [scriptDemotedToAsync]
+ * @property {boolean|string} [schemaValid]
+ * @property {string} [schemaError]
+ * @property {RangeCondition[]} [authMs]
+ * @property {RangeCondition[]} [bodyPrepMs]
+ * @property {RangeCondition[]} [schemaMs]
+ * @property {RangeCondition[]} [signatureMs]
+ * @property {RangeCondition[]} [scriptMs]
+ * @property {RangeCondition[]} [ackMs]
+ * @property {RangeCondition[]} [pushDataMs]
+ * @property {RangeCondition[]} [duckdbMs]
+ * @property {RangeCondition[]} [forwardMs]
+ * @property {RangeCondition[]} [backgroundTotalMs]
  * @property {RangeCondition[]} [size]
  * @property {RangeCondition[]} [timestamp]
  * @property {Object|string} [headers]
@@ -246,7 +279,8 @@
  * @typedef {import('express').RequestHandler & {
  *   updateOptions: (options: Object) => void,
  *   hasCompiledScript: () => boolean,
- *   hasValidator: () => boolean
+ *   hasValidator: () => boolean,
+ *   waitForBackgroundTasks: () => Promise<void>
  * }} LoggerMiddlewareFunction
  */
 
@@ -259,11 +293,13 @@
  * @property {string | Object} [defaultResponseBody]
  * @property {Object.<string, string>} [defaultResponseHeaders]
  * @property {number} [responseDelayMs]
+ * @property {"fast"|"strict"} [responseMode]
  * @property {string} [forwardUrl]
  * @property {boolean} [forwardHeaders]
  * @property {string[]} [redactBodyPaths]
  * @property {Object} [jsonSchema]
  * @property {string} [customScript]
+ * @property {number} [customScriptSlowThresholdMs]
  * @property {boolean} [maskSensitiveData]
  * @property {number} [maxPayloadSize]
  * @property {number} [rateLimitPerMinute]
@@ -289,9 +325,11 @@
  * @property {string} authKey
  * @property {number} maxPayloadSize
  * @property {number} responseDelayMs
+ * @property {"fast"|"strict"} responseMode
  * @property {number} replayMaxRetries
  * @property {number} replayTimeoutMs
  * @property {number} maxForwardRetries
+ * @property {number} customScriptSlowThresholdMs
  * @property {boolean} useFixedMemory
  * @property {number} fixedMemoryMbytes
  */

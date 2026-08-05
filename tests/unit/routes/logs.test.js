@@ -200,6 +200,54 @@ describe("Logs Routes", () => {
       );
     });
 
+    it("should translate response-mode, schema, async, and phase telemetry filters", async () => {
+      mockReq.query = {
+        responseMode: "fast",
+        asyncEnrichment: "false",
+        scriptDemotedToAsync: "true",
+        schemaValid: "false",
+        schemaError: "required property",
+        authMs: assertType({ gte: APP_ROUTES.LOGS.length }),
+        bodyPrepMs: assertType({ lte: HTTP_STATUS.OK }),
+        schemaMs: assertType({ gt: APP_ROUTES.HEALTH.length }),
+        signatureMs: assertType({ lt: HTTP_STATUS.BAD_REQUEST }),
+        scriptMs: assertType({ gte: APP_ROUTES.READY.length }),
+        ackMs: assertType({ lte: HTTP_STATUS.ACCEPTED }),
+        pushDataMs: assertType({ gt: APP_ROUTES.INFO.length }),
+        duckdbMs: assertType({ lt: HTTP_STATUS.INTERNAL_SERVER_ERROR }),
+        forwardMs: assertType({ gte: APP_ROUTES.REPLAY.length }),
+        backgroundTotalMs: assertType({ lte: HTTP_STATUS.CREATED }),
+      };
+      mockLogRepo.findLogs.mockResolvedValueOnce({ items: [], total: 0 });
+
+      const handler = createLogsHandler(mockWebhookManager, {
+        logRepo: mockLogRepo,
+      });
+      await handler(mockReq, mockRes, mockNext);
+
+      expect(mockLogRepo.findLogs).toHaveBeenCalledWith(
+        expect.objectContaining({
+          responseMode: "fast",
+          asyncEnrichment: false,
+          scriptDemotedToAsync: true,
+          schemaValid: false,
+          schemaError: "required property",
+          authMs: [{ operator: "gte", value: APP_ROUTES.LOGS.length }],
+          bodyPrepMs: [{ operator: "lte", value: HTTP_STATUS.OK }],
+          schemaMs: [{ operator: "gt", value: APP_ROUTES.HEALTH.length }],
+          signatureMs: [{ operator: "lt", value: HTTP_STATUS.BAD_REQUEST }],
+          scriptMs: [{ operator: "gte", value: APP_ROUTES.READY.length }],
+          ackMs: [{ operator: "lte", value: HTTP_STATUS.ACCEPTED }],
+          pushDataMs: [{ operator: "gt", value: APP_ROUTES.INFO.length }],
+          duckdbMs: [
+            { operator: "lt", value: HTTP_STATUS.INTERNAL_SERVER_ERROR },
+          ],
+          forwardMs: [{ operator: "gte", value: APP_ROUTES.REPLAY.length }],
+          backgroundTotalMs: [{ operator: "lte", value: HTTP_STATUS.CREATED }],
+        }),
+      );
+    });
+
     it("should catch database errors and return 500 cleanly", async () => {
       mockLogRepo.findLogs.mockRejectedValueOnce(new Error("DB Failure"));
 
@@ -237,27 +285,9 @@ describe("Logs Routes", () => {
       mockReq.query = { sort: "" };
       mockLogRepo.findLogs.mockResolvedValueOnce({ items: [], total: 0 });
 
-      // Mock includes to return false specifically for TIMESTAMP in the VALID_SORT_FIELDS array safely
-      const originalIncludes = Array.prototype.includes;
-      /**
-       * @param {string} searchElement
-       * @param {number} fromIndex
-       */
-      Array.prototype.includes = function (searchElement, fromIndex) {
-        // Duck type the VALID_SORT_FIELDS array
-        if (
-          this &&
-          this[0] === "id" &&
-          this[this.length - 1] === "signatureError" &&
-          searchElement === "timestamp"
-        ) {
-          return false;
-        }
-        return originalIncludes.call(this, searchElement, fromIndex);
-      };
-
       const handler = createLogsHandler(mockWebhookManager, {
         logRepo: mockLogRepo,
+        validSortFields: ["id"],
       });
       await handler(mockReq, mockRes, mockNext);
 
@@ -266,8 +296,6 @@ describe("Logs Routes", () => {
           sort: [{ field: "id", dir: SORT_DIRECTIONS.DESC }], // 'id' corresponds to VALID_SORT_FIELDS[0]
         }),
       );
-
-      Array.prototype.includes = originalIncludes;
     });
 
     it("should correctly parse valid timestamp range queries dynamically", async () => {

@@ -97,6 +97,10 @@ jobs:
             echo "✅ No harmful Content-Encoding detected"
           fi
 
+      - name: Verify Apify Warm Webhook Path
+        run: |
+          node -e "const base='http://localhost:8080'; const info=await fetch(base+'/info').then(r=>r.json()); const id=info.system.activeWebhooks[0].id; const res=await fetch(base+'/webhook/'+id,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id:'evt_docker_smoke',source:'docker-smoke',data:{ok:true}})}); if(!res.ok) throw new Error('webhook smoke failed: '+res.status); const logs=await fetch(base+'/logs?webhookId='+encodeURIComponent(id)+'&limit=5').then(r=>r.json()); if(!Array.isArray(logs.items)||!logs.items.some((item)=>item.webhookId===id)) throw new Error('log smoke failed'); console.log('✅ Apify warm webhook path stored a log');"
+
       - name: Stop Apify Container
         if: always()
         run: docker rm -f debugger-apify || true
@@ -149,6 +153,10 @@ jobs:
             echo "✅ Standalone image returned safe SSE headers"
           fi
 
+      - name: Verify Standalone Warm Webhook Path
+        run: |
+          node -e "const base='http://localhost:8081'; const info=await fetch(base+'/info').then(r=>r.json()); const id=info.system.activeWebhooks[0].id; const res=await fetch(base+'/webhook/'+id,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id:'evt_standalone_smoke',source:'docker-smoke',data:{ok:true}})}); if(!res.ok) throw new Error('webhook smoke failed: '+res.status); const logs=await fetch(base+'/logs?webhookId='+encodeURIComponent(id)+'&limit=5').then(r=>r.json()); if(!Array.isArray(logs.items)||!logs.items.some((item)=>item.webhookId===id)) throw new Error('log smoke failed'); console.log('✅ Standalone warm webhook path stored a log');"
+
       - name: Docker Logs (on failure)
         if: failure()
         run: |
@@ -158,3 +166,31 @@ jobs:
       - name: Stop Standalone Container
         if: always()
         run: docker rm -f debugger-standalone || true
+
+  perf-gate:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario:
+          - no-custom-script
+          - schema-only
+          - script-only
+          - schema-plus-script
+          - restart-resurrection
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Use Node.js 24.x
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: 24.x
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Run PERF_RUN latency gate
+        run: npm run test:perf -- --scenario=${{ matrix.scenario }}

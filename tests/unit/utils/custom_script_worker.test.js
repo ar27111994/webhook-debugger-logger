@@ -4,6 +4,7 @@
  */
 
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { EventEmitter } from "node:events";
 import { HTTP_STATUS } from "../../../src/consts/http.js";
 import { LOG_MESSAGES } from "../../../src/consts/messages.js";
 import { LogLevel } from "../../../src/utils/logger.js";
@@ -12,6 +13,8 @@ const WORKER_THREADS_MODULE = "node:worker_threads";
 const VM_MODULE = "node:vm";
 const WORKER_MODULE_PATH = "../../../src/utils/custom_script_worker.js";
 const NON_ERROR_THROWN_VALUE = 123;
+const MESSAGE_MODE_JOB_ID = 7;
+const SYNTAX_FAILURE_MESSAGE = "syntax failure";
 
 /**
  * @typedef {{
@@ -57,6 +60,39 @@ async function runWorkerModule({ workerData, vmFactory }) {
   });
 
   return postMessage;
+}
+
+/**
+ * @param {{ workerData: Record<string, unknown>, vmFactory?: () => Promise<Record<string, unknown>> | Record<string, unknown> }} options
+ * @returns {Promise<{ parentPort: EventEmitter & { postMessage: jest.Mock }, postMessage: jest.Mock }>}
+ */
+async function runWorkerModuleInMessageMode({ workerData, vmFactory }) {
+  const parentPort = /** @type {EventEmitter & { postMessage: jest.Mock }} */ (
+    new EventEmitter()
+  );
+  parentPort.postMessage = jest.fn();
+
+  jest.unstable_mockModule(WORKER_THREADS_MODULE, () => ({
+    parentPort,
+    workerData,
+  }));
+
+  if (vmFactory) {
+    jest.unstable_mockModule(VM_MODULE, vmFactory);
+  } else {
+    const actualVmModule = await import(VM_MODULE);
+    const actualVmDefault = actualVmModule.default ?? actualVmModule;
+    jest.unstable_mockModule(VM_MODULE, () => ({
+      ...actualVmModule,
+      default: actualVmDefault,
+    }));
+  }
+
+  await jest.isolateModulesAsync(async () => {
+    await import(WORKER_MODULE_PATH);
+  });
+
+  return { parentPort, postMessage: parentPort.postMessage };
 }
 
 describe("Custom Script Worker", () => {
@@ -132,6 +168,92 @@ describe("Custom Script Worker", () => {
           args: [HTTP_STATUS.CREATED],
         },
       ],
+    });
+  });
+
+  it("should execute message-mode jobs with job identifiers", async () => {
+    const { parentPort, postMessage } = await runWorkerModuleInMessageMode({
+      workerData: { source: "ignored" },
+      vmFactory: async () => {
+        class MockScript {
+          /**
+           * @param {MockScriptContext} context
+           */
+          runInContext(context) {
+            context.event.accepted = true;
+            context.console.info("pooled");
+          }
+        }
+
+        const createContext = jest.fn((sandbox) => sandbox);
+
+        return {
+          default: { createContext, Script: MockScript },
+          createContext,
+          Script: MockScript,
+        };
+      },
+    });
+
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "ready", ok: true }),
+    );
+
+    parentPort.emit("message", {
+      jobId: MESSAGE_MODE_JOB_ID,
+      event: {},
+      req: {},
+      timeoutMs: 50,
+    });
+
+    expect(postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        jobId: MESSAGE_MODE_JOB_ID,
+        ok: true,
+        event: expect.objectContaining({ accepted: true }),
+        logs: [{ level: LogLevel.INFO, args: ["pooled"] }],
+      }),
+    );
+  });
+
+  it("should report message-mode compilation failures with job identifiers", async () => {
+    const { parentPort, postMessage } = await runWorkerModuleInMessageMode({
+      workerData: { source: "if (" },
+      vmFactory: async () => {
+        class MockScript {
+          constructor() {
+            throw new Error(SYNTAX_FAILURE_MESSAGE);
+          }
+        }
+
+        return {
+          default: { Script: MockScript },
+          Script: MockScript,
+          createContext: jest.fn((sandbox) => sandbox),
+        };
+      },
+    });
+
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "ready",
+        ok: false,
+        error: expect.objectContaining({ message: SYNTAX_FAILURE_MESSAGE }),
+      }),
+    );
+
+    parentPort.emit("message", {
+      jobId: MESSAGE_MODE_JOB_ID,
+      event: {},
+      req: {},
+      timeoutMs: 50,
+    });
+
+    expect(postMessage).toHaveBeenLastCalledWith({
+      jobId: MESSAGE_MODE_JOB_ID,
+      ok: false,
+      logs: [],
+      error: expect.objectContaining({ message: SYNTAX_FAILURE_MESSAGE }),
     });
   });
 

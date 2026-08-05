@@ -15,6 +15,7 @@ import express from "express";
 import compression from "compression";
 import { WebhookManager } from "./webhook_manager.js";
 import { LoggerMiddleware } from "./logger_middleware.js";
+import { resetCustomScriptPools } from "./utils/custom_script_executor.js";
 import { parseWebhookOptions, normalizeInput } from "./utils/config.js";
 import { ensureLocalInputExists } from "./utils/bootstrap.js";
 import { HotReloadManager } from "./utils/hot_reload_manager.js";
@@ -27,6 +28,7 @@ import {
   QUERY_PARAMS,
   EXIT_CODES,
   EXPRESS_SETTINGS,
+  RESPONSE_MODES,
 } from "./consts/app.js";
 import { LOG_COMPONENTS, LOG_TAGS } from "./consts/logging.js";
 import {
@@ -60,7 +62,7 @@ import cors from "cors";
 import { createChildLogger, serializeError } from "./utils/logger.js";
 import { LOG_MESSAGES } from "./consts/messages.js";
 import { validateStatusCode } from "./utils/common.js";
-import { SSE_CONSTS } from "./consts/ui.js";
+import { DASHBOARD_CONSTS, SSE_CONSTS } from "./consts/ui.js";
 import { exit as systemExit, on as systemOn } from "./utils/system.js";
 import { ERROR_MESSAGES } from "./consts/errors.js";
 import { IS_TEST } from "./utils/env.js";
@@ -121,6 +123,8 @@ let cleanupInterval;
 let appState;
 /** @type {HotReloadManager | undefined} */
 let hotReloadManager;
+/** @type {LoggerMiddleware | undefined} */
+let loggerMiddlewareInstance;
 
 // Track initialization to detect re-entrancy and enable safe teardown
 // of leaked intervals and managers on a second call.
@@ -136,11 +140,11 @@ const app = express();
 const broadcast = createBroadcaster(clients);
 let isShuttingDown = false;
 let signalsRegistered = false;
-let isTestSystemInfoPollingDisabled = false;
 
 /**
  * @typedef {{
  *   emitSystemInfoEvent?: (intervalCallback?: () => void) => Promise<void> | void,
+ *   close?: () => Promise<void> | void,
  * }} TestSystemInfoEventManager
  */
 
@@ -152,7 +156,7 @@ let isTestSystemInfoPollingDisabled = false;
  * @returns {void}
  */
 const disableActorSystemInfoPollingForTests = () => {
-  if (isTestSystemInfoPollingDisabled || !IS_TEST()) {
+  if (!IS_TEST()) {
     return;
   }
 
@@ -163,10 +167,23 @@ const disableActorSystemInfoPollingForTests = () => {
     return;
   }
 
-  eventManager.emitSystemInfoEvent = async (intervalCallback = () => {}) => {
-    intervalCallback();
-  };
-  isTestSystemInfoPollingDisabled = true;
+  eventManager.emitSystemInfoEvent = async () => undefined;
+};
+
+/**
+ * @returns {Promise<void>}
+ */
+const closeActorEventManagerForTests = async () => {
+  if (!IS_TEST()) {
+    return;
+  }
+
+  const eventManager = /** @type {TestSystemInfoEventManager | undefined} */ (
+    Actor.config?.getEventManager?.()
+  );
+  if (typeof eventManager?.close === "function") {
+    await eventManager.close();
+  }
 };
 
 /**
@@ -238,6 +255,12 @@ const shutdown = async (signal) => {
   // which is what we want.
   await syncService.stop();
 
+  if (loggerMiddlewareInstance) {
+    await loggerMiddlewareInstance.waitForBackgroundTasks();
+  }
+
+  await resetCustomScriptPools();
+
   try {
     await closeDb();
   } catch (err) {
@@ -255,6 +278,7 @@ const shutdown = async (signal) => {
   const finalCleanup = async () => {
     try {
       await webhookManager.persist();
+      await closeActorEventManagerForTests();
       // Actor.init() opens SDK resources that must always be closed. In tests we
       // still need the cleanup, but must prevent the SDK from terminating the
       // Jest process, so use exit:false there.
@@ -316,12 +340,12 @@ const handleShutdownSignal = (signal) => {
 const resetShutdownForTest = () => {
   isShuttingDown = false;
   signalsRegistered = false;
-  isTestSystemInfoPollingDisabled = false;
   // Also reset the init guard so tests can call initialize() across
   // a shutdown→reset→initialize cycle without triggering the re-entrancy warning.
   isInitialized = false;
   hotReloadManager = undefined;
   appState = undefined;
+  loggerMiddlewareInstance = undefined;
   sseHeartbeat = undefined;
   cleanupInterval = undefined;
   webhookManager.resetStateForTest();
@@ -376,6 +400,7 @@ async function initialize(testOptions = {}) {
   disableActorSystemInfoPollingForTests();
 
   await Actor.init();
+  disableActorSystemInfoPollingForTests();
   setupGracefulShutdown();
 
   // Cache the HTML template once at startup (using modular preloader)
@@ -500,7 +525,7 @@ async function initialize(testOptions = {}) {
 
   // LoggerMiddleware: Handles request and response processing, logging, and signature verification
   // Initialize LoggerMiddleware first as it's a dependency for AppState
-  const loggerMiddlewareInstance = new LoggerMiddleware(
+  loggerMiddlewareInstance = new LoggerMiddleware(
     webhookManager,
     config,
     broadcast,
@@ -607,9 +632,19 @@ async function initialize(testOptions = {}) {
         indexTemplate = template;
       },
       getSignatureStatus: () => {
-        const opts = loggerMiddlewareInstance.options.signatureVerification;
+        const opts = loggerMiddlewareInstance?.options.signatureVerification;
         if (opts?.provider && opts?.secret) {
           return opts.provider.toUpperCase();
+        }
+        return null;
+      },
+      getScriptWarning: () => {
+        const opts = loggerMiddlewareInstance?.options;
+        if (
+          opts?.responseMode === RESPONSE_MODES.STRICT &&
+          loggerMiddlewareInstance?.hasCompiledScript()
+        ) {
+          return DASHBOARD_CONSTS.STRICT_SCRIPT_WARNING;
         }
         return null;
       },

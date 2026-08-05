@@ -8,24 +8,29 @@ import { EventEmitter } from "node:events";
 import { STREAM_EVENTS } from "../../../src/consts/app.js";
 import { ERROR_MESSAGES } from "../../../src/consts/errors.js";
 import { useMockCleanup } from "../../setup/helpers/test-lifecycle.js";
-import { assertType } from "../../setup/helpers/test-utils.js";
+import { assertType, flushPromises } from "../../setup/helpers/test-utils.js";
 
 /**
  * @typedef {import("node:worker_threads").WorkerOptions} WorkerOptions
  * @typedef {jest.MockedFunction<() => Promise<void>>} TerminateMock
  * @typedef {jest.MockedFunction<() => void>} UnrefMock
- * @typedef {EventEmitter & { terminate: TerminateMock, unref?: UnrefMock }} MockWorkerInstance
+ * @typedef {EventEmitter & { terminate: TerminateMock, unref?: UnrefMock, postMessage?: jest.Mock }} MockWorkerInstance
  */
 
 const WORKER_THREADS_MODULE = "node:worker_threads";
 const SUCCESS_SCRIPT_SOURCE = "event.ok = true;";
+const POOLED_WORKER_TIMEOUT_ADVANCE_MS = 100;
+const EXPECTED_TWO_WORKERS = 2;
+const EXPECTED_THREE_WORKERS = 3;
+const UNEXPECTED_EXIT_CODE = 2;
+const EXPECTED_TWO_TERMINATIONS = 2;
 
 /**
  * @typedef {((...args: any[]) => void) & { listener?: (...args: any[]) => void }} WrappedListener
  */
 
 /**
- * @param {{ includeUnref?: boolean }} [options]
+ * @param {{ includeUnref?: boolean, includePostMessage?: boolean }} [options]
  * @returns {{
  *   workerInstances: Array<MockWorkerInstance>;
  *   workerOptions: Array<WorkerOptions>;
@@ -38,7 +43,7 @@ const SUCCESS_SCRIPT_SOURCE = "event.ok = true;";
  * }}
  */
 function createMockWorkerHarness(options = {}) {
-  const { includeUnref = true } = options;
+  const { includeUnref = true, includePostMessage = false } = options;
   /** @type {Array<MockWorkerInstance>} */
   const workerInstances = [];
   /** @type {Array<WorkerOptions>} */
@@ -58,6 +63,9 @@ function createMockWorkerHarness(options = {}) {
       this.terminate = terminateMock;
       if (includeUnref) {
         this.unref = unrefMock;
+      }
+      if (includePostMessage) {
+        this.postMessage = jest.fn();
       }
       workerOptions.push(options);
       workerInstances.push(this);
@@ -145,6 +153,291 @@ describe("Custom Script Executor worker failure paths", () => {
         stackSizeMb: 4,
       }),
     );
+  });
+
+  it("should execute pooled postMessage workers and preserve job payloads", async () => {
+    const { workerInstances, MockWorker } = createMockWorkerHarness({
+      includePostMessage: true,
+    });
+
+    jest.unstable_mockModule(WORKER_THREADS_MODULE, () => ({
+      Worker: MockWorker,
+    }));
+
+    const { executeCustomScript } =
+      await import("../../../src/utils/custom_script_executor.js");
+
+    const pendingResult = executeCustomScript({
+      source: SUCCESS_SCRIPT_SOURCE,
+      event: { id: "evt-1" },
+      req: { requestId: "req-1" },
+      timeoutMs: 50,
+    });
+
+    workerInstances[0].emit(STREAM_EVENTS.MESSAGE, { type: "ready" });
+    await flushPromises(1);
+
+    expect(workerInstances[0].postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobId: expect.any(Number),
+        event: { id: "evt-1" },
+        req: { requestId: "req-1" },
+        timeoutMs: 50,
+      }),
+    );
+
+    const postedJob = assertType(
+      /** @type {{ jobId: number }} */ (
+        workerInstances[0].postMessage?.mock.calls[0][0]
+      ),
+    );
+    workerInstances[0].emit(STREAM_EVENTS.MESSAGE, {
+      jobId: postedJob.jobId,
+      ok: true,
+      event: { accepted: true },
+      logs: [],
+    });
+
+    await expect(pendingResult).resolves.toEqual({
+      ok: true,
+      event: { accepted: true },
+      logs: [],
+    });
+  });
+
+  it("should fallback to a sole pending job when worker omits jobId", async () => {
+    const { workerInstances, MockWorker } = createMockWorkerHarness({
+      includePostMessage: true,
+    });
+
+    jest.unstable_mockModule(WORKER_THREADS_MODULE, () => ({
+      Worker: MockWorker,
+    }));
+
+    const { executeCustomScript } =
+      await import("../../../src/utils/custom_script_executor.js");
+
+    const pendingResult = executeCustomScript({
+      source: SUCCESS_SCRIPT_SOURCE,
+      event: {},
+      req: {},
+      timeoutMs: 50,
+    });
+
+    workerInstances[0].emit(STREAM_EVENTS.MESSAGE, { type: "ready" });
+    await flushPromises(1);
+    workerInstances[0].emit(STREAM_EVENTS.MESSAGE, {
+      ok: true,
+      event: { fallback: true },
+      logs: [],
+    });
+
+    await expect(pendingResult).resolves.toEqual({
+      ok: true,
+      event: { fallback: true },
+      logs: [],
+    });
+  });
+
+  it("should ignore unmatched pooled worker messages", async () => {
+    const { workerInstances, MockWorker } = createMockWorkerHarness({
+      includePostMessage: true,
+    });
+
+    jest.unstable_mockModule(WORKER_THREADS_MODULE, () => ({
+      Worker: MockWorker,
+    }));
+
+    const { executeCustomScript } =
+      await import("../../../src/utils/custom_script_executor.js");
+
+    const pendingResult = executeCustomScript({
+      source: SUCCESS_SCRIPT_SOURCE,
+      event: {},
+      req: {},
+      timeoutMs: 50,
+    });
+    workerInstances[0].emit(STREAM_EVENTS.MESSAGE, { type: "ready" });
+    await flushPromises(1);
+    workerInstances[0].emit(STREAM_EVENTS.MESSAGE, {
+      jobId: 999,
+      ok: true,
+      logs: [],
+    });
+    const postedJob = assertType(
+      /** @type {{ jobId: number }} */ (
+        workerInstances[0].postMessage?.mock.calls[0][0]
+      ),
+    );
+    workerInstances[0].emit(STREAM_EVENTS.MESSAGE, {
+      jobId: postedJob.jobId,
+      ok: true,
+      event: { ok: true },
+      logs: [],
+    });
+
+    await expect(pendingResult).resolves.toEqual({
+      ok: true,
+      event: { ok: true },
+      logs: [],
+    });
+  });
+
+  it("should time out pooled worker jobs and recreate the worker", async () => {
+    jest.useFakeTimers();
+    const { workerInstances, terminateMock, MockWorker } =
+      createMockWorkerHarness({ includePostMessage: true });
+
+    jest.unstable_mockModule(WORKER_THREADS_MODULE, () => ({
+      Worker: MockWorker,
+    }));
+
+    try {
+      const { executeCustomScript } =
+        await import("../../../src/utils/custom_script_executor.js");
+
+      const pendingResult = executeCustomScript({
+        source: SUCCESS_SCRIPT_SOURCE,
+        event: {},
+        req: {},
+        timeoutMs: 50,
+      });
+      workerInstances[0].emit(STREAM_EVENTS.MESSAGE, { type: "ready" });
+      await flushPromises(1);
+
+      jest.advanceTimersByTime(POOLED_WORKER_TIMEOUT_ADVANCE_MS);
+      await flushPromises(1);
+      await expect(pendingResult).resolves.toEqual(
+        expect.objectContaining({
+          ok: false,
+          error: expect.objectContaining({
+            code: "ERR_CUSTOM_SCRIPT_JOB_TIMEOUT",
+          }),
+        }),
+      );
+      expect(terminateMock).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("should reject pooled pending jobs on worker errors and exits", async () => {
+    const { workerInstances, MockWorker } = createMockWorkerHarness({
+      includePostMessage: true,
+    });
+
+    jest.unstable_mockModule(WORKER_THREADS_MODULE, () => ({
+      Worker: MockWorker,
+    }));
+
+    const { executeCustomScript } =
+      await import("../../../src/utils/custom_script_executor.js");
+
+    const errorResult = executeCustomScript({
+      source: SUCCESS_SCRIPT_SOURCE,
+      event: {},
+      req: {},
+      timeoutMs: 50,
+    });
+    workerInstances[0].emit(STREAM_EVENTS.MESSAGE, { type: "ready" });
+    await flushPromises(1);
+    workerInstances[0].emit(STREAM_EVENTS.ERROR, "string failure");
+
+    await expect(errorResult).rejects.toThrow("string failure");
+    expect(workerInstances).toHaveLength(EXPECTED_TWO_WORKERS);
+
+    const exitResult = executeCustomScript({
+      source: SUCCESS_SCRIPT_SOURCE,
+      event: {},
+      req: {},
+      timeoutMs: 50,
+    });
+    workerInstances[1].emit(STREAM_EVENTS.MESSAGE, { type: "ready" });
+    await flushPromises(1);
+    workerInstances[1].emit(STREAM_EVENTS.EXIT, UNEXPECTED_EXIT_CODE);
+
+    await expect(exitResult).rejects.toThrow(
+      ERROR_MESSAGES.SCRIPT_EXECUTION_FAILED(UNEXPECTED_EXIT_CODE),
+    );
+    expect(workerInstances).toHaveLength(EXPECTED_THREE_WORKERS);
+  });
+
+  it("should reset and invalidate custom script pools", async () => {
+    const { workerInstances, terminateMock, MockWorker } =
+      createMockWorkerHarness({ includePostMessage: true });
+
+    jest.unstable_mockModule(WORKER_THREADS_MODULE, () => ({
+      Worker: MockWorker,
+    }));
+
+    const {
+      executeCustomScript,
+      invalidateCustomScriptPool,
+      resetCustomScriptPools,
+    } = await import("../../../src/utils/custom_script_executor.js");
+
+    await expect(
+      invalidateCustomScriptPool(undefined),
+    ).resolves.toBeUndefined();
+    await expect(
+      invalidateCustomScriptPool("missing script"),
+    ).resolves.toBeUndefined();
+
+    const pendingResult = executeCustomScript({
+      source: SUCCESS_SCRIPT_SOURCE,
+      event: {},
+      req: {},
+      timeoutMs: 50,
+    });
+    workerInstances[0].emit(STREAM_EVENTS.MESSAGE, { type: "ready" });
+    await flushPromises(1);
+    const postedJob = assertType(
+      /** @type {{ jobId: number }} */ (
+        workerInstances[0].postMessage?.mock.calls[0][0]
+      ),
+    );
+    workerInstances[0].emit(STREAM_EVENTS.MESSAGE, {
+      jobId: postedJob.jobId,
+      ok: true,
+      event: { ok: true },
+      logs: [],
+    });
+
+    await expect(pendingResult).resolves.toEqual({
+      ok: true,
+      event: { ok: true },
+      logs: [],
+    });
+    await invalidateCustomScriptPool(SUCCESS_SCRIPT_SOURCE);
+    expect(terminateMock).toHaveBeenCalledTimes(1);
+
+    const secondResult = executeCustomScript({
+      source: SUCCESS_SCRIPT_SOURCE,
+      event: {},
+      req: {},
+      timeoutMs: 50,
+    });
+    workerInstances[1].emit(STREAM_EVENTS.MESSAGE, { type: "ready" });
+    await flushPromises(1);
+    const secondJob = assertType(
+      /** @type {{ jobId: number }} */ (
+        workerInstances[1].postMessage?.mock.calls[0][0]
+      ),
+    );
+    workerInstances[1].emit(STREAM_EVENTS.MESSAGE, {
+      jobId: secondJob.jobId,
+      ok: true,
+      event: { reset: true },
+      logs: [],
+    });
+
+    await expect(secondResult).resolves.toEqual({
+      ok: true,
+      event: { reset: true },
+      logs: [],
+    });
+    await resetCustomScriptPools();
+    expect(terminateMock).toHaveBeenCalledTimes(EXPECTED_TWO_TERMINATIONS);
   });
 
   it("should clamp heap env overrides before passing them to Worker", async () => {

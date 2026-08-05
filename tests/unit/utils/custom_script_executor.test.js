@@ -3,7 +3,14 @@
  * @description Unit tests for custom script executor behavior using real worker isolates.
  */
 
-import { beforeEach, describe, expect, it, jest } from "@jest/globals";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  jest,
+} from "@jest/globals";
 
 describe("Custom Script Executor", () => {
   const COVERAGE_SAFE_EXECUTOR_TEST_TIMEOUT_MS = 60000;
@@ -19,6 +26,13 @@ describe("Custom Script Executor", () => {
   const SUCCESS_PATH_WORKER_SCRIPT_TIMEOUT_MS = 250;
 
   beforeEach(() => {
+    jest.resetModules();
+  });
+
+  afterEach(async () => {
+    const { resetCustomScriptPools } =
+      await import("../../../src/utils/custom_script_executor.js");
+    await resetCustomScriptPools();
     jest.resetModules();
   });
 

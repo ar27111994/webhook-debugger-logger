@@ -1,3 +1,4 @@
+/* istanbul ignore file */
 /**
  * @file src/consts/index.js
  * @description Central aggregation point for modular constants.

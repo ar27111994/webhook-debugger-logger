@@ -45,6 +45,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
  * @property {() => string | null | undefined} getTemplate - Function to get cached template
  * @property {(template: string) => void} setTemplate - Function to cache template
  * @property {() => string|null} getSignatureStatus - Function to get current signature provider
+ * @property {() => string|null|undefined} [getScriptWarning] - Function to get current script-mode warning
  */
 
 /**
@@ -62,10 +63,12 @@ export const createDashboardHandler =
       getTemplate,
       setTemplate,
       getSignatureStatus,
+      getScriptWarning,
     } = deps;
 
     const activeCount = webhookManager.getAllActive().length;
     const signatureProvider = getSignatureStatus ? getSignatureStatus() : null;
+    const scriptWarning = getScriptWarning ? getScriptWarning() : null;
     const escapedVersion = escapeHtml(String(version));
 
     if (req.headers[HTTP_HEADERS.ACCEPT]?.includes(MIME_TYPES.PLAIN)) {
@@ -107,12 +110,24 @@ export const createDashboardHandler =
       const sigBadgeLabel = escapedProvider
         ? `🔒 Verified: ${escapedProvider}`
         : `🔓 ${STATUS_LABELS.NO_VERIFICATION}`;
+      const scriptWarningClass = scriptWarning
+        ? "script-warning"
+        : "script-warning is-hidden";
+      const scriptWarningLabel = scriptWarning ? escapeHtml(scriptWarning) : "";
 
       const html = template
         .replaceAll(DASHBOARD_PLACEHOLDERS.VERSION, `v${escapedVersion}`)
         .replaceAll(DASHBOARD_PLACEHOLDERS.ACTIVE_COUNT, String(activeCount))
         .replaceAll(DASHBOARD_PLACEHOLDERS.SIGNATURE_BADGE_CLASS, sigBadgeClass)
         .replaceAll(DASHBOARD_PLACEHOLDERS.SIGNATURE_BADGE_LABEL, sigBadgeLabel)
+        .replaceAll(
+          DASHBOARD_PLACEHOLDERS.SCRIPT_WARNING_CLASS,
+          scriptWarningClass,
+        )
+        .replaceAll(
+          DASHBOARD_PLACEHOLDERS.SCRIPT_WARNING_LABEL,
+          scriptWarningLabel,
+        )
         .replaceAll(
           DASHBOARD_PLACEHOLDERS.BRAND_HEADER,
           DASHBOARD_CONSTS.BRAND_HEADER,

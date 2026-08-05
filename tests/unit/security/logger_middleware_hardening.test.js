@@ -51,7 +51,9 @@ const { LoggerMiddleware } = await import("../../../src/logger_middleware.js");
 
 describe("LoggerMiddleware Hardening", () => {
   useFakeTimers();
-  useMockCleanup();
+  useMockCleanup(() => {
+    apifyMock.pushData.mockResolvedValue(undefined);
+  });
 
   const HARDENING_TEST_TIMEOUT_MS = 30000;
   const WEBHOOK_ID = "wh_test_123";

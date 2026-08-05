@@ -12,6 +12,8 @@ import { loggerMock, constsMock } from "../../setup/helpers/shared-mocks.js";
 import { assertType } from "../../setup/helpers/test-utils.js";
 import { SIGNATURE_PROVIDERS } from "../../../src/consts/security.js";
 
+const RESPONSE_MODES = Object.freeze({ FAST: "fast", STRICT: "strict" });
+
 /**
  * @typedef {import('../../../src/utils/config.js')} ConfigUtils
  * @typedef {import('../../../src/typedefs.js').ActorInput} ActorInput
@@ -127,6 +129,42 @@ describe("Config Utils", () => {
       );
       expect(options.maxPayloadSize).toBe(APP_CONSTS.DEFAULT_PAYLOAD_LIMIT);
       expect(options.authKey).toBe("");
+      expect(options.responseMode).toBe(RESPONSE_MODES.FAST);
+      expect(options.customScriptSlowThresholdMs).toBe(
+        APP_CONSTS.DEFAULT_CUSTOM_SCRIPT_SLOW_THRESHOLD_MS,
+      );
+    });
+
+    it("should normalize responseMode to strict only when explicitly requested", () => {
+      const strictOptions = configUtils.coerceRuntimeOptions({
+        responseMode: RESPONSE_MODES.STRICT,
+      });
+      expect(strictOptions.responseMode).toBe(RESPONSE_MODES.STRICT);
+
+      const fallbackOptions = configUtils.coerceRuntimeOptions(
+        assertType({ responseMode: "unexpected" }),
+      );
+      expect(fallbackOptions.responseMode).toBe(RESPONSE_MODES.FAST);
+    });
+
+    it("should clamp customScriptSlowThresholdMs within safe bounds", () => {
+      const customScriptSlowThresholdOffset = 100;
+      const clamped = configUtils.coerceRuntimeOptions({
+        customScriptSlowThresholdMs:
+          APP_CONSTS.MAX_SAFE_CUSTOM_SCRIPT_SLOW_THRESHOLD_MS +
+          customScriptSlowThresholdOffset,
+      });
+      expect(clamped.customScriptSlowThresholdMs).toBe(
+        APP_CONSTS.MAX_SAFE_CUSTOM_SCRIPT_SLOW_THRESHOLD_MS,
+      );
+
+      const defaulted = configUtils.coerceRuntimeOptions({
+        customScriptSlowThresholdMs:
+          APP_CONSTS.MIN_CUSTOM_SCRIPT_SLOW_THRESHOLD_MS - 1,
+      });
+      expect(defaulted.customScriptSlowThresholdMs).toBe(
+        APP_CONSTS.DEFAULT_CUSTOM_SCRIPT_SLOW_THRESHOLD_MS,
+      );
     });
 
     it("should clamp excessive values and log warnings", () => {
@@ -163,6 +201,7 @@ describe("Config Utils", () => {
           ...constsMock.APP_CONSTS,
           MAX_SAFE_URL_COUNT: undefined,
         },
+        RESPONSE_MODES,
         ENV_VALUES: constsMock.ENV_VALUES,
         ENV_VARS: constsMock.ENV_VARS,
       }));

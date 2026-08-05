@@ -79,7 +79,7 @@ await setupCommonMocks({
 5. **Keep tests isolated** - use `useMockCleanup()`
 6. **Place new tests** in the appropriate subdirectory (`unit`, `integration`, or `e2e`)
 7. **For lifecycle and worker-cleanup changes**, add focused unit coverage for retry and failure paths first, then rerun `npm run test:stress` to validate broader concurrency and shutdown behavior.
-8. **For latency-contract changes**, prefer deterministic `process.hrtime.bigint()` mocks in unit tests and verify both the legacy `processingTime` field and the precise `processingTimeUs` field in persisted integration/E2E assertions.
+8. **For latency-contract changes**, prefer deterministic `process.hrtime.bigint()` mocks in unit tests and verify both the legacy `processingTime` field and the precise `processingTimeUs` field in persisted integration/E2E assertions. Run `npm run test:perf -- --scenario=no-custom-script` for the fastest release-gate smoke check, and use the other supported scenarios when schema validation, strict custom scripts, or restart resurrection behavior changes.
 
 ## Known Test Runtime Signals
 

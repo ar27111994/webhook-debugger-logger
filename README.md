@@ -68,21 +68,23 @@ It is designed for developers working with providers such as Stripe, GitHub, Sho
 
 The current repo schema is defined in [.actor/input_schema.json](https://github.com/ar27111994/webhook-debugger-logger/blob/main/.actor/input_schema.json). These are the settings most users touch first.
 
-| Input                   | Purpose                                                                                                                  | Default    |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------ | ---------- |
-| `urlCount`              | Number of temporary webhook endpoints to generate                                                                        | `3`        |
-| `retentionHours`        | How long generated webhook URLs remain active                                                                            | `24`       |
-| `maxPayloadSize`        | Maximum accepted request body size in bytes; values above 100 MB are clamped                                             | `10485760` |
-| `enableJSONParsing`     | Parse JSON payloads into structured objects for search                                                                   | `true`     |
-| `maskSensitiveData`     | Redact sensitive headers such as `Authorization`, `Cookie`, `Set-Cookie`, and API key headers from logs                  | `true`     |
-| `authKey`               | Protect management routes and optionally webhook ingest with a shared key                                                | unset      |
-| `allowedIps`            | Restrict traffic to specific IPs or CIDR blocks                                                                          | empty      |
-| `signatureVerification` | Verify Stripe, Shopify, GitHub, Slack, or custom signatures                                                              | unset      |
-| `forwardUrl`            | Forward every captured request to another destination                                                                    | unset      |
-| `defaultResponseCode`   | Return a custom HTTP status to the sender                                                                                | `200`      |
-| `responseDelayMs`       | Add an artificial response delay after processing completes; accepted range is 0-10,000 ms and higher values are clamped | `0`        |
-| `jsonSchema`            | Reject payloads that do not match a JSON Schema                                                                          | unset      |
-| `customScript`          | Transform or enrich the captured event before storage                                                                    | unset      |
+| Input                         | Purpose                                                                                                                  | Default    |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ---------- |
+| `urlCount`                    | Number of temporary webhook endpoints to generate                                                                        | `3`        |
+| `retentionHours`              | How long generated webhook URLs remain active                                                                            | `24`       |
+| `maxPayloadSize`              | Maximum accepted request body size in bytes; values above 100 MB are clamped                                             | `10485760` |
+| `enableJSONParsing`           | Parse JSON payloads into structured objects for search                                                                   | `true`     |
+| `maskSensitiveData`           | Redact sensitive headers such as `Authorization`, `Cookie`, `Set-Cookie`, and API key headers from logs                  | `true`     |
+| `authKey`                     | Protect management routes and optionally webhook ingest with a shared key                                                | unset      |
+| `allowedIps`                  | Restrict traffic to specific IPs or CIDR blocks                                                                          | empty      |
+| `signatureVerification`       | Verify Stripe, Shopify, GitHub, Slack, or custom signatures                                                              | unset      |
+| `forwardUrl`                  | Forward every captured request to another destination                                                                    | unset      |
+| `defaultResponseCode`         | Return a custom HTTP status to the sender                                                                                | `200`      |
+| `responseDelayMs`             | Add an artificial response delay after processing completes; accepted range is 0-10,000 ms and higher values are clamped | `0`        |
+| `responseMode`                | Use `fast` to ACK before storage/forwarding completes, or `strict` to wait for custom-script response mutations          | `fast`     |
+| `jsonSchema`                  | Reject payloads that do not match a JSON Schema                                                                          | unset      |
+| `customScript`                | Transform or enrich the captured event before storage                                                                    | unset      |
+| `customScriptSlowThresholdMs` | Slow-script threshold that demotes strict custom scripts to async enrichment on later requests                           | `25`       |
 
 ![Input schema preview from the Apify Actor input tab](https://raw.githubusercontent.com/ar27111994/webhook-debugger-logger/main/assets/input_schema_preview.png)
 
@@ -98,6 +100,7 @@ It helps you:
 - replay captured requests to a new destination
 - forward incoming traffic to another endpoint with retries and circuit breaking
 - simulate downstream behavior with custom status codes, response bodies, headers, and latency
+- choose fast ACK mode for low-latency ingest or strict mode when custom scripts must shape the immediate HTTP response
 - trigger Slack or Discord alerts when a webhook run needs attention
 - handle large request bodies by enforcing size limits and offloading oversized accepted payloads to storage
 - validate JSON payloads and run custom JavaScript transformation scripts before storage
@@ -231,6 +234,11 @@ curl -X POST "https://<run-id>.runs.apify.net/webhook/wh_demo123" \
       "contentType": "application/json",
       "processingTime": 10,
       "processingTimeUs": 10543,
+      "responseMode": "fast",
+      "asyncEnrichment": true,
+      "scriptDemotedToAsync": false,
+      "ackMs": 8,
+      "backgroundTotalMs": 24,
       "size": 61,
       "remoteIp": "203.0.113.10",
       "requestUrl": "/webhook/wh_demo123",
@@ -247,6 +255,8 @@ curl -X POST "https://<run-id>.runs.apify.net/webhook/wh_demo123" \
 `processingTime` is the backward-compatible integer millisecond view of server-side processing cost only. It does **not** include any configured `responseDelayMs` latency simulation.
 
 `processingTimeUs` exposes the same server-side measurement in microseconds, which makes very fast warm-path requests distinguishable even when the legacy `processingTime` field floors to `0`.
+
+`ackMs`, `scriptMs`, `pushDataMs`, `duckdbMs`, `forwardMs`, and `backgroundTotalMs` break that latency into phases. In default `fast` response mode, storage, DuckDB projection, forwarding, and alerting continue after the sender receives the response. Use `strict` response mode only when a `customScript` must change the immediate status, headers, or body; slow strict scripts are marked with `scriptDemotedToAsync` so operators can see when the runtime preserved webhook ACK latency by moving script enrichment off the hot path.
 
 ![Dataset view showing captured webhook events with metadata and payload fields](https://raw.githubusercontent.com/ar27111994/webhook-debugger-logger/main/assets/dataset_view.png)
 
@@ -613,9 +623,13 @@ Yes. Use the replay endpoint to send a stored event to another target URL.
 
 Yes. You can return custom status codes, bodies, headers, and artificial latency to simulate downstream behavior.
 
+Use `responseMode: "strict"` when the custom script needs to mutate the HTTP response before the sender receives it. Use the default `responseMode: "fast"` for low-latency capture, forwarding, and replay workflows where enrichment can finish asynchronously.
+
 ### Where are logs stored?
 
 Captured events are written to the Apify Dataset as the durable source of truth. DuckDB keeps a disposable read model for fast log queries, and the Apify Key-Value Store holds active webhook state plus large payload offloads.
+
+`GET /system/metrics` also exposes aggregate warm-path latency telemetry and the release-gate budgets used by `npm run test:perf -- --scenario=<name>`.
 
 ### What happens with large payloads?
 

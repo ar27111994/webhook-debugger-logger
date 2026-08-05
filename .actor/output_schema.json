@@ -33,6 +33,10 @@
           "size",
           "processingTime",
           "processingTimeUs",
+          "responseMode",
+          "ackMs",
+          "scriptMs",
+          "backgroundTotalMs",
           "remoteIp",
           "signatureProvider"
         ],
@@ -47,6 +51,21 @@
           },
           "processingTimeUs": {
             "label": "Processing Time (μs)",
+            "format": "number"
+          },
+          "responseMode": {
+            "label": "Mode"
+          },
+          "ackMs": {
+            "label": "Ack (ms)",
+            "format": "number"
+          },
+          "scriptMs": {
+            "label": "Script (ms)",
+            "format": "number"
+          },
+          "backgroundTotalMs": {
+            "label": "Background (ms)",
             "format": "number"
           }
         }
@@ -66,7 +85,20 @@
           "responseBody",
           "responseHeaders",
           "signatureProvider",
-          "signatureError"
+          "signatureError",
+          "responseMode",
+          "asyncEnrichment",
+          "scriptDemotedToAsync",
+          "authMs",
+          "bodyPrepMs",
+          "schemaMs",
+          "signatureMs",
+          "scriptMs",
+          "ackMs",
+          "pushDataMs",
+          "duckdbMs",
+          "forwardMs",
+          "backgroundTotalMs"
         ],
         "desc": true
       },

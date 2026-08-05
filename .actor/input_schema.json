@@ -290,6 +290,15 @@
       "default": 0,
       "editor": "number"
     },
+    "responseMode": {
+      "type": "string",
+      "title": "Response Path Mode",
+      "description": "Choose 'fast' to acknowledge first and run enrichment asynchronously, or 'strict' to let custom scripts mutate the immediate HTTP response.",
+      "enum": ["fast", "strict"],
+      "default": "fast",
+      "prefill": "fast",
+      "editor": "select"
+    },
     "section_v2_workflows": {
       "title": "🔄 Smart Data Workflows",
       "type": "string",
@@ -333,10 +342,20 @@
     "customScript": {
       "type": "string",
       "title": "Transformation Logic (JS)",
-      "description": "JavaScript snippet to clean or transform the event before storage. Args: { event, req }.",
+      "description": "JavaScript snippet to clean or transform the event. In fast mode it runs after the webhook is accepted. In strict mode it can mutate the immediate HTTP response.",
       "example": "event.body = JSON.parse(event.body);\nevent.headers['x-custom'] = 'modified';",
       "prefill": "// Example: Parse body and add a custom flag\nif (event.contentType === 'application/json') {\n    const body = JSON.parse(event.body);\n    event.body = { ...body, _debug: true };\n}",
       "editor": "javascript"
+    },
+    "customScriptSlowThresholdMs": {
+      "type": "integer",
+      "title": "Sync Script Guardrail (ms)",
+      "description": "If a strict-mode script exceeds this execution time budget, future requests are automatically demoted to async processing until the script changes.",
+      "minimum": 10,
+      "maximum": 5000,
+      "default": 100,
+      "prefill": 100,
+      "editor": "number"
     },
     "testAndExit": {
       "type": "boolean",

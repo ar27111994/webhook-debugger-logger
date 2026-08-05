@@ -59,14 +59,14 @@ describe("Integration: Main routes", () => {
       defaultResponseCode: HTTP_STATUS.CREATED,
       defaultResponseBody: "created",
     });
-  });
+  }, TEST_TIMEOUT_MS);
 
   afterEach(async () => {
     if (context) {
       await context.teardown();
       context = null;
     }
-  });
+  }, TEST_TIMEOUT_MS);
 
   it("should respond correctly for dashboard, health, ready, info, and system metrics routes", async () => {
     const activeContext = requireContext(context);

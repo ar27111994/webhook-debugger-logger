@@ -191,7 +191,10 @@ curl "https://example-run-id.runs.apify.net/webhook/wh_abc123?__status=503"
 - Applies per-webhook rate limiting before body parsing.
 - Streams large payloads to Apify KVS when they exceed the offload threshold.
 - Applies optional JSON parsing, JSON Schema validation, signature verification, custom script execution, forwarding, and alerting.
-- Executes `customScript` in a disposable worker isolate with access only to `event`, a safe copy of `req`, `console`, and `HTTP_STATUS`.
+- Executes `customScript` in pooled worker isolates with access only to `event`, a safe copy of `req`, `console`, and `HTTP_STATUS`.
+- Uses `responseMode: "fast"` by default so durable storage, DuckDB projection, forwarding, and alerts can continue after the HTTP response is sent.
+- Uses `responseMode: "strict"` when a custom script must mutate the immediate response status, headers, or body before ACK.
+- Marks slow strict scripts with `scriptDemotedToAsync` once they exceed `customScriptSlowThresholdMs`, preserving ACK latency while retaining async enrichment telemetry.
 - Blocks self-referential forwarding loops and returns `422 Unprocessable Entity` when recursion is detected.
 - If `responseDelayMs` is configured, the route waits artificially **after** request processing is measured. Stored `processingTime` values exclude that simulated delay.
 
@@ -265,39 +268,54 @@ Queries captured webhook events from the DuckDB read model using offset- or curs
 
 **Query Parameters:**
 
-| Parameter           | Type                   | Default          | Description                                                                                                    |
-| ------------------- | ---------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------- |
-| `id`                | string                 | -                | Exact log ID                                                                                                   |
-| `webhookId`         | string                 | -                | Exact webhook ID                                                                                               |
-| `requestUrl`        | string                 | -                | Partial match against the stored request URL                                                                   |
-| `method`            | string                 | -                | Exact HTTP method, normalized to uppercase                                                                     |
-| `statusCode`        | number or range object | -                | Exact code or range syntax such as `statusCode[gte]=400`                                                       |
-| `contentType`       | string                 | -                | Partial match against stored content type                                                                      |
-| `requestId`         | string                 | -                | Exact request ID                                                                                               |
-| `remoteIp`          | string                 | -                | Exact IP or CIDR block                                                                                         |
-| `userAgent`         | string                 | -                | Partial match against user agent                                                                               |
-| `signatureValid`    | boolean                | -                | Signature verification result                                                                                  |
-| `signatureProvider` | string                 | -                | Exact signature provider                                                                                       |
-| `signatureError`    | string                 | -                | Exact signature error string                                                                                   |
-| `processingTime`    | number or range object | -                | Exact or ranged server-side processing time filter, excluding any configured `responseDelayMs`                 |
-| `processingTimeUs`  | number or range object | -                | Exact or ranged server-side processing time filter in microseconds, excluding any configured `responseDelayMs` |
-| `size`              | number or range object | -                | Exact or ranged payload size filter                                                                            |
-| `timestamp`         | string or range object | -                | Exact or ranged timestamp filter                                                                               |
-| `startTime`         | ISO string             | -                | Convenience lower bound for timestamp filtering                                                                |
-| `endTime`           | ISO string             | -                | Convenience upper bound for timestamp filtering                                                                |
-| `headers`           | string or object       | -                | Substring search over serialized headers or keyed JSON filtering                                               |
-| `query`             | string or object       | -                | Substring search over query JSON or keyed JSON filtering                                                       |
-| `body`              | string or object       | -                | Substring search over body JSON or keyed JSON filtering                                                        |
-| `responseHeaders`   | string or object       | -                | Substring search over response header JSON or keyed JSON filtering                                             |
-| `responseBody`      | string or object       | -                | Substring search over response body JSON or keyed JSON filtering                                               |
-| `limit`             | number                 | `10000`          | Result limit. Invalid values are clamped to a minimum of `1`.                                                  |
-| `offset`            | number                 | `0`              | Offset for traditional pagination                                                                              |
-| `cursor`            | string                 | -                | Cursor for keyset pagination. When present, it takes precedence over `offset`.                                 |
-| `sort`              | string                 | `timestamp:DESC` | Comma-separated sort rules such as `timestamp:desc,method:asc`                                                 |
+| Parameter              | Type                   | Default          | Description                                                                                                    |
+| ---------------------- | ---------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------- |
+| `id`                   | string                 | -                | Exact log ID                                                                                                   |
+| `webhookId`            | string                 | -                | Exact webhook ID                                                                                               |
+| `requestUrl`           | string                 | -                | Partial match against the stored request URL                                                                   |
+| `method`               | string                 | -                | Exact HTTP method, normalized to uppercase                                                                     |
+| `statusCode`           | number or range object | -                | Exact code or range syntax such as `statusCode[gte]=400`                                                       |
+| `contentType`          | string                 | -                | Partial match against stored content type                                                                      |
+| `requestId`            | string                 | -                | Exact request ID                                                                                               |
+| `remoteIp`             | string                 | -                | Exact IP or CIDR block                                                                                         |
+| `userAgent`            | string                 | -                | Partial match against user agent                                                                               |
+| `signatureValid`       | boolean                | -                | Signature verification result                                                                                  |
+| `signatureProvider`    | string                 | -                | Exact signature provider                                                                                       |
+| `signatureError`       | string                 | -                | Exact signature error string                                                                                   |
+| `responseMode`         | string                 | -                | Exact response mode, currently `fast` or `strict`                                                              |
+| `asyncEnrichment`      | boolean                | -                | Whether storage, forwarding, or enrichment continued after the response ACK                                    |
+| `scriptDemotedToAsync` | boolean                | -                | Whether a slow strict-mode script was demoted off the immediate response path                                  |
+| `schemaValid`          | boolean                | -                | JSON Schema validation result                                                                                  |
+| `schemaError`          | string                 | -                | Partial match against schema validation error text                                                             |
+| `processingTime`       | number or range object | -                | Exact or ranged server-side processing time filter, excluding any configured `responseDelayMs`                 |
+| `processingTimeUs`     | number or range object | -                | Exact or ranged server-side processing time filter in microseconds, excluding any configured `responseDelayMs` |
+| `authMs`               | number or range object | -                | Exact or ranged auth phase duration in milliseconds                                                            |
+| `bodyPrepMs`           | number or range object | -                | Exact or ranged body preparation/offload phase duration in milliseconds                                        |
+| `schemaMs`             | number or range object | -                | Exact or ranged JSON Schema validation phase duration in milliseconds                                          |
+| `signatureMs`          | number or range object | -                | Exact or ranged signature verification phase duration in milliseconds                                          |
+| `scriptMs`             | number or range object | -                | Exact or ranged custom script phase duration in milliseconds                                                   |
+| `ackMs`                | number or range object | -                | Exact or ranged time to HTTP response ACK in milliseconds                                                      |
+| `pushDataMs`           | number or range object | -                | Exact or ranged Apify Dataset write duration in milliseconds                                                   |
+| `duckdbMs`             | number or range object | -                | Exact or ranged DuckDB projection duration in milliseconds                                                     |
+| `forwardMs`            | number or range object | -                | Exact or ranged forwarding duration in milliseconds                                                            |
+| `backgroundTotalMs`    | number or range object | -                | Exact or ranged post-ACK background work duration in milliseconds                                              |
+| `size`                 | number or range object | -                | Exact or ranged payload size filter                                                                            |
+| `timestamp`            | string or range object | -                | Exact or ranged timestamp filter                                                                               |
+| `startTime`            | ISO string             | -                | Convenience lower bound for timestamp filtering                                                                |
+| `endTime`              | ISO string             | -                | Convenience upper bound for timestamp filtering                                                                |
+| `headers`              | string or object       | -                | Substring search over serialized headers or keyed JSON filtering                                               |
+| `query`                | string or object       | -                | Substring search over query JSON or keyed JSON filtering                                                       |
+| `body`                 | string or object       | -                | Substring search over body JSON or keyed JSON filtering                                                        |
+| `responseHeaders`      | string or object       | -                | Substring search over response header JSON or keyed JSON filtering                                             |
+| `responseBody`         | string or object       | -                | Substring search over response body JSON or keyed JSON filtering                                               |
+| `limit`                | number                 | `10000`          | Result limit. Invalid values are clamped to a minimum of `1`.                                                  |
+| `offset`               | number                 | `0`              | Offset for traditional pagination                                                                              |
+| `cursor`               | string                 | -                | Cursor for keyset pagination. When present, it takes precedence over `offset`.                                 |
+| `sort`                 | string                 | `timestamp:DESC` | Comma-separated sort rules such as `timestamp:desc,method:asc`                                                 |
 
 **Supported Sort Fields:**
 
-`id`, `statusCode`, `method`, `size`, `timestamp`, `remoteIp`, `processingTime`, `processingTimeUs`, `webhookId`, `userAgent`, `requestUrl`, `contentType`, `requestId`, `signatureValid`, `signatureProvider`, `signatureError`
+`id`, `statusCode`, `method`, `size`, `timestamp`, `remoteIp`, `processingTime`, `processingTimeUs`, `authMs`, `bodyPrepMs`, `schemaMs`, `signatureMs`, `scriptMs`, `ackMs`, `pushDataMs`, `duckdbMs`, `forwardMs`, `backgroundTotalMs`, `webhookId`, `userAgent`, `requestUrl`, `contentType`, `requestId`, `signatureValid`, `signatureProvider`, `signatureError`, `responseMode`, `asyncEnrichment`, `scriptDemotedToAsync`, `schemaValid`, `schemaError`
 
 **Filter Syntax Notes:**
 
@@ -307,6 +325,7 @@ Queries captured webhook events from the DuckDB read model using offset- or curs
 - Nested object filters use dot notation in keyed JSON filters, for example `body[data.id]=evt_123`.
 - `processingTime` represents measured server processing time only. Artificial delay configured via `responseDelayMs` is intentionally excluded.
 - `processingTimeUs` is the precise microsecond form of the same monotonic measurement and is useful when `processingTime` floors to `0` for warm-path requests.
+- `ackMs` measures the hot path visible to the sender. `pushDataMs`, `duckdbMs`, `forwardMs`, and `backgroundTotalMs` describe async background phases that may finish after the ACK in fast mode.
 
 **Offset Pagination Response Example:**
 
@@ -335,6 +354,12 @@ Queries captured webhook events from the DuckDB read model using offset- or curs
       "size": 1240,
       "processingTime": 12,
       "processingTimeUs": 12873,
+      "responseMode": "fast",
+      "asyncEnrichment": true,
+      "scriptDemotedToAsync": false,
+      "ackMs": 9,
+      "scriptMs": 0,
+      "backgroundTotalMs": 31,
       "requestId": "req_abc123",
       "requestUrl": "/webhook/wh_abc123",
       "contentType": "application/json",
@@ -526,7 +551,7 @@ data: {"id":"evt_123","webhookId":"wh_abc123","method":"POST","statusCode":200}
 
 #### `GET /system/metrics`
 
-Returns current sync-service metrics for the Dataset-to-DuckDB replication loop.
+Returns current sync-service metrics for the Dataset-to-DuckDB replication loop plus aggregate webhook latency telemetry.
 
 **Authentication:** Required when `authKey` is configured
 
@@ -542,9 +567,27 @@ Returns current sync-service metrics for the Dataset-to-DuckDB replication loop.
     "lastSyncTime": "2026-01-30T11:59:59.000Z",
     "lastErrorTime": null,
     "isRunning": true
+  },
+  "latency": {
+    "total": 1524,
+    "avgAckMs": 8.4,
+    "maxAckMs": 42,
+    "avgScriptMs": 1.2,
+    "maxScriptMs": 19,
+    "avgBackgroundTotalMs": 24.7,
+    "maxBackgroundTotalMs": 91,
+    "asyncEnrichmentCount": 1508,
+    "scriptDemotionCount": 2
+  },
+  "latencyBudgets": {
+    "NO_CUSTOM_SCRIPT": { "p50Ms": 50, "p95Ms": 150 },
+    "SCHEMA_ONLY": { "p50Ms": 75, "p95Ms": 200 },
+    "STRICT_CUSTOM_SCRIPT": { "p50Ms": 150, "p95Ms": 500 }
   }
 }
 ```
+
+Use this endpoint to verify low-latency ACK behavior after release. Local release gates can be run with `npm run test:perf -- --scenario=no-custom-script`, `schema-only`, `script-only`, `schema-plus-script`, or `restart-resurrection`.
 
 ---
 

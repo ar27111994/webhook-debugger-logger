@@ -1,0 +1,32 @@
+name: Post-release Apify Canary
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  apify-canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install Dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Run Apify canary
+        env:
+          APIFY_TOKEN: ${{ secrets[format('APIFY_{0}', 'TOKEN')] }}
+          APIFY_ACTOR_ID: ${{ vars[format('APIFY_{0}', 'ACTOR_ID')] || 'ar27111994~webhook-debugger-logger' }}
+        run: npm run canary:apify

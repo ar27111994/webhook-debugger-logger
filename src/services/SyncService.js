@@ -134,18 +134,7 @@ export class SyncService {
     if (!this.#isRunning) return;
     if (!payload || typeof payload !== "object") return;
 
-    try {
-      // 1. Instant insert for real-time view (offset=null)
-      await logRepository.insertLog(payload);
-
-      // 2. Schedule sync
-      this.#triggerSync();
-    } catch (err) {
-      log.error(
-        { err: serializeError(err) },
-        LOG_MESSAGES.REALTIME_INSERT_FAILED,
-      );
-    }
+    this.#triggerSync();
   }
 
   /**

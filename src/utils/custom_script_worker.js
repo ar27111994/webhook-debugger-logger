@@ -1,6 +1,6 @@
 /**
  * @file src/utils/custom_script_worker.js
- * @description Executes custom webhook scripts inside a throwaway worker thread.
+ * @description Executes custom webhook scripts inside a pooled worker thread.
  */
 
 import vm from "node:vm";
@@ -16,10 +16,17 @@ import { LogLevel } from "./logger.js";
 
 /**
  * @typedef {object} CustomScriptExecutionRequest
- * @property {string} source
  * @property {Record<string, unknown>} event
  * @property {Record<string, unknown>} req
  * @property {number} timeoutMs
+ */
+
+/**
+ * @typedef {CustomScriptExecutionRequest & { jobId: number }} CustomScriptExecutionJob
+ */
+
+/**
+ * @typedef {{ includeJobId?: boolean }} ExecutionOptions
  */
 
 /**
@@ -87,95 +94,196 @@ function serializeExecutionError(error) {
   };
 }
 
+/** @type {string} */
+const compiledScriptSource = String(workerData?.source ?? "");
+
+/** @type {vm.Script | null} */
+let compiledScript = null;
+/** @type {Record<string, unknown> | null} */
+let compilationError = null;
+
+try {
+  // eslint-disable-next-line sonarjs/code-eval
+  compiledScript = new vm.Script(compiledScriptSource);
+} catch (error) {
+  compilationError = serializeExecutionError(error);
+}
+
+if (
+  typeof parentPort?.postMessage === "function" &&
+  typeof workerData?.timeoutMs !== "number"
+) {
+  parentPort.postMessage({
+    type: "ready",
+    ok: compilationError === null,
+    error: compilationError ?? undefined,
+  });
+}
+
 /**
  * @param {CustomScriptLogLevel} level
+ * @param {CustomScriptExecutionLog[]} logs
  * @param {...unknown} args
  * @returns {void}
  */
-function pushLog(level, ...args) {
+function pushScopedLog(level, logs, ...args) {
   logs.push({ level, args: args.map(serializeConsoleArg) });
 }
 
 /**
+ * @param {CustomScriptExecutionLog[]} logs
  * @param {...unknown} args
  * @returns {void}
  */
-function debugLog(...args) {
-  pushLog(LogLevel.DEBUG, ...args);
+function debugLog(logs, ...args) {
+  pushScopedLog(LogLevel.DEBUG, logs, ...args);
 }
 
 /**
+ * @param {CustomScriptExecutionLog[]} logs
  * @param {...unknown} args
  * @returns {void}
  */
-function errorLog(...args) {
-  pushLog(LogLevel.ERROR, ...args);
+function errorLog(logs, ...args) {
+  pushScopedLog(LogLevel.ERROR, logs, ...args);
 }
 
 /**
+ * @param {CustomScriptExecutionLog[]} logs
  * @param {...unknown} args
  * @returns {void}
  */
-function warnLog(...args) {
-  pushLog(LogLevel.WARN, ...args);
+function warnLog(logs, ...args) {
+  pushScopedLog(LogLevel.WARN, logs, ...args);
 }
 
 /**
+ * @param {CustomScriptExecutionLog[]} logs
  * @param {...unknown} args
  * @returns {void}
  */
-function infoLog(...args) {
-  pushLog(LogLevel.INFO, ...args);
+function infoLog(logs, ...args) {
+  pushScopedLog(LogLevel.INFO, logs, ...args);
 }
 
-/** @type {CustomScriptExecutionRequest} */
-const executionRequest = /** @type {CustomScriptExecutionRequest} */ (
-  workerData
-);
+/**
+ * @param {CustomScriptExecutionJob} executionRequest
+ * @param {ExecutionOptions} [options]
+ * @returns {void}
+ */
+function executeJob(executionRequest, options = {}) {
+  const { includeJobId = true } = options;
+  /** @type {CustomScriptExecutionLog[]} */
+  const logs = [];
 
-/** @type {CustomScriptExecutionLog[]} */
-const logs = [];
+  const sandboxEvent = createSandboxRecord(executionRequest.event);
+  sandboxEvent.headers = createSandboxRecord(sandboxEvent.headers);
+  sandboxEvent.query = createSandboxRecord(sandboxEvent.query);
+  sandboxEvent.params = createSandboxRecord(sandboxEvent.params);
+  sandboxEvent.responseHeaders = createSandboxRecord(
+    sandboxEvent.responseHeaders,
+  );
 
-const sandboxEvent = createSandboxRecord(executionRequest.event);
-sandboxEvent.headers = createSandboxRecord(sandboxEvent.headers);
-sandboxEvent.query = createSandboxRecord(sandboxEvent.query);
-sandboxEvent.params = createSandboxRecord(sandboxEvent.params);
-sandboxEvent.responseHeaders = createSandboxRecord(
-  sandboxEvent.responseHeaders,
-);
+  const sandboxRequest = createSandboxRecord(executionRequest.req);
+  sandboxRequest.headers = createSandboxRecord(sandboxRequest.headers);
+  sandboxRequest.query = createSandboxRecord(sandboxRequest.query);
+  sandboxRequest.params = createSandboxRecord(sandboxRequest.params);
 
-const sandboxRequest = createSandboxRecord(executionRequest.req);
-sandboxRequest.headers = createSandboxRecord(sandboxRequest.headers);
-sandboxRequest.query = createSandboxRecord(sandboxRequest.query);
-sandboxRequest.params = createSandboxRecord(sandboxRequest.params);
+  /**
+   * @param {...unknown} args
+   * @returns {void}
+   */
+  const logDebug = (...args) => debugLog(logs, ...args);
+  /**
+   * @param {...unknown} args
+   * @returns {void}
+   */
+  const logError = (...args) => errorLog(logs, ...args);
+  /**
+   * @param {...unknown} args
+   * @returns {void}
+   */
+  const logWarn = (...args) => warnLog(logs, ...args);
+  /**
+   * @param {...unknown} args
+   * @returns {void}
+   */
+  const logInfo = (...args) => infoLog(logs, ...args);
 
-const sandbox = {
-  event: sandboxEvent,
-  req: sandboxRequest,
-  console: {
-    log: debugLog,
-    error: errorLog,
-    warn: warnLog,
-    info: infoLog,
-  },
-  HTTP_STATUS,
-};
+  if (!compiledScript || compilationError) {
+    const payload = {
+      ok: false,
+      logs,
+      error: compilationError ?? {
+        name: "Error",
+        message: LOG_MESSAGES.UNKNOWN_ERROR,
+      },
+    };
+    parentPort?.postMessage(
+      includeJobId ? { jobId: executionRequest.jobId, ...payload } : payload,
+    );
+    return;
+  }
 
-try {
-  const context = vm.createContext(sandbox, {
-    codeGeneration: {
-      strings: false,
-      wasm: false,
+  const sandbox = {
+    event: sandboxEvent,
+    req: sandboxRequest,
+    console: {
+      log: logDebug,
+      error: logError,
+      warn: logWarn,
+      info: logInfo,
     },
-  });
-  // eslint-disable-next-line sonarjs/code-eval
-  const script = new vm.Script(executionRequest.source);
-  script.runInContext(context, { timeout: executionRequest.timeoutMs });
-  parentPort?.postMessage({ ok: true, event: sandboxEvent, logs });
-} catch (error) {
-  parentPort?.postMessage({
-    ok: false,
-    logs,
-    error: serializeExecutionError(error),
+    HTTP_STATUS,
+  };
+
+  try {
+    const context = vm.createContext(sandbox, {
+      codeGeneration: {
+        strings: false,
+        wasm: false,
+      },
+    });
+    compiledScript.runInContext(context, {
+      timeout: executionRequest.timeoutMs,
+    });
+    const payload = {
+      ok: true,
+      event: sandboxEvent,
+      logs,
+    };
+    parentPort?.postMessage(
+      includeJobId ? { jobId: executionRequest.jobId, ...payload } : payload,
+    );
+  } catch (error) {
+    const payload = {
+      ok: false,
+      logs,
+      error: serializeExecutionError(error),
+    };
+    parentPort?.postMessage(
+      includeJobId ? { jobId: executionRequest.jobId, ...payload } : payload,
+    );
+  }
+}
+
+const hasLegacyBootstrapRequest =
+  typeof workerData?.timeoutMs === "number" &&
+  Object.prototype.hasOwnProperty.call(workerData ?? {}, "event") &&
+  Object.prototype.hasOwnProperty.call(workerData ?? {}, "req");
+
+if (hasLegacyBootstrapRequest) {
+  executeJob(
+    /** @type {CustomScriptExecutionJob} */ ({
+      jobId: 0,
+      event: workerData.event,
+      req: workerData.req,
+      timeoutMs: workerData.timeoutMs,
+    }),
+    { includeJobId: false },
+  );
+} else if (typeof parentPort?.on === "function") {
+  parentPort.on("message", (message) => {
+    executeJob(/** @type {CustomScriptExecutionJob} */ (message));
   });
 }
