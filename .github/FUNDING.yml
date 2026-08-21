@@ -1,7 +1,6 @@
-# These are supported funding model platforms
-
-patreon: ar27111994
+# Sponsor AR Labs development
 ko_fi: ar27111994
 liberapay: ar27111994
-buy_me_a_coffee: ar27111994
-thanks_dev: d/gh/ar27111994
+custom:
+  - https://www.patreon.com/cw/ARLabs
+  - https://buymeacoffee.com/ar27111994
