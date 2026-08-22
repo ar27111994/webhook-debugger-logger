@@ -896,7 +896,7 @@ describe("SyncService", () => {
 
         // Start triggers exactly one schedule. If recursive trigger runs after stop,
         // this would be greater than 1.
-        expect(scheduleSpy.mock.calls.length).toBe(1);
+        expect(scheduleSpy.mock.calls).toHaveLength(1);
       } finally {
         scheduleSpy.mockRestore();
       }

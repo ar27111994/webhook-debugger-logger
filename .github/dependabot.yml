@@ -13,6 +13,12 @@ updates:
       dependencies:
         patterns:
           - "*"
+    ignore:
+      # typescript-eslint peers on typescript ">=4.8.4 <6.1.0"; TS 7 breaks the
+      # lint toolchain (ESLint crashes). Remove this rule when the peer range
+      # opens up (e.g. typescript-eslint ships TS 7 support).
+      - dependency-name: "typescript"
+        versions: [">=7"]
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

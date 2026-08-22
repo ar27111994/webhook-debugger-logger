@@ -745,8 +745,8 @@ describe("LoggerMiddleware Hardening", () => {
         // Verify ID format
         const idLength = APP_CONSTS.DEFAULT_ID_LENGTH;
         expect(typeof evt1.id).toBe("string");
-        expect(evt1.id.length).toBe(idLength);
-        expect(evt2.id.length).toBe(idLength);
+        expect(evt1.id).toHaveLength(idLength);
+        expect(evt2.id).toHaveLength(idLength);
       } finally {
         jest.useFakeTimers();
       }

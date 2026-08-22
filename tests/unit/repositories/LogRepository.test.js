@@ -214,7 +214,7 @@ describe("LogRepository", () => {
 
       const { items, total } = await logRepository.findLogs({ limit: 10 });
       expect(total).toBe(logs.length);
-      expect(items.length).toBe(logs.length);
+      expect(items).toHaveLength(logs.length);
     });
 
     it("should handle empty batch", async () => {
@@ -397,7 +397,7 @@ describe("LogRepository", () => {
 
       const result = await logRepository.findLogs({ limit: 1, offset: 1 });
       expect(result.total).toBe(expectedIds.length);
-      expect(result.items.length).toBe(1);
+      expect(result.items).toHaveLength(1);
       expect(result.items[0].id).toBe("log_b");
     });
 

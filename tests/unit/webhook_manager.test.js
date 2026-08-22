@@ -149,7 +149,7 @@ describe("WebhookManager", () => {
 
       const ids = await manager.generateWebhooks(count, retention);
 
-      expect(ids.length).toBe(count);
+      expect(ids).toHaveLength(count);
       expect(manager.webhookCount).toBe(count);
       expect(ids[0].startsWith(WEBHOOK_ID_PREFIX)).toBe(true);
 
@@ -269,7 +269,7 @@ describe("WebhookManager", () => {
 
         const active = manager.getAllActive();
         const EXPECTED_COUNT = 2;
-        expect(active.length).toBe(EXPECTED_COUNT);
+        expect(active).toHaveLength(EXPECTED_COUNT);
         expect(active.map((w) => w.id)).toEqual(["wh_active", "wh_active2"]);
       } finally {
         process.env[ENV_VARS.NODE_ENV] = previousEnv;

@@ -89,7 +89,7 @@
     "prettier": "^3.8.0",
     "supertest": "^7.2.2",
     "ts-api-utils": "^2.4.0",
-    "typescript": "^7.0.2"
+    "typescript": "^6.0.2"
   },
   "publishConfig": {
     "access": "public",

@@ -571,9 +571,8 @@ describe("Main Entry Point", () => {
     it("should not register the JSON parser middleware when enableJSONParsing is false", async () => {
       await mainModule.initialize({ enableJSONParsing: false });
       expect(
-        jest.mocked(middlewareMock.createJsonParserMiddleware).mock.calls
-          .length,
-      ).toBe(0);
+        jest.mocked(middlewareMock.createJsonParserMiddleware).mock.calls,
+      ).toHaveLength(0);
     });
 
     it("should register the JSON parser middleware when enableJSONParsing is true", async () => {

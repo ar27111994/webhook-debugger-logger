@@ -29,24 +29,17 @@ describe("Env Utils", () => {
       expect(getInt("TEST_INT", DEFAULT_VAL)).toBe(TEST_INT_VAL);
     });
 
-    it("should return fallback if environment variable is undefined", () => {
-      delete process.env.TEST_INT;
-      expect(getInt("TEST_INT", DEFAULT_VAL)).toBe(DEFAULT_VAL);
-    });
-
-    it("should return fallback if environment variable is empty string", () => {
-      process.env.TEST_INT = "";
-      expect(getInt("TEST_INT", DEFAULT_VAL)).toBe(DEFAULT_VAL);
-    });
-
-    it("should return fallback for non-numeric strings", () => {
-      process.env.TEST_INT = "invalid";
-      expect(getInt("TEST_INT", DEFAULT_VAL)).toBe(DEFAULT_VAL);
-    });
-
-    it("should return fallback for negative numbers (per implementation constraints)", () => {
-      // Implementation requires >= 0
-      process.env.TEST_INT = "-5";
+    it.each([
+      ["undefined", undefined],
+      ["empty string", ""],
+      ["non-numeric", "invalid"],
+      ["negative", "-5"],
+    ])("should return fallback for %s environment variable", (label, value) => {
+      if (value === undefined) {
+        delete process.env.TEST_INT;
+      } else {
+        process.env.TEST_INT = value;
+      }
       expect(getInt("TEST_INT", DEFAULT_VAL)).toBe(DEFAULT_VAL);
     });
 
