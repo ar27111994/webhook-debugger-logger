@@ -200,7 +200,7 @@ describe("JSON Parser Middleware", () => {
       expect(() => middleware(mockReq, mockRes, mockNext)).not.toThrow();
 
       expect(Array.isArray(mockReq.body)).toBe(true);
-      expect(mockReq.body.length).toBe(MASSIVE_ARRAY_SIZE);
+      expect(mockReq.body).toHaveLength(MASSIVE_ARRAY_SIZE);
       expect(mockNext).toHaveBeenCalled();
     });
 

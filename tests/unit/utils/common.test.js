@@ -89,6 +89,7 @@ describe("Common Utils", () => {
 
   describe("deepRedact", () => {
     const SENSITIVE_VAL = "sensitive-value";
+    // eslint-disable-next-line sonarjs/no-hardcoded-passwords -- test fixture for redaction verification
     const PASSWORD_VAL = "password123";
 
     it("should redact sensitive keys", () => {

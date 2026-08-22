@@ -297,8 +297,8 @@ describe("E2E: Resilience", () => {
       (status) => status >= HTTP_STATUS.INTERNAL_SERVER_ERROR,
     );
 
-    expect(writerServerErrors.length).toBe(0);
-    expect(readerServerErrors.length).toBe(0);
+    expect(writerServerErrors).toHaveLength(0);
+    expect(readerServerErrors).toHaveLength(0);
 
     const finalLogs = await httpRequest(
       `${baseUrl}${APP_ROUTES.LOGS}?webhookId=${encodeURIComponent(webhookId)}&limit=100`,

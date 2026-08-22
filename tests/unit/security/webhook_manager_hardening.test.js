@@ -220,7 +220,7 @@ describe("WebhookManager Hardening", () => {
         // 5 hours minus something = approx > 4 hours
         expect(new Date(entry.expiresAt).getTime()).toBeGreaterThan(
           Date.now() +
-          EXPECTED_RETENTION_LOWER_BOUND_HOURS * APP_CONSTS.MS_PER_HOUR,
+            EXPECTED_RETENTION_LOWER_BOUND_HOURS * APP_CONSTS.MS_PER_HOUR,
         );
       }
     });
@@ -273,7 +273,7 @@ describe("WebhookManager Hardening", () => {
       await manager.generateWebhooks(1, 1);
 
       // Chain should remain healthy for subsequent calls
-      loggerMock.error.mockImplementation(() => { });
+      loggerMock.error.mockImplementation(() => {});
       keyValueStoreMock.setValue.mockResolvedValue(undefined);
       await manager.generateWebhooks(1, 1);
 
@@ -452,7 +452,7 @@ describe("WebhookManager Hardening", () => {
       const ids = await manager.generateWebhooks(limit, RETENTION_VAL);
 
       // Count
-      expect(ids.length).toBe(limit);
+      expect(ids).toHaveLength(limit);
       expect(manager.webhookCount).toBe(limit);
 
       // All IDs are unique

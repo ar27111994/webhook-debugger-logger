@@ -95,7 +95,8 @@ describe("Logger Utils", () => {
 
   describe("createRequestLogger", () => {
     it("should create a child logger with requestId", async () => {
-      const { createRequestLogger } = await import("../../../src/utils/logger.js");
+      const { createRequestLogger } =
+        await import("../../../src/utils/logger.js");
       const requestId = "req-123";
       createRequestLogger(requestId);
       expect(loggerMock.child).toHaveBeenCalledWith({ requestId });
@@ -128,7 +129,7 @@ describe("Logger Utils", () => {
       );
       // Verify pino was called with the transport result
       expect(pinoMock).toHaveBeenCalledWith(expect.anything(), transport);
-      expect(jest.mocked(pinoMock).mock.calls[0].length).toBe(1 + 1);
+      expect(jest.mocked(pinoMock).mock.calls[0]).toHaveLength(1 + 1);
     });
 
     it("should NOT use transport when PRETTY_LOGS is false", async () => {
@@ -137,7 +138,7 @@ describe("Logger Utils", () => {
 
       expect(transportMock).not.toHaveBeenCalled();
       // pino(config) - 1 arg
-      expect(jest.mocked(pinoMock).mock.calls[0].length).toBe(1);
+      expect(jest.mocked(pinoMock).mock.calls[0]).toHaveLength(1);
     });
   });
 });
