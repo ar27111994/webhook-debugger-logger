@@ -81,7 +81,7 @@
     "apify-cli": "^1.4.1",
     "eslint": "^10.0.0",
     "eslint-plugin-sonarjs": "^4.0.2",
-    "eventsource": "^4.1.0",
+    "eventsource": "^5.1.0",
     "globals": "^17.0.0",
     "husky": "^9.1.7",
     "jest": "^30.2.0",
