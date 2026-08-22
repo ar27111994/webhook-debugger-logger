@@ -1,0 +1,2 @@
+# Normalize text files to LF on checkout so local checks match CI
+* text=auto eol=lf

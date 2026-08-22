@@ -118,9 +118,12 @@ jobs:
             'https://www.npmjs.com/package/webhook-debugger-logger',
             'https://www.npmjs.com/package/isolated-vm?activeTab=readme',
             'https://img.shields.io/coderabbit/prs/github/ar27111994/webhook-debugger-logger?utm_source=oss&utm_medium=github&utm_campaign=ar27111994%2Fwebhook-debugger-logger&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews',
-            'https://www.patreon.com/cw/ar27111994',
+            'https://www.patreon.com/cw/ARLabs',
             'https://liberapay.com/ar27111994',
             'https://thanks.dev/d/gh/ar27111994',
+            'https://stackoverflow.com/questions/55744926/offset-pagination-vs-cursor-pagination',
+            'https://embedded.gusto.com/blog/api-pagination/',
+            'https://www.producthunt.com/products/webhook-debugger-logger-api-mocker',
           ];
           const softHandledUrlKeys = new Set(
             softHandledUrls.map((value) => normalizeUrlKey(value)).filter(Boolean),
