@@ -169,7 +169,7 @@ function getProviderContext(provider, headers, config) {
       }
 
       case SIGNATURE_PROVIDERS.SHOPIFY: {
-        /** @see https://shopify.dev/docs/apps/build/webhooks/subscribe/https#step-2-validate-the-origin-of-your-webhook-to-ensure-its-coming-from-shopify */
+        /** @see https://shopify.dev/docs/apps/build/webhooks/subscribe/https */
         const sig =
           headers[HTTP_HEADERS.SHOPIFY_HMAC_SHA256] ||
           headers[HTTP_HEADERS.SHOPIFY_HMAC_SHA256_FALLBACK];
