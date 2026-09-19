@@ -69,8 +69,8 @@
     "basic-ftp": "5.2.2"
   },
   "devDependencies": {
-    "@apify/actor-memory-expression": "^0.2.10",
-    "@apify/input_secrets": "^1.2.30",
+    "@apify/actor-memory-expression": "^1.0.1",
+    "@apify/input_secrets": "^2.0.5",
     "@eslint/js": "^10.0.1",
     "@types/compression": "^1.8.1",
     "@types/cors": "^2.8.19",
