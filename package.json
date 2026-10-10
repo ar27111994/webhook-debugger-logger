@@ -41,7 +41,7 @@
     "bottleneck": "^2.19.5",
     "compression": "^1.8.1",
     "cors": "^2.8.5",
-    "dotenv": "^17.4.0",
+    "dotenv": "^18.0.6",
     "express": "^5.2.1",
     "ipaddr.js": "^2.3.0",
     "nanoid": "^6.0.1",
@@ -69,8 +69,8 @@
     "basic-ftp": "5.2.2"
   },
   "devDependencies": {
-    "@apify/actor-memory-expression": "^0.2.10",
-    "@apify/input_secrets": "^1.2.30",
+    "@apify/actor-memory-expression": "^1.0.1",
+    "@apify/input_secrets": "^2.0.6",
     "@eslint/js": "^10.0.1",
     "@types/compression": "^1.8.1",
     "@types/cors": "^2.8.19",
